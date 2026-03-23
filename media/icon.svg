@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <text x="2" y="17" font-family="Arial Black, Arial, sans-serif" font-size="14" font-weight="900" fill="currentColor">Qt</text>
+  <circle cx="19" cy="5" r="3" fill="currentColor"/>
+  <path d="M17 5l4 0M19 3l0 4" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

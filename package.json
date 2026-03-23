@@ -1,0 +1,102 @@
+{
+  "name": "xy-qt-tools",
+  "displayName": "XY Qt Tools",
+  "publisher": "xy",
+  "description": "Qt build tools for XY project: status bar, qmake detection, .pri sync helper",
+  "version": "0.3.0",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["workspaceContains:**/*.pro"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "xyQt.selectProject", "title": "XY Qt: 选择项目" },
+      { "command": "xyQt.showActions",   "title": "XY Qt: 显示操作菜单" },
+      { "command": "xyQt.qmake",         "title": "XY Qt: QMake" },
+      { "command": "xyQt.build",         "title": "XY Qt: Build" },
+      { "command": "xyQt.clean",         "title": "XY Qt: Clean" },
+      { "command": "xyQt.run",           "title": "XY Qt: Run" },
+      { "command": "xyQt.stop",          "title": "XY Qt: 停止" },
+      { "command": "xyQt.debug",         "title": "XY Qt: 调试" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "xy-qt-tools",
+          "title": "XY Qt Tools",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "xy-qt-tools": [
+        {
+          "type": "webview",
+          "id": "xyQt.configView",
+          "name": "配置"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "XY Qt Tools",
+      "properties": {
+        "xyQt.qtPath": {
+          "type": "string",
+          "default": "",
+          "description": "Qt 安装路径（手动指定，留空则自动检测）"
+        },
+        "xyQt.vsDevShellPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to Launch-VsDevShell.ps1 (VsDevCmd.bat will be used automatically)"
+        },
+        "xyQt.selectedProject": {
+          "type": "string",
+          "default": "",
+          "description": "当前选中的 .pro 文件路径（相对于 workspace 根目录）"
+        },
+        "xyQt.arch": {
+          "type": "string",
+          "default": "x86",
+          "enum": ["x86", "x64"],
+          "description": "目标架构"
+        },
+        "xyQt.scanExcludeDirs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "生成 IntelliSense 配置时额外排除的目录名（已内置排除 build*/debug/release）"
+        },
+        "xyQt.cStandard": {
+          "type": "string",
+          "default": "c11",
+          "enum": ["c89", "c99", "c11", "c17"],
+          "description": "IntelliSense C 标准版本"
+        },
+        "xyQt.cppStandard": {
+          "type": "string",
+          "default": "c++11",
+          "enum": ["c++11", "c++14", "c++17", "c++20", "c++23"],
+          "description": "IntelliSense C++ 标准版本"
+        },
+        "xyQt.proPath": {
+          "type": "string",
+          "default": "",
+          "description": "（已废弃）请使用 xyQt.selectedProject"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npm run compile && vsce package --allow-missing-repository",
+    "vsix": "vsce package --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.22.0"
+  }
+}
