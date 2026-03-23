@@ -157,6 +157,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         const vsOk = !!effectiveDevShell;
         const qtOk = !!effectiveQtPath;
         const jomOk = env?.jom ?? false;
+        const isWin = process.platform === 'win32';
 
         return `<!DOCTYPE html>
 <html lang="zh">
@@ -323,15 +324,20 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
       <span id="dot-vs" class="status-dot ${env ? (env.vs ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>
       <span id="dot-qt" class="status-dot ${env ? (env.qt ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>
       <span id="dot-jom" class="status-dot ${env ? (jomOk ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>
+      ${isWin ? `<span id="dot-vs" class="status-dot ${env ? (env.vs ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>` : ''}
     </div>
-    <span id="status-summary" class="status-text">${env ? (env.vs ? 'VS ' + env.vs.version : 'VS 未检测') + ' · ' + (env.qt ? 'Qt ' + env.qt.version : 'Qt 未检测') + ' · ' + (jomOk ? 'jom 可用' : 'jom 未找到') : '检测中...'}</span>
+    <span id="status-summary" class="status-text">${env
+        ? (isWin ? (env.vs ? 'VS ' + env.vs.version : 'VS 未检测') + ' · ' : '')
+          + (env.qt ? 'Qt ' + env.qt.version : 'Qt 未检测') + ' · ' + (jomOk ? 'make 可用' : 'make 未找到')
+        : '检测中...'}</span>
     <span id="env-arrow" class="status-arrow">▼</span>
   </div>
   <div id="env-detail" class="status-detail">
+    ${isWin ? `
     <div class="status-detail-row">
       <span id="dot-vs-detail" class="status-dot ${env ? (env.vs ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>
       <span id="text-vs">${env ? (env.vs ? 'VS ' + env.vs.version + ' ' + env.vs.edition : '未检测到 Visual Studio') : '检测中...'}</span>
-    </div>
+    </div>` : ''}
     <div class="status-detail-row">
       <span id="dot-qt-detail" class="status-dot ${env ? (env.qt ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>
       <span id="text-qt">${env ? (env.qt ? 'Qt ' + env.qt.version + ' (' + env.qt.compiler + ')' : '未检测到 Qt') : '检测中...'}</span>
