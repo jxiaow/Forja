@@ -28,7 +28,8 @@ export function scanProFiles(root: string): string[] {
         try {
             const entries = fs.readdirSync(dir, { withFileTypes: true });
             for (const entry of entries) {
-                if (entry.isDirectory() && entry.name !== 'node_modules' && entry.name !== '.git') {
+                const skip = ['node_modules', '.git', 'build', 'debug', 'release', 'out'];
+                if (entry.isDirectory() && !skip.includes(entry.name.toLowerCase())) {
                     scan(path.join(dir, entry.name));
                 } else if (entry.isFile() && entry.name.endsWith('.pro')) {
                     proFiles.push(path.join(dir, entry.name));

@@ -1,0 +1,93 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { EnvInfo, VSInfo, QtInfo, execAsync, hasQmake, parseQtInfo, scanQt } from '../../envDetector';
+import { log } from '../../logger';
+
+// ── VS 检测 ──
+
+function parseVsPath(devShellPath: string): VSInfo {
+    const installPath = devShellPath.replace(/\\Common7\\Tools\\[^\\]+$/i, '');
+    let version = 'unknown';
+    const yearMatch = installPath.match(/(2022|2019|2017)/);
+    if (yearMatch) {
+        version = yearMatch[1];
+    } else {
+        const verMatch = installPath.match(/\\(\d{2})\\/);
+        if (verMatch) {
+            const n = parseInt(verMatch[1]);
+            if (n >= 17) { version = '2022'; }
+            else if (n === 16) { version = '2019'; }
+            else if (n === 15) { version = '2017'; }
+            else { version = verMatch[1]; }
+        }
+    }
+    let edition = 'Community';
+    if (installPath.includes('Professional')) { edition = 'Professional'; }
+    else if (installPath.includes('Enterprise')) { edition = 'Enterprise'; }
+    return { version, edition, installPath, devShellPath };
+}
+
+async function detectVS(manualPath?: string): Promise<VSInfo | null> {
+    if (manualPath) {
+        if (!fs.existsSync(manualPath)) { return null; }
+        return parseVsPath(manualPath);
+    }
+    const vswhere = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe';
+    if (!fs.existsSync(vswhere)) { return null; }
+    try {
+        const installPath = (await execAsync(vswhere, ['-latest', '-property', 'installationPath'])).trim();
+        if (!installPath) { return null; }
+        return parseVsPath(`${installPath}\\Common7\\Tools\\Launch-VsDevShell.ps1`);
+    } catch {
+        return null;
+    }
+}
+
+// ── Qt 检测 ──
+
+// Windows 编译器从路径推断
+function detectCompiler(qtPath: string): string {
+    if (qtPath.includes('msvc2022')) { return 'msvc2022'; }
+    if (qtPath.includes('msvc2019')) { return 'msvc2019'; }
+    if (qtPath.includes('mingw')) { return 'mingw'; }
+    return 'msvc2019';
+}
+
+async function detectQt(manualPath?: string): Promise<QtInfo | null> {
+    // 1. 手动配置优先
+    if (manualPath) {
+        log(`[Win] 手动 Qt 路径: "${manualPath}"`);
+        if (!hasQmake(manualPath)) { log('[Win] 手动路径无效'); return null; }
+        return parseQtInfo(manualPath, detectCompiler(manualPath));
+    }
+
+    // 2. 环境变量
+    const qtdir = process.env.QTDIR || process.env.Qt6_DIR || process.env.Qt5_DIR;
+    if (qtdir && hasQmake(qtdir)) {
+        log(`[Win] 环境变量找到 Qt: "${qtdir}"`);
+        return parseQtInfo(qtdir, detectCompiler(qtdir));
+    }
+
+    // 3. 目录扫描（选版本最高的）
+    const parentDirs = ['C:\\Qt', 'C:\\QtCompile', 'D:\\Qt', 'E:\\Qt'];
+    const found = await scanQt(parentDirs, 'Win');
+    if (found) { return parseQtInfo(found, detectCompiler(found)); }
+
+    log('[Win] 未检测到 Qt');
+    return null;
+}
+
+// ── Jom 检测 ──
+
+async function detectJom(qt: QtInfo | null): Promise<boolean> {
+    if (!qt) { return false; }
+    if (fs.existsSync(path.join(qt.path, 'bin', 'jom.exe'))) { return true; }
+    const out = await execAsync('jom', ['/VERSION']);
+    return out.trim().length > 0;
+}
+
+export async function detectEnvWin(manualQtPath?: string, manualVsPath?: string): Promise<EnvInfo> {
+    const [vs, qt] = await Promise.all([detectVS(manualVsPath || undefined), detectQt(manualQtPath)]);
+    const jom = await detectJom(qt);
+    return { vs, qt, jom };
+}

@@ -2,14 +2,7 @@ import * as vscode from 'vscode';
 import { getEnvInfo, detectEnv, EnvInfo } from './envDetector';
 import { getCurrentProject, ProjectInfo } from './projectManager';
 import { generateCppProperties, updateCppPropertiesStandard } from './configGenerator';
-
-const LOG_PREFIX = '[XY Qt]';
-
-function log(message: string): void {
-    console.log(`${LOG_PREFIX} ${message}`);
-}
-
-log('configPanel module loaded');
+import { log } from './logger';
 
 export class ConfigPanel implements vscode.WebviewViewProvider {
     static readonly viewId = 'xyQt.configView';
@@ -112,7 +105,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         const env = getEnvInfo();
         log(`推送环境更新: VS=${env?.vs ? env.vs.version : '未检测'}, Qt=${env?.qt ? env.qt.version : '未检测'}, jom=${env?.jom}`);
         const cfg = vscode.workspace.getConfiguration('xyQt');
-        this._view?.webview.postMessage({ command: 'envUpdated', env: {
+        this._view?.webview.postMessage({ command: 'envUpdated', isWin: process.platform === 'win32', env: {
             vs: env?.vs ? `VS ${env.vs.version} ${env.vs.edition}` : null,
             qt: env?.qt ? `Qt ${env.qt.version} (${env.qt.compiler})` : null,
             jom: env?.jom ?? false
@@ -321,10 +314,9 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
 <div class="env-block">
   <div class="status-bar" onclick="toggleEnvDetail()">
     <div class="status-dots">
-      <span id="dot-vs" class="status-dot ${env ? (env.vs ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>
+      ${isWin ? `<span id="dot-vs" class="status-dot ${env ? (env.vs ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>` : ''}
       <span id="dot-qt" class="status-dot ${env ? (env.qt ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>
       <span id="dot-jom" class="status-dot ${env ? (jomOk ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>
-      ${isWin ? `<span id="dot-vs" class="status-dot ${env ? (env.vs ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>` : ''}
     </div>
     <span id="status-summary" class="status-text">${env
         ? (isWin ? (env.vs ? 'VS ' + env.vs.version : 'VS 未检测') + ' · ' : '')
@@ -344,7 +336,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
     </div>
     <div class="status-detail-row">
       <span id="dot-jom-detail" class="status-dot ${env ? (jomOk ? 'dot-ok' : 'dot-warn') : 'dot-detecting'}"></span>
-      <span id="text-jom">${env ? (jomOk ? 'jom 可用' : 'jom 未找到') : '检测中...'}</span>
+      <span id="text-jom">${env ? (jomOk ? (isWin ? 'jom 可用' : 'make 可用') : (isWin ? 'jom 未找到' : 'make 未找到')) : '检测中...'}</span>
     </div>
     <div style="margin-top:10px;">
       <button id="refreshBtn" class="btn" onclick="refreshEnv()" ${!env ? 'disabled' : ''}>${!env ? '<span class="spin">↻</span> 检测中...' : '刷新检测'}</button>
@@ -391,6 +383,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
   </details>
 </div>
 
+${isWin ? `
 <div class="env-block">
   <div class="block-header">
     <span id="dot-vsblock" class="status-dot ${vsOk ? 'dot-ok' : 'dot-warn'}"></span>
@@ -421,6 +414,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
     </div>
   </details>
 </div>
+` : ''}
 
 <div class="env-block">
   <div class="block-header">
@@ -537,23 +531,25 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         if (el) { el.textContent = text; }
       };
 
-      setDot('dot-vs', !!d.env.vs);
       setDot('dot-qt', !!d.env.qt);
       setDot('dot-jom', d.env.jom);
-      setDot('dot-vs-detail', !!d.env.vs);
       setDot('dot-qt-detail', !!d.env.qt);
       setDot('dot-jom-detail', d.env.jom);
-
-      setText('text-vs', d.env.vs || '未检测到 Visual Studio');
+      if (d.isWin) {
+        setDot('dot-vs', !!d.env.vs);
+        setDot('dot-vs-detail', !!d.env.vs);
+        setText('text-vs', d.env.vs || '未检测到 Visual Studio');
+      }
       setText('text-qt', d.env.qt || '未检测到 Qt');
-      setText('text-jom', d.env.jom ? 'jom 可用' : 'jom 未找到');
+      const makeLabel = d.isWin ? 'jom' : 'make';
+      setText('text-jom', d.env.jom ? makeLabel + ' 可用' : makeLabel + ' 未找到');
 
-      const vsVer = d.env.vs ? d.env.vs.split(' ')[1] : '';
       const qtVer = d.env.qt ? d.env.qt.split(' ')[1] : '';
+      const vsPart = d.isWin ? (d.env.vs ? 'VS ' + d.env.vs.split(' ')[1] : 'VS 未检测') + ' · ' : '';
       document.getElementById('status-summary').textContent =
-        (d.env.vs ? 'VS ' + vsVer : 'VS 未检测') + ' · ' +
+        vsPart +
         (d.env.qt ? 'Qt ' + qtVer : 'Qt 未检测') + ' · ' +
-        (d.env.jom ? 'jom 可用' : 'jom 未找到');
+        (d.env.jom ? makeLabel + ' 可用' : makeLabel + ' 未找到');
 
       const btn = document.getElementById('refreshBtn');
       btn.disabled = false;

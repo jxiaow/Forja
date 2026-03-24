@@ -3,7 +3,7 @@
   "displayName": "XY Qt Tools",
   "publisher": "xy",
   "description": "Qt build tools for XY project: status bar, qmake detection, .pri sync helper",
-  "version": "0.3.1",
+  "version": "0.3.16",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
   "activationEvents": ["workspaceContains:**/*.pro"],

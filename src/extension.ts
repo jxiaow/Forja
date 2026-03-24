@@ -6,16 +6,13 @@ import { createStatusBar, setBuilding, setProject, setRunning, showActions } fro
 import { registerPriWatcher } from './priWatcher';
 import { ConfigPanel } from './configPanel';
 import { selectProject } from './projectManager';
-import { detectEnv } from './envDetector';
 import { startDebug } from './debugger';
 import { generateCppProperties } from './configGenerator';
-
-const LOG_PREFIX = '[XY Qt]';
-function log(message: string): void {
-    console.log(`${LOG_PREFIX} ${message}`);
-}
+import { initLogger, log } from './logger';
 
 export async function activate(context: vscode.ExtensionContext) {
+    const channel = initLogger();
+    context.subscriptions.push(channel);
     log('扩展激活');
     createStatusBar(context);
 
@@ -25,10 +22,6 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     registerPriWatcher(context);
-
-    // 检测环境（后台，不阻塞激活）
-    const cfg = vscode.workspace.getConfiguration('xyQt');
-    detectEnv(cfg.get<string>('qtPath', ''), cfg.get<string>('vsDevShellPath', '')).catch(() => {});
 
     // 自动选择项目
     const project = await selectProject(context);
@@ -45,23 +38,6 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }
     }
-
-    // 构建状态同步
-    vscode.tasks.onDidStartTask(e => {
-        if (e.execution.task.name.startsWith('Build ')) {
-            setBuilding(true);
-        }
-    });
-    vscode.tasks.onDidEndTask(e => {
-        if (e.execution.task.name.startsWith('Build ')) {
-            setBuilding(false);
-        }
-    });
-    vscode.tasks.onDidEndTaskProcess(e => {
-        if (e.execution.task.name.startsWith('Run ')) {
-            setRunning(false);
-        }
-    });
 
     const err = (e: Error) => vscode.window.showErrorMessage(e.message);
 
