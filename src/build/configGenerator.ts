@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ProjectInfo, getCurrentProject } from './projectManager';
-import { getEnvInfo } from './envDetector';
-import { getArch } from './statusBar';
+import { ProjectInfo } from '../project/projectManager';
+import { getState } from '../core/stateManager';
+import { getWorkspaceRoot, getCStandard, getCppStandard, getScanExcludeDirs } from '../core/configService';
 
 // 判断目录是否应跳过（精确匹配 + build* 前缀 + 用户自定义）
 function shouldSkip(name: string, extraSkip: string[]): boolean {
@@ -45,15 +45,15 @@ function detectSdkVersion(): string {
 }
 
 export function generateCppProperties(project: ProjectInfo): void {
-    const root = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+    const root = getWorkspaceRoot();
     if (!root) { return; }
 
-    const env = getEnvInfo();
-    const qtPath = (env?.qt?.path || '').replace(/\\/g, '/');
-    const arch = getArch();
+    const state = getState();
+    const qtPath = (state.envInfo?.qt?.path || '').replace(/\\/g, '/');
+    const arch = state.arch;
 
     // 从 VS installPath 推断 cl.exe 路径（用 glob，让 IntelliSense 自动匹配 MSVC 版本）
-    const vsInstall = (env?.vs?.installPath || '').replace(/\\/g, '/');
+    const vsInstall = (state.envInfo?.vs?.installPath || '').replace(/\\/g, '/');
     const hostDir = arch === 'x64' ? 'Hostx64' : 'Hostx86';
     const clExe = vsInstall
         ? `${vsInstall}/VC/Tools/MSVC/**/${hostDir}/${arch}/cl.exe`
@@ -67,11 +67,9 @@ export function generateCppProperties(project: ProjectInfo): void {
     // Windows SDK 版本
     const sdkVersion = detectSdkVersion();
 
-    // C/C++ 标准（可配置，默认 c11/c++11）
-    const cfg = vscode.workspace.getConfiguration('xyQt');
-    const cStandard = cfg.get<string>('cStandard', 'c11');
-    const cppStandard = cfg.get<string>('cppStandard', 'c++11');
-    const extraSkip = cfg.get<string[]>('scanExcludeDirs', []);
+    const cStandard = getCStandard();
+    const cppStandard = getCppStandard();
+    const extraSkip = getScanExcludeDirs();
 
     // Qt 模块 include 路径
     const qtModuleIncludes = project.qtModules.map(m => {
@@ -134,14 +132,14 @@ export function generateCppProperties(project: ProjectInfo): void {
 }
 
 export function updateCppPropertiesStandard(cStandard: string, cppStandard: string): void {
-    const root = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+    const root = getWorkspaceRoot();
     if (!root) { return; }
 
     const vscodeDir = path.join(root, '.vscode');
     const propsPath = path.join(vscodeDir, 'c_cpp_properties.json');
 
     if (!fs.existsSync(propsPath)) {
-        const project = getCurrentProject();
+        const project = getState().currentProject;
         if (project) {
             generateCppProperties(project);
         }

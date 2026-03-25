@@ -3,7 +3,7 @@
   "displayName": "XY Qt Tools",
   "publisher": "xy",
   "description": "Qt build tools for XY project: status bar, qmake detection, .pri sync helper",
-  "version": "0.1.27",
+  "version": "0.2.4",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
   "activationEvents": ["workspaceContains:**/*.pro"],
@@ -67,6 +67,11 @@
           "default": [],
           "description": "生成 IntelliSense 配置时额外排除的目录名（已内置排除 build*/debug/release）"
         },
+        "xyQt.qmakeTarget": {
+          "type": "string",
+          "default": "",
+          "description": "QMake 时指定的 TARGET 名称（留空则使用 .pro 文件默认值）"
+        },
         "xyQt.cStandard": {
           "type": "string",
           "default": "c11",
@@ -88,7 +93,8 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "copy-html": "powershell -Command \"Copy-Item -Path src/ui/configPanel/configPanel.html -Destination out/ui/configPanel/ -Force\"",
+    "compile": "tsc -p ./ && npm run copy-html",
     "watch": "tsc -watch -p ./",
     "package": "npm run compile && vsce package --allow-missing-repository",
     "vsix": "vsce package --allow-missing-repository"

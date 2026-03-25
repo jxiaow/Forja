@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background: var(--vscode-sideBar-background);
+    padding: 0; margin: 0;
+    line-height: 1.5;
+  }
+  .env-block {
+    padding: 12px;
+    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+  }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot-ok { background: #22C55E; }
+  .dot-warn { background: #F59E0B; }
+  .dot-detecting { background: #64748B; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .status-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: rgba(255,255,255,0.05); border-radius: 6px; cursor: pointer; }
+  .status-dots { display: flex; gap: 4px; }
+  .status-text { color: var(--vscode-foreground); font-size: 13px; flex: 1; }
+  .status-arrow { color: var(--vscode-descriptionForeground); font-size: 12px; }
+  .status-detail { display: none; padding: 12px; background: rgba(255,255,255,0.03); margin-top: 4px; border-radius: 6px; font-size: 13px; }
+  .status-detail.show { display: block; }
+  .status-detail-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .status-detail-row:last-child { margin-bottom: 0; }
+  .project-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .project-name { color: var(--vscode-foreground); font-size: 16px; font-weight: 600; }
+  .btn { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; padding: 6px 14px; border-radius: 4px; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+  .btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+  .btn-full { width: 100%; }
+  details { margin-top: 8px; }
+  details summary { cursor: pointer; list-style: none; color: var(--vscode-descriptionForeground); font-size: 13px; display: flex; align-items: center; gap: 4px; }
+  details summary::-webkit-details-marker { display: none; }
+  details .arrow { display: inline-block; transition: transform 0.2s; font-size: 10px; }
+  details[open] .arrow { transform: rotate(90deg); }
+  .details-content { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border)); }
+  .field-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .field-row .field { flex: 1; margin-bottom: 0; }
+  .field { margin-bottom: 10px; }
+  .field:last-child { margin-bottom: 0; }
+  label { display: block; font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 5px; font-weight: 500; }
+  input, select { width: 100%; background: rgba(255,255,255,0.05); color: var(--vscode-foreground); border: 1px solid rgba(255,255,255,0.1); padding: 8px 10px; border-radius: 4px; font-size: 13px; font-family: var(--vscode-font-family); outline: none; transition: border-color 0.15s, background 0.15s; }
+  input:focus, select:focus { border-color: var(--vscode-focusBorder); background: rgba(255,255,255,0.08); }
+  select option { background: #1e1e1e; color: var(--vscode-foreground); }
+  input::placeholder { color: rgba(255,255,255,0.35); }
+  .input-row { display: flex; gap: 6px; }
+  .input-row input { flex: 1; }
+  .hint { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 4px; }
+  .block-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .block-title { color: var(--vscode-foreground); font-size: 14px; font-weight: 600; }
+  .block-source { color: rgba(255,255,255,0.5); font-size: 11px; margin-left: auto; }
+  .block-path { font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 8px; word-break: break-all; line-height: 1.4; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { display: inline-block; animation: spin 1s linear infinite; }
+</style>
+</head>
+<body>
+
+<div class="env-block">
+  <div class="status-bar" onclick="toggleEnvDetail()">
+    <div class="status-dots">
+      <!--IF_WIN--><span id="dot-vs" class="status-dot {{dotVsClass}}"></span><!--END_WIN-->
+      <span id="dot-qt" class="status-dot {{dotQtClass}}"></span>
+      <span id="dot-jom" class="status-dot {{dotJomClass}}"></span>
+    </div>
+    <span id="status-summary" class="status-text">{{statusSummary}}</span>
+    <span id="env-arrow" class="status-arrow">▼</span>
+  </div>
+  <div id="env-detail" class="status-detail">
+    <!--IF_WIN-->
+    <div class="status-detail-row">
+      <span id="dot-vs-detail" class="status-dot {{dotVsClass}}"></span>
+      <span id="text-vs">{{textVs}}</span>
+    </div>
+    <!--END_WIN-->
+    <div class="status-detail-row">
+      <span id="dot-qt-detail" class="status-dot {{dotQtClass}}"></span>
+      <span id="text-qt">{{textQt}}</span>
+    </div>
+    <div class="status-detail-row">
+      <span id="dot-jom-detail" class="status-dot {{dotJomClass}}"></span>
+      <span id="text-jom">{{textJom}}</span>
+    </div>
+    <div style="margin-top:10px;">
+      <button id="refreshBtn" class="btn" onclick="refreshEnv()" {{refreshDisabled}}>{{refreshLabel}}</button>
+    </div>
+  </div>
+</div>
+
+<div class="env-block">
+  <div class="project-header">
+    <span class="project-name">{{projectName}}</span>
+    <button class="btn" onclick="selectProject()">切换</button>
+  </div>
+  <details>
+    <summary><span class="arrow">▶</span> 高级设置</summary>
+    <div class="details-content">
+      <div class="field-row">
+        <div class="field">
+          <label>C 标准</label>
+          <select id="cStandard" onchange="saveStandard()">
+            <option value="c89" {{selC89}}>C89</option>
+            <option value="c99" {{selC99}}>C99</option>
+            <option value="c11" {{selC11}}>C11</option>
+            <option value="c17" {{selC17}}>C17</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>C++ 标准</label>
+          <select id="cppStandard" onchange="saveStandard()">
+            <option value="c++11" {{selCpp11}}>C++11</option>
+            <option value="c++14" {{selCpp14}}>C++14</option>
+            <option value="c++17" {{selCpp17}}>C++17</option>
+            <option value="c++20" {{selCpp20}}>C++20</option>
+            <option value="c++23" {{selCpp23}}>C++23</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>排除目录</label>
+        <input id="scanExcludeDirs" value="{{scanExcludeDirs}}" placeholder="thirdparty, vendor" onblur="saveExcludeDirs()" />
+        <div class="hint">已内置: build*, debug, release</div>
+      </div>
+      <div class="field">
+        <label>QMake TARGET（留空使用 .pro 默认值）</label>
+        <input id="qmakeTarget" value="{{qmakeTarget}}" placeholder="例: MyApp" onblur="saveQmakeTarget()" />
+      </div>
+      <button class="btn btn-full" style="margin-top:10px;" onclick="generateIntelliSense()">生成 IntelliSense 配置</button>
+    </div>
+  </details>
+</div>
+
+<!--IF_WIN-->
+<div class="env-block">
+  <div class="block-header">
+    <span id="dot-vsblock" class="status-dot {{dotVsBlockClass}}"></span>
+    <span class="block-title">Visual Studio</span>
+    <span id="vs-source" class="block-source">{{devShellSource}}</span>
+  </div>
+  <div id="vs-path" class="block-path">{{effectiveDevShell}}</div>
+  <details>
+    <summary><span class="arrow">▶</span> 手动覆盖</summary>
+    <div class="details-content">
+      <div class="field">
+        <select id="vsVersion" onchange="onVersionChange()">
+          <option value="">-- 快速选择版本 --</option>
+          <option value="2022_community">VS 2022 Community</option>
+          <option value="2022_professional">VS 2022 Professional</option>
+          <option value="2022_enterprise">VS 2022 Enterprise</option>
+          <option value="2019_community">VS 2019 Community</option>
+          <option value="2019_professional">VS 2019 Professional</option>
+          <option value="2019_enterprise">VS 2019 Enterprise</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="input-row">
+          <input id="vsDevShellPath" value="{{vsDevShellPath}}" placeholder="手动覆盖路径" onblur="saveVsPath()" />
+          <button class="btn" onclick="browse('vsDevShellPath', false)">浏览</button>
+        </div>
+      </div>
+    </div>
+  </details>
+</div>
+<!--END_WIN-->
+
+<div class="env-block">
+  <div class="block-header">
+    <span id="dot-qtblock" class="status-dot {{dotQtBlockClass}}"></span>
+    <span class="block-title">Qt</span>
+    <span id="qt-source" class="block-source">{{qtSource}}</span>
+  </div>
+  <div id="qt-path" class="block-path">{{effectiveQtPath}}</div>
+  <details>
+    <summary><span class="arrow">▶</span> 手动覆盖</summary>
+    <div class="details-content">
+      <div class="field">
+        <div class="input-row">
+          <input id="qtPath" value="{{qtPathValue}}" placeholder="手动指定 Qt 路径" list="qtPathList" onblur="saveQtPath()" />
+          <datalist id="qtPathList">{{qtCandidateOptions}}</datalist>
+          <button class="btn" onclick="browse('qtPath', true)">浏览</button>
+        </div>
+      </div>
+    </div>
+  </details>
+</div>
+
+<script>
+  const vscode = acquireVsCodeApi();
+  const vsPaths = {
+    '2022_community':    'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1',
+    '2022_professional': 'C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\Common7\\Tools\\Launch-VsDevShell.ps1',
+    '2022_enterprise':   'C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\Tools\\Launch-VsDevShell.ps1',
+    '2019_community':    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1',
+    '2019_professional': 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Professional\\Common7\\Tools\\Launch-VsDevShell.ps1',
+    '2019_enterprise':   'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Enterprise\\Common7\\Tools\\Launch-VsDevShell.ps1',
+  };
+  function toggleEnvDetail() {
+    const detail = document.getElementById('env-detail');
+    const arrow = document.getElementById('env-arrow');
+    if (detail.classList.contains('show')) { detail.classList.remove('show'); arrow.textContent = '▼'; }
+    else { detail.classList.add('show'); arrow.textContent = '▲'; }
+  }
+  function onVersionChange() {
+    const ver = document.getElementById('vsVersion').value;
+    if (ver && vsPaths[ver]) { document.getElementById('vsDevShellPath').value = vsPaths[ver]; saveVsPath(); }
+  }
+  function saveVsPath() { vscode.postMessage({ command: 'saveVsPath', value: document.getElementById('vsDevShellPath').value }); }
+  function saveQtPath() { vscode.postMessage({ command: 'saveQtPath', value: document.getElementById('qtPath').value }); }
+  function saveStandard() { vscode.postMessage({ command: 'saveStandard', cStandard: document.getElementById('cStandard').value, cppStandard: document.getElementById('cppStandard').value }); }
+  function saveExcludeDirs() {
+    const val = document.getElementById('scanExcludeDirs').value;
+    const dirs = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    vscode.postMessage({ command: 'saveExcludeDirs', dirs });
+  }
+  function saveQmakeTarget() { vscode.postMessage({ command: 'saveQmakeTarget', value: document.getElementById('qmakeTarget').value }); }
+  function browse(targetId, isDir) { vscode.postMessage({ command: 'browse', targetId, isDir }); }
+  function refreshEnv() {
+    const btn = document.getElementById('refreshBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span> 检测中...';
+    vscode.postMessage({ command: 'refreshEnv' });
+  }
+  function selectProject() { vscode.postMessage({ command: 'selectProject' }); }
+  function generateIntelliSense() { vscode.postMessage({ command: 'generateIntelliSense', cStandard: document.getElementById('cStandard').value, cppStandard: document.getElementById('cppStandard').value }); }
+  function setText(id, text) { const el = document.getElementById(id); if (el) { el.textContent = text; } }
+  window.addEventListener('message', e => {
+    const d = e.data;
+    if (d.command === 'setPath') {
+      document.getElementById(d.targetId).value = d.value;
+      if (d.targetId === 'vsDevShellPath') { saveVsPath(); } else if (d.targetId === 'qtPath') { saveQtPath(); }
+    } else if (d.command === 'envUpdated') {
+      const setDot = (id, ok) => { const dot = document.getElementById(id); if (dot) { dot.className = 'status-dot ' + (ok ? 'dot-ok' : 'dot-warn'); } };
+      setDot('dot-qt', !!d.env.qt); setDot('dot-jom', d.env.jom); setDot('dot-qt-detail', !!d.env.qt); setDot('dot-jom-detail', d.env.jom);
+      if (d.isWin) { setDot('dot-vs', !!d.env.vs); setDot('dot-vs-detail', !!d.env.vs); setText('text-vs', d.env.vs || '未检测到 Visual Studio'); }
+      setText('text-qt', d.env.qt || '未检测到 Qt');
+      const makeLabel = d.isWin ? 'jom' : 'make';
+      setText('text-jom', d.env.jom ? makeLabel + ' 可用' : makeLabel + ' 未找到');
+      const qtVer = d.env.qt ? d.env.qt.split(' ')[1] : '';
+      const vsPart = d.isWin ? (d.env.vs ? 'VS ' + d.env.vs.split(' ')[1] : 'VS 未检测') + ' · ' : '';
+      document.getElementById('status-summary').textContent = vsPart + (d.env.qt ? 'Qt ' + qtVer : 'Qt 未检测') + ' · ' + (d.env.jom ? makeLabel + ' 可用' : makeLabel + ' 未找到');
+      const btn = document.getElementById('refreshBtn'); btn.disabled = false; btn.innerHTML = '刷新检测';
+    } else if (d.command === 'envDetecting') {
+      ['dot-vs','dot-qt','dot-jom','dot-vs-detail','dot-qt-detail','dot-jom-detail','dot-vsblock','dot-qtblock'].forEach(id => { const dot = document.getElementById(id); if (dot) { dot.className = 'status-dot dot-detecting'; } });
+      document.getElementById('status-summary').textContent = '检测中...';
+      setText('text-vs', '检测中...'); setText('text-qt', '检测中...'); setText('text-jom', '检测中...');
+      const btn = document.getElementById('refreshBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span> 检测中...';
+    } else if (d.command === 'devShellUpdated') {
+      const dot = document.getElementById('dot-vsblock'); if (dot) { dot.className = 'status-dot ' + (d.ok ? 'dot-ok' : 'dot-warn'); }
+      const p = document.getElementById('vs-path'); if (p) { p.textContent = d.effective || '未配置'; }
+      const s = document.getElementById('vs-source'); if (s) { s.textContent = d.source; }
+    } else if (d.command === 'qtPathUpdated') {
+      const dot = document.getElementById('dot-qtblock'); if (dot) { dot.className = 'status-dot ' + (d.ok ? 'dot-ok' : 'dot-warn'); }
+      const p = document.getElementById('qt-path'); if (p) { p.textContent = d.effective || '未配置'; }
+      const s = document.getElementById('qt-source'); if (s) { s.textContent = d.source; }
+    }
+  });
+</script>
+
+<div style="padding: 10px 12px; text-align: right; color: rgba(255,255,255,0.3); font-size: 11px;">
+  XY Qt Tools v{{version}}
+</div>
+</body>
+</html>

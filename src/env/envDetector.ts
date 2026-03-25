@@ -1,13 +1,17 @@
-import * as child_process from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { detectEnvWin } from './platform/win/envDetector';
-import { detectEnvLinux } from './platform/linux/envDetector';
-import { log } from './logger';
+import { execAsync, readDir, isDir } from './utils';
+import { detectEnvWin } from '../platform/win/envDetector';
+import { detectEnvLinux } from '../platform/linux/envDetector';
+import { log } from '../core/logger';
+
+// 重新导出，供 platform 子模块使用
+export { execAsync, readDir, isDir };
 
 export interface EnvInfo {
     vs: VSInfo | null;
     qt: QtInfo | null;
+    qtCandidates: QtInfo[];
     jom: boolean;
 }
 
@@ -22,29 +26,6 @@ export interface QtInfo {
     version: string;
     compiler: string;
     path: string;
-}
-
-let _envInfo: EnvInfo | null = null;
-
-// ── 共享工具 ──
-
-export function execAsync(cmd: string, args: string[]): Promise<string> {
-    return new Promise(resolve => {
-        const proc = child_process.spawn(cmd, args, { windowsHide: true });
-        let out = '';
-        proc.stdout.on('data', (d: Buffer) => { out += d.toString(); });
-        proc.stderr.on('data', (d: Buffer) => { out += d.toString(); });
-        proc.on('close', () => resolve(out));
-        proc.on('error', () => resolve(''));
-    });
-}
-
-export function readDir(dir: string): string[] {
-    try { return fs.readdirSync(dir); } catch { return []; }
-}
-
-export function isDir(p: string): boolean {
-    try { return fs.statSync(p).isDirectory(); } catch { return false; }
 }
 
 // ── Qt 扫描公共逻辑 ──
@@ -123,38 +104,28 @@ export async function parseQtInfo(qtPath: string, defaultCompiler: string): Prom
     return { version, compiler: defaultCompiler, path: qtPath };
 }
 
-// 扫描目录列表，找到所有含 qmake 的 Qt 路径，返回版本最高的
-export async function scanQt(parentDirs: string[], tag: string): Promise<string | null> {
+// 扫描目录列表，找到所有含 qmake 的 Qt 路径，按版本降序返回
+export async function scanQt(parentDirs: string[], tag: string): Promise<string[]> {
     const scanRoots = collectQtDirs(parentDirs);
     log(`[${tag}] 扫描目录: ${scanRoots.join(', ') || '无'}`);
-    let bestPath: string | null = null;
-    let bestVersion = '';
+    const found: Array<{ path: string; version: string }> = [];
     for (const root of scanRoots) {
-        const found = findQmakeIn(root);
-        if (!found) { continue; }
-        // 从路径提取版本用于比较
-        const m = found.match(/(\d+\.\d+\.\d+)/);
-        const ver = m ? m[1] : '0.0.0';
-        if (!bestPath || compareVersion(ver, bestVersion) > 0) {
-            bestPath = found;
-            bestVersion = ver;
-        }
+        const qtPath = findQmakeIn(root);
+        if (!qtPath) { continue; }
+        const m = qtPath.match(/(\d+\.\d+\.\d+)/);
+        found.push({ path: qtPath, version: m ? m[1] : '0.0.0' });
     }
-    if (bestPath) { log(`[${tag}] 扫描找到 Qt: "${bestPath}" (${bestVersion})`); }
-    return bestPath;
+    found.sort((a, b) => compareVersion(b.version, a.version));
+    if (found.length > 0) { log(`[${tag}] 扫描找到 ${found.length} 个 Qt: ${found.map(f => f.path).join(', ')}`); }
+    return found.map(f => f.path);
 }
 
 // ── 入口 ──
 
-export function getEnvInfo(): EnvInfo | null {
-    return _envInfo;
-}
-
 export async function detectEnv(manualQtPath?: string, manualVsPath?: string): Promise<EnvInfo> {
     if (process.platform === 'win32') {
-        _envInfo = await detectEnvWin(manualQtPath, manualVsPath);
+        return detectEnvWin(manualQtPath, manualVsPath);
     } else {
-        _envInfo = await detectEnvLinux(manualQtPath);
+        return detectEnvLinux(manualQtPath);
     }
-    return _envInfo;
 }

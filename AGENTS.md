@@ -134,12 +134,37 @@ export async function runDebug() {
 
 ```
 src/
-├── extension.ts    # Extension entry point, command registration
-├── statusBar.ts    # Status bar UI, mode toggle
-├── buildManager.ts # QMake/Build/Run task execution
-├── configPanel.ts  # WebView configuration panel
-└── priWatcher.ts   # File watcher for .pri/.pro sync
-out/                # Compiled JavaScript (gitignored)
+├── extension.ts                    # 入口，初始化 + 命令注册
+├── core/
+│   ├── stateManager.ts             # 单一状态源，事件订阅
+│   ├── configService.ts            # 统一配置读写、BuildConfig 组装、路径解析
+│   └── logger.ts                   # Output channel 日志
+├── build/
+│   ├── buildManager.ts             # QMake/Build/Run 任务执行
+│   ├── debugger.ts                 # 调试会话启动
+│   └── configGenerator.ts          # IntelliSense c_cpp_properties.json 生成
+├── project/
+│   ├── projectManager.ts           # .pro 扫描、解析、项目选择（无状态）
+│   └── priWatcher.ts               # .pri/.pro 文件监听
+├── env/
+│   ├── envDetector.ts              # Qt 扫描公共逻辑 + detectEnv 入口（无状态）
+│   └── utils.ts                    # 通用工具函数 (execAsync, readDir, isDir)
+├── ui/
+│   ├── statusBar.ts                # 纯 UI 层，订阅 stateManager
+│   └── configPanel/
+│       ├── index.ts                # WebviewViewProvider，消息路由
+│       ├── messageHandler.ts       # 消息处理逻辑
+│       └── template.ts            # HTML/CSS/JS 模板生成
+└── platform/
+    ├── builder.ts                  # BuildConfig/PlatformBuilder 接口 + createBuilder 工厂
+    ├── platformConfig.ts           # PlatformConfig 平台抽象接口
+    ├── win/
+    │   ├── builder.ts              # Windows 平台配置 (winConfig)
+    │   └── envDetector.ts          # Windows 环境检测
+    └── linux/
+        ├── builder.ts              # Linux 平台配置 (linuxConfig)
+        └── envDetector.ts          # Linux 环境检测
+out/                                # 编译输出 (gitignored)
 ```
 
 ## Important Notes

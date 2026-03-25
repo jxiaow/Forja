@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
+import { PlatformConfig } from './platformConfig';
 
 export interface BuildConfig {
     vsDevShell: string;
     qtPath: string;
     projectDir: string;
     proFile: string;
-    exeName: string;
-    destDir: string;        // DESTDIR，已解析变量，相对于 projectDir
     arch: string;
     mode: string;
+    qmakeTarget: string;   // 可选 TARGET 覆盖，空字符串表示不覆盖
 }
 
 export interface PlatformBuilder {
@@ -17,6 +17,63 @@ export interface PlatformBuilder {
     qmakeCommands(cfg: BuildConfig): { commands: string[]; matcher: string | string[] };
     buildCommands(cfg: BuildConfig): { commands: string[]; matcher: string | string[] };
     cleanCommands(cfg: BuildConfig): { commands: string[]; matcher: string | string[] };
-    exePath(root: string, cfg: BuildConfig): string;
     stopCommands(exeName: string): string[];
+}
+
+export function createBuilder(config: PlatformConfig): PlatformBuilder {
+    function assembleCommands(cfg: BuildConfig, specificCmds: string[]): string[] {
+        return [
+            ...config.initCommands(cfg),
+            config.cdCommand(cfg.projectDir),
+            ...specificCmds
+        ];
+    }
+
+    return {
+        makeExec(commands: string[]): vscode.ShellExecution {
+            const cmd = commands.join(config.commandJoiner);
+            if (config.shellExecutable) {
+                return new vscode.ShellExecution(cmd, {
+                    executable: config.shellExecutable,
+                    shellArgs: config.shellArgs || []
+                });
+            }
+            return new vscode.ShellExecution(cmd);
+        },
+
+        killApp(exeName: string): string {
+            return config.killCommand(exeName);
+        },
+
+        qmakeCommands(cfg: BuildConfig) {
+            const modeConfig = cfg.mode === 'debug'
+                ? 'CONFIG+=debug CONFIG+=console'
+                : 'CONFIG+=release';
+            const extra = config.qmakeExtraArgs(cfg);
+            const targetArg = cfg.qmakeTarget ? ` "TARGET=${cfg.qmakeTarget}"` : '';
+            const qmakeCmd = `qmake ${cfg.proFile} -spec ${config.qmakeSpec} ${modeConfig}${extra ? ' ' + extra : ''}${targetArg}`;
+            return {
+                commands: assembleCommands(cfg, [qmakeCmd]),
+                matcher: config.qmakeMatcher
+            };
+        },
+
+        buildCommands(cfg: BuildConfig) {
+            return {
+                commands: assembleCommands(cfg, [config.buildCommand]),
+                matcher: config.buildMatcher
+            };
+        },
+
+        cleanCommands(cfg: BuildConfig) {
+            return {
+                commands: assembleCommands(cfg, [config.cleanCommand]),
+                matcher: config.cleanMatcher
+            };
+        },
+
+        stopCommands(exeName: string): string[] {
+            return config.stopCommands(exeName);
+        }
+    };
 }

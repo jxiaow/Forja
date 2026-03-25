@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { EnvInfo, QtInfo, execAsync, hasQmake, parseQtInfo, scanQt } from '../../envDetector';
-import { log } from '../../logger';
+import { EnvInfo, QtInfo, execAsync, hasQmake, parseQtInfo, scanQt } from '../../env/envDetector';
+import { log } from '../../core/logger';
 
 // Linux 默认编译器从路径推断
 function detectCompiler(qtPath: string): string {
@@ -9,31 +9,40 @@ function detectCompiler(qtPath: string): string {
     return 'gcc';
 }
 
-async function detectQt(manualPath?: string): Promise<QtInfo | null> {
-    // 1. 手动配置优先
-    if (manualPath) {
-        log(`[Linux] 手动 Qt 路径: "${manualPath}"`);
-        if (!hasQmake(manualPath)) { log('[Linux] 手动路径无效'); return null; }
-        return parseQtInfo(manualPath, detectCompiler(manualPath));
+async function detectQt(manualPath?: string): Promise<{ qt: QtInfo | null; candidates: QtInfo[] }> {
+    const candidates: QtInfo[] = [];
+
+    // 1. 目录扫描（收集所有版本）
+    const parentDirs = ['/opt', '/usr/local', process.env.HOME || ''];
+    const foundPaths = await scanQt(parentDirs, 'Linux');
+    for (const p of foundPaths) {
+        candidates.push(await parseQtInfo(p, detectCompiler(p)));
     }
 
     // 2. 系统 PATH（which qmake）
     const whichOut = (await execAsync('which', ['qmake'])).trim();
     if (whichOut && fs.existsSync(whichOut)) {
         const qtRoot = path.dirname(path.dirname(whichOut));
-        if (hasQmake(qtRoot)) {
+        if (hasQmake(qtRoot) && !candidates.some(c => c.path === qtRoot)) {
             log(`[Linux] PATH 找到 Qt: "${qtRoot}"`);
-            return parseQtInfo(qtRoot, detectCompiler(qtRoot));
+            candidates.unshift(await parseQtInfo(qtRoot, detectCompiler(qtRoot)));
         }
     }
 
-    // 3. 目录扫描（选版本最高的）
-    const parentDirs = ['/opt', '/usr/local', process.env.HOME || ''];
-    const found = await scanQt(parentDirs, 'Linux');
-    if (found) { return parseQtInfo(found, detectCompiler(found)); }
+    // 3. 手动配置：验证有效性，插到最前面作为当前选中版本
+    if (manualPath) {
+        log(`[Linux] 手动 Qt 路径: "${manualPath}"`);
+        if (!hasQmake(manualPath)) {
+            log('[Linux] 手动路径无效');
+        } else {
+            const manual = await parseQtInfo(manualPath, detectCompiler(manualPath));
+            const filtered = candidates.filter(c => c.path !== manualPath);
+            return { qt: manual, candidates: [manual, ...filtered] };
+        }
+    }
 
-    log('[Linux] 未检测到 Qt');
-    return null;
+    if (candidates.length === 0) { log('[Linux] 未检测到 Qt'); return { qt: null, candidates: [] }; }
+    return { qt: candidates[0], candidates };
 }
 
 async function detectMake(qt: QtInfo | null): Promise<boolean> {
@@ -43,7 +52,7 @@ async function detectMake(qt: QtInfo | null): Promise<boolean> {
 }
 
 export async function detectEnvLinux(manualQtPath?: string): Promise<EnvInfo> {
-    const qt = await detectQt(manualQtPath);
+    const { qt, candidates } = await detectQt(manualQtPath);
     const jom = await detectMake(qt);
-    return { vs: null, qt, jom };
+    return { vs: null, qt, qtCandidates: candidates, jom };
 }

@@ -107,10 +107,13 @@ export function registerPriWatcher(context: vscode.ExtensionContext) {
         const filePath = uri.fsPath;
         const fileName = path.basename(filePath);
         // 忽略 Qt 自动生成的文件
-        if (fileName.startsWith('ui_') || fileName.startsWith('moc_')) { return; }
+        if (fileName.startsWith('ui_') || fileName.startsWith('moc_') || fileName.startsWith('qrc_')) { return; }
         const dir = path.dirname(filePath);
         const priPath = findPriOrPro(dir, root);
         if (!priPath) return;
+        // 已经在 pri/pro 里了，静默跳过
+        const relPath = getRelativePath(priPath, filePath);
+        if (isInPri(readPriContent(priPath), relPath)) { return; }
         await promptSync(priPath, filePath, 'add');
     });
 

@@ -6,26 +6,20 @@ export interface ProjectInfo {
     proPath: string;        // .pro 文件完整路径
     projectDir: string;     // 项目目录（相对于 workspace）
     proFile: string;        // .pro 文件名
-    target: string;         // TARGET 名称
-    destDir: string;        // DESTDIR（相对于项目目录，可能含变量）
+    target: string;         // TARGET 名称（显示用，从 .pro 粗略解析）
     qtModules: string[];    // QT 模块列表
     defines: string[];      // DEFINES
 }
 
-let _currentProject: ProjectInfo | null = null;
-
-export function getCurrentProject(): ProjectInfo | null {
-    return _currentProject;
-}
-
-export function setCurrentProject(project: ProjectInfo | null): void {
-    _currentProject = project;
+export interface MakefileInfo {
+    target: string;         // 可执行文件名（不含 .exe）
+    destDir: string;        // 输出目录（已展开的最终值）
 }
 
 export function scanProFiles(root: string): string[] {
     const proFiles: string[] = [];
 
-    function scan(dir: string) {
+    function scan(dir: string): void {
         try {
             const entries = fs.readdirSync(dir, { withFileTypes: true });
             for (const entry of entries) {
@@ -43,45 +37,68 @@ export function scanProFiles(root: string): string[] {
     return proFiles.map(p => path.relative(root, p).replace(/\\/g, '/'));
 }
 
+// ── Makefile 解析（qmake 生成的最终值，最可靠） ──
+
+function _parseMakefileVar(makefilePath: string, varName: string): string | null {
+    try {
+        if (!fs.existsSync(makefilePath)) { return null; }
+        const content = fs.readFileSync(makefilePath, 'utf-8');
+        const match = content.match(new RegExp(`^${varName}\\s*=\\s*(.+)$`, 'm'));
+        if (!match) { return null; }
+        // 去掉行尾注释（如 qmake 生成的 #avoid trailing-slash linebreak）
+        return match[1].replace(/#.*$/, '').trim();
+    } catch {}
+    return null;
+}
+
+export function getMakefileInfo(projectDir: string, mode?: string): MakefileInfo | null {
+    // 按 mode 优先选对应的 Makefile，再 fallback 到通用 Makefile
+    const modeFile = mode === 'release' ? 'Makefile.Release'
+                   : mode === 'debug'   ? 'Makefile.Debug'
+                   : null;
+    const candidates = [
+        modeFile ? path.join(projectDir, modeFile) : null,
+        path.join(projectDir, 'Makefile'),
+        path.join(projectDir, 'Makefile.Debug'),
+        path.join(projectDir, 'Makefile.Release')
+    ].filter((p): p is string => p !== null);
+
+    let target: string | null = null;
+    let destDir: string | null = null;
+
+    for (const mf of candidates) {
+        if (!target) {
+            const t = _parseMakefileVar(mf, 'TARGET');
+            if (t) { target = t.replace(/\.exe$/i, ''); }
+        }
+        if (!destDir) {
+            const d = _parseMakefileVar(mf, 'DESTDIR');
+            if (d) { destDir = d.replace(/\\/g, '/').replace(/\/$/, ''); }
+        }
+        if (target && destDir) { break; }
+    }
+
+    if (!target) { return null; }
+    return { target, destDir: destDir || '' };
+}
+
+// ── .pro 文件解析（只取显示名 + IntelliSense 需要的信息） ──
+
 export function parseProFile(proPath: string): ProjectInfo {
     const content = fs.readFileSync(proPath, 'utf-8');
     const projectDir = path.dirname(proPath);
     const proFile = path.basename(proPath);
 
-    // 解析 TARGET：平台块优先，其次全局
-    let target = 'app';
-    const isWin = process.platform === 'win32';
-    const platformKey = isWin ? 'win32' : 'linux';
-    const platformMatch = content.match(new RegExp(`${platformKey}\\s*\\{[^}]*TARGET\\s*=\\s*(\\S+)`, 's'));
-    if (platformMatch) {
-        target = platformMatch[1].trim();
-    } else {
-        const globalMatch = content.match(/^\s*TARGET\s*=\s*(\S+)/m);
-        if (globalMatch) { target = globalMatch[1].trim(); }
-    }
+    // TARGET：粗略解析，仅用于 UI 显示
+    let target = path.basename(proFile, '.pro');
+    const targetMatch = content.match(/^\s*TARGET\s*=\s*(\S+)/m);
+    if (targetMatch) { target = targetMatch[1].trim(); }
 
-    // 解析 DESTDIR（取最后一个平台无关的赋值，简单处理变量）
-    let destDir = '';
-    const destMatches = [...content.matchAll(/^\s*DESTDIR\s*=\s*(.+)$/mg)];
-    if (destMatches.length > 0) {
-        destDir = destMatches[destMatches.length - 1][1].trim();
-        // 去掉行尾注释
-        destDir = destDir.replace(/#.*$/, '').trim();
-        // 替换 $$PWD → 空（相对路径基准就是 projectDir）
-        destDir = destDir.replace(/\$\$\{?PWD\}?/g, '');
-        // $$CONFIGURATION / $$[QMAKE_SPEC] 等运行时变量用占位符，buildManager 里按 mode 替换
-        destDir = destDir.replace(/\$\$\{?CONFIGURATION\}?/gi, '{MODE}');
-        destDir = destDir.replace(/\$\$\{?BUILD_TYPE\}?/gi, '{MODE}');
-        // 去掉其他未知 $$ 变量（避免传入 shell 被误解析）
-        destDir = destDir.replace(/\$\$\{?\w+\}?/g, '');
-        destDir = destDir.replace(/^[/\\]/, '').replace(/\\/g, '/').trim();
-    }
-
-    // 解析 QT 模块
+    // QT 模块
     const qtMatch = content.match(/^\s*QT\s*\+?=\s*(.+)$/m);
     const qtModules = qtMatch ? qtMatch[1].trim().split(/\s+/) : ['core', 'gui', 'widgets'];
 
-    // 解析 DEFINES
+    // DEFINES
     const definesMatch = content.match(/^\s*DEFINES\s*\+?=\s*(.+)$/m);
     const defines = definesMatch ? definesMatch[1].trim().split(/\s+/) : [];
 
@@ -90,7 +107,6 @@ export function parseProFile(proPath: string): ProjectInfo {
         projectDir: path.basename(projectDir),
         proFile,
         target,
-        destDir,
         qtModules,
         defines
     };
@@ -106,13 +122,11 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
     const config = vscode.workspace.getConfiguration('xyQt');
     const savedProject = config.get<string>('selectedProject');
 
-    // 非强制模式：有已保存的项目直接加载，不弹选择框
     if (!forceSelect && savedProject) {
         const fullPath = path.join(root, savedProject);
         if (fs.existsSync(fullPath)) {
             const info = parseProFile(fullPath);
             info.projectDir = path.dirname(savedProject);
-            _currentProject = info;
             return info;
         }
     }
@@ -129,7 +143,6 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const info = parseProFile(fullPath);
         info.projectDir = path.dirname(proFiles[0]);
         await config.update('selectedProject', proFiles[0], vscode.ConfigurationTarget.Workspace);
-        _currentProject = info;
         return info;
     }
 
@@ -142,7 +155,6 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const info = parseProFile(fullPath);
         info.projectDir = path.dirname(selected);
         await config.update('selectedProject', selected, vscode.ConfigurationTarget.Workspace);
-        _currentProject = info;
         return info;
     }
 

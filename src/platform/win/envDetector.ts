@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { EnvInfo, VSInfo, QtInfo, execAsync, hasQmake, parseQtInfo, scanQt } from '../../envDetector';
-import { log } from '../../logger';
+import { EnvInfo, VSInfo, QtInfo, execAsync, hasQmake, parseQtInfo, scanQt } from '../../env/envDetector';
+import { log } from '../../core/logger';
 
 // ── VS 检测 ──
 
@@ -53,31 +53,42 @@ function detectCompiler(qtPath: string): string {
     return 'msvc2019';
 }
 
-async function detectQt(manualPath?: string): Promise<QtInfo | null> {
-    // 1. 手动配置优先
-    if (manualPath) {
-        log(`[Win] 手动 Qt 路径: "${manualPath}"`);
-        if (!hasQmake(manualPath)) { log('[Win] 手动路径无效'); return null; }
-        return parseQtInfo(manualPath, detectCompiler(manualPath));
+async function detectQt(manualPath?: string): Promise<{ qt: QtInfo | null; candidates: QtInfo[] }> {
+    const candidates: QtInfo[] = [];
+
+    // 1. 目录扫描（收集所有版本）
+    const parentDirs = ['C:\\Qt', 'C:\\QtCompile', 'D:\\Qt', 'E:\\Qt'];
+    const foundPaths = await scanQt(parentDirs, 'Win');
+    for (const p of foundPaths) {
+        candidates.push(await parseQtInfo(p, detectCompiler(p)));
     }
 
     // 2. 系统 PATH（where qmake）
     const whereOut = (await execAsync('where', ['qmake'])).trim().split('\n')[0].trim();
     if (whereOut && fs.existsSync(whereOut)) {
         const qtRoot = path.dirname(path.dirname(whereOut));
-        if (hasQmake(qtRoot)) {
+        if (hasQmake(qtRoot) && !candidates.some(c => c.path === qtRoot)) {
             log(`[Win] PATH 找到 Qt: "${qtRoot}"`);
-            return parseQtInfo(qtRoot, detectCompiler(qtRoot));
+            candidates.unshift(await parseQtInfo(qtRoot, detectCompiler(qtRoot)));
         }
     }
 
-    // 3. 目录扫描（选版本最高的）
-    const parentDirs = ['C:\\Qt', 'C:\\QtCompile', 'D:\\Qt', 'E:\\Qt'];
-    const found = await scanQt(parentDirs, 'Win');
-    if (found) { return parseQtInfo(found, detectCompiler(found)); }
+    // 3. 手动配置：验证有效性，插到最前面作为当前选中版本
+    if (manualPath) {
+        log(`[Win] 手动 Qt 路径: "${manualPath}"`);
+        if (!hasQmake(manualPath)) {
+            log('[Win] 手动路径无效');
+        } else {
+            const manual = await parseQtInfo(manualPath, detectCompiler(manualPath));
+            // 去重后置顶
+            const filtered = candidates.filter(c => c.path !== manualPath);
+            const qt = manual;
+            return { qt, candidates: [manual, ...filtered] };
+        }
+    }
 
-    log('[Win] 未检测到 Qt');
-    return null;
+    if (candidates.length === 0) { log('[Win] 未检测到 Qt'); return { qt: null, candidates: [] }; }
+    return { qt: candidates[0], candidates };
 }
 
 // ── Jom 检测 ──
@@ -90,7 +101,7 @@ async function detectJom(qt: QtInfo | null): Promise<boolean> {
 }
 
 export async function detectEnvWin(manualQtPath?: string, manualVsPath?: string): Promise<EnvInfo> {
-    const [vs, qt] = await Promise.all([detectVS(manualVsPath || undefined), detectQt(manualQtPath)]);
+    const [vs, { qt, candidates }] = await Promise.all([detectVS(manualVsPath || undefined), detectQt(manualQtPath)]);
     const jom = await detectJom(qt);
-    return { vs, qt, jom };
+    return { vs, qt, qtCandidates: candidates, jom };
 }
