@@ -72,16 +72,19 @@ function findQmakeIn(root: string): string | null {
     return null;
 }
 
-// 收集父目录下所有 qt* 开头的子目录（大小写不敏感）
+// 收集候选扫描根目录：
+//   - 父目录本身（如 C:\Qt 直接含版本子目录）
+//   - 父目录下 qt* 开头的子目录（如 /usr/local/qt5.13.2）
 function collectQtDirs(parentDirs: string[]): string[] {
     const roots: string[] = [];
     const seen = new Set<string>();
+    const add = (p: string) => { if (!seen.has(p) && isDir(p)) { seen.add(p); roots.push(p); } };
     for (const parent of parentDirs) {
         if (!parent || !isDir(parent)) { continue; }
+        add(parent); // 父目录本身也作为候选（Windows C:\Qt 场景）
         for (const name of readDir(parent)) {
             if (!name.toLowerCase().startsWith('qt')) { continue; }
-            const full = path.join(parent, name);
-            if (!seen.has(full) && isDir(full)) { seen.add(full); roots.push(full); }
+            add(path.join(parent, name));
         }
     }
     return roots;

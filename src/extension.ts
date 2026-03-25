@@ -9,6 +9,7 @@ import { selectProject } from './projectManager';
 import { startDebug } from './debugger';
 import { generateCppProperties } from './configGenerator';
 import { initLogger, log } from './logger';
+import { detectEnv } from './envDetector';
 
 export async function activate(context: vscode.ExtensionContext) {
     const channel = initLogger();
@@ -22,6 +23,12 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     registerPriWatcher(context);
+
+    // 启动时主动检测环境，确保 buildManager 能拿到 Qt 路径
+    const cfg0 = vscode.workspace.getConfiguration('xyQt');
+    detectEnv(cfg0.get<string>('qtPath', ''), cfg0.get<string>('vsDevShellPath', '')).then(() => {
+        log('启动环境检测完成');
+    }).catch((e: Error) => log(`启动环境检测失败: ${e.message}`));
 
     // 自动选择项目
     const project = await selectProject(context);

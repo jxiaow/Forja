@@ -17,19 +17,7 @@ async function detectQt(manualPath?: string): Promise<QtInfo | null> {
         return parseQtInfo(manualPath, detectCompiler(manualPath));
     }
 
-    // 2. 环境变量
-    const qtdir = process.env.QTDIR || process.env.Qt6_DIR || process.env.Qt5_DIR;
-    if (qtdir && hasQmake(qtdir)) {
-        log(`[Linux] 环境变量找到 Qt: "${qtdir}"`);
-        return parseQtInfo(qtdir, detectCompiler(qtdir));
-    }
-
-    // 3. 目录扫描（选版本最高的）
-    const parentDirs = ['/opt', '/usr/local', process.env.HOME || ''];
-    const found = await scanQt(parentDirs, 'Linux');
-    if (found) { return parseQtInfo(found, detectCompiler(found)); }
-
-    // 4. 系统 PATH（which qmake）
+    // 2. 系统 PATH（which qmake）
     const whichOut = (await execAsync('which', ['qmake'])).trim();
     if (whichOut && fs.existsSync(whichOut)) {
         const qtRoot = path.dirname(path.dirname(whichOut));
@@ -38,6 +26,11 @@ async function detectQt(manualPath?: string): Promise<QtInfo | null> {
             return parseQtInfo(qtRoot, detectCompiler(qtRoot));
         }
     }
+
+    // 3. 目录扫描（选版本最高的）
+    const parentDirs = ['/opt', '/usr/local', process.env.HOME || ''];
+    const found = await scanQt(parentDirs, 'Linux');
+    if (found) { return parseQtInfo(found, detectCompiler(found)); }
 
     log('[Linux] 未检测到 Qt');
     return null;

@@ -14,7 +14,7 @@ export const linuxBuilder: PlatformBuilder = {
     },
 
     killApp(exeName: string): string {
-        return `pkill -f ${exeName} 2>/dev/null; true`;
+        return `pkill -x ${exeName} 2>/dev/null; true`;
     },
 
     qmakeCommands(cfg: BuildConfig) {
@@ -30,7 +30,6 @@ export const linuxBuilder: PlatformBuilder = {
     buildCommands(cfg: BuildConfig) {
         const cmds: string[] = [];
         const pathCmd = initPath(cfg);
-        cmds.push(this.killApp(cfg.exeName));
         if (pathCmd) { cmds.push(pathCmd); }
         cmds.push(`cd "${cfg.projectDir}"`);
         cmds.push('make -j$(nproc)');
@@ -47,10 +46,11 @@ export const linuxBuilder: PlatformBuilder = {
     },
 
     exePath(root: string, cfg: BuildConfig): string {
+        if (cfg.destDir) { return path.join(cfg.projectDir, cfg.destDir, cfg.exeName); }
         return path.join(cfg.projectDir, cfg.exeName);
     },
 
     stopCommands(exeName: string): string[] {
-        return [`pkill -f ${exeName}`];
+        return [`pkill -x ${exeName}`];
     }
 };

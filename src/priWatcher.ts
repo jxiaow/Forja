@@ -105,6 +105,9 @@ export function registerPriWatcher(context: vscode.ExtensionContext) {
     const createWatcher = vscode.workspace.createFileSystemWatcher('**/*.{cpp,h,ui}');
     createWatcher.onDidCreate(async (uri) => {
         const filePath = uri.fsPath;
+        const fileName = path.basename(filePath);
+        // 忽略 Qt 自动生成的文件
+        if (fileName.startsWith('ui_') || fileName.startsWith('moc_')) { return; }
         const dir = path.dirname(filePath);
         const priPath = findPriOrPro(dir, root);
         if (!priPath) return;

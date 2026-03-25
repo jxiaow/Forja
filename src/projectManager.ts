@@ -7,6 +7,7 @@ export interface ProjectInfo {
     projectDir: string;     // 项目目录（相对于 workspace）
     proFile: string;        // .pro 文件名
     target: string;         // TARGET 名称
+    destDir: string;        // DESTDIR（相对于项目目录，可能含变量）
     qtModules: string[];    // QT 模块列表
     defines: string[];      // DEFINES
 }
@@ -47,14 +48,33 @@ export function parseProFile(proPath: string): ProjectInfo {
     const projectDir = path.dirname(proPath);
     const proFile = path.basename(proPath);
 
-    // 解析 TARGET
+    // 解析 TARGET：平台块优先，其次全局
     let target = 'app';
-    const win32Match = content.match(/win32\s*\{[^}]*TARGET\s*=\s*(\S+)/s);
-    if (win32Match) {
-        target = win32Match[1].trim();
+    const isWin = process.platform === 'win32';
+    const platformKey = isWin ? 'win32' : 'linux';
+    const platformMatch = content.match(new RegExp(`${platformKey}\\s*\\{[^}]*TARGET\\s*=\\s*(\\S+)`, 's'));
+    if (platformMatch) {
+        target = platformMatch[1].trim();
     } else {
         const globalMatch = content.match(/^\s*TARGET\s*=\s*(\S+)/m);
         if (globalMatch) { target = globalMatch[1].trim(); }
+    }
+
+    // 解析 DESTDIR（取最后一个平台无关的赋值，简单处理变量）
+    let destDir = '';
+    const destMatches = [...content.matchAll(/^\s*DESTDIR\s*=\s*(.+)$/mg)];
+    if (destMatches.length > 0) {
+        destDir = destMatches[destMatches.length - 1][1].trim();
+        // 去掉行尾注释
+        destDir = destDir.replace(/#.*$/, '').trim();
+        // 替换 $$PWD → 空（相对路径基准就是 projectDir）
+        destDir = destDir.replace(/\$\$\{?PWD\}?/g, '');
+        // $$CONFIGURATION / $$[QMAKE_SPEC] 等运行时变量用占位符，buildManager 里按 mode 替换
+        destDir = destDir.replace(/\$\$\{?CONFIGURATION\}?/gi, '{MODE}');
+        destDir = destDir.replace(/\$\$\{?BUILD_TYPE\}?/gi, '{MODE}');
+        // 去掉其他未知 $$ 变量（避免传入 shell 被误解析）
+        destDir = destDir.replace(/\$\$\{?\w+\}?/g, '');
+        destDir = destDir.replace(/^[/\\]/, '').replace(/\\/g, '/').trim();
     }
 
     // 解析 QT 模块
@@ -70,6 +90,7 @@ export function parseProFile(proPath: string): ProjectInfo {
         projectDir: path.basename(projectDir),
         proFile,
         target,
+        destDir,
         qtModules,
         defines
     };

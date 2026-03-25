@@ -61,11 +61,14 @@ async function detectQt(manualPath?: string): Promise<QtInfo | null> {
         return parseQtInfo(manualPath, detectCompiler(manualPath));
     }
 
-    // 2. 环境变量
-    const qtdir = process.env.QTDIR || process.env.Qt6_DIR || process.env.Qt5_DIR;
-    if (qtdir && hasQmake(qtdir)) {
-        log(`[Win] 环境变量找到 Qt: "${qtdir}"`);
-        return parseQtInfo(qtdir, detectCompiler(qtdir));
+    // 2. 系统 PATH（where qmake）
+    const whereOut = (await execAsync('where', ['qmake'])).trim().split('\n')[0].trim();
+    if (whereOut && fs.existsSync(whereOut)) {
+        const qtRoot = path.dirname(path.dirname(whereOut));
+        if (hasQmake(qtRoot)) {
+            log(`[Win] PATH 找到 Qt: "${qtRoot}"`);
+            return parseQtInfo(qtRoot, detectCompiler(qtRoot));
+        }
     }
 
     // 3. 目录扫描（选版本最高的）

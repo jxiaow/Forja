@@ -6,6 +6,7 @@ export interface BuildConfig {
     projectDir: string;
     proFile: string;
     exeName: string;
+    destDir: string;        // DESTDIR，已解析变量，相对于 projectDir
     arch: string;
     mode: string;
 }

@@ -55,6 +55,7 @@ export const winBuilder: PlatformBuilder = {
     },
 
     exePath(root: string, cfg: BuildConfig): string {
+        if (cfg.destDir) { return path.join(cfg.projectDir, cfg.destDir, `${cfg.exeName}.exe`); }
         return path.join(cfg.projectDir, cfg.mode, cfg.arch, `${cfg.exeName}.exe`);
     },
 
