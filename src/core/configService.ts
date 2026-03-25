@@ -57,10 +57,15 @@ export function getBuildConfig(): BuildConfig {
     const project = state.currentProject;
     const env = state.envInfo;
     let projectDir = '';
-    if (project?.projectDir) {
-        projectDir = path.isAbsolute(project.projectDir)
-            ? project.projectDir
-            : path.join(root, project.projectDir);
+    if (project) {
+        // proPath 是绝对路径，最可靠
+        if (project.proPath) {
+            projectDir = path.dirname(project.proPath);
+        } else if (project.projectDir) {
+            projectDir = path.isAbsolute(project.projectDir)
+                ? project.projectDir
+                : path.join(root, project.projectDir);
+        }
     }
     return {
         vsDevShell: getVsDevShellPath() || env?.vs?.devShellPath || '',

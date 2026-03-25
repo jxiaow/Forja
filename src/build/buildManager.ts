@@ -11,14 +11,12 @@ import { log } from '../core/logger';
 const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
 const isWin = process.platform === 'win32';
 
-const _clearCmd = process.platform === 'win32' ? 'cls' : 'clear';
-
 function runTask(name: string, commands: string[], matcher: string | string[]): Thenable<vscode.TaskExecution> {
     log(`[Task] ${name}: ${commands.join(' && ')}`);
     const task = new vscode.Task(
         { type: 'shell' },
         vscode.TaskScope.Workspace, name, 'XY Qt',
-        builder.makeExec([_clearCmd, ...commands]), matcher
+        builder.makeExec(commands), matcher
     );
     task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated, echo: true, focus: true, showReuseMessage: false, clear: false };
     return vscode.tasks.executeTask(task);
@@ -27,8 +25,10 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
 // 从 Makefile 解析 exe 完整路径，失败返回 null
 function _resolveExePath(): string | null {
     const cfg = getBuildConfig();
+    log(`[resolveExePath] projectDir="${cfg.projectDir}", mode="${cfg.mode}"`);
     if (!cfg.projectDir) { return null; }
     const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode);
+    log(`[resolveExePath] mfInfo=${JSON.stringify(mfInfo)}`);
     if (!mfInfo) { return null; }
     const exeName = isWin ? `${mfInfo.target}.exe` : mfInfo.target;
     if (mfInfo.destDir) {
@@ -64,7 +64,7 @@ export async function run(): Promise<void> {
     const buildTask = new vscode.Task(
         { type: 'shell' },
         vscode.TaskScope.Workspace, `Build ${cfg.mode}`, 'XY Qt',
-        builder.makeExec([_clearCmd, ...commands]), matcher
+        builder.makeExec(commands), matcher
     );
     buildTask.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated, echo: true, focus: true, showReuseMessage: false, clear: false };
     const execution = await vscode.tasks.executeTask(buildTask);
@@ -91,7 +91,7 @@ export async function run(): Promise<void> {
 
             const exePath = _resolveExePath();
             if (!exePath) {
-                vscode.window.showErrorMessage('无法确定可执行文件路径，请先运行 QMake');
+                vscode.window.showErrorMessage(`请先运行 QMake (${cfg.mode})`);
                 reject(new Error('无法确定可执行文件路径'));
                 return;
             }

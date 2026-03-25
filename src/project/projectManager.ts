@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { log } from '../core/logger';
 
 export interface ProjectInfo {
     proPath: string;        // .pro 文件完整路径
@@ -46,43 +47,49 @@ function _parseMakefileVar(makefilePath: string, varName: string): string | null
     try {
         if (!fs.existsSync(makefilePath)) { return null; }
         const content = fs.readFileSync(makefilePath, 'utf-8');
-        const match = content.match(new RegExp(`^${varName}\\s*=\\s*(.+)$`, 'm'));
+        // 支持多空格对齐（qmake 生成的 Makefile 用空格对齐变量名）
+        const match = content.match(new RegExp(`^${varName}[ \\t]+=[ \\t]*(.+)$`, 'm'));
         if (!match) { return null; }
-        // 去掉行尾注释（如 qmake 生成的 #avoid trailing-slash linebreak）
         return match[1].replace(/#.*$/, '').trim();
     } catch {}
     return null;
 }
 
+// 从 Makefile 头部注释读取生成时的 mode（CONFIG+=release 或 CONFIG+=debug）
+function _parseMakefileMode(makefilePath: string): string | null {
+    try {
+        if (!fs.existsSync(makefilePath)) { return null; }
+        const content = fs.readFileSync(makefilePath, 'utf-8');
+        const match = content.match(/^#\s*Command:.*CONFIG\+=(\w+)/m);
+        if (!match) { return null; }
+        if (match[1] === 'release') { return 'release'; }
+        if (match[1] === 'debug') { return 'debug'; }
+    } catch {}
+    return null;
+}
+
 export function getMakefileInfo(projectDir: string, mode?: string): MakefileInfo | null {
-    // 按 mode 优先选对应的 Makefile，再 fallback 到通用 Makefile
-    const modeFile = mode === 'release' ? 'Makefile.Release'
-                   : mode === 'debug'   ? 'Makefile.Debug'
-                   : null;
-    const candidates = [
-        modeFile ? path.join(projectDir, modeFile) : null,
-        path.join(projectDir, 'Makefile'),
-        path.join(projectDir, 'Makefile.Debug'),
-        path.join(projectDir, 'Makefile.Release')
-    ].filter((p): p is string => p !== null);
-
-    let target: string | null = null;
-    let destDir: string | null = null;
-
-    for (const mf of candidates) {
-        if (!target) {
-            const t = _parseMakefileVar(mf, 'TARGET');
-            if (t) { target = t.replace(/\.exe$/i, ''); }
-        }
-        if (!destDir) {
-            const d = _parseMakefileVar(mf, 'DESTDIR');
-            if (d) { destDir = d.replace(/\\/g, '/').replace(/\/$/, ''); }
-        }
-        if (target && destDir) { break; }
+    const mf = path.join(projectDir, 'Makefile');
+    if (!fs.existsSync(mf)) {
+        log(`[getMakefileInfo] Makefile 不存在: ${mf}`);
+        return null;
     }
 
-    if (!target) { return null; }
-    return { target, destDir: destDir || '' };
+    if (mode) {
+        const mfMode = _parseMakefileMode(mf);
+        if (mfMode && mfMode !== mode) {
+            log(`[getMakefileInfo] Makefile mode=${mfMode} 与当前 mode=${mode} 不匹配，请重新运行 QMake`);
+            return null;
+        }
+    }
+
+    const t = _parseMakefileVar(mf, 'TARGET');
+    if (!t) { return null; }
+    const target = path.basename(t.replace(/\.exe$/i, ''));
+    const d = _parseMakefileVar(mf, 'DESTDIR');
+    const destDir = d ? d.replace(/\\/g, '/').replace(/\/$/, '') : '';
+    log(`[getMakefileInfo] target=${target}, destDir=${destDir}`);
+    return { target, destDir };
 }
 
 // ── .pro 文件解析（只取显示名 + IntelliSense 需要的信息） ──

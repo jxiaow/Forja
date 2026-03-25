@@ -4,6 +4,7 @@ import * as path from 'path';
 import { ProjectInfo } from '../project/projectManager';
 import { getState } from '../core/stateManager';
 import { getWorkspaceRoot, getCStandard, getCppStandard, getScanExcludeDirs } from '../core/configService';
+import { log } from '../core/logger';
 
 // 判断目录是否应跳过（精确匹配 + build* 前缀 + 用户自定义）
 function shouldSkip(name: string, extraSkip: string[]): boolean {
@@ -30,17 +31,17 @@ function _scanSubDirsAbs(absDir: string, extraSkip: string[], depth: number = 0)
 
 // 获取 include 扫描根目录（.pro 所在目录的父级，覆盖同级依赖库）
 function _getScanRoot(project: ProjectInfo): string {
-    if (path.isAbsolute(project.projectDir)) {
-        return path.dirname(project.projectDir);
-    }
-    const wsRoot = getWorkspaceRoot();
-    if (!wsRoot) { return ''; }
-    const absDir = path.join(wsRoot, project.projectDir);
-    return path.dirname(absDir);
+    const proDir = _getProDir(project);
+    return proDir ? path.dirname(proDir) : '';
 }
 
-// 获取 .pro 所在目录（用于放 .vscode 等）
+// 获取 .pro 所在目录（用于放 .vscode、查找 Makefile 等）
 function _getProDir(project: ProjectInfo): string {
+    // proPath 始终是绝对路径，最可靠
+    if (project.proPath) {
+        return path.dirname(project.proPath);
+    }
+    // fallback: projectDir
     if (path.isAbsolute(project.projectDir)) {
         return project.projectDir;
     }
@@ -121,7 +122,12 @@ function _parseDefines(makefilePath: string): string[] | null {
 export function generateCppProperties(project: ProjectInfo): void {
     const scanRoot = _getScanRoot(project);
     const proDir = _getProDir(project);
-    if (!scanRoot || !proDir) { return; }
+    log(`生成 IntelliSense: proPath="${project.proPath}", projectDir="${project.projectDir}", proDir="${proDir}", scanRoot="${scanRoot}"`);
+    if (!scanRoot || !proDir) {
+        log(`生成 IntelliSense 失败: scanRoot="${scanRoot}", proDir="${proDir}"`);
+        vscode.window.showWarningMessage('无法确定项目目录，请检查 .pro 文件路径');
+        return;
+    }
 
     const isWin = process.platform === 'win32';
     const state = getState();
@@ -166,8 +172,14 @@ export function generateCppProperties(project: ProjectInfo): void {
         defines = [...baseDefs, ...project.defines, ...qtDefines];
     }
 
-    // .vscode 目录放在 .pro 所在目录下
-    const vscodeDir = path.join(proDir, '.vscode');
+    // .vscode 目录放在 workspace root 下（IntelliSense 只认 workspace root）
+    const wsRoot = getWorkspaceRoot();
+    if (!wsRoot) {
+        log('无法确定 workspace root');
+        vscode.window.showWarningMessage('无法确定工作区根目录');
+        return;
+    }
+    const vscodeDir = path.join(wsRoot, '.vscode');
 
     let configuration: Record<string, unknown>;
 
@@ -220,7 +232,9 @@ export function generateCppProperties(project: ProjectInfo): void {
 
     if (!fs.existsSync(vscodeDir)) { fs.mkdirSync(vscodeDir, { recursive: true }); }
 
-    fs.writeFileSync(path.join(vscodeDir, 'c_cpp_properties.json'), JSON.stringify(config, null, 4), 'utf-8');
+    const outPath = path.join(vscodeDir, 'c_cpp_properties.json');
+    log(`写入 ${outPath}`);
+    fs.writeFileSync(outPath, JSON.stringify(config, null, 4), 'utf-8');
     const source = mfIncPath ? 'Makefile' : '目录扫描';
     vscode.window.showInformationMessage(`已生成 c_cpp_properties.json（来源: ${source}）`);
 }

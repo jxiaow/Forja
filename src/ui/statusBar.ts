@@ -30,8 +30,11 @@ function _modeIcon(): string {
 
 function _updateDisplay(): void {
     const state = getState();
+    const isWin = process.platform === 'win32';
     const projectName = state.currentProject?.target ?? '未选择项目';
-    const modeLabel = `${state.mode === 'debug' ? 'Debug' : 'Release'} ${state.arch}`;
+    const modeLabel = isWin
+        ? `${state.mode === 'debug' ? 'Debug' : 'Release'} ${state.arch}`
+        : `${state.mode === 'debug' ? 'Debug' : 'Release'}`;
     _projectModeItem.text = `${_modeIcon()} ${projectName} · ${modeLabel}`;
     _projectModeItem.tooltip = '点击选择模式/架构、构建操作、切换项目';
     _projectModeItem.color = state.mode === 'debug'
@@ -63,13 +66,17 @@ function _updateDisplay(): void {
 
 export async function showActions(): Promise<void> {
     const state = getState();
+    const isWin = process.platform === 'win32';
     type Item = vscode.QuickPickItem & { action: string };
 
-    const modeItems: Item[] = [
+    const modeItems: Item[] = isWin ? [
         { label: '$(bug) Debug x86',       description: state.mode === 'debug' && state.arch === 'x86' ? '当前' : '', action: 'mode:debug:x86' },
         { label: '$(bug) Debug x64',       description: state.mode === 'debug' && state.arch === 'x64' ? '当前' : '', action: 'mode:debug:x64' },
         { label: '$(package) Release x86', description: state.mode === 'release' && state.arch === 'x86' ? '当前' : '', action: 'mode:release:x86' },
         { label: '$(package) Release x64', description: state.mode === 'release' && state.arch === 'x64' ? '当前' : '', action: 'mode:release:x64' }
+    ] : [
+        { label: '$(bug) Debug',     description: state.mode === 'debug' ? '当前' : '', action: 'mode:debug:x64' },
+        { label: '$(package) Release', description: state.mode === 'release' ? '当前' : '', action: 'mode:release:x64' }
     ];
 
     const buildItems: Item[] = [
@@ -93,7 +100,7 @@ export async function showActions(): Promise<void> {
             sep('项目'),
             ...projectItems
         ],
-        { placeHolder: `${state.currentProject?.target ?? '未选择项目'} · ${state.mode === 'debug' ? 'Debug' : 'Release'} ${state.arch}` }
+        { placeHolder: `${state.currentProject?.target ?? '未选择项目'} · ${state.mode === 'debug' ? 'Debug' : 'Release'}${isWin ? ' ' + state.arch : ''}` }
     ) as Item | undefined;
 
     if (!selected?.action) { return; }

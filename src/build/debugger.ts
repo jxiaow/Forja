@@ -17,7 +17,7 @@ export async function startDebug(): Promise<void> {
     const cfg = getBuildConfig();
     const mfInfo = getMakefileInfo(cfg.projectDir, state.mode);
     if (!mfInfo) {
-        vscode.window.showErrorMessage('无法确定可执行文件路径，请先运行 QMake');
+        vscode.window.showErrorMessage(`请先运行 QMake (${state.mode})`);
         return;
     }
 

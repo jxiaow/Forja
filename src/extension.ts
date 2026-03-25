@@ -52,9 +52,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // 自动生成 c_cpp_properties.json
     if (project) {
-        const root = getWorkspaceRoot();
-        if (root) {
-            const cppPropsPath = path.join(root, '.vscode', 'c_cpp_properties.json');
+        const wsRoot = getWorkspaceRoot();
+        if (wsRoot) {
+            const cppPropsPath = path.join(wsRoot, '.vscode', 'c_cpp_properties.json');
             if (!fs.existsSync(cppPropsPath)) {
                 log('c_cpp_properties.json 不存在，自动生成');
                 generateCppProperties(project);
