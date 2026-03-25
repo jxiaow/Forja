@@ -16,16 +16,19 @@ export interface MakefileInfo {
     destDir: string;        // 输出目录（已展开的最终值）
 }
 
+const maxScanDepth = 5;
+
 export function scanProFiles(root: string): string[] {
     const proFiles: string[] = [];
 
-    function scan(dir: string): void {
+    function scan(dir: string, depth: number): void {
+        if (depth > maxScanDepth) { return; }
         try {
             const entries = fs.readdirSync(dir, { withFileTypes: true });
             for (const entry of entries) {
                 const skip = ['node_modules', '.git', 'build', 'debug', 'release', 'out'];
                 if (entry.isDirectory() && !skip.includes(entry.name.toLowerCase())) {
-                    scan(path.join(dir, entry.name));
+                    scan(path.join(dir, entry.name), depth + 1);
                 } else if (entry.isFile() && entry.name.endsWith('.pro')) {
                     proFiles.push(path.join(dir, entry.name));
                 }
@@ -33,7 +36,7 @@ export function scanProFiles(root: string): string[] {
         } catch {}
     }
 
-    scan(root);
+    scan(root, 0);
     return proFiles.map(p => path.relative(root, p).replace(/\\/g, '/'));
 }
 
@@ -113,8 +116,8 @@ export function parseProFile(proPath: string): ProjectInfo {
 }
 
 export async function selectProject(context: vscode.ExtensionContext, forceSelect = false): Promise<ProjectInfo | null> {
-    const root = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
-    if (!root) {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
         vscode.window.showErrorMessage('请先打开工作区');
         return null;
     }
@@ -122,40 +125,57 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
     const config = vscode.workspace.getConfiguration('xyQt');
     const savedProject = config.get<string>('selectedProject');
 
+    // 已保存的项目：尝试在所有 workspace folders 中定位
     if (!forceSelect && savedProject) {
-        const fullPath = path.join(root, savedProject);
-        if (fs.existsSync(fullPath)) {
-            const info = parseProFile(fullPath);
-            info.projectDir = path.dirname(savedProject);
-            return info;
+        for (const folder of folders) {
+            const fullPath = path.join(folder.uri.fsPath, savedProject);
+            if (fs.existsSync(fullPath)) {
+                const info = parseProFile(fullPath);
+                info.projectDir = path.dirname(savedProject);
+                return info;
+            }
         }
     }
 
-    const proFiles = scanProFiles(root);
+    // 扫描所有 workspace folders
+    const allProFiles: { label: string; root: string; relative: string }[] = [];
+    for (const folder of folders) {
+        const root = folder.uri.fsPath;
+        const proFiles = scanProFiles(root);
+        for (const rel of proFiles) {
+            const folderName = folders.length > 1 ? `[${folder.name}] ` : '';
+            allProFiles.push({ label: folderName + rel, root, relative: rel });
+        }
+    }
 
-    if (proFiles.length === 0) {
+    if (allProFiles.length === 0) {
         vscode.window.showWarningMessage('未找到 .pro 文件，请在配置面板中手动设置');
         return null;
     }
 
-    if (proFiles.length === 1 && !forceSelect) {
-        const fullPath = path.join(root, proFiles[0]);
+    if (allProFiles.length === 1 && !forceSelect) {
+        const item = allProFiles[0];
+        const fullPath = path.join(item.root, item.relative);
         const info = parseProFile(fullPath);
-        info.projectDir = path.dirname(proFiles[0]);
-        await config.update('selectedProject', proFiles[0], vscode.ConfigurationTarget.Workspace);
+        info.projectDir = path.dirname(item.relative);
+        await config.update('selectedProject', item.relative, vscode.ConfigurationTarget.Workspace);
         return info;
     }
 
-    const selected = await vscode.window.showQuickPick(proFiles, {
-        placeHolder: '选择项目'
-    });
+    const selected = await vscode.window.showQuickPick(
+        allProFiles.map(f => f.label),
+        { placeHolder: '选择项目' }
+    );
 
     if (selected) {
-        const fullPath = path.join(root, selected);
-        const info = parseProFile(fullPath);
-        info.projectDir = path.dirname(selected);
-        await config.update('selectedProject', selected, vscode.ConfigurationTarget.Workspace);
-        return info;
+        const item = allProFiles.find(f => f.label === selected);
+        if (item) {
+            const fullPath = path.join(item.root, item.relative);
+            const info = parseProFile(fullPath);
+            info.projectDir = path.dirname(item.relative);
+            await config.update('selectedProject', item.relative, vscode.ConfigurationTarget.Workspace);
+            return info;
+        }
     }
 
     return null;

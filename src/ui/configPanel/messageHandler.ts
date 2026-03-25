@@ -54,7 +54,13 @@ export async function handleMessage(
         }
         case 'browse': {
             log(`浏览: targetId=${msg.targetId}, isDir=${msg.isDir}`);
-            if (msg.isDir) {
+            if (msg.targetId === 'manualProPath') {
+                const uris = await vscode.window.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, filters: { 'Qt Project': ['pro'] } });
+                if (uris?.[0]) {
+                    log(`选择 .pro: ${uris[0].fsPath}`);
+                    webview.postMessage({ command: 'setPath', targetId: msg.targetId, value: uris[0].fsPath });
+                }
+            } else if (msg.isDir) {
                 const uris = await vscode.window.showOpenDialog({ canSelectFiles: false, canSelectFolders: true });
                 if (uris?.[0]) {
                     log(`选择目录: ${uris[0].fsPath}`);
@@ -78,6 +84,15 @@ export async function handleMessage(
         case 'saveQmakeTarget': {
             log(`保存 QMake TARGET: "${msg.value}"`);
             await updateConfig('qmakeTarget', msg.value || '');
+            break;
+        }
+        case 'saveManualProPath': {
+            log(`手动指定 .pro: "${msg.value}"`);
+            await updateConfig('manualProPath', msg.value || '');
+            if (msg.value) {
+                await vscode.commands.executeCommand('xyQt.loadManualProject');
+            }
+            updateHtml();
             break;
         }
         case 'generateIntelliSense': {

@@ -1,2 +1,8 @@
 {
+    "xyQt.qtPath": "",
+    "xyQt.scanExcludeDirs": [],
+    "xyQt.vsDevShellPath": "",
+    "xyQt.qmakeTarget": "",
+    "xyQt.cStandard": "c11",
+    "xyQt.cppStandard": "c++11"
 }

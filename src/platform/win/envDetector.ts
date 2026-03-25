@@ -94,10 +94,42 @@ async function detectQt(manualPath?: string): Promise<{ qt: QtInfo | null; candi
 // ── Jom 检测 ──
 
 async function detectJom(qt: QtInfo | null): Promise<boolean> {
-    if (!qt) { return false; }
-    if (fs.existsSync(path.join(qt.path, 'bin', 'jom.exe'))) { return true; }
-    const out = await execAsync('jom', ['/VERSION']);
-    return out.trim().length > 0;
+    // 1. Qt 编译器目录下 bin/jom.exe
+    if (qt && fs.existsSync(path.join(qt.path, 'bin', 'jom.exe'))) { return true; }
+
+    // 2. Qt 安装根目录下 Tools/QtCreator/bin/jom/jom.exe
+    if (qt) {
+        // 从 qt.path（如 C:\Qt\5.15.2\msvc2019）向上找 Qt 安装根
+        let dir = qt.path;
+        for (let i = 0; i < 4; i++) {
+            const parent = path.dirname(dir);
+            if (parent === dir) { break; }
+            const jomPath = path.join(parent, 'Tools', 'QtCreator', 'bin', 'jom', 'jom.exe');
+            if (fs.existsSync(jomPath)) {
+                log(`[Win] 找到 jom: "${jomPath}"`);
+                return true;
+            }
+            dir = parent;
+        }
+    }
+
+    // 3. 常见固定路径
+    const knownPaths = ['C:\\Qt', 'D:\\Qt', 'E:\\Qt'];
+    for (const root of knownPaths) {
+        const jomPath = path.join(root, 'Tools', 'QtCreator', 'bin', 'jom', 'jom.exe');
+        if (fs.existsSync(jomPath)) {
+            log(`[Win] 找到 jom: "${jomPath}"`);
+            return true;
+        }
+    }
+
+    // 4. 系统 PATH
+    try {
+        const out = await execAsync('jom', ['/VERSION']);
+        return out.trim().length > 0;
+    } catch {
+        return false;
+    }
 }
 
 export async function detectEnvWin(manualQtPath?: string, manualVsPath?: string): Promise<EnvInfo> {

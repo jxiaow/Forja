@@ -41,6 +41,10 @@ export function getQmakeTarget(): string {
     return cfg().get<string>('qmakeTarget', '');
 }
 
+export function getManualProPath(): string {
+    return cfg().get<string>('manualProPath', '');
+}
+
 export async function updateConfig(key: string, value: unknown): Promise<void> {
     await cfg().update(key, value, vscode.ConfigurationTarget.Workspace);
 }
@@ -52,7 +56,12 @@ export function getBuildConfig(): BuildConfig {
     const root = getWorkspaceRoot();
     const project = state.currentProject;
     const env = state.envInfo;
-    const projectDir = project?.projectDir ? path.join(root, project.projectDir) : '';
+    let projectDir = '';
+    if (project?.projectDir) {
+        projectDir = path.isAbsolute(project.projectDir)
+            ? project.projectDir
+            : path.join(root, project.projectDir);
+    }
     return {
         vsDevShell: getVsDevShellPath() || env?.vs?.devShellPath || '',
         qtPath: getQtPath() || env?.qt?.path || '',

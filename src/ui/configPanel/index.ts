@@ -4,7 +4,7 @@ import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-         getScanExcludeDirs, getSelectedProject, getQmakeTarget } from '../../core/configService';
+         getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath } from '../../core/configService';
 import { log } from '../../core/logger';
 
 function _getVersion(): string {
@@ -89,6 +89,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             autoDevShell: env?.vs?.devShellPath || '',
             autoQtPath: env?.qt?.path || '',
             qtPath: getQtPath(),
+            manualProPath: getManualProPath(),
             version: _getVersion()
         };
         this._view.webview.html = getHtml(data);

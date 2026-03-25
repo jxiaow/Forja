@@ -128,6 +128,14 @@
         <div class="hint">已内置: build*, debug, release</div>
       </div>
       <div class="field">
+        <label>手动指定 .pro 文件</label>
+        <div class="input-row">
+          <input id="manualProPath" value="{{manualProPath}}" placeholder="扫描不到时手动指定" onblur="saveManualProPath()" />
+          <button class="btn" onclick="browse('manualProPath', false)">浏览</button>
+        </div>
+        <div class="hint">绝对路径，保存后自动切换项目</div>
+      </div>
+      <div class="field">
         <label>QMake TARGET（留空使用 .pro 默认值）</label>
         <input id="qmakeTarget" value="{{qmakeTarget}}" placeholder="例: MyApp" onblur="saveQmakeTarget()" />
       </div>
@@ -180,9 +188,14 @@
     <summary><span class="arrow">▶</span> 手动覆盖</summary>
     <div class="details-content">
       <div class="field">
+        <select id="qtVersion" onchange="onQtVersionChange()">
+          <option value="">-- 快速选择版本 --</option>
+          {{qtCandidateOptions}}
+        </select>
+      </div>
+      <div class="field">
         <div class="input-row">
-          <input id="qtPath" value="{{qtPathValue}}" placeholder="手动指定 Qt 路径" list="qtPathList" onblur="saveQtPath()" />
-          <datalist id="qtPathList">{{qtCandidateOptions}}</datalist>
+          <input id="qtPath" value="{{qtPathValue}}" placeholder="手动覆盖路径" onblur="saveQtPath()" />
           <button class="btn" onclick="browse('qtPath', true)">浏览</button>
         </div>
       </div>
@@ -211,6 +224,10 @@
     if (ver && vsPaths[ver]) { document.getElementById('vsDevShellPath').value = vsPaths[ver]; saveVsPath(); }
   }
   function saveVsPath() { vscode.postMessage({ command: 'saveVsPath', value: document.getElementById('vsDevShellPath').value }); }
+  function onQtVersionChange() {
+    const sel = document.getElementById('qtVersion');
+    if (sel.value) { document.getElementById('qtPath').value = sel.value; saveQtPath(); }
+  }
   function saveQtPath() { vscode.postMessage({ command: 'saveQtPath', value: document.getElementById('qtPath').value }); }
   function saveStandard() { vscode.postMessage({ command: 'saveStandard', cStandard: document.getElementById('cStandard').value, cppStandard: document.getElementById('cppStandard').value }); }
   function saveExcludeDirs() {
@@ -219,6 +236,10 @@
     vscode.postMessage({ command: 'saveExcludeDirs', dirs });
   }
   function saveQmakeTarget() { vscode.postMessage({ command: 'saveQmakeTarget', value: document.getElementById('qmakeTarget').value }); }
+  function saveManualProPath() {
+    const val = document.getElementById('manualProPath').value.trim();
+    if (val) { vscode.postMessage({ command: 'saveManualProPath', value: val }); }
+  }
   function browse(targetId, isDir) { vscode.postMessage({ command: 'browse', targetId, isDir }); }
   function refreshEnv() {
     const btn = document.getElementById('refreshBtn');
@@ -232,7 +253,7 @@
     const d = e.data;
     if (d.command === 'setPath') {
       document.getElementById(d.targetId).value = d.value;
-      if (d.targetId === 'vsDevShellPath') { saveVsPath(); } else if (d.targetId === 'qtPath') { saveQtPath(); }
+      if (d.targetId === 'vsDevShellPath') { saveVsPath(); } else if (d.targetId === 'qtPath') { saveQtPath(); } else if (d.targetId === 'manualProPath') { saveManualProPath(); }
     } else if (d.command === 'envUpdated') {
       const setDot = (id, ok) => { const dot = document.getElementById(id); if (dot) { dot.className = 'status-dot ' + (ok ? 'dot-ok' : 'dot-warn'); } };
       setDot('dot-qt', !!d.env.qt); setDot('dot-jom', d.env.jom); setDot('dot-qt-detail', !!d.env.qt); setDot('dot-jom-detail', d.env.jom);

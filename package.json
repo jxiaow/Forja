@@ -3,7 +3,7 @@
   "displayName": "XY Qt Tools",
   "publisher": "xy",
   "description": "Qt build tools for XY project: status bar, qmake detection, .pri sync helper",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
   "activationEvents": ["workspaceContains:**/*.pro"],
@@ -88,6 +88,11 @@
           "type": "string",
           "default": "",
           "description": "（已废弃）请使用 xyQt.selectedProject"
+        },
+        "xyQt.manualProPath": {
+          "type": "string",
+          "default": "",
+          "description": "手动指定 .pro 文件绝对路径（扫描不到时使用）"
         }
       }
     }

@@ -13,20 +13,39 @@ function shouldSkip(name: string, extraSkip: string[]): boolean {
     return extraSkip.some(p => name === p || lower === p.toLowerCase());
 }
 
-// 扫描目录下所有子目录（递归），返回 ${workspaceFolder}/... 格式路径
-function scanSubDirs(root: string, relDir: string, extraSkip: string[]): string[] {
-    const absDir = path.join(root, relDir);
-    if (!fs.existsSync(absDir)) { return []; }
-    const result: string[] = [`\${workspaceFolder}/${relDir}`];
+// 扫描目录下所有子目录（递归），返回绝对路径，最多 maxDepth 层
+function _scanSubDirsAbs(absDir: string, extraSkip: string[], depth: number = 0): string[] {
+    if (depth > 5 || !fs.existsSync(absDir)) { return []; }
+    const result: string[] = [absDir.replace(/\\/g, '/')];
     try {
         const entries = fs.readdirSync(absDir, { withFileTypes: true });
         for (const e of entries) {
             if (e.isDirectory() && !e.name.startsWith('.') && !shouldSkip(e.name, extraSkip)) {
-                result.push(...scanSubDirs(root, `${relDir}/${e.name}`, extraSkip));
+                result.push(..._scanSubDirsAbs(path.join(absDir, e.name), extraSkip, depth + 1));
             }
         }
     } catch {}
     return result;
+}
+
+// 获取 include 扫描根目录（.pro 所在目录的父级，覆盖同级依赖库）
+function _getScanRoot(project: ProjectInfo): string {
+    if (path.isAbsolute(project.projectDir)) {
+        return path.dirname(project.projectDir);
+    }
+    const wsRoot = getWorkspaceRoot();
+    if (!wsRoot) { return ''; }
+    const absDir = path.join(wsRoot, project.projectDir);
+    return path.dirname(absDir);
+}
+
+// 获取 .pro 所在目录（用于放 .vscode 等）
+function _getProDir(project: ProjectInfo): string {
+    if (path.isAbsolute(project.projectDir)) {
+        return project.projectDir;
+    }
+    const wsRoot = getWorkspaceRoot();
+    return wsRoot ? path.join(wsRoot, project.projectDir) : '';
 }
 
 // 检测已安装的 Windows SDK 最新版本
@@ -44,91 +63,166 @@ function detectSdkVersion(): string {
     return '10.0.22000.0';
 }
 
-export function generateCppProperties(project: ProjectInfo): void {
-    const root = getWorkspaceRoot();
-    if (!root) { return; }
+// ── Makefile 解析 ──
 
+function _parseMakefileVar(makefilePath: string, varName: string): string | null {
+    try {
+        if (!fs.existsSync(makefilePath)) { return null; }
+        const content = fs.readFileSync(makefilePath, 'utf-8');
+        const match = content.match(new RegExp(`^${varName}\\s*=\\s*(.+)$`, 'm'));
+        if (!match) { return null; }
+        return match[1].replace(/#.*$/, '').trim();
+    } catch {}
+    return null;
+}
+
+function _findMakefile(proDir: string): string | null {
+    const candidates = [
+        path.join(proDir, 'Makefile.Debug'),
+        path.join(proDir, 'Makefile.Release'),
+        path.join(proDir, 'Makefile')
+    ];
+    for (const mf of candidates) {
+        if (fs.existsSync(mf)) { return mf; }
+    }
+    return null;
+}
+
+// 解析 INCPATH: -I../foo -I"C:/Qt/include" → 绝对路径数组
+function _parseIncPath(makefilePath: string, proDir: string): string[] | null {
+    const raw = _parseMakefileVar(makefilePath, 'INCPATH');
+    if (!raw) { return null; }
+    const paths: string[] = [];
+    // 匹配 -I"path" 或 -Ipath
+    const re = /-I"([^"]+)"|-I(\S+)/g;
+    let m;
+    while ((m = re.exec(raw)) !== null) {
+        const p = (m[1] || m[2]).replace(/\\/g, '/');
+        // 相对路径基于 .pro 所在目录解析
+        const abs = path.isAbsolute(p) ? p : path.resolve(proDir, p);
+        paths.push(abs.replace(/\\/g, '/'));
+    }
+    return paths.length > 0 ? paths : null;
+}
+
+// 解析 DEFINES: -DFOO -DBAR=1 → ["FOO", "BAR=1"]
+function _parseDefines(makefilePath: string): string[] | null {
+    const raw = _parseMakefileVar(makefilePath, 'DEFINES');
+    if (!raw) { return null; }
+    const defs: string[] = [];
+    const re = /-D"([^"]+)"|-D(\S+)/g;
+    let m;
+    while ((m = re.exec(raw)) !== null) {
+        defs.push(m[1] || m[2]);
+    }
+    return defs.length > 0 ? defs : null;
+}
+
+export function generateCppProperties(project: ProjectInfo): void {
+    const scanRoot = _getScanRoot(project);
+    const proDir = _getProDir(project);
+    if (!scanRoot || !proDir) { return; }
+
+    const isWin = process.platform === 'win32';
     const state = getState();
     const qtPath = (state.envInfo?.qt?.path || '').replace(/\\/g, '/');
     const arch = state.arch;
-
-    // 从 VS installPath 推断 cl.exe 路径（用 glob，让 IntelliSense 自动匹配 MSVC 版本）
-    const vsInstall = (state.envInfo?.vs?.installPath || '').replace(/\\/g, '/');
-    const hostDir = arch === 'x64' ? 'Hostx64' : 'Hostx86';
-    const clExe = vsInstall
-        ? `${vsInstall}/VC/Tools/MSVC/**/${hostDir}/${arch}/cl.exe`
-        : 'cl.exe';
-
-    // intelliSenseMode 根据架构
-    const intelliSenseMode = arch === 'x64' ? 'windows-msvc-x64' : 'windows-msvc-x86';
-    // configuration name 根据架构
-    const configName = arch === 'x64' ? 'x64' : 'Win32';
-
-    // Windows SDK 版本
-    const sdkVersion = detectSdkVersion();
 
     const cStandard = getCStandard();
     const cppStandard = getCppStandard();
     const extraSkip = getScanExcludeDirs();
 
-    // Qt 模块 include 路径
-    const qtModuleIncludes = project.qtModules.map(m => {
-        const name = m.charAt(0).toUpperCase() + m.slice(1);
-        return `${qtPath}/include/Qt${name}`;
-    });
+    // 优先从 Makefile 解析 INCPATH 和 DEFINES（不依赖当前 mode，按优先级找）
+    const makefile = _findMakefile(proDir);
+    const mfIncPath = makefile ? _parseIncPath(makefile, proDir) : null;
+    const mfDefines = makefile ? _parseDefines(makefile) : null;
 
-    // 扫描 workspace 根目录下所有顶层目录
-    const allSubDirs: string[] = [];
-    try {
-        const entries = fs.readdirSync(root, { withFileTypes: true });
-        for (const e of entries) {
-            if (e.isDirectory() && !e.name.startsWith('.') && !shouldSkip(e.name, extraSkip)) {
-                allSubDirs.push(...scanSubDirs(root, e.name, extraSkip));
-            }
-        }
-    } catch {}
+    // include path: Makefile 优先，fallback 到目录扫描
+    let includePath: string[];
+    if (mfIncPath) {
+        includePath = mfIncPath;
+    } else {
+        const qtModuleIncludes = project.qtModules.map(m => {
+            const name = m.charAt(0).toUpperCase() + m.slice(1);
+            return `${qtPath}/include/Qt${name}`;
+        });
+        const projectDirs = _scanSubDirsAbs(scanRoot, extraSkip);
+        includePath = [
+            ...projectDirs,
+            `${qtPath}/include`,
+            ...qtModuleIncludes
+        ];
+    }
 
-    // 确保当前项目目录在其中（去重）
-    const projectSubDirs = scanSubDirs(root, project.projectDir, extraSkip);
-    const includeDirs = [...new Set([...projectSubDirs, ...allSubDirs])];
+    // defines: Makefile 优先，fallback 到推断
+    let defines: string[];
+    if (mfDefines) {
+        defines = mfDefines;
+    } else {
+        const qtDefines = project.qtModules.map(m => `QT_${m.toUpperCase()}_LIB`);
+        const baseDefs = isWin
+            ? ['_DEBUG', 'UNICODE', '_UNICODE', 'WIN32', '_WINDOWS', 'QT_DEPRECATED_WARNINGS']
+            : ['QT_DEPRECATED_WARNINGS'];
+        defines = [...baseDefs, ...project.defines, ...qtDefines];
+    }
 
-    // Qt 模块 define
-    const qtDefines = project.qtModules.map(m => `QT_${m.toUpperCase()}_LIB`);
+    // .vscode 目录放在 .pro 所在目录下
+    const vscodeDir = path.join(proDir, '.vscode');
 
-    const config = {
-        configurations: [{
+    let configuration: Record<string, unknown>;
+
+    if (isWin) {
+        const vsInstall = (state.envInfo?.vs?.installPath || '').replace(/\\/g, '/');
+        const hostDir = arch === 'x64' ? 'Hostx64' : 'Hostx86';
+        const clExe = vsInstall
+            ? `${vsInstall}/VC/Tools/MSVC/**/${hostDir}/${arch}/cl.exe`
+            : 'cl.exe';
+        const intelliSenseMode = arch === 'x64' ? 'windows-msvc-x64' : 'windows-msvc-x86';
+        const configName = arch === 'x64' ? 'x64' : 'Win32';
+        const sdkVersion = detectSdkVersion();
+
+        configuration = {
             name: configName,
-            includePath: [
-                '${workspaceFolder}/**',
-                ...includeDirs,
-                `${qtPath}/include`,
-                ...qtModuleIncludes
-            ],
-            defines: [
-                '_DEBUG', 'UNICODE', '_UNICODE', 'WIN32', '_WINDOWS',
-                'QT_DEPRECATED_WARNINGS',
-                ...project.defines,
-                ...qtDefines
-            ],
+            includePath,
+            defines,
             windowsSdkVersion: sdkVersion,
             compilerPath: clExe,
-            cStandard: cStandard,
-            cppStandard: cppStandard,
+            cStandard,
+            cppStandard,
             intelliSenseMode,
             compilerArgs: [],
             browse: {
-                path: ['${workspaceFolder}'],
+                path: [scanRoot.replace(/\\/g, '/')],
                 limitSymbolsToIncludedHeaders: true
             }
-        }],
+        };
+    } else {
+        configuration = {
+            name: 'Linux',
+            includePath,
+            defines,
+            compilerPath: '/usr/bin/g++',
+            cStandard,
+            cppStandard,
+            intelliSenseMode: 'linux-gcc-x64',
+            compilerArgs: [],
+            browse: {
+                path: [scanRoot.replace(/\\/g, '/')],
+                limitSymbolsToIncludedHeaders: true
+            }
+        };
+    }
+
+    const config = {
+        configurations: [configuration],
         version: 4
     };
 
-    const vscodeDir = path.join(root, '.vscode');
     if (!fs.existsSync(vscodeDir)) { fs.mkdirSync(vscodeDir, { recursive: true }); }
 
     fs.writeFileSync(path.join(vscodeDir, 'c_cpp_properties.json'), JSON.stringify(config, null, 4), 'utf-8');
-    vscode.window.showInformationMessage('已生成 c_cpp_properties.json');
+    const source = mfIncPath ? 'Makefile' : '目录扫描';
+    vscode.window.showInformationMessage(`已生成 c_cpp_properties.json（来源: ${source}）`);
 }
 
 export function updateCppPropertiesStandard(cStandard: string, cppStandard: string): void {

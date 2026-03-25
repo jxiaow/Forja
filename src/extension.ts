@@ -3,11 +3,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as buildManager from './build/buildManager';
 import { setState } from './core/stateManager';
-import { getQtPath, getVsDevShellPath, getWorkspaceRoot } from './core/configService';
+import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath } from './core/configService';
 import { createStatusBar, showActions } from './ui/statusBar';
 import { registerPriWatcher } from './project/priWatcher';
 import { ConfigPanel } from './ui/configPanel/index';
-import { selectProject } from './project/projectManager';
+import { selectProject, parseProFile } from './project/projectManager';
 import { startDebug } from './build/debugger';
 import { generateCppProperties } from './build/configGenerator';
 import { initLogger, log } from './core/logger';
@@ -69,6 +69,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const p = await selectProject(context, true);
             setState('currentProject', p);
             panel.refresh();
+        }],
+        ['xyQt.loadManualProject', () => {
+            const proPath = getManualProPath();
+            if (proPath && fs.existsSync(proPath)) {
+                const info = parseProFile(proPath);
+                info.projectDir = path.dirname(proPath);
+                setState('currentProject', info);
+                panel.refresh();
+                log(`手动加载项目: ${proPath}`);
+            } else {
+                vscode.window.showWarningMessage('.pro 文件不存在: ' + proPath);
+            }
         }],
         ['xyQt.showActions',   () => showActions()],
         ['xyQt.qmake',         () => buildManager.qmake()],
