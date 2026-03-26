@@ -122,6 +122,23 @@ export function parseProFile(proPath: string): ProjectInfo {
     };
 }
 
+/** 从 Makefile 中读取 LIBS 变量，提取 -L 库搜索路径（qmake 已展开所有变量和 scope） */
+export function parseLibPaths(projectDir: string): string[] {
+    const mf = path.join(projectDir, 'Makefile');
+    const libs = _parseMakefileVar(mf, 'LIBS');
+    if (!libs) { return []; }
+    const paths: string[] = [];
+    const matches = libs.matchAll(/-L(\S+)/g);
+    for (const m of matches) {
+        const p = m[1];
+        const abs = path.isAbsolute(p) ? path.normalize(p) : path.resolve(projectDir, p);
+        if (fs.existsSync(abs)) {
+            paths.push(abs);
+        }
+    }
+    return paths;
+}
+
 export async function selectProject(context: vscode.ExtensionContext, forceSelect = false): Promise<ProjectInfo | null> {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) {

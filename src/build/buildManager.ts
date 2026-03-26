@@ -5,7 +5,7 @@ import { getBuildConfig, getWorkspaceRoot } from '../core/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
 import { winConfig } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
-import { getMakefileInfo } from '../project/projectManager';
+import { getMakefileInfo, parseLibPaths } from '../project/projectManager';
 import { log } from '../core/logger';
 
 const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
@@ -96,7 +96,17 @@ export async function run(): Promise<void> {
                 return;
             }
             const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode)!;
-            const runCmds = [builder.killApp(mfInfo.target), `"${exePath}"`];
+            const runCmds: string[] = [builder.killApp(mfInfo.target)];
+            // Linux: 从 Makefile 的 LIBS 中提取 -L 路径加入 LD_LIBRARY_PATH
+            if (!isWin) {
+                const libPaths = parseLibPaths(cfg.projectDir);
+                if (libPaths.length > 0) {
+                    const joined = libPaths.join(':');
+                    runCmds.push(`export LD_LIBRARY_PATH="${joined}:$LD_LIBRARY_PATH"`);
+                    log(`[Run] LD_LIBRARY_PATH += ${joined}`);
+                }
+            }
+            runCmds.push(`"${exePath}"`);
             const runTaskObj = new vscode.Task(
                 { type: 'shell' },
                 vscode.TaskScope.Workspace, `Run ${cfg.mode}`, 'XY Qt',
