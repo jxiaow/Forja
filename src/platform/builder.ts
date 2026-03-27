@@ -48,7 +48,7 @@ export function createBuilder(config: PlatformConfig): PlatformBuilder {
         qmakeCommands(cfg: BuildConfig) {
             const modeConfig = cfg.mode === 'debug'
                 ? 'CONFIG+=debug CONFIG+=console'
-                : 'CONFIG+=release';
+                : 'CONFIG+=release CONFIG+=console';
             const extra = config.qmakeExtraArgs(cfg);
             const targetArg = cfg.qmakeTarget ? ` "TARGET=${cfg.qmakeTarget}"` : '';
             const qmakeCmd = `qmake ${cfg.proFile} -spec ${config.qmakeSpec} ${modeConfig}${extra ? ' ' + extra : ''}${targetArg}`;

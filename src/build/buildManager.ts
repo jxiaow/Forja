@@ -23,17 +23,19 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
     return vscode.tasks.executeTask(task);
 }
 
-// 从 Makefile 解析 exe 完整路径，失败返回 null
-function _resolveExePath(): string | null {
+// 从 Makefile 解析 MakefileInfo，失败返回 null 并记录日志
+function _resolveMakefileInfo(): ReturnType<typeof getMakefileInfo> {
     const cfg = getBuildConfig();
-    log(`[resolveExePath] projectDir="${cfg.projectDir}", mode="${cfg.mode}", arch="${cfg.arch}"`);
+    log(`[resolveMakefileInfo] projectDir="${cfg.projectDir}", mode="${cfg.mode}", arch="${cfg.arch}"`);
     if (!cfg.projectDir) { return null; }
     const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
-    log(`[resolveExePath] mfInfo=${JSON.stringify(mfInfo)}`);
-    if (!mfInfo) { return null; }
+    if (!mfInfo) {
+        log('[resolveMakefileInfo] 解析失败');
+        return null;
+    }
     const exists = fs.existsSync(mfInfo.exePath);
-    log(`[resolveExePath] exePath="${mfInfo.exePath}", exists=${exists}`);
-    return mfInfo.exePath;
+    log(`[resolveMakefileInfo] exePath="${mfInfo.exePath}", exists=${exists}`);
+    return mfInfo;
 }
 
 export function qmake(): Thenable<vscode.TaskExecution> {
@@ -88,13 +90,12 @@ export async function run(): Promise<void> {
                 return;
             }
 
-            const exePath = _resolveExePath();
-            if (!exePath) {
+            const mfInfo = _resolveMakefileInfo();
+            if (!mfInfo) {
                 vscode.window.showErrorMessage(`请先运行 QMake (${cfg.mode})`);
                 reject(new Error('无法确定可执行文件路径'));
                 return;
             }
-            const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch)!;
             const runCmds: string[] = [builder.killApp(mfInfo.target)];
             // Linux: 从 Makefile 的 LIBS 中提取 -L 路径加入 LD_LIBRARY_PATH
             if (!isWin) {

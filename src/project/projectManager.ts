@@ -44,77 +44,77 @@ export function scanProFiles(root: string): string[] {
 
 // ── Makefile 解析（qmake 生成的最终值，最可靠） ──
 
-function _parseMakefileVar(makefilePath: string, varName: string): string | null {
+// 读取文件内容，失败返回 null
+function _readFile(filePath: string): string | null {
     try {
-        if (!fs.existsSync(makefilePath)) { return null; }
-        const content = fs.readFileSync(makefilePath, 'utf-8');
-        // 支持多空格对齐（qmake 生成的 Makefile 用空格对齐变量名）
-        const match = content.match(new RegExp(`^${varName}[ \\t]+=[ \\t]*(.+)$`, 'm'));
-        if (!match) {
-            log(`[parseMakefileVar] "${varName}" 未匹配`);
-            return null;
-        }
-        return match[1].replace(/#.*$/, '').trim();
+        if (!fs.existsSync(filePath)) { return null; }
+        return fs.readFileSync(filePath, 'utf-8');
     } catch {}
     return null;
 }
 
-// 从 Makefile 头部注释读取生成时的 mode（CONFIG+=release 或 CONFIG+=debug）
-function _parseMakefileMode(makefilePath: string): string | null {
-    try {
-        if (!fs.existsSync(makefilePath)) { return null; }
-        const content = fs.readFileSync(makefilePath, 'utf-8');
-        const match = content.match(/^#\s*Command:.*CONFIG\+=(\w+)/m);
-        if (!match) { return null; }
-        if (match[1] === 'release') { return 'release'; }
-        if (match[1] === 'debug') { return 'debug'; }
-    } catch {}
+// 从已读取的内容中解析变量值（支持多空格对齐）
+function _parseMakefileVar(content: string, varName: string): string | null {
+    const match = content.match(new RegExp(`^${varName}[ \\t]+=[ \\t]*(.+)$`, 'm'));
+    if (!match) {
+        log(`[parseMakefileVar] "${varName}" 未匹配`);
+        return null;
+    }
+    return match[1].replace(/#.*$/, '').trim();
+}
+
+// 从 Makefile 头部注释读取生成时的 mode
+function _parseMakefileMode(content: string): string | null {
+    const match = content.match(/^#\s*Command:.*CONFIG\+=(\w+)/m);
+    if (!match) { return null; }
+    if (match[1] === 'release') { return 'release'; }
+    if (match[1] === 'debug') { return 'debug'; }
     return null;
 }
 
 // 从主 Makefile 头部注释校验 mode 和 arch 是否匹配
-function _validateMakefileConfig(makefilePath: string, mode: string, arch: string): boolean {
-    try {
-        const content = fs.readFileSync(makefilePath, 'utf-8');
-        const match = content.match(/^#\s*Command:.*$/m);
-        if (!match) { return false; }
-        const cmd = match[0];
-        const hasMode = cmd.includes(`CONFIG+=${mode}`);
-        const hasArch = cmd.includes(`CONFIG+=${arch}`);
-        log(`[validateMakefileConfig] cmd="${cmd.trim()}", hasMode=${hasMode}, hasArch=${hasArch}`);
-        return hasMode && hasArch;
-    } catch {}
-    return false;
+function _validateMakefileConfig(content: string, mode: string, arch: string): boolean {
+    const match = content.match(/^#\s*Command:.*$/m);
+    if (!match) { return false; }
+    const cmd = match[0];
+    const hasMode = cmd.includes(`CONFIG+=${mode}`);
+    const hasArch = cmd.includes(`CONFIG+=${arch}`);
+    log(`[validateMakefileConfig] cmd="${cmd.trim()}", hasMode=${hasMode}, hasArch=${hasArch}`);
+    return hasMode && hasArch;
 }
 
 export function getMakefileInfo(projectDir: string, mode?: string, arch?: string): MakefileInfo | null {
     const mf = path.join(projectDir, 'Makefile');
     log(`[getMakefileInfo] platform=${process.platform}, projectDir="${projectDir}", mode="${mode}", arch="${arch}"`);
-    if (!fs.existsSync(mf)) {
+
+    // 一次读取主 Makefile
+    const mfContent = _readFile(mf);
+    if (!mfContent) {
         log(`[getMakefileInfo] Makefile 不存在: ${mf}`);
         return null;
     }
-    log(`[getMakefileInfo] Makefile 存在: ${mf}`);
 
     if (process.platform === 'win32') {
         // Windows: 校验 mode + arch，从 Makefile.Release/Debug 读 DESTDIR_TARGET
         if (mode && arch) {
-            const valid = _validateMakefileConfig(mf, mode, arch);
+            const valid = _validateMakefileConfig(mfContent, mode, arch);
             if (!valid) {
                 log(`[getMakefileInfo] 校验失败: mode=${mode} arch=${arch} 与 Makefile 不匹配，请重新运行 QMake`);
                 return null;
             }
             log(`[getMakefileInfo] 校验通过: mode=${mode} arch=${arch}`);
         }
-        const subMf = mode
+        const subMfPath = mode
             ? path.join(projectDir, `Makefile.${mode.charAt(0).toUpperCase() + mode.slice(1)}`)
             : mf;
-        log(`[getMakefileInfo] 子 Makefile: ${subMf}`);
-        if (!fs.existsSync(subMf)) {
-            log(`[getMakefileInfo] 子 Makefile 不存在: ${subMf}`);
+        log(`[getMakefileInfo] 子 Makefile: ${subMfPath}`);
+        // 一次读取子 Makefile
+        const subContent = _readFile(subMfPath);
+        if (!subContent) {
+            log(`[getMakefileInfo] 子 Makefile 不存在: ${subMfPath}`);
             return null;
         }
-        const destDirTarget = _parseMakefileVar(subMf, 'DESTDIR_TARGET');
+        const destDirTarget = _parseMakefileVar(subContent, 'DESTDIR_TARGET');
         log(`[getMakefileInfo] DESTDIR_TARGET="${destDirTarget}"`);
         if (!destDirTarget) { return null; }
         const exePath = path.join(projectDir, destDirTarget.replace(/\\/g, path.sep));
@@ -125,7 +125,7 @@ export function getMakefileInfo(projectDir: string, mode?: string, arch?: string
     } else {
         // Linux: 只校验 mode，从主 Makefile 读 TARGET
         if (mode) {
-            const mfMode = _parseMakefileMode(mf);
+            const mfMode = _parseMakefileMode(mfContent);
             log(`[getMakefileInfo] mfMode="${mfMode}", mode="${mode}"`);
             if (mfMode && mfMode !== mode) {
                 log(`[getMakefileInfo] 校验失败: Makefile mode=${mfMode} 与当前 mode=${mode} 不匹配，请重新运行 QMake`);
@@ -133,10 +133,9 @@ export function getMakefileInfo(projectDir: string, mode?: string, arch?: string
             }
             log(`[getMakefileInfo] 校验通过: mode=${mode}`);
         }
-        const t = _parseMakefileVar(mf, 'TARGET');
+        const t = _parseMakefileVar(mfContent, 'TARGET');
         log(`[getMakefileInfo] TARGET="${t}"`);
         if (!t) { return null; }
-        // Linux 的 TARGET 已包含完整相对路径，如 build_linux/debug/XYWinQTPri
         const target = path.basename(t);
         const destDir = path.dirname(t) !== '.' ? path.dirname(t) : '';
         const exePath = path.join(projectDir, t);
@@ -152,16 +151,13 @@ export function parseProFile(proPath: string): ProjectInfo {
     const projectDir = path.dirname(proPath);
     const proFile = path.basename(proPath);
 
-    // TARGET：粗略解析，仅用于 UI 显示
     let target = path.basename(proFile, '.pro');
     const targetMatch = content.match(/^\s*TARGET\s*=\s*(\S+)/m);
     if (targetMatch) { target = targetMatch[1].trim(); }
 
-    // QT 模块
     const qtMatch = content.match(/^\s*QT\s*\+?=\s*(.+)$/m);
     const qtModules = qtMatch ? qtMatch[1].trim().split(/\s+/) : ['core', 'gui', 'widgets'];
 
-    // DEFINES
     const definesMatch = content.match(/^\s*DEFINES\s*\+?=\s*(.+)$/m);
     const defines = definesMatch ? definesMatch[1].trim().split(/\s+/) : [];
 
@@ -175,10 +171,12 @@ export function parseProFile(proPath: string): ProjectInfo {
     };
 }
 
-/** 从 Makefile 中读取 LIBS 变量，提取 -L 库搜索路径（qmake 已展开所有变量和 scope） */
+/** 从 Makefile 中读取 LIBS 变量，提取 -L 库搜索路径 */
 export function parseLibPaths(projectDir: string): string[] {
     const mf = path.join(projectDir, 'Makefile');
-    const libs = _parseMakefileVar(mf, 'LIBS');
+    const content = _readFile(mf);
+    if (!content) { return []; }
+    const libs = _parseMakefileVar(content, 'LIBS');
     if (!libs) { return []; }
     const paths: string[] = [];
     const matches = libs.matchAll(/-L(\S+)/g);
@@ -202,7 +200,6 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
     const config = vscode.workspace.getConfiguration('xyQt');
     const savedProject = config.get<string>('selectedProject');
 
-    // 已保存的项目：尝试在所有 workspace folders 中定位
     if (!forceSelect && savedProject) {
         for (const folder of folders) {
             const fullPath = path.join(folder.uri.fsPath, savedProject);
@@ -214,7 +211,6 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         }
     }
 
-    // 扫描所有 workspace folders
     const allProFiles: { label: string; root: string; relative: string }[] = [];
     for (const folder of folders) {
         const root = folder.uri.fsPath;

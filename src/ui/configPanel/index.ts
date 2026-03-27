@@ -29,16 +29,22 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         webviewView.webview.options = { enableScripts: true };
         this._updateHtml();
 
-        const qtPath = getQtPath();
-        const vsPath = getVsDevShellPath();
-        log(`初始环境检测: qtPath="${qtPath}", vsPath="${vsPath}"`);
-        detectEnv(qtPath, vsPath).then(env => {
-            log('初始环境检测完成');
-            setState('envInfo', env);
+        // 复用已有的 envInfo，避免重复检测
+        const existingEnv = getState().envInfo;
+        if (existingEnv) {
             this._pushEnvUpdate();
-        }).catch((err) => {
-            log(`初始环境检测失败: ${err}`);
-        });
+        } else {
+            const qtPath = getQtPath();
+            const vsPath = getVsDevShellPath();
+            log(`初始环境检测: qtPath="${qtPath}", vsPath="${vsPath}"`);
+            detectEnv(qtPath, vsPath).then(env => {
+                log('初始环境检测完成');
+                setState('envInfo', env);
+                this._pushEnvUpdate();
+            }).catch((err) => {
+                log(`初始环境检测失败: ${err}`);
+            });
+        }
 
         webviewView.webview.onDidReceiveMessage(msg =>
             handleMessage(msg, webviewView.webview,
