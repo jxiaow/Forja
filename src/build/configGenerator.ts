@@ -264,6 +264,6 @@ export function updateCppPropertiesStandard(cStandard: string, cppStandard: stri
             fs.writeFileSync(propsPath, JSON.stringify(props, null, 4), 'utf-8');
         }
     } catch (e) {
-        console.error('[XY Qt] 更新 c_cpp_properties.json 失败:', e);
+        console.error('[XYQt] 更新 c_cpp_properties.json 失败:', e);
     }
 }
