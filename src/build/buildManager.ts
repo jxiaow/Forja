@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { setState } from '../core/stateManager';
 import { getBuildConfig, getWorkspaceRoot } from '../core/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
@@ -25,16 +26,14 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
 // 从 Makefile 解析 exe 完整路径，失败返回 null
 function _resolveExePath(): string | null {
     const cfg = getBuildConfig();
-    log(`[resolveExePath] projectDir="${cfg.projectDir}", mode="${cfg.mode}"`);
+    log(`[resolveExePath] projectDir="${cfg.projectDir}", mode="${cfg.mode}", arch="${cfg.arch}"`);
     if (!cfg.projectDir) { return null; }
-    const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode);
+    const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
     log(`[resolveExePath] mfInfo=${JSON.stringify(mfInfo)}`);
     if (!mfInfo) { return null; }
-    const exeName = isWin ? `${mfInfo.target}.exe` : mfInfo.target;
-    if (mfInfo.destDir) {
-        return path.join(cfg.projectDir, mfInfo.destDir, exeName);
-    }
-    return path.join(cfg.projectDir, exeName);
+    const exists = fs.existsSync(mfInfo.exePath);
+    log(`[resolveExePath] exePath="${mfInfo.exePath}", exists=${exists}`);
+    return mfInfo.exePath;
 }
 
 export function qmake(): Thenable<vscode.TaskExecution> {
@@ -95,7 +94,7 @@ export async function run(): Promise<void> {
                 reject(new Error('无法确定可执行文件路径'));
                 return;
             }
-            const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode)!;
+            const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch)!;
             const runCmds: string[] = [builder.killApp(mfInfo.target)];
             // Linux: 从 Makefile 的 LIBS 中提取 -L 路径加入 LD_LIBRARY_PATH
             if (!isWin) {
@@ -106,7 +105,7 @@ export async function run(): Promise<void> {
                     log(`[Run] LD_LIBRARY_PATH += ${joined}`);
                 }
             }
-            runCmds.push(`"${exePath}"`);
+            runCmds.push(`"${mfInfo.exePath}"`);
             const runTaskObj = new vscode.Task(
                 { type: 'shell' },
                 vscode.TaskScope.Workspace, `Run ${cfg.mode}`, 'XY Qt',
@@ -130,7 +129,7 @@ export async function run(): Promise<void> {
 
 export function stop(): void {
     const cfg = getBuildConfig();
-    const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode);
+    const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
     const exeName = mfInfo?.target || 'app';
     runTask('Stop', builder.stopCommands(exeName), []);
     setState('isRunning', false);

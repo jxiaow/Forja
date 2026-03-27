@@ -3,7 +3,7 @@
   "displayName": "XY Qt Tools",
   "publisher": "xy",
   "description": "Qt build tools for XY project: status bar, qmake detection, .pri sync helper",
-  "version": "0.2.10",
+  "version": "0.2.13",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
   "activationEvents": ["workspaceContains:**/*.pro"],
@@ -60,6 +60,12 @@
           "default": "x86",
           "enum": ["x86", "x64"],
           "description": "目标架构"
+        },
+        "xyQt.mode": {
+          "type": "string",
+          "default": "debug",
+          "enum": ["debug", "release"],
+          "description": "构建模式"
         },
         "xyQt.scanExcludeDirs": {
           "type": "array",

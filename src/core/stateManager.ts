@@ -17,9 +17,13 @@ export interface AppState {
 type StateKey = keyof AppState;
 type StateListener = (key: StateKey, state: AppState) => void;
 
+function cfg(): vscode.WorkspaceConfiguration {
+    return vscode.workspace.getConfiguration('xyQt');
+}
+
 const _state: AppState = {
-    mode: 'debug',
-    arch: 'x86',
+    mode: cfg().get<BuildMode>('mode', 'debug'),
+    arch: cfg().get<Arch>('arch', 'x86'),
     isBuilding: false,
     isRunning: false,
     currentProject: null,
@@ -35,6 +39,9 @@ export function getState(): Readonly<AppState> {
 export function setState<K extends StateKey>(key: K, value: AppState[K]): void {
     if (_state[key] === value) { return; }
     _state[key] = value;
+    if (key === 'mode' || key === 'arch') {
+        cfg().update(key, value, vscode.ConfigurationTarget.Workspace);
+    }
     _listeners.forEach(fn => fn(key, _state));
 }
 

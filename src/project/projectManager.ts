@@ -14,7 +14,8 @@ export interface ProjectInfo {
 
 export interface MakefileInfo {
     target: string;         // 可执行文件名（不含 .exe）
-    destDir: string;        // 输出目录（已展开的最终值）
+    destDir: string;        // 输出目录
+    exePath: string;        // 完整可执行文件绝对路径
 }
 
 const maxScanDepth = 5;
@@ -49,7 +50,10 @@ function _parseMakefileVar(makefilePath: string, varName: string): string | null
         const content = fs.readFileSync(makefilePath, 'utf-8');
         // 支持多空格对齐（qmake 生成的 Makefile 用空格对齐变量名）
         const match = content.match(new RegExp(`^${varName}[ \\t]+=[ \\t]*(.+)$`, 'm'));
-        if (!match) { return null; }
+        if (!match) {
+            log(`[parseMakefileVar] "${varName}" 未匹配`);
+            return null;
+        }
         return match[1].replace(/#.*$/, '').trim();
     } catch {}
     return null;
@@ -68,28 +72,77 @@ function _parseMakefileMode(makefilePath: string): string | null {
     return null;
 }
 
-export function getMakefileInfo(projectDir: string, mode?: string): MakefileInfo | null {
+// 从主 Makefile 头部注释校验 mode 和 arch 是否匹配
+function _validateMakefileConfig(makefilePath: string, mode: string, arch: string): boolean {
+    try {
+        const content = fs.readFileSync(makefilePath, 'utf-8');
+        const match = content.match(/^#\s*Command:.*$/m);
+        if (!match) { return false; }
+        const cmd = match[0];
+        const hasMode = cmd.includes(`CONFIG+=${mode}`);
+        const hasArch = cmd.includes(`CONFIG+=${arch}`);
+        log(`[validateMakefileConfig] cmd="${cmd.trim()}", hasMode=${hasMode}, hasArch=${hasArch}`);
+        return hasMode && hasArch;
+    } catch {}
+    return false;
+}
+
+export function getMakefileInfo(projectDir: string, mode?: string, arch?: string): MakefileInfo | null {
     const mf = path.join(projectDir, 'Makefile');
+    log(`[getMakefileInfo] platform=${process.platform}, projectDir="${projectDir}", mode="${mode}", arch="${arch}"`);
     if (!fs.existsSync(mf)) {
         log(`[getMakefileInfo] Makefile 不存在: ${mf}`);
         return null;
     }
+    log(`[getMakefileInfo] Makefile 存在: ${mf}`);
 
-    if (mode) {
-        const mfMode = _parseMakefileMode(mf);
-        if (mfMode && mfMode !== mode) {
-            log(`[getMakefileInfo] Makefile mode=${mfMode} 与当前 mode=${mode} 不匹配，请重新运行 QMake`);
+    if (process.platform === 'win32') {
+        // Windows: 校验 mode + arch，从 Makefile.Release/Debug 读 DESTDIR_TARGET
+        if (mode && arch) {
+            const valid = _validateMakefileConfig(mf, mode, arch);
+            if (!valid) {
+                log(`[getMakefileInfo] 校验失败: mode=${mode} arch=${arch} 与 Makefile 不匹配，请重新运行 QMake`);
+                return null;
+            }
+            log(`[getMakefileInfo] 校验通过: mode=${mode} arch=${arch}`);
+        }
+        const subMf = mode
+            ? path.join(projectDir, `Makefile.${mode.charAt(0).toUpperCase() + mode.slice(1)}`)
+            : mf;
+        log(`[getMakefileInfo] 子 Makefile: ${subMf}`);
+        if (!fs.existsSync(subMf)) {
+            log(`[getMakefileInfo] 子 Makefile 不存在: ${subMf}`);
             return null;
         }
+        const destDirTarget = _parseMakefileVar(subMf, 'DESTDIR_TARGET');
+        log(`[getMakefileInfo] DESTDIR_TARGET="${destDirTarget}"`);
+        if (!destDirTarget) { return null; }
+        const exePath = path.join(projectDir, destDirTarget.replace(/\\/g, path.sep));
+        const target = path.basename(destDirTarget.replace(/\.exe$/i, ''));
+        const destDir = path.dirname(destDirTarget).replace(/\\/g, '/');
+        log(`[getMakefileInfo] target="${target}", destDir="${destDir}", exePath="${exePath}", exists=${fs.existsSync(exePath)}`);
+        return { target, destDir, exePath };
+    } else {
+        // Linux: 只校验 mode，从主 Makefile 读 TARGET
+        if (mode) {
+            const mfMode = _parseMakefileMode(mf);
+            log(`[getMakefileInfo] mfMode="${mfMode}", mode="${mode}"`);
+            if (mfMode && mfMode !== mode) {
+                log(`[getMakefileInfo] 校验失败: Makefile mode=${mfMode} 与当前 mode=${mode} 不匹配，请重新运行 QMake`);
+                return null;
+            }
+            log(`[getMakefileInfo] 校验通过: mode=${mode}`);
+        }
+        const t = _parseMakefileVar(mf, 'TARGET');
+        log(`[getMakefileInfo] TARGET="${t}"`);
+        if (!t) { return null; }
+        // Linux 的 TARGET 已包含完整相对路径，如 build_linux/debug/XYWinQTPri
+        const target = path.basename(t);
+        const destDir = path.dirname(t) !== '.' ? path.dirname(t) : '';
+        const exePath = path.join(projectDir, t);
+        log(`[getMakefileInfo] target="${target}", destDir="${destDir}", exePath="${exePath}", exists=${fs.existsSync(exePath)}`);
+        return { target, destDir, exePath };
     }
-
-    const t = _parseMakefileVar(mf, 'TARGET');
-    if (!t) { return null; }
-    const target = path.basename(t.replace(/\.exe$/i, ''));
-    const d = _parseMakefileVar(mf, 'DESTDIR');
-    const destDir = d ? d.replace(/\\/g, '/').replace(/\/$/, '') : '';
-    log(`[getMakefileInfo] target=${target}, destDir=${destDir}`);
-    return { target, destDir };
 }
 
 // ── .pro 文件解析（只取显示名 + IntelliSense 需要的信息） ──

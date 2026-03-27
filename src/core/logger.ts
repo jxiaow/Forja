@@ -4,7 +4,7 @@ let _channel: vscode.OutputChannel | null = null;
 
 export function initLogger(): vscode.OutputChannel {
     if (!_channel) {
-        _channel = vscode.window.createOutputChannel('XY Qt');
+        _channel = vscode.window.createOutputChannel('XYQt');
     }
     return _channel;
 }
