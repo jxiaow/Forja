@@ -1,43 +1,61 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import { getState } from '../core/stateManager';
 import { getBuildConfig } from '../core/configService';
+import { setState } from '../core/stateManager';
 import { getMakefileInfo } from '../project/projectManager';
+import { build } from './buildManager';
 
 const isWin = process.platform === 'win32';
 
 export async function startDebug(): Promise<void> {
-    const state = getState();
-    const project = state.currentProject;
-    if (!project) {
+    const cfg = getBuildConfig();
+    if (!cfg.projectDir) {
         vscode.window.showErrorMessage('请先选择项目');
         return;
     }
 
-    const cfg = getBuildConfig();
-    const mfInfo = getMakefileInfo(cfg.projectDir, state.mode);
+    // 先 Build
+    setState('isBuilding', true);
+    try {
+        const execution = await build();
+        await new Promise<void>((resolve, reject) => {
+            let settled = false;
+            const finish = (exitCode: number | undefined) => {
+                if (settled) { return; }
+                settled = true;
+                d1.dispose(); d2.dispose();
+                if (exitCode === 0) { resolve(); }
+                else { reject(new Error(exitCode === undefined ? '任务已终止' : '构建失败')); }
+            };
+            const d1 = vscode.tasks.onDidEndTaskProcess(e => {
+                if (e.execution === execution) { finish(e.exitCode); }
+            });
+            const d2 = vscode.tasks.onDidEndTask(e => {
+                if (e.execution === execution) { finish(undefined); }
+            });
+        });
+    } catch (e: any) {
+        vscode.window.showErrorMessage(e.message);
+        return;
+    } finally {
+        setState('isBuilding', false);
+    }
+
+    const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
     if (!mfInfo) {
-        vscode.window.showErrorMessage(`请先运行 QMake (${state.mode})`);
+        vscode.window.showErrorMessage(`请先运行 QMake (${cfg.mode})`);
         return;
     }
 
-    const exeName = isWin ? `${mfInfo.target}.exe` : mfInfo.target;
-    const exePath = mfInfo.destDir
-        ? path.join(cfg.projectDir, mfInfo.destDir, exeName)
-        : path.join(cfg.projectDir, exeName);
-    const cwd = path.dirname(exePath);
-
     const config: vscode.DebugConfiguration = {
         name: `Debug ${mfInfo.target}`,
-        type: 'cppvsdbg',
+        type: isWin ? 'cppvsdbg' : 'cppdbg',
         request: 'launch',
-        program: exePath,
+        program: mfInfo.exePath,
         args: [],
         stopAtEntry: false,
-        cwd: cwd,
+        cwd: cfg.projectDir,
         environment: [],
-        console: 'integratedTerminal',
-        preLaunchTask: `Build ${state.mode} ${state.arch}`
+        console: 'integratedTerminal'
     };
 
     try {

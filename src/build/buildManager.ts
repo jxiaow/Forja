@@ -27,20 +27,11 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
         echo: true,
         focus: true,
         showReuseMessage: false,
-        clear: true
+        clear: false
     };
     return vscode.tasks.executeTask(task);
 }
 
-// Run 用持久 terminal，与 build terminal 分开，程序输出不干扰编译错误
-let _runTerminal: vscode.Terminal | undefined;
-
-function _getRunTerminal(): vscode.Terminal {
-    if (!_runTerminal || _runTerminal.exitStatus !== undefined) {
-        _runTerminal = vscode.window.createTerminal({ name: 'XYQt - Run' });
-    }
-    return _runTerminal;
-}
 
 // 静默 kill（不开新 terminal）
 function _killApp(exeName: string): void {
@@ -49,7 +40,9 @@ function _killApp(exeName: string): void {
         : `pkill -x ${exeName}`;
     log(`[killApp] ${cmd}`);
     cp.exec(cmd, (err) => {
-        if (err) { log(`[killApp] ${err.message}`); }
+        if (err && !err.message.includes('not found') && !err.message.includes('找不到') && !err.message.includes('没有找到')) {
+            log(`[killApp] ${err.message}`);
+        }
     });
 }
 
@@ -91,6 +84,7 @@ export async function run(): Promise<void> {
     setState('isRunning', false);
 
     const { commands, matcher } = builder.buildCommands(cfg);
+    // Build task: 不清屏，失败时保留编译错误
     const buildTask = new vscode.Task(
         { type: 'shell' },
         vscode.TaskScope.Workspace, `Build ${cfg.mode}`, 'XYQt',
@@ -102,7 +96,7 @@ export async function run(): Promise<void> {
         echo: true,
         focus: true,
         showReuseMessage: false,
-        clear: true
+        clear: false
     };
     const execution = await vscode.tasks.executeTask(buildTask);
 
@@ -132,29 +126,41 @@ export async function run(): Promise<void> {
                 return;
             }
 
-            // 先静默 kill 旧进程，再用持久 terminal 启动
+            // 先静默 kill 旧进程，再用 task 启动（保留 shell 环境变量）
             _killApp(mfInfo.target);
 
-            // Linux: 设置 LD_LIBRARY_PATH
-            const term = _getRunTerminal();
+            const runCmds: string[] = [];
             if (!isWin) {
                 const libPaths = parseLibPaths(cfg.projectDir);
                 if (libPaths.length > 0) {
                     const joined = libPaths.join(':');
-                    term.sendText(`export LD_LIBRARY_PATH="${joined}:$LD_LIBRARY_PATH"`);
+                    runCmds.push(`export LD_LIBRARY_PATH="${joined}:$LD_LIBRARY_PATH"`);
                     log(`[Run] LD_LIBRARY_PATH += ${joined}`);
                 }
             }
-            term.sendText(`"${mfInfo.exePath}"`);
-            term.show(false); // false = 不抢焦点
-            setState('isRunning', true);
-
-            // 监听 run terminal 关闭
-            const dTerm = vscode.window.onDidCloseTerminal(t => {
-                if (t === _runTerminal) {
-                    dTerm.dispose();
-                    setState('isRunning', false);
-                }
+            runCmds.push(`"${mfInfo.exePath}"`);
+            const runTaskObj = new vscode.Task(
+                { type: 'shell' },
+                vscode.TaskScope.Workspace, `Run ${cfg.mode}`, 'XYQt',
+                builder.makeExec(runCmds), []
+            );
+            // 编译成功，Run task 清屏再启动
+            runTaskObj.presentationOptions = {
+                reveal: vscode.TaskRevealKind.Always,
+                panel: vscode.TaskPanelKind.Shared,
+                echo: false,
+                focus: false,
+                showReuseMessage: false,
+                clear: true
+            };
+            vscode.tasks.executeTask(runTaskObj).then(runExecution => {
+                setState('isRunning', true);
+                const dRun = vscode.tasks.onDidEndTask(e => {
+                    if (e.execution === runExecution) {
+                        dRun.dispose();
+                        setState('isRunning', false);
+                    }
+                });
             });
 
             resolve();
