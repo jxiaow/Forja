@@ -67,6 +67,18 @@ export function qmake(): Thenable<vscode.TaskExecution> {
     return runTask(`QMake ${cfg.mode}`, commands, matcher);
 }
 
+export function qmakeForDebug(): Thenable<vscode.TaskExecution> {
+    const cfg = getBuildConfig();
+    const extraConfigs = cfg.mode === 'release'
+        ? ['CONFIG+=force_debug_info']
+        : [];
+    const { commands, matcher } = builder.qmakeCommands(cfg, extraConfigs);
+    const taskName = cfg.mode === 'release'
+        ? 'QMake release (debug info)'
+        : `QMake ${cfg.mode}`;
+    return runTask(taskName, commands, matcher);
+}
+
 export function build(): Thenable<vscode.TaskExecution> {
     const cfg = getBuildConfig();
     const { commands, matcher } = builder.buildCommands(cfg);
@@ -181,6 +193,11 @@ export function stop(): void {
     const cfg = getBuildConfig();
     const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
     const exeName = mfInfo?.target || 'app';
+    logger.info(`Stop current target: ${exeName}`);
     _killApp(exeName);
     setState('isRunning', false);
+}
+
+export function stopCurrentTarget(): void {
+    stop();
 }

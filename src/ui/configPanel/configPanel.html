@@ -207,6 +207,14 @@
         </div>
         <div class="hint">已配置时将优先用于“Qt Pilot: 用 Qt Designer 打开”</div>
       </div>
+      <div class="field">
+        <label>Qt 源码路径（可选）</label>
+        <div class="input-row">
+          <input id="qtSourcePath" value="{{qtSourcePathValue}}" placeholder="例如: C:\\Qt\\5.15.2\\Src" onblur="saveQtSourcePath()" />
+          <button class="btn" onclick="browse('qtSourcePath', true)">浏览</button>
+        </div>
+        <div class="hint">用于调试时定位 Qt 源码；留空时会尝试从 Qt 路径推断</div>
+      </div>
     </div>
   </details>
 </div>
@@ -238,6 +246,7 @@
   }
   function saveQtPath() { vscode.postMessage({ command: 'saveQtPath', value: document.getElementById('qtPath').value }); }
   function saveDesignerPath() { vscode.postMessage({ command: 'saveDesignerPath', value: document.getElementById('designerPath').value }); }
+  function saveQtSourcePath() { vscode.postMessage({ command: 'saveQtSourcePath', value: document.getElementById('qtSourcePath').value }); }
   function saveStandard() { vscode.postMessage({ command: 'saveStandard', cStandard: document.getElementById('cStandard').value, cppStandard: document.getElementById('cppStandard').value }); }
   function saveExcludeDirs() {
     const val = document.getElementById('scanExcludeDirs').value;
@@ -262,7 +271,7 @@
     const d = e.data;
     if (d.command === 'setPath') {
       document.getElementById(d.targetId).value = d.value;
-      if (d.targetId === 'vsDevShellPath') { saveVsPath(); } else if (d.targetId === 'qtPath') { saveQtPath(); } else if (d.targetId === 'designerPath') { saveDesignerPath(); } else if (d.targetId === 'manualProPath') { saveManualProPath(); }
+      if (d.targetId === 'vsDevShellPath') { saveVsPath(); } else if (d.targetId === 'qtPath') { saveQtPath(); } else if (d.targetId === 'designerPath') { saveDesignerPath(); } else if (d.targetId === 'qtSourcePath') { saveQtSourcePath(); } else if (d.targetId === 'manualProPath') { saveManualProPath(); }
     } else if (d.command === 'envUpdated') {
       const setDot = (id, ok) => { const dot = document.getElementById(id); if (dot) { dot.className = 'status-dot ' + (ok ? 'dot-ok' : 'dot-warn'); } };
       setDot('dot-qt', !!d.env.qt); setDot('dot-jom', d.env.jom); setDot('dot-qt-detail', !!d.env.qt); setDot('dot-jom-detail', d.env.jom);

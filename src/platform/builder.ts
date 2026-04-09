@@ -14,7 +14,7 @@ export interface BuildConfig {
 export interface PlatformBuilder {
     makeExec(commands: string[]): vscode.ShellExecution;
     killApp(exeName: string): string;
-    qmakeCommands(cfg: BuildConfig): { commands: string[]; matcher: string | string[] };
+    qmakeCommands(cfg: BuildConfig, extraConfigs?: string[]): { commands: string[]; matcher: string | string[] };
     buildCommands(cfg: BuildConfig): { commands: string[]; matcher: string | string[] };
     cleanCommands(cfg: BuildConfig): { commands: string[]; matcher: string | string[] };
     stopCommands(exeName: string): string[];
@@ -45,13 +45,14 @@ export function createBuilder(config: PlatformConfig): PlatformBuilder {
             return config.killCommand(exeName);
         },
 
-        qmakeCommands(cfg: BuildConfig) {
-            const modeConfig = cfg.mode === 'debug'
-                ? 'CONFIG+=debug CONFIG+=console'
-                : 'CONFIG+=release CONFIG+=console';
+        qmakeCommands(cfg: BuildConfig, extraConfigs: string[] = []) {
+            const modeConfigs = cfg.mode === 'debug'
+                ? ['CONFIG+=debug', 'CONFIG+=console']
+                : ['CONFIG+=release', 'CONFIG+=console'];
             const extra = config.qmakeExtraArgs(cfg);
             const targetArg = cfg.qmakeTarget ? ` "TARGET=${cfg.qmakeTarget}"` : '';
-            const qmakeCmd = `qmake ${cfg.proFile} -spec ${config.qmakeSpec} ${modeConfig}${extra ? ' ' + extra : ''}${targetArg}`;
+            const configArgs = [...modeConfigs, ...extraConfigs].join(' ');
+            const qmakeCmd = `qmake ${cfg.proFile} -spec ${config.qmakeSpec} ${configArgs}${extra ? ' ' + extra : ''}${targetArg}`;
             return {
                 commands: assembleCommands(cfg, [qmakeCmd]),
                 matcher: config.qmakeMatcher

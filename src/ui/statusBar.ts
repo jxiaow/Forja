@@ -127,8 +127,12 @@ export async function showActions(): Promise<void> {
 
     if (selected.action.startsWith('mode:')) {
         const [, m, a] = selected.action.split(':');
+        const changed = state.mode !== m || state.arch !== a;
         setState('mode', m as BuildMode);
         setState('arch', a as Arch);
+        if (changed) {
+            await vscode.commands.executeCommand('qtPilot.qmake');
+        }
     } else if (selected.action === 'qmake') {
         vscode.commands.executeCommand('qtPilot.qmake');
     } else if (selected.action === 'build') {

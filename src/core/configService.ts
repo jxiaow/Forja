@@ -25,6 +25,10 @@ export function getDesignerPath(): string {
     return cfg().get<string>('designerPath', '');
 }
 
+export function getQtSourcePath(): string {
+    return cfg().get<string>('qtSourcePath', '');
+}
+
 export function getSelectedProject(): string {
     const saved = cfg().get<string>('selectedProject', '');
     if (!saved) { return ''; }

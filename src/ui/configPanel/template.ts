@@ -17,6 +17,7 @@ export interface TemplateData {
     autoQtPath: string;
     qtPath: string;
     designerPath: string;
+    qtSourcePath: string;
     manualProPath: string;
     version: string;
 }
@@ -98,6 +99,7 @@ export function getHtml(data: TemplateData): string {
         effectiveQtPath: effectiveQtPath || '未配置',
         qtPathValue: qtPath,
         designerPathValue: data.designerPath,
+        qtSourcePathValue: data.qtSourcePath,
         qtCandidateOptions: (env?.qtCandidates ?? [])
             .map((c: QtInfo) => `<option value="${c.path}">Qt ${c.version} (${c.compiler})</option>`)
             .join(''),

@@ -3,7 +3,7 @@
   "displayName": "Qt Pilot",
   "publisher": "qtpilot",
   "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
   "activationEvents": [
@@ -71,6 +71,11 @@
           "type": "string",
           "default": "",
           "description": "Qt Designer 可执行文件路径（可选，优先于自动推断）"
+        },
+        "qtPilot.qtSourcePath": {
+          "type": "string",
+          "default": "",
+          "description": "Qt 源码根目录（可选，用于调试时定位 Qt 源码）"
         },
         "qtPilot.vsDevShellPath": {
           "type": "string",

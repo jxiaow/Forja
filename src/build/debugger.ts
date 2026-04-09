@@ -1,10 +1,126 @@
 import * as vscode from 'vscode';
-import { getBuildConfig } from '../core/configService';
+import * as fs from 'fs';
+import * as path from 'path';
+import { getBuildConfig, getQtSourcePath } from '../core/configService';
 import { setState } from '../core/stateManager';
 import { getMakefileInfo } from '../project/projectManager';
-import { build } from './buildManager';
+import { build, qmakeForDebug, stopCurrentTarget } from './buildManager';
 
 const isWin = process.platform === 'win32';
+
+function getEffectiveQtSourcePath(qtPath: string): string {
+    const manualPath = getQtSourcePath().trim();
+    if (manualPath && fs.existsSync(manualPath)) {
+        return manualPath;
+    }
+
+    if (!qtPath) {
+        return '';
+    }
+
+    const candidates = [
+        path.join(qtPath, 'Src'),
+        path.join(path.dirname(qtPath), 'Src'),
+        path.join(path.dirname(path.dirname(qtPath)), 'Src')
+    ];
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return '';
+}
+
+function createQtSourceFileMap(qtSourcePath: string): Record<string, string> | undefined {
+    if (!qtSourcePath || !fs.existsSync(qtSourcePath)) {
+        return undefined;
+    }
+
+    const moduleDirs = fs.readdirSync(qtSourcePath, { withFileTypes: true })
+        .filter(entry => entry.isDirectory() && entry.name.toLowerCase().startsWith('qt'))
+        .map(entry => entry.name);
+    if (moduleDirs.length === 0) {
+        return undefined;
+    }
+
+    const commonRoots = [
+        'C:\\Qt',
+        'D:\\Qt',
+        'E:\\Qt',
+        'C:\\work',
+        'D:\\work',
+        'E:\\work',
+        'C:\\Users\\qt\\work',
+        'D:\\Users\\qt\\work',
+        'E:\\Users\\qt\\work',
+        'C:\\a\\_work\\1\\s',
+        'D:\\a\\_work\\1\\s',
+        'E:\\a\\_work\\1\\s'
+    ];
+    const sourceRootNames = ['Src', 'src', 'qt5', 'qt6', 'qt', 'install\\src'];
+    const sourceFileMap: Record<string, string> = {};
+
+    for (const moduleDir of moduleDirs) {
+        const localModulePath = path.join(qtSourcePath, moduleDir);
+        sourceFileMap[localModulePath] = localModulePath;
+        for (const root of commonRoots) {
+            sourceFileMap[path.join(root, moduleDir)] = localModulePath;
+            for (const rootName of sourceRootNames) {
+                sourceFileMap[path.join(root, rootName, moduleDir)] = localModulePath;
+            }
+        }
+    }
+
+    return Object.keys(sourceFileMap).length > 0 ? sourceFileMap : undefined;
+}
+
+async function waitForTask(execution: vscode.TaskExecution): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const finish = (exitCode: number | undefined) => {
+            if (settled) { return; }
+            settled = true;
+            d1.dispose();
+            d2.dispose();
+            if (exitCode === 0) { resolve(); }
+            else { reject(new Error(exitCode === undefined ? '任务已终止' : '任务失败')); }
+        };
+        const d1 = vscode.tasks.onDidEndTaskProcess(e => {
+            if (e.execution === execution) { finish(e.exitCode); }
+        });
+        const d2 = vscode.tasks.onDidEndTask(e => {
+            if (e.execution === execution) { finish(undefined); }
+        });
+    });
+}
+
+async function stopExistingDebugSessions(program: string): Promise<void> {
+    const session = vscode.debug.activeDebugSession;
+    const targetProgram = session?.configuration?.program;
+    if (!session || typeof targetProgram !== 'string' || path.normalize(targetProgram) !== path.normalize(program)) {
+        return;
+    }
+
+    vscode.window.showInformationMessage('检测到现有调试实例，已先停止后重新启动');
+    await vscode.debug.stopDebugging(session);
+
+    await new Promise<void>(resolve => {
+        const check = (): void => {
+            const activeSession = vscode.debug.activeDebugSession;
+            const activeProgram = activeSession?.configuration?.program;
+            const stillRunning = !!activeSession
+                && typeof activeProgram === 'string'
+                && path.normalize(activeProgram) === path.normalize(program);
+            if (!stillRunning) {
+                resolve();
+                return;
+            }
+            setTimeout(check, 100);
+        };
+        check();
+    });
+}
 
 export async function startDebug(): Promise<void> {
     const cfg = getBuildConfig();
@@ -17,25 +133,14 @@ export async function startDebug(): Promise<void> {
     setState('isBuilding', true);
     setState('buildAction', 'debug');
     try {
-        const execution = await build();
-        await new Promise<void>((resolve, reject) => {
-            let settled = false;
-            const finish = (exitCode: number | undefined) => {
-                if (settled) { return; }
-                settled = true;
-                d1.dispose(); d2.dispose();
-                if (exitCode === 0) { resolve(); }
-                else { reject(new Error(exitCode === undefined ? '任务已终止' : '构建失败')); }
-            };
-            const d1 = vscode.tasks.onDidEndTaskProcess(e => {
-                if (e.execution === execution) { finish(e.exitCode); }
-            });
-            const d2 = vscode.tasks.onDidEndTask(e => {
-                if (e.execution === execution) { finish(undefined); }
-            });
-        });
+        if (cfg.mode === 'release') {
+            const qmakeExecution = await qmakeForDebug();
+            await waitForTask(qmakeExecution);
+        }
+        const buildExecution = await build();
+        await waitForTask(buildExecution);
     } catch (e: any) {
-        vscode.window.showErrorMessage(e.message);
+        vscode.window.showErrorMessage(e.message === '任务失败' ? '构建失败' : e.message);
         return;
     } finally {
         setState('isBuilding', false);
@@ -48,6 +153,12 @@ export async function startDebug(): Promise<void> {
         return;
     }
 
+    await stopExistingDebugSessions(mfInfo.exePath);
+    stopCurrentTarget();
+
+    const qtSourcePath = getEffectiveQtSourcePath(cfg.qtPath);
+    const sourceFileMap = createQtSourceFileMap(qtSourcePath);
+
     const config: vscode.DebugConfiguration = {
         name: `Debug ${mfInfo.target}`,
         type: isWin ? 'cppvsdbg' : 'cppdbg',
@@ -59,6 +170,9 @@ export async function startDebug(): Promise<void> {
         environment: [],
         console: 'integratedTerminal'
     };
+    if (sourceFileMap) {
+        config.sourceFileMap = sourceFileMap;
+    }
 
     try {
         await vscode.debug.startDebugging(undefined, config);

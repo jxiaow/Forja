@@ -52,6 +52,11 @@ export async function handleMessage(
             await updateConfig('designerPath', msg.value || '');
             break;
         }
+        case 'saveQtSourcePath': {
+            logger.info(`保存 Qt 源码路径: "${msg.value}"`);
+            await updateConfig('qtSourcePath', msg.value || '');
+            break;
+        }
         case 'saveStandard': {
             logger.info(`保存标准: C=${msg.cStandard}, C++=${msg.cppStandard}`);
             if (msg.cStandard) { await updateConfig('cStandard', msg.cStandard); }

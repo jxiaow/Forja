@@ -4,7 +4,7 @@ import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-         getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath } from '../../core/configService';
+         getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath } from '../../core/configService';
 import { createLogger } from '../../core/logger';
 
 const logger = createLogger('ConfigPanelView');
@@ -96,6 +96,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             autoQtPath: env?.qt?.path || '',
             qtPath: getQtPath(),
             designerPath: getDesignerPath(),
+            qtSourcePath: getQtSourcePath(),
             manualProPath: getManualProPath(),
             version: this._version
         };
