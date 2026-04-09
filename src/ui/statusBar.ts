@@ -48,8 +48,8 @@ function _updateDisplay(): void {
     _projectModeItem.show();
 
     if (state.isBuilding) {
-        _runItem.text = '$(sync~spin) Building';
-        _runItem.tooltip = '正在构建，完成后可运行';
+        _runItem.text = '$(sync~spin) Compiling';
+        _runItem.tooltip = '正在编译，完成后可运行或调试';
         _runItem.command = undefined;
     } else if (state.isRunning) {
         _runItem.text = '$(debug-stop) Stop';
