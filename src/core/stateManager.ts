@@ -18,7 +18,7 @@ type StateKey = keyof AppState;
 type StateListener = (key: StateKey, state: AppState) => void;
 
 function cfg(): vscode.WorkspaceConfiguration {
-    return vscode.workspace.getConfiguration('xyQt');
+    return vscode.workspace.getConfiguration('qtPilot');
 }
 
 const _state: AppState = {

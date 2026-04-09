@@ -6,7 +6,7 @@ import { getState } from './stateManager';
 // ── 配置读取 ──
 
 function cfg(): vscode.WorkspaceConfiguration {
-    return vscode.workspace.getConfiguration('xyQt');
+    return vscode.workspace.getConfiguration('qtPilot');
 }
 
 export function getWorkspaceRoot(): string {
@@ -21,8 +21,20 @@ export function getQtPath(): string {
     return cfg().get<string>('qtPath', '');
 }
 
+export function getDesignerPath(): string {
+    return cfg().get<string>('designerPath', '');
+}
+
 export function getSelectedProject(): string {
-    return cfg().get<string>('selectedProject', '');
+    const saved = cfg().get<string>('selectedProject', '');
+    if (!saved) { return ''; }
+    try {
+        const parsed = JSON.parse(saved) as { relative?: string };
+        if (typeof parsed.relative === 'string') {
+            return parsed.relative;
+        }
+    } catch {}
+    return saved;
 }
 
 export function getCStandard(): string {

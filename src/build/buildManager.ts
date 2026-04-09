@@ -8,17 +8,18 @@ import { PlatformBuilder, createBuilder } from '../platform/builder';
 import { winConfig } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
 import { getMakefileInfo, parseLibPaths } from '../project/projectManager';
-import { log } from '../core/logger';
+import { createLogger } from '../core/logger';
 
 const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
 const isWin = process.platform === 'win32';
+const logger = createLogger('Build');
 
 // QMake/Build/Clean 共用一个 Shared terminal（保留 problem matcher）
 function runTask(name: string, commands: string[], matcher: string | string[]): Thenable<vscode.TaskExecution> {
-    log(`[Task] ${name}: ${commands.join(' && ')}`);
+    logger.info(`Task ${name}: ${commands.join(' && ')}`);
     const task = new vscode.Task(
         { type: 'shell' },
-        vscode.TaskScope.Workspace, name, 'XYQt',
+        vscode.TaskScope.Workspace, name, 'Qt Pilot',
         builder.makeExec(commands), matcher
     );
     task.presentationOptions = {
@@ -38,10 +39,10 @@ function _killApp(exeName: string): void {
     const cmd = isWin
         ? `taskkill /F /IM ${exeName}.exe`
         : `pkill -x ${exeName}`;
-    log(`[killApp] ${cmd}`);
+    logger.info(`Kill app: ${cmd}`);
     cp.exec(cmd, (err) => {
         if (err && !err.message.includes('not found') && !err.message.includes('找不到') && !err.message.includes('没有找到')) {
-            log(`[killApp] ${err.message}`);
+            logger.error(`Kill app failed: ${err.message}`);
         }
     });
 }
@@ -49,14 +50,14 @@ function _killApp(exeName: string): void {
 // 从 Makefile 解析 MakefileInfo，失败返回 null 并记录日志
 function _resolveMakefileInfo(): ReturnType<typeof getMakefileInfo> {
     const cfg = getBuildConfig();
-    log(`[resolveMakefileInfo] projectDir="${cfg.projectDir}", mode="${cfg.mode}", arch="${cfg.arch}"`);
+    logger.info(`Resolve MakefileInfo: projectDir="${cfg.projectDir}", mode="${cfg.mode}", arch="${cfg.arch}"`);
     if (!cfg.projectDir) { return null; }
     const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
     if (!mfInfo) {
-        log('[resolveMakefileInfo] 解析失败');
+        logger.warn('Resolve MakefileInfo failed');
         return null;
     }
-    log(`[resolveMakefileInfo] exePath="${mfInfo.exePath}", exists=${fs.existsSync(mfInfo.exePath)}`);
+    logger.info(`Resolved executable: exePath="${mfInfo.exePath}", exists=${fs.existsSync(mfInfo.exePath)}`);
     return mfInfo;
 }
 
@@ -87,7 +88,7 @@ export async function run(): Promise<void> {
     // Build task: 不清屏，失败时保留编译错误
     const buildTask = new vscode.Task(
         { type: 'shell' },
-        vscode.TaskScope.Workspace, `Build ${cfg.mode}`, 'XYQt',
+        vscode.TaskScope.Workspace, `Build ${cfg.mode}`, 'Qt Pilot',
         builder.makeExec(commands), matcher
     );
     buildTask.presentationOptions = {
@@ -135,13 +136,13 @@ export async function run(): Promise<void> {
                 if (libPaths.length > 0) {
                     const joined = libPaths.join(':');
                     runCmds.push(`export LD_LIBRARY_PATH="${joined}:$LD_LIBRARY_PATH"`);
-                    log(`[Run] LD_LIBRARY_PATH += ${joined}`);
+                    logger.info(`Run env: LD_LIBRARY_PATH += ${joined}`);
                 }
             }
             runCmds.push(`"${mfInfo.exePath}"`);
             const runTaskObj = new vscode.Task(
                 { type: 'shell' },
-                vscode.TaskScope.Workspace, `Run ${cfg.mode}`, 'XYQt',
+                vscode.TaskScope.Workspace, `Run ${cfg.mode}`, 'Qt Pilot',
                 builder.makeExec(runCmds), []
             );
             // 编译成功，Run task 清屏再启动

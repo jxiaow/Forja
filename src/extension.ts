@@ -1,26 +1,29 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as cp from 'child_process';
 import * as buildManager from './build/buildManager';
 import { setState } from './core/stateManager';
-import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath } from './core/configService';
+import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, getDesignerPath } from './core/configService';
 import { createStatusBar, showActions } from './ui/statusBar';
 import { registerPriWatcher } from './project/priWatcher';
 import { ConfigPanel } from './ui/configPanel/index';
 import { selectProject, parseProFile } from './project/projectManager';
 import { startDebug } from './build/debugger';
 import { generateCppProperties } from './build/configGenerator';
-import { initLogger, log } from './core/logger';
+import { createLogger, initLogger } from './core/logger';
 import { detectEnv } from './env/envDetector';
+
+const logger = createLogger('Extension');
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const channel = initLogger();
     context.subscriptions.push(channel);
-    log('扩展激活');
+    logger.info('扩展激活');
 
     createStatusBar(context);
 
-    const panel = new ConfigPanel();
+    const panel = new ConfigPanel(context);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(ConfigPanel.viewId, panel)
     );
@@ -43,11 +46,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 环境检测（一次）
     detectEnv(getQtPath(), getVsDevShellPath()).then((env) => {
         setState('envInfo', env);
-        log('启动环境检测完成');
-    }).catch((e: Error) => log(`启动环境检测失败: ${e.message}`));
+        logger.info('启动环境检测完成');
+    }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
 
-    // 自动选择项目
-    const project = await selectProject(context);
+    // 启动时优先恢复手动指定项目，其次再走工作区扫描/记忆选择
+    let project = null;
+    const manualProPath = getManualProPath();
+    if (manualProPath && fs.existsSync(manualProPath)) {
+        const info = parseProFile(manualProPath);
+        info.projectDir = path.dirname(manualProPath);
+        project = info;
+        logger.info(`启动恢复手动项目: ${manualProPath}`);
+    } else {
+        project = await selectProject(context);
+    }
     setState('currentProject', project);
 
     // 自动生成 c_cpp_properties.json
@@ -56,39 +68,92 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (wsRoot) {
             const cppPropsPath = path.join(wsRoot, '.vscode', 'c_cpp_properties.json');
             if (!fs.existsSync(cppPropsPath)) {
-                log('c_cpp_properties.json 不存在，自动生成');
+                logger.info('c_cpp_properties.json 不存在，自动生成');
                 generateCppProperties(project);
             }
         }
     }
 
     const err = (e: Error) => vscode.window.showErrorMessage(e.message);
+    const resolveDesignerExecutable = (): string => {
+        const configured = (getDesignerPath() || '').trim();
+        if (configured) {
+            return configured;
+        }
+        const qtPath = (getQtPath() || '').trim();
+        const candidates: string[] = [];
+        if (qtPath) {
+            candidates.push(
+                path.join(qtPath, 'designer.exe'),
+                path.join(qtPath, 'bin', 'designer.exe'),
+                path.join(qtPath, 'designer'),
+                path.join(qtPath, 'bin', 'designer')
+            );
+        }
 
-    const cmds: [string, () => void][] = [
-        ['xyQt.selectProject', async () => {
+        for (const p of candidates) {
+            try {
+                if (fs.existsSync(p)) {
+                    return p;
+                }
+            } catch {}
+        }
+        return 'designer';
+    };
+
+    const cmds: [string, (...args: any[]) => void][] = [
+        ['qtPilot.selectProject', async () => {
             const p = await selectProject(context, true);
             setState('currentProject', p);
             panel.refresh();
         }],
-        ['xyQt.loadManualProject', () => {
+        ['qtPilot.loadManualProject', () => {
             const proPath = getManualProPath();
             if (proPath && fs.existsSync(proPath)) {
                 const info = parseProFile(proPath);
                 info.projectDir = path.dirname(proPath);
                 setState('currentProject', info);
                 panel.refresh();
-                log(`手动加载项目: ${proPath}`);
+                logger.info(`手动加载项目: ${proPath}`);
             } else {
                 vscode.window.showWarningMessage('.pro 文件不存在: ' + proPath);
             }
         }],
-        ['xyQt.showActions',   () => showActions()],
-        ['xyQt.qmake',         () => buildManager.qmake()],
-        ['xyQt.build',         () => buildManager.build()],
-        ['xyQt.clean',         () => buildManager.clean()],
-        ['xyQt.run',           () => buildManager.run().catch(err)],
-        ['xyQt.stop',          () => buildManager.stop()],
-        ['xyQt.debug',         () => startDebug()]
+        ['qtPilot.showActions',   () => showActions()],
+        ['qtPilot.qmake',         () => buildManager.qmake()],
+        ['qtPilot.build',         () => buildManager.build()],
+        ['qtPilot.clean',         () => buildManager.clean()],
+        ['qtPilot.run',           () => buildManager.run().catch(err)],
+        ['qtPilot.stop',          () => buildManager.stop()],
+        ['qtPilot.debug',         () => startDebug()],
+        ['qtPilot.openWithQtDesigner', (uri?: vscode.Uri) => {
+            const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+            if (!target || target.scheme !== 'file') {
+                vscode.window.showWarningMessage('请选择一个本地 .ui 文件');
+                return;
+            }
+
+            const filePath = target.fsPath;
+            if (path.extname(filePath).toLowerCase() !== '.ui') {
+                vscode.window.showWarningMessage('仅支持 .ui 文件');
+                return;
+            }
+            if (!fs.existsSync(filePath)) {
+                vscode.window.showWarningMessage('.ui 文件不存在: ' + filePath);
+                return;
+            }
+
+            const designerExe = resolveDesignerExecutable();
+            const proc = cp.spawn(designerExe, [filePath], {
+                detached: true,
+                stdio: 'ignore',
+                windowsHide: true
+            });
+            proc.on('error', () => {
+                vscode.window.showErrorMessage('启动 Qt Designer 失败，请在 Qt Pilot 配置面板设置 Qt Designer 路径');
+            });
+            proc.unref();
+        }]
     ];
 
     cmds.forEach(([cmd, handler]) => {

@@ -24,7 +24,7 @@ npm run watch
 
 No automated tests are currently configured. Manual testing:
 1. Press F5 in VSCode to launch Extension Development Host
-2. Test commands via Command Palette (Ctrl+Shift+P) → "XY Qt:"
+2. Test commands via Command Palette (Ctrl+Shift+P) → "Qt Pilot:"
 
 ## Lint/Typecheck Commands
 

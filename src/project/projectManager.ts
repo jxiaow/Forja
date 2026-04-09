@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { log } from '../core/logger';
+import { createLogger } from '../core/logger';
 
 export interface ProjectInfo {
     proPath: string;        // .pro 文件完整路径
@@ -18,7 +18,28 @@ export interface MakefileInfo {
     exePath: string;        // 完整可执行文件绝对路径
 }
 
+interface SavedProjectRef {
+    root: string;
+    relative: string;
+}
+
 const maxScanDepth = 5;
+const logger = createLogger('Project');
+
+function _encodeSavedProject(root: string, relative: string): string {
+    return JSON.stringify({ root, relative });
+}
+
+function _decodeSavedProject(value: string): SavedProjectRef | null {
+    if (!value) { return null; }
+    try {
+        const parsed = JSON.parse(value) as Partial<SavedProjectRef>;
+        if (typeof parsed.root === 'string' && typeof parsed.relative === 'string') {
+            return { root: parsed.root, relative: parsed.relative };
+        }
+    } catch {}
+    return null;
+}
 
 export function scanProFiles(root: string): string[] {
     const proFiles: string[] = [];
@@ -57,7 +78,7 @@ function _readFile(filePath: string): string | null {
 function _parseMakefileVar(content: string, varName: string): string | null {
     const match = content.match(new RegExp(`^${varName}[ \\t]+=[ \\t]*(.+)$`, 'm'));
     if (!match) {
-        log(`[parseMakefileVar] "${varName}" 未匹配`);
+        logger.warn(`Makefile var not found: "${varName}"`);
         return null;
     }
     return match[1].replace(/#.*$/, '').trim();
@@ -79,18 +100,18 @@ function _validateMakefileConfig(content: string, mode: string, arch: string): b
     const cmd = match[0];
     const hasMode = cmd.includes(`CONFIG+=${mode}`);
     const hasArch = cmd.includes(`CONFIG+=${arch}`);
-    log(`[validateMakefileConfig] cmd="${cmd.trim()}", hasMode=${hasMode}, hasArch=${hasArch}`);
+    logger.info(`Validate Makefile config: cmd="${cmd.trim()}", hasMode=${hasMode}, hasArch=${hasArch}`);
     return hasMode && hasArch;
 }
 
 export function getMakefileInfo(projectDir: string, mode?: string, arch?: string): MakefileInfo | null {
     const mf = path.join(projectDir, 'Makefile');
-    log(`[getMakefileInfo] platform=${process.platform}, projectDir="${projectDir}", mode="${mode}", arch="${arch}"`);
+    logger.info(`Get MakefileInfo: platform=${process.platform}, projectDir="${projectDir}", mode="${mode}", arch="${arch}"`);
 
     // 一次读取主 Makefile
     const mfContent = _readFile(mf);
     if (!mfContent) {
-        log(`[getMakefileInfo] Makefile 不存在: ${mf}`);
+        logger.warn(`Makefile not found: ${mf}`);
         return null;
     }
 
@@ -99,47 +120,47 @@ export function getMakefileInfo(projectDir: string, mode?: string, arch?: string
         if (mode && arch) {
             const valid = _validateMakefileConfig(mfContent, mode, arch);
             if (!valid) {
-                log(`[getMakefileInfo] 校验失败: mode=${mode} arch=${arch} 与 Makefile 不匹配，请重新运行 QMake`);
+                logger.warn(`Makefile validation failed: mode=${mode}, arch=${arch}`);
                 return null;
             }
-            log(`[getMakefileInfo] 校验通过: mode=${mode} arch=${arch}`);
+            logger.info(`Makefile validation passed: mode=${mode}, arch=${arch}`);
         }
         const subMfPath = mode
             ? path.join(projectDir, `Makefile.${mode.charAt(0).toUpperCase() + mode.slice(1)}`)
             : mf;
-        log(`[getMakefileInfo] 子 Makefile: ${subMfPath}`);
+        logger.info(`Use sub Makefile: ${subMfPath}`);
         // 一次读取子 Makefile
         const subContent = _readFile(subMfPath);
         if (!subContent) {
-            log(`[getMakefileInfo] 子 Makefile 不存在: ${subMfPath}`);
+            logger.warn(`Sub Makefile not found: ${subMfPath}`);
             return null;
         }
         const destDirTarget = _parseMakefileVar(subContent, 'DESTDIR_TARGET');
-        log(`[getMakefileInfo] DESTDIR_TARGET="${destDirTarget}"`);
+        logger.info(`DESTDIR_TARGET="${destDirTarget}"`);
         if (!destDirTarget) { return null; }
         const exePath = path.join(projectDir, destDirTarget.replace(/\\/g, path.sep));
         const target = path.basename(destDirTarget.replace(/\.exe$/i, ''));
         const destDir = path.dirname(destDirTarget).replace(/\\/g, '/');
-        log(`[getMakefileInfo] target="${target}", destDir="${destDir}", exePath="${exePath}", exists=${fs.existsSync(exePath)}`);
+        logger.info(`Resolved target="${target}", destDir="${destDir}", exePath="${exePath}", exists=${fs.existsSync(exePath)}`);
         return { target, destDir, exePath };
     } else {
         // Linux: 只校验 mode，从主 Makefile 读 TARGET
         if (mode) {
             const mfMode = _parseMakefileMode(mfContent);
-            log(`[getMakefileInfo] mfMode="${mfMode}", mode="${mode}"`);
+            logger.info(`Makefile mode="${mfMode}", current mode="${mode}"`);
             if (mfMode && mfMode !== mode) {
-                log(`[getMakefileInfo] 校验失败: Makefile mode=${mfMode} 与当前 mode=${mode} 不匹配，请重新运行 QMake`);
+                logger.warn(`Makefile mode mismatch: makefile=${mfMode}, current=${mode}`);
                 return null;
             }
-            log(`[getMakefileInfo] 校验通过: mode=${mode}`);
+            logger.info(`Makefile validation passed: mode=${mode}`);
         }
         const t = _parseMakefileVar(mfContent, 'TARGET');
-        log(`[getMakefileInfo] TARGET="${t}"`);
+        logger.info(`TARGET="${t}"`);
         if (!t) { return null; }
         const target = path.basename(t);
         const destDir = path.dirname(t) !== '.' ? path.dirname(t) : '';
         const exePath = path.join(projectDir, t);
-        log(`[getMakefileInfo] target="${target}", destDir="${destDir}", exePath="${exePath}", exists=${fs.existsSync(exePath)}`);
+        logger.info(`Resolved target="${target}", destDir="${destDir}", exePath="${exePath}", exists=${fs.existsSync(exePath)}`);
         return { target, destDir, exePath };
     }
 }
@@ -197,16 +218,26 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         return null;
     }
 
-    const config = vscode.workspace.getConfiguration('xyQt');
-    const savedProject = config.get<string>('selectedProject');
+    const config = vscode.workspace.getConfiguration('qtPilot');
+    const savedProject = config.get<string>('selectedProject', '');
 
     if (!forceSelect && savedProject) {
-        for (const folder of folders) {
-            const fullPath = path.join(folder.uri.fsPath, savedProject);
+        const savedRef = _decodeSavedProject(savedProject);
+        if (savedRef) {
+            const fullPath = path.join(savedRef.root, savedRef.relative);
             if (fs.existsSync(fullPath)) {
                 const info = parseProFile(fullPath);
-                info.projectDir = path.dirname(savedProject);
+                info.projectDir = path.dirname(savedRef.relative);
                 return info;
+            }
+        } else {
+            for (const folder of folders) {
+                const fullPath = path.join(folder.uri.fsPath, savedProject);
+                if (fs.existsSync(fullPath)) {
+                    const info = parseProFile(fullPath);
+                    info.projectDir = path.dirname(savedProject);
+                    return info;
+                }
             }
         }
     }
@@ -231,7 +262,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const fullPath = path.join(item.root, item.relative);
         const info = parseProFile(fullPath);
         info.projectDir = path.dirname(item.relative);
-        await config.update('selectedProject', item.relative, vscode.ConfigurationTarget.Workspace);
+        await config.update('selectedProject', _encodeSavedProject(item.root, item.relative), vscode.ConfigurationTarget.Workspace);
         return info;
     }
 
@@ -246,7 +277,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
             const fullPath = path.join(item.root, item.relative);
             const info = parseProFile(fullPath);
             info.projectDir = path.dirname(item.relative);
-            await config.update('selectedProject', item.relative, vscode.ConfigurationTarget.Workspace);
+            await config.update('selectedProject', _encodeSavedProject(item.root, item.relative), vscode.ConfigurationTarget.Workspace);
             return info;
         }
     }

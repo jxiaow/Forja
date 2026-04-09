@@ -1,101 +1,128 @@
 {
-  "name": "xy-qt-tools",
-  "displayName": "XY Qt Tools",
-  "publisher": "xy",
-  "description": "Qt build tools for XY project: status bar, qmake detection, .pri sync helper",
-  "version": "0.2.25",
+  "name": "qt-pilot",
+  "displayName": "Qt Pilot",
+  "publisher": "qtpilot",
+  "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
+  "version": "0.3.2",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
-  "activationEvents": ["workspaceContains:**/*.pro"],
+  "activationEvents": [
+    "workspaceContains:**/*.pro",
+    "onView:qtPilot.configView",
+    "onCommand:qtPilot.selectProject",
+    "onCommand:qtPilot.showActions",
+    "onCommand:qtPilot.qmake",
+    "onCommand:qtPilot.build",
+    "onCommand:qtPilot.clean",
+    "onCommand:qtPilot.run",
+    "onCommand:qtPilot.stop",
+    "onCommand:qtPilot.debug",
+    "onCommand:qtPilot.openWithQtDesigner"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      { "command": "xyQt.selectProject", "title": "XY Qt: 选择项目" },
-      { "command": "xyQt.showActions",   "title": "XY Qt: 显示操作菜单" },
-      { "command": "xyQt.qmake",         "title": "XY Qt: QMake" },
-      { "command": "xyQt.build",         "title": "XY Qt: Build" },
-      { "command": "xyQt.clean",         "title": "XY Qt: Clean" },
-      { "command": "xyQt.run",           "title": "XY Qt: Run" },
-      { "command": "xyQt.stop",          "title": "XY Qt: 停止" },
-      { "command": "xyQt.debug",         "title": "XY Qt: 调试" }
+      { "command": "qtPilot.selectProject", "title": "Qt Pilot: 选择项目" },
+      { "command": "qtPilot.showActions",   "title": "Qt Pilot: 显示操作菜单" },
+      { "command": "qtPilot.qmake",         "title": "Qt Pilot: QMake" },
+      { "command": "qtPilot.build",         "title": "Qt Pilot: Build" },
+      { "command": "qtPilot.clean",         "title": "Qt Pilot: Clean" },
+      { "command": "qtPilot.run",           "title": "Qt Pilot: Run" },
+      { "command": "qtPilot.stop",          "title": "Qt Pilot: 停止" },
+      { "command": "qtPilot.debug",         "title": "Qt Pilot: 调试" },
+      { "command": "qtPilot.openWithQtDesigner", "title": "Qt Pilot: 用 Qt Designer 打开" }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "qtPilot.openWithQtDesigner",
+          "when": "resourceExtname == .ui",
+          "group": "navigation@100"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "xy-qt-tools",
-          "title": "XY Qt Tools",
+          "id": "qt-pilot",
+          "title": "Qt Pilot",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "xy-qt-tools": [
+      "qt-pilot": [
         {
           "type": "webview",
-          "id": "xyQt.configView",
+          "id": "qtPilot.configView",
           "name": "配置"
         }
       ]
     },
     "configuration": {
-      "title": "XY Qt Tools",
+      "title": "Qt Pilot",
       "properties": {
-        "xyQt.qtPath": {
+        "qtPilot.qtPath": {
           "type": "string",
           "default": "",
           "description": "Qt 安装路径（手动指定，留空则自动检测）"
         },
-        "xyQt.vsDevShellPath": {
+        "qtPilot.designerPath": {
+          "type": "string",
+          "default": "",
+          "description": "Qt Designer 可执行文件路径（可选，优先于自动推断）"
+        },
+        "qtPilot.vsDevShellPath": {
           "type": "string",
           "default": "",
           "description": "Path to Launch-VsDevShell.ps1 (VsDevCmd.bat will be used automatically)"
         },
-        "xyQt.selectedProject": {
+        "qtPilot.selectedProject": {
           "type": "string",
           "default": "",
-          "description": "当前选中的 .pro 文件路径（相对于 workspace 根目录）"
+          "description": "当前选中的 .pro 文件记录（扩展内部维护）"
         },
-        "xyQt.arch": {
+        "qtPilot.arch": {
           "type": "string",
           "default": "x86",
           "enum": ["x86", "x64"],
           "description": "目标架构"
         },
-        "xyQt.mode": {
+        "qtPilot.mode": {
           "type": "string",
           "default": "debug",
           "enum": ["debug", "release"],
           "description": "构建模式"
         },
-        "xyQt.scanExcludeDirs": {
+        "qtPilot.scanExcludeDirs": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
           "description": "生成 IntelliSense 配置时额外排除的目录名（已内置排除 build*/debug/release）"
         },
-        "xyQt.qmakeTarget": {
+        "qtPilot.qmakeTarget": {
           "type": "string",
           "default": "",
           "description": "QMake 时指定的 TARGET 名称（留空则使用 .pro 文件默认值）"
         },
-        "xyQt.cStandard": {
+        "qtPilot.cStandard": {
           "type": "string",
           "default": "c11",
           "enum": ["c89", "c99", "c11", "c17"],
           "description": "IntelliSense C 标准版本"
         },
-        "xyQt.cppStandard": {
+        "qtPilot.cppStandard": {
           "type": "string",
           "default": "c++11",
           "enum": ["c++11", "c++14", "c++17", "c++20", "c++23"],
           "description": "IntelliSense C++ 标准版本"
         },
-        "xyQt.proPath": {
+        "qtPilot.proPath": {
           "type": "string",
           "default": "",
-          "description": "（已废弃）请使用 xyQt.selectedProject"
+          "description": "（已废弃）请使用 qtPilot.selectedProject"
         },
-        "xyQt.manualProPath": {
+        "qtPilot.manualProPath": {
           "type": "string",
           "default": "",
           "description": "手动指定 .pro 文件绝对路径（扫描不到时使用）"

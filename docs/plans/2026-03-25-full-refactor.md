@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 全面重构 xy-qt-tools 扩展，引入服务层、统一状态管理、拆分巨型文件、抽象平台层，消除重复逻辑。
+**Goal:** 全面重构 qt-pilot 扩展，引入服务层、统一状态管理、拆分巨型文件、抽象平台层，消除重复逻辑。
 
 **Architecture:** 引入 `stateManager` 作为单一状态源（事件驱动），`configService` 统一配置读写和路径解析，拆分 `configPanel` 为目录结构（index/messageHandler/template），抽象 platform builder 为基类+平台配置，提取公共工具函数到 `utils.ts`。
 
@@ -196,7 +196,7 @@ import { getState } from './stateManager';
 // ── 配置读取 ──
 
 function cfg(): vscode.WorkspaceConfiguration {
-    return vscode.workspace.getConfiguration('xyQt');
+    return vscode.workspace.getConfiguration('qtPilot');
 }
 
 export function getWorkspaceRoot(): string {
@@ -796,7 +796,7 @@ import { getVsDevShellPath, getQtPath, getEffectiveVsDevShell, getEffectiveQtPat
 import { log } from '../logger';
 
 export class ConfigPanel implements vscode.WebviewViewProvider {
-    static readonly viewId = 'xyQt.configView';
+    static readonly viewId = 'qtPilot.configView';
     private _view?: vscode.WebviewView;
 
     constructor() {}
@@ -926,18 +926,18 @@ export async function activate(context: vscode.ExtensionContext) {
     const err = (e: Error) => vscode.window.showErrorMessage(e.message);
 
     const cmds: [string, () => void][] = [
-        ['xyQt.selectProject', async () => {
+        ['qtPilot.selectProject', async () => {
             const p = await selectProject(context, true);
             setState('currentProject', p);
             panel.refresh();
         }],
-        ['xyQt.showActions',   () => showActions()],
-        ['xyQt.qmake',         () => buildManager.qmake()],
-        ['xyQt.build',         () => buildManager.build()],
-        ['xyQt.clean',         () => buildManager.clean()],
-        ['xyQt.run',           () => buildManager.run().catch(err)],
-        ['xyQt.stop',          () => buildManager.stop()],
-        ['xyQt.debug',         () => startDebug()]
+        ['qtPilot.showActions',   () => showActions()],
+        ['qtPilot.qmake',         () => buildManager.qmake()],
+        ['qtPilot.build',         () => buildManager.build()],
+        ['qtPilot.clean',         () => buildManager.clean()],
+        ['qtPilot.run',           () => buildManager.run().catch(err)],
+        ['qtPilot.stop',          () => buildManager.stop()],
+        ['qtPilot.debug',         () => startDebug()]
     ];
 
     cmds.forEach(([cmd, handler]) => {
@@ -985,3 +985,4 @@ Expected: 编译成功
 git add .
 git commit -m "refactor: complete full refactoring, update docs"
 ```
+

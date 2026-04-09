@@ -1,4 +1,4 @@
-# XY Qt 配置面板 UI 重设计 实现计划
+# Qt Pilot 配置面板 UI 重设计 实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -517,28 +517,28 @@
 ```typescript
 webviewView.webview.onDidReceiveMessage(async msg => {
     if (msg.command === 'refreshEnv') {
-        const cfgR = vscode.workspace.getConfiguration('xyQt');
+        const cfgR = vscode.workspace.getConfiguration('qtPilot');
         await detectEnv(cfgR.get<string>('qtPath', ''), cfgR.get<string>('vsDevShellPath', ''));
         this._pushEnvUpdate();
     } else if (msg.command === 'selectProject') {
-        await vscode.commands.executeCommand('xyQt.selectProject');
+        await vscode.commands.executeCommand('qtPilot.selectProject');
         this._updateHtml();
     } else if (msg.command === 'saveVsPath') {
-        const cfg = vscode.workspace.getConfiguration('xyQt');
+        const cfg = vscode.workspace.getConfiguration('qtPilot');
         await cfg.update('vsDevShellPath', msg.value || '', vscode.ConfigurationTarget.Workspace);
         this._view?.webview.postMessage({ command: 'envDetecting' });
         const qtPath = cfg.get<string>('qtPath', '');
         await detectEnv(qtPath, msg.value || '');
         this._pushEnvUpdate();
     } else if (msg.command === 'saveQtPath') {
-        const cfg = vscode.workspace.getConfiguration('xyQt');
+        const cfg = vscode.workspace.getConfiguration('qtPilot');
         await cfg.update('qtPath', msg.value || '', vscode.ConfigurationTarget.Workspace);
         this._view?.webview.postMessage({ command: 'envDetecting' });
         const vsPath = cfg.get<string>('vsDevShellPath', '');
         await detectEnv(msg.value || '', vsPath);
         this._pushEnvUpdate();
     } else if (msg.command === 'saveStandard') {
-        const cfg = vscode.workspace.getConfiguration('xyQt');
+        const cfg = vscode.workspace.getConfiguration('qtPilot');
         const t = vscode.ConfigurationTarget.Workspace;
         if (msg.cStandard) { await cfg.update('cStandard', msg.cStandard, t); }
         if (msg.cppStandard) { await cfg.update('cppStandard', msg.cppStandard, t); }
@@ -556,10 +556,10 @@ webviewView.webview.onDidReceiveMessage(async msg => {
             }
         }
     } else if (msg.command === 'saveExcludeDirs') {
-        const cfgE = vscode.workspace.getConfiguration('xyQt');
+        const cfgE = vscode.workspace.getConfiguration('qtPilot');
         await cfgE.update('scanExcludeDirs', msg.dirs, vscode.ConfigurationTarget.Workspace);
     } else if (msg.command === 'generateIntelliSense') {
-        const cfgW = vscode.workspace.getConfiguration('xyQt');
+        const cfgW = vscode.workspace.getConfiguration('qtPilot');
         const t = vscode.ConfigurationTarget.Workspace;
         if (msg.cStandard) { await cfgW.update('cStandard', msg.cStandard, t); }
         if (msg.cppStandard) { await cfgW.update('cppStandard', msg.cppStandard, t); }

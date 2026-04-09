@@ -4,27 +4,27 @@ import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-         getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath } from '../../core/configService';
-import { log } from '../../core/logger';
+         getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath } from '../../core/configService';
+import { createLogger } from '../../core/logger';
 
-function _getVersion(): string {
-    const ext = vscode.extensions.getExtension('xy.xy-qt-tools');
-    return ext?.packageJSON?.version ?? '';
-}
+const logger = createLogger('ConfigPanelView');
 
 export class ConfigPanel implements vscode.WebviewViewProvider {
-    static readonly viewId = 'xyQt.configView';
+    static readonly viewId = 'qtPilot.configView';
     private _view?: vscode.WebviewView;
+    private readonly _version: string;
 
-    constructor() {}
+    constructor(context: vscode.ExtensionContext) {
+        this._version = context.extension.packageJSON.version ?? '';
+    }
 
     refresh(): void {
-        log('refresh() called');
+        logger.info('refresh() called');
         this._updateHtml();
     }
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
-        log('resolveWebviewView() called');
+        logger.info('resolveWebviewView() called');
         this._view = webviewView;
         webviewView.webview.options = { enableScripts: true };
         this._updateHtml();
@@ -36,13 +36,13 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         } else {
             const qtPath = getQtPath();
             const vsPath = getVsDevShellPath();
-            log(`初始环境检测: qtPath="${qtPath}", vsPath="${vsPath}"`);
+            logger.info(`初始环境检测: qtPath="${qtPath}", vsPath="${vsPath}"`);
             detectEnv(qtPath, vsPath).then(env => {
-                log('初始环境检测完成');
+                logger.info('初始环境检测完成');
                 setState('envInfo', env);
                 this._pushEnvUpdate();
             }).catch((err) => {
-                log(`初始环境检测失败: ${err}`);
+                logger.error(`初始环境检测失败: ${err}`);
             });
         }
 
@@ -57,7 +57,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         const state = getState();
         const env = state.envInfo;
         const isWin = process.platform === 'win32';
-        log(`推送环境更新: VS=${env?.vs ? env.vs.version : '未检测'}, Qt=${env?.qt ? env.qt.version : '未检测'}, jom=${env?.jom}`);
+        logger.info(`推送环境更新: VS=${env?.vs ? env.vs.version : '未检测'}, Qt=${env?.qt ? env.qt.version : '未检测'}, jom=${env?.jom}`);
         this._view?.webview.postMessage({ command: 'envUpdated', isWin, env: {
             vs: env?.vs ? `VS ${env.vs.version} ${env.vs.edition}` : null,
             qt: env?.qt ? `Qt ${env.qt.version} (${env.qt.compiler})` : null,
@@ -77,11 +77,11 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
 
     private _updateHtml(): void {
         if (!this._view) { return; }
-        log('更新 HTML');
+        logger.info('更新 HTML');
         const state = getState();
         const env = state.envInfo;
         const project = state.currentProject;
-        log(`项目: ${project ? project.target : '无'}`);
+        logger.info(`项目: ${project ? project.target : '无'}`);
         const data: TemplateData = {
             env,
             project,
@@ -95,8 +95,9 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             autoDevShell: env?.vs?.devShellPath || '',
             autoQtPath: env?.qt?.path || '',
             qtPath: getQtPath(),
+            designerPath: getDesignerPath(),
             manualProPath: getManualProPath(),
-            version: _getVersion()
+            version: this._version
         };
         this._view.webview.html = getHtml(data);
     }
