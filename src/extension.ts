@@ -36,6 +36,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const name = e.execution.task.name;
             if (name.startsWith('Build ') || name.startsWith('QMake ') || name.startsWith('Clean ')) {
                 setState('isBuilding', false);
+                setState('buildAction', null);
             }
             if (name.startsWith('Run ')) {
                 setState('isRunning', false);

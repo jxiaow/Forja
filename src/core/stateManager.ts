@@ -4,11 +4,13 @@ import { EnvInfo } from '../env/envDetector';
 
 export type BuildMode = 'debug' | 'release';
 export type Arch = 'x86' | 'x64';
+export type BuildAction = 'run' | 'debug' | 'build' | null;
 
 export interface AppState {
     mode: BuildMode;
     arch: Arch;
     isBuilding: boolean;
+    buildAction: BuildAction;
     isRunning: boolean;
     currentProject: ProjectInfo | null;
     envInfo: EnvInfo | null;
@@ -25,6 +27,7 @@ const _state: AppState = {
     mode: cfg().get<BuildMode>('mode', 'debug'),
     arch: cfg().get<Arch>('arch', 'x86'),
     isBuilding: false,
+    buildAction: null,
     isRunning: false,
     currentProject: null,
     envInfo: null

@@ -47,14 +47,18 @@ function _updateDisplay(): void {
         : undefined;
     _projectModeItem.show();
 
-    if (state.isBuilding) {
+    if (state.isBuilding && state.buildAction === 'run') {
         _runItem.text = '$(sync~spin) Compiling';
-        _runItem.tooltip = '正在编译，完成后可运行或调试';
+        _runItem.tooltip = '正在为运行编译';
         _runItem.command = undefined;
     } else if (state.isRunning) {
         _runItem.text = '$(debug-stop) Stop';
         _runItem.tooltip = '终止程序';
         _runItem.command = 'qtPilot.stop';
+    } else if (state.isBuilding) {
+        _runItem.text = '$(play) Run';
+        _runItem.tooltip = '构建并运行';
+        _runItem.command = 'qtPilot.run';
     } else {
         _runItem.text = '$(play) Run';
         _runItem.tooltip = '构建并运行';
@@ -62,10 +66,15 @@ function _updateDisplay(): void {
     }
     _runItem.show();
 
-    if (state.isBuilding) {
+    if (state.isBuilding && state.buildAction === 'debug') {
         _debugItem.text = '$(sync~spin) Debug';
-        _debugItem.tooltip = '正在构建，完成后可调试';
+        _debugItem.tooltip = '正在为调试编译';
         _debugItem.command = undefined;
+        _debugItem.show();
+    } else if (state.isBuilding) {
+        _debugItem.text = '$(debug-alt) Debug';
+        _debugItem.tooltip = '构建并启动调试';
+        _debugItem.command = 'qtPilot.debug';
         _debugItem.show();
     } else {
         _debugItem.text = '$(debug-alt) Debug';

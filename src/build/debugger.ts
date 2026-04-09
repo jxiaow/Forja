@@ -15,6 +15,7 @@ export async function startDebug(): Promise<void> {
 
     // 先 Build
     setState('isBuilding', true);
+    setState('buildAction', 'debug');
     try {
         const execution = await build();
         await new Promise<void>((resolve, reject) => {
@@ -38,6 +39,7 @@ export async function startDebug(): Promise<void> {
         return;
     } finally {
         setState('isBuilding', false);
+        setState('buildAction', null);
     }
 
     const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);

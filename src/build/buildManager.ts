@@ -82,6 +82,7 @@ export function clean(): Thenable<vscode.TaskExecution> {
 export async function run(): Promise<void> {
     const cfg = getBuildConfig();
     setState('isBuilding', true);
+    setState('buildAction', 'run');
     setState('isRunning', false);
 
     const { commands, matcher } = builder.buildCommands(cfg);
