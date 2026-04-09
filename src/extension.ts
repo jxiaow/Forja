@@ -9,7 +9,7 @@ import { createStatusBar, showActions } from './ui/statusBar';
 import { registerPriWatcher } from './project/priWatcher';
 import { ConfigPanel } from './ui/configPanel/index';
 import { selectProject, parseProFile } from './project/projectManager';
-import { startDebug } from './build/debugger';
+import { registerDebugSessionWatcher, startDebug } from './build/debugger';
 import { generateCppProperties } from './build/configGenerator';
 import { createLogger, initLogger } from './core/logger';
 import { detectEnv } from './env/envDetector';
@@ -29,6 +29,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     registerPriWatcher(context);
+    registerDebugSessionWatcher(context);
 
     // 全局任务结束监听：兜底重置 isBuilding / isRunning（防止关闭终端后状态卡住）
     context.subscriptions.push(

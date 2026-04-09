@@ -5,8 +5,12 @@ import { getBuildConfig, getQtSourcePath } from '../core/configService';
 import { setState } from '../core/stateManager';
 import { getMakefileInfo } from '../project/projectManager';
 import { build, qmakeForDebug, stopCurrentTarget } from './buildManager';
+import { createLogger } from '../core/logger';
 
 const isWin = process.platform === 'win32';
+const logger = createLogger('Debug');
+let _activeDebugProgram: string | null = null;
+let _suppressTerminateNotice = false;
 
 function getEffectiveQtSourcePath(qtPath: string): string {
     const manualPath = getQtSourcePath().trim();
@@ -103,6 +107,7 @@ async function stopExistingDebugSessions(program: string): Promise<void> {
     }
 
     vscode.window.showInformationMessage('检测到现有调试实例，已先停止后重新启动');
+    _suppressTerminateNotice = true;
     await vscode.debug.stopDebugging(session);
 
     await new Promise<void>(resolve => {
@@ -113,6 +118,7 @@ async function stopExistingDebugSessions(program: string): Promise<void> {
                 && typeof activeProgram === 'string'
                 && path.normalize(activeProgram) === path.normalize(program);
             if (!stillRunning) {
+                _suppressTerminateNotice = false;
                 resolve();
                 return;
             }
@@ -120,6 +126,30 @@ async function stopExistingDebugSessions(program: string): Promise<void> {
         };
         check();
     });
+}
+
+export function registerDebugSessionWatcher(context: vscode.ExtensionContext): void {
+    context.subscriptions.push(
+        vscode.debug.onDidTerminateDebugSession(session => {
+            const targetProgram = session.configuration?.program;
+            if (typeof targetProgram !== 'string' || !_activeDebugProgram) {
+                return;
+            }
+            if (path.normalize(targetProgram) !== path.normalize(_activeDebugProgram)) {
+                return;
+            }
+
+            logger.warn(`调试会话结束: ${targetProgram}`);
+            _activeDebugProgram = null;
+
+            if (_suppressTerminateNotice) {
+                return;
+            }
+
+            void vscode.commands.executeCommand('workbench.debug.action.toggleRepl');
+            vscode.window.showWarningMessage('调试会话已结束，程序可能已崩溃或已退出，请查看“调试控制台”获取更多信息');
+        })
+    );
 }
 
 export async function startDebug(): Promise<void> {
@@ -168,14 +198,20 @@ export async function startDebug(): Promise<void> {
         stopAtEntry: false,
         cwd: cfg.projectDir,
         environment: [],
-        console: 'integratedTerminal'
+        externalConsole: false,
+        logging: {
+            exceptions: true,
+            programOutput: true
+        }
     };
     if (sourceFileMap) {
         config.sourceFileMap = sourceFileMap;
     }
 
     try {
+        logger.info(`启动调试: ${mfInfo.exePath}`);
         await vscode.debug.startDebugging(undefined, config);
+        _activeDebugProgram = mfInfo.exePath;
     } catch (e) {
         vscode.window.showErrorMessage(`启动调试失败: ${e}`);
     }
