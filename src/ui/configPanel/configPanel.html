@@ -136,7 +136,7 @@
         <label>手动指定 .pro 文件</label>
         <div class="input-row">
           <input id="manualProPath" value="{{manualProPath}}" placeholder="扫描不到时手动指定" onblur="saveManualProPath()" />
-          <button class="btn" onclick="browse('manualProPath', false)">浏览</button>
+          <button class="btn" onclick="browse('manualProPath', false)" onmousedown="preserveBrowseInputFocus(event)">浏览</button>
         </div>
         <div class="hint">绝对路径，保存后自动切换项目</div>
       </div>
@@ -192,7 +192,7 @@
       <div class="field">
         <div class="input-row">
           <input id="vsDevShellPath" value="{{vsDevShellPath}}" placeholder="手动覆盖路径" onblur="saveVsPath()" />
-          <button class="btn" onclick="browse('vsDevShellPath', false)">浏览</button>
+          <button class="btn" onclick="browse('vsDevShellPath', false)" onmousedown="preserveBrowseInputFocus(event)">浏览</button>
         </div>
       </div>
     </div>
@@ -219,14 +219,14 @@
       <div class="field">
         <div class="input-row">
           <input id="qtPath" value="{{qtPathValue}}" placeholder="手动覆盖路径" onblur="saveQtPath()" />
-          <button class="btn" onclick="browse('qtPath', true)">浏览</button>
+          <button class="btn" onclick="browse('qtPath', true)" onmousedown="preserveBrowseInputFocus(event)">浏览</button>
         </div>
       </div>
       <div class="field">
         <label>Qt Designer 路径（可选）</label>
         <div class="input-row">
           <input id="designerPath" value="{{designerPathValue}}" placeholder="designer.exe 绝对路径" onblur="saveDesignerPath()" />
-          <button class="btn" onclick="browse('designerPath', false)">浏览</button>
+          <button class="btn" onclick="browse('designerPath', false)" onmousedown="preserveBrowseInputFocus(event)">浏览</button>
         </div>
         <div class="hint">已配置时将优先用于“Qt Pilot: 用 Qt Designer 打开”</div>
       </div>
@@ -234,7 +234,7 @@
         <label>Qt 源码路径（可选）</label>
         <div class="input-row">
           <input id="qtSourcePath" value="{{qtSourcePathValue}}" placeholder="例如: C:\\Qt\\5.15.2\\Src" onblur="saveQtSourcePath()" />
-          <button class="btn" onclick="browse('qtSourcePath', true)">浏览</button>
+          <button class="btn" onclick="browse('qtSourcePath', true)" onmousedown="preserveBrowseInputFocus(event)">浏览</button>
         </div>
         <div class="hint">用于调试时定位 Qt 源码；留空时会尝试从 Qt 路径推断</div>
       </div>
@@ -288,6 +288,7 @@
     const val = document.getElementById('manualProPath').value.trim();
     if (val) { vscode.postMessage({ command: 'saveManualProPath', value: val }); }
   }
+  function preserveBrowseInputFocus(event) { event.preventDefault(); }
   function browse(targetId, isDir) { vscode.postMessage({ command: 'browse', targetId, isDir }); }
   function refreshEnv() {
     const btn = document.getElementById('refreshBtn');

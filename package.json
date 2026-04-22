@@ -3,7 +3,7 @@
   "displayName": "Qt Pilot",
   "publisher": "qtpilot",
   "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
   "activationEvents": [

@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { getState, setState, onStateChange, BuildMode, Arch } from '../core/stateManager';
+import { getQmakeTarget } from '../core/configService';
+import { getEffectiveProjectName } from '../core/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';
 
 // 3 个状态栏按钮
@@ -36,7 +38,7 @@ function _modeDisplayLabel(): string {
 
 function _updateDisplay(): void {
     const state = getState();
-    const projectName = state.currentProject?.target ?? '未选择项目';
+    const projectName = getEffectiveProjectName(state.currentProject, getQmakeTarget(), '未选择项目');
     _projectModeItem.text = `${_modeIcon()} ${projectName} · ${_modeDisplayLabel()}`;
     _projectModeItem.tooltip = '点击选择模式/架构、构建操作、切换项目';
     _projectModeItem.color = state.mode === 'debug'
@@ -117,7 +119,7 @@ export async function showActions(): Promise<void> {
             sep('项目'),
             ...projectItems
         ],
-        { placeHolder: `${state.currentProject?.target ?? '未选择项目'} · ${_modeDisplayLabel()}` }
+        { placeHolder: `${getEffectiveProjectName(state.currentProject, getQmakeTarget(), '未选择项目')} · ${_modeDisplayLabel()}` }
     ) as Item | undefined;
 
     if (!selected?.action) { return; }

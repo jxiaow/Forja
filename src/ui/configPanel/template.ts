@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { getEffectiveProjectName } from '../../core/projectDisplay';
 import { EnvInfo, QtInfo } from '../../env/envDetector';
-import { ProjectInfo } from '../../project/projectManager';
+import type { ProjectInfo } from '../../project/projectManager';
 
 export interface TemplateData {
     env: EnvInfo | null;
@@ -47,7 +48,7 @@ export function getHtml(data: TemplateData): string {
     const { env, project, vsDevShellPath, selectedProject, cStandard, cppStandard,
             scanExcludeDirs, qmakeTarget, isWin, autoDevShell, autoQtPath, qtPath } = data;
 
-    const projectName = project ? project.target : (selectedProject || '未选择');
+    const projectName = getEffectiveProjectName(project, qmakeTarget, selectedProject || '未选择');
     const defaultQmakeTarget = project?.target || '';
     const effectiveQmakeTarget = qmakeTarget || defaultQmakeTarget;
     const effectiveDevShell = vsDevShellPath || autoDevShell;

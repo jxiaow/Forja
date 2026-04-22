@@ -3,6 +3,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../core/logger';
 import { decodeSelectedProject, encodeSelectedProject } from '../core/selectedProject';
+import { getEffectiveProjectName, getProjectSelectionLabel } from '../core/projectDisplay';
+import { getQmakeTarget } from '../core/configService';
+import { getState } from '../core/stateManager';
 
 export interface ProjectInfo {
     proPath: string;        // .pro 文件完整路径
@@ -228,8 +231,20 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const root = folder.uri.fsPath;
         const proFiles = scanProFiles(root);
         for (const rel of proFiles) {
-            const folderName = folders.length > 1 ? `[${folder.name}] ` : '';
-            allProFiles.push({ label: folderName + rel, root, relative: rel });
+            const fullPath = path.join(root, rel);
+            let label: string;
+            try {
+                const info = parseProFile(fullPath);
+                label = getProjectSelectionLabel(info, rel, folders.length > 1 ? folder.name : '');
+            } catch {
+                logger.warn(`解析 .pro 失败, 使用路径显示: ${fullPath}`);
+                label = getProjectSelectionLabel(null, rel, folders.length > 1 ? folder.name : '');
+            }
+            allProFiles.push({
+                label,
+                root,
+                relative: rel
+            });
         }
     }
 
@@ -249,7 +264,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
 
     const selected = await vscode.window.showQuickPick(
         allProFiles.map(f => f.label),
-        { placeHolder: '选择项目' }
+        { placeHolder: `切换项目 · 当前 ${getEffectiveProjectName(getState().currentProject, getQmakeTarget(), '未选择项目')}` }
     );
 
     if (selected) {

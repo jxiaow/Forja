@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ProjectInfo } from '../project/projectManager';
 import { getState } from '../core/stateManager';
-import { getWorkspaceRoot, getCStandard, getCppStandard, getScanExcludeDirs } from '../core/configService';
+import { getWorkspaceRoot, getCStandard, getCppStandard, getEffectiveQtPath, getScanExcludeDirs } from '../core/configService';
 import { log } from '../core/logger';
 
 // 判断目录是否应跳过（精确匹配 + build* 前缀 + 用户自定义）
@@ -131,7 +131,7 @@ export function generateCppProperties(project: ProjectInfo): void {
 
     const isWin = process.platform === 'win32';
     const state = getState();
-    const qtPath = (state.envInfo?.qt?.path || '').replace(/\\/g, '/');
+    const qtPath = getEffectiveQtPath().replace(/\\/g, '/');
     const arch = state.arch;
 
     const cStandard = getCStandard();
