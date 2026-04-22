@@ -142,7 +142,7 @@
       </div>
       <div class="field">
         <label>QMake TARGET（留空使用 .pro 默认值）</label>
-        <input id="qmakeTarget" value="{{qmakeTarget}}" placeholder="例: MyApp" oninput="saveQmakeTarget()" onblur="saveQmakeTarget()" />
+        <input id="qmakeTarget" value="{{effectiveQmakeTarget}}" data-default-qmake-target="{{defaultQmakeTarget}}" placeholder="例: MyApp" oninput="saveQmakeTarget()" onblur="saveQmakeTarget()" />
       </div>
       <div class="field">
         <div class="toggle-row">
@@ -276,7 +276,12 @@
     const dirs = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
     vscode.postMessage({ command: 'saveExcludeDirs', dirs });
   }
-  function saveQmakeTarget() { vscode.postMessage({ command: 'saveQmakeTarget', value: document.getElementById('qmakeTarget').value }); }
+  function saveQmakeTarget() {
+    const input = document.getElementById('qmakeTarget');
+    const value = input.value.trim();
+    const defaultTarget = input.dataset.defaultQmakeTarget || '';
+    vscode.postMessage({ command: 'saveQmakeTarget', value: value === defaultTarget ? '' : value });
+  }
   function saveFileSyncPromptEnabled() { vscode.postMessage({ command: 'saveFileSyncPromptEnabled', value: document.getElementById('fileSyncPromptEnabled').checked }); }
   function saveQmakeReminderEnabled() { vscode.postMessage({ command: 'saveQmakeReminderEnabled', value: document.getElementById('qmakeReminderEnabled').checked }); }
   function saveManualProPath() {

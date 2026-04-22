@@ -48,6 +48,8 @@ export function getHtml(data: TemplateData): string {
             scanExcludeDirs, qmakeTarget, isWin, autoDevShell, autoQtPath, qtPath } = data;
 
     const projectName = project ? project.target : (selectedProject || '未选择');
+    const defaultQmakeTarget = project?.target || '';
+    const effectiveQmakeTarget = qmakeTarget || defaultQmakeTarget;
     const effectiveDevShell = vsDevShellPath || autoDevShell;
     const devShellSource = vsDevShellPath ? '手动配置' : (autoDevShell ? '自动检测' : '未配置');
     const effectiveQtPath = qtPath || autoQtPath;
@@ -91,7 +93,8 @@ export function getHtml(data: TemplateData): string {
         'selCpp20': _sel(cppStandard, 'c++20'),
         'selCpp23': _sel(cppStandard, 'c++23'),
         scanExcludeDirs,
-        qmakeTarget,
+        effectiveQmakeTarget,
+        defaultQmakeTarget,
         dotVsBlockClass: effectiveDevShell ? 'dot-ok' : 'dot-warn',
         devShellSource,
         effectiveDevShell: effectiveDevShell || '未配置',

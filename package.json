@@ -3,7 +3,7 @@
   "displayName": "Qt Pilot",
   "publisher": "qtpilot",
   "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
   "activationEvents": [
@@ -83,8 +83,18 @@
           "description": "Path to Launch-VsDevShell.ps1 (VsDevCmd.bat will be used automatically)"
         },
         "qtPilot.selectedProject": {
-          "type": "string",
-          "default": "",
+          "type": "object",
+          "default": {},
+          "additionalProperties": false,
+          "required": ["root", "relative"],
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "relative": {
+              "type": "string"
+            }
+          },
           "description": "当前选中的 .pro 文件记录（扩展内部维护）"
         },
         "qtPilot.arch": {

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../core/logger';
+import { decodeSelectedProject, encodeSelectedProject } from '../core/selectedProject';
 
 export interface ProjectInfo {
     proPath: string;        // .pro 文件完整路径
@@ -18,28 +19,8 @@ export interface MakefileInfo {
     exePath: string;        // 完整可执行文件绝对路径
 }
 
-interface SavedProjectRef {
-    root: string;
-    relative: string;
-}
-
 const maxScanDepth = 5;
 const logger = createLogger('Project');
-
-function _encodeSavedProject(root: string, relative: string): string {
-    return JSON.stringify({ root, relative });
-}
-
-function _decodeSavedProject(value: string): SavedProjectRef | null {
-    if (!value) { return null; }
-    try {
-        const parsed = JSON.parse(value) as Partial<SavedProjectRef>;
-        if (typeof parsed.root === 'string' && typeof parsed.relative === 'string') {
-            return { root: parsed.root, relative: parsed.relative };
-        }
-    } catch {}
-    return null;
-}
 
 export function scanProFiles(root: string): string[] {
     const proFiles: string[] = [];
@@ -219,10 +200,10 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
     }
 
     const config = vscode.workspace.getConfiguration('qtPilot');
-    const savedProject = config.get<string>('selectedProject', '');
+    const savedProject = config.get<unknown>('selectedProject');
 
     if (!forceSelect && savedProject) {
-        const savedRef = _decodeSavedProject(savedProject);
+        const savedRef = decodeSelectedProject(savedProject);
         if (savedRef) {
             const fullPath = path.join(savedRef.root, savedRef.relative);
             if (fs.existsSync(fullPath)) {
@@ -230,7 +211,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
                 info.projectDir = path.dirname(savedRef.relative);
                 return info;
             }
-        } else {
+        } else if (typeof savedProject === 'string') {
             for (const folder of folders) {
                 const fullPath = path.join(folder.uri.fsPath, savedProject);
                 if (fs.existsSync(fullPath)) {
@@ -262,7 +243,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const fullPath = path.join(item.root, item.relative);
         const info = parseProFile(fullPath);
         info.projectDir = path.dirname(item.relative);
-        await config.update('selectedProject', _encodeSavedProject(item.root, item.relative), vscode.ConfigurationTarget.Workspace);
+        await config.update('selectedProject', encodeSelectedProject(item.root, item.relative), vscode.ConfigurationTarget.Workspace);
         return info;
     }
 
@@ -277,7 +258,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
             const fullPath = path.join(item.root, item.relative);
             const info = parseProFile(fullPath);
             info.projectDir = path.dirname(item.relative);
-            await config.update('selectedProject', _encodeSavedProject(item.root, item.relative), vscode.ConfigurationTarget.Workspace);
+            await config.update('selectedProject', encodeSelectedProject(item.root, item.relative), vscode.ConfigurationTarget.Workspace);
             return info;
         }
     }

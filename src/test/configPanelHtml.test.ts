@@ -11,7 +11,7 @@ function createTemplateData(): TemplateData {
         cStandard: 'c11',
         cppStandard: 'c++17',
         scanExcludeDirs: '',
-        qmakeTarget: 'MyApp',
+        qmakeTarget: '',
         isWin: true,
         autoDevShell: '',
         autoQtPath: '',
@@ -32,5 +32,46 @@ test('qmake target input saves while typing so reopening can restore it', () => 
         html,
         /<input id="qmakeTarget"[^>]*oninput="saveQmakeTarget\(\)"/,
         'qmakeTarget input should persist edits on input instead of waiting for blur only'
+    );
+});
+
+test('qmake target input falls back to current project target when override is empty', () => {
+    const html = getHtml({
+        ...createTemplateData(),
+        project: {
+            proPath: 'C:\\workspace\\demo\\demo.pro',
+            proFile: 'demo.pro',
+            projectDir: 'demo',
+            target: 'DemoApp',
+            qtModules: ['core'],
+            defines: []
+        }
+    });
+
+    assert.match(
+        html,
+        /<input id="qmakeTarget"[^>]*value="DemoApp"/,
+        'qmakeTarget input should show the parsed .pro TARGET when there is no manual override'
+    );
+});
+
+test('qmake target save keeps fallback display from being persisted as a manual override', () => {
+    const html = getHtml({
+        ...createTemplateData(),
+        project: {
+            proPath: 'C:\\workspace\\demo\\demo.pro',
+            proFile: 'demo.pro',
+            projectDir: 'demo',
+            target: 'DemoApp',
+            qtModules: ['core'],
+            defines: []
+        }
+    });
+
+    assert.match(html, /data-default-qmake-target="DemoApp"/);
+    assert.match(
+        html,
+        /function saveQmakeTarget\(\) \{[\s\S]*value: value === defaultTarget \? '' : value[\s\S]*\}/,
+        'saveQmakeTarget should clear the override when the input still matches the parsed .pro TARGET'
     );
 });

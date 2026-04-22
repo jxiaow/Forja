@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { BuildConfig } from '../platform/builder';
 import { getState } from './stateManager';
+import { decodeSelectedProject } from './selectedProject';
 
 // ── 配置读取 ──
 
@@ -30,15 +31,12 @@ export function getQtSourcePath(): string {
 }
 
 export function getSelectedProject(): string {
-    const saved = cfg().get<string>('selectedProject', '');
-    if (!saved) { return ''; }
-    try {
-        const parsed = JSON.parse(saved) as { relative?: string };
-        if (typeof parsed.relative === 'string') {
-            return parsed.relative;
-        }
-    } catch {}
-    return saved;
+    const saved = cfg().get<unknown>('selectedProject');
+    const parsed = decodeSelectedProject(saved);
+    if (parsed) {
+        return parsed.relative;
+    }
+    return typeof saved === 'string' ? saved : '';
 }
 
 export function getCStandard(): string {
