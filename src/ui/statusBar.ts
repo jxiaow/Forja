@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { getState, setState, onStateChange, BuildMode, Arch } from '../core/stateManager';
+import { getModeDisplayLabel } from './statusBarLabels';
 
 // 3 个状态栏按钮
 let _projectModeItem: vscode.StatusBarItem;
@@ -28,19 +29,15 @@ function _modeIcon(): string {
     return '$(tools)';
 }
 
-function _modeShortLabel(): string {
+function _modeDisplayLabel(): string {
     const state = getState();
-    const mode = state.mode === 'debug' ? 'D' : 'R';
-    if (process.platform !== 'win32') {
-        return mode;
-    }
-    return `${mode}${state.arch === 'x64' ? '64' : '32'}`;
+    return getModeDisplayLabel(state.mode, state.arch, process.platform === 'win32');
 }
 
 function _updateDisplay(): void {
     const state = getState();
     const projectName = state.currentProject?.target ?? '未选择项目';
-    _projectModeItem.text = `${_modeIcon()} ${projectName} · ${_modeShortLabel()}`;
+    _projectModeItem.text = `${_modeIcon()} ${projectName} · ${_modeDisplayLabel()}`;
     _projectModeItem.tooltip = '点击选择模式/架构、构建操作、切换项目';
     _projectModeItem.color = state.mode === 'debug'
         ? new vscode.ThemeColor('statusBarItem.warningForeground')
@@ -120,7 +117,7 @@ export async function showActions(): Promise<void> {
             sep('项目'),
             ...projectItems
         ],
-        { placeHolder: `${state.currentProject?.target ?? '未选择项目'} · ${_modeShortLabel()}` }
+        { placeHolder: `${state.currentProject?.target ?? '未选择项目'} · ${_modeDisplayLabel()}` }
     ) as Item | undefined;
 
     if (!selected?.action) { return; }

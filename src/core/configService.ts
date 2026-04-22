@@ -61,6 +61,14 @@ export function getManualProPath(): string {
     return cfg().get<string>('manualProPath', '');
 }
 
+export function getFileSyncPromptEnabled(): boolean {
+    return cfg().get<boolean>('fileSyncPromptEnabled', true);
+}
+
+export function getQmakeReminderEnabled(): boolean {
+    return cfg().get<boolean>('qmakeReminderEnabled', true);
+}
+
 export async function updateConfig(key: string, value: unknown): Promise<void> {
     await cfg().update(key, value, vscode.ConfigurationTarget.Workspace);
 }

@@ -4,7 +4,8 @@ import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-         getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath } from '../../core/configService';
+         getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath,
+         getFileSyncPromptEnabled, getQmakeReminderEnabled } from '../../core/configService';
 import { createLogger } from '../../core/logger';
 
 const logger = createLogger('ConfigPanelView');
@@ -98,6 +99,8 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             designerPath: getDesignerPath(),
             qtSourcePath: getQtSourcePath(),
             manualProPath: getManualProPath(),
+            fileSyncPromptEnabled: getFileSyncPromptEnabled(),
+            qmakeReminderEnabled: getQmakeReminderEnabled(),
             version: this._version
         };
         this._view.webview.html = getHtml(data);

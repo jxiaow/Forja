@@ -109,6 +109,16 @@ export async function handleMessage(
             updateHtml();
             break;
         }
+        case 'saveFileSyncPromptEnabled': {
+            logger.info(`保存新增/删除文件提醒开关: ${!!msg.value}`);
+            await updateConfig('fileSyncPromptEnabled', !!msg.value);
+            break;
+        }
+        case 'saveQmakeReminderEnabled': {
+            logger.info(`保存 QMake 提醒开关: ${!!msg.value}`);
+            await updateConfig('qmakeReminderEnabled', !!msg.value);
+            break;
+        }
         case 'generateIntelliSense': {
             logger.info(`生成 IntelliSense: C=${msg.cStandard}, C++=${msg.cppStandard}`);
             if (msg.cStandard) { await updateConfig('cStandard', msg.cStandard); }

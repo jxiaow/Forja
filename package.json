@@ -3,7 +3,7 @@
   "displayName": "Qt Pilot",
   "publisher": "qtpilot",
   "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
   "activationEvents": [
@@ -131,6 +131,16 @@
           "type": "string",
           "default": "",
           "description": "手动指定 .pro 文件绝对路径（扫描不到时使用）"
+        },
+        "qtPilot.fileSyncPromptEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "新增/删除 .cpp/.h/.ui 文件时是否提示同步 .pri/.pro"
+        },
+        "qtPilot.qmakeReminderEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": ".pro/.pri 文件变更后是否提示重新运行 QMake"
         }
       }
     }

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getFileSyncPromptEnabled, getQmakeReminderEnabled } from '../core/configService';
 
 // 找到文件所在目录最近的 .pri 或 .pro 文件
 function findPriOrPro(dir: string, root: string): string | null {
@@ -32,6 +33,8 @@ function isInPri(content: string, relPath: string): boolean {
 }
 
 async function promptRemoveFromPri(priPath: string, filePath: string): Promise<void> {
+    if (!getFileSyncPromptEnabled()) { return; }
+
     const relPath = getRelativePath(priPath, filePath);
     const priName = path.basename(priPath);
 
@@ -87,6 +90,7 @@ export function registerPriWatcher(context: vscode.ExtensionContext): void {
     const proWatcher = vscode.workspace.createFileSystemWatcher('**/*.{pro,pri}');
     let qmakeNeeded = false;
     proWatcher.onDidChange(() => {
+        if (!getQmakeReminderEnabled()) { return; }
         if (!qmakeNeeded) {
             qmakeNeeded = true;
             vscode.window.showWarningMessage(

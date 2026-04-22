@@ -19,6 +19,8 @@ export interface TemplateData {
     designerPath: string;
     qtSourcePath: string;
     manualProPath: string;
+    fileSyncPromptEnabled: boolean;
+    qmakeReminderEnabled: boolean;
     version: string;
 }
 
@@ -104,6 +106,8 @@ export function getHtml(data: TemplateData): string {
             .map((c: QtInfo) => `<option value="${c.path}">Qt ${c.version} (${c.compiler})</option>`)
             .join(''),
         manualProPath: data.manualProPath,
+        chkFileSyncPrompt: data.fileSyncPromptEnabled ? 'checked' : '',
+        chkQmakeReminder: data.qmakeReminderEnabled ? 'checked' : '',
         version: data.version
     };
 
