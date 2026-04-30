@@ -1,5 +1,5 @@
 import { PlatformConfig } from '../platformConfig';
-import { BuildConfig } from '../builder';
+import { BuildConfig } from '../shellPlan';
 
 export const linuxConfig: PlatformConfig = {
     shellExecutable: null,

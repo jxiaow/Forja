@@ -1,5 +1,5 @@
 import { PlatformConfig } from '../platformConfig';
-import { BuildConfig } from '../builder';
+import { BuildConfig } from '../shellPlan';
 
 function getVsDevCmd(vsDevShell: string): string {
     return vsDevShell.replace(/Launch-VsDevShell\.ps1$/i, 'VsDevCmd.bat');

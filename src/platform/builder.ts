@@ -1,80 +1,51 @@
 import * as vscode from 'vscode';
 import { PlatformConfig } from './platformConfig';
+import { BuildConfig, CommandPlan, createShellPlanBuilder } from './shellPlan';
 
-export interface BuildConfig {
-    vsDevShell: string;
-    qtPath: string;
-    projectDir: string;
-    proFile: string;
-    arch: string;
-    mode: string;
-    qmakeTarget: string;   // 可选 TARGET 覆盖，空字符串表示不覆盖
-}
+export { BuildConfig };
 
 export interface PlatformBuilder {
     makeExec(commands: string[]): vscode.ShellExecution;
     killApp(exeName: string): string;
-    qmakeCommands(cfg: BuildConfig, extraConfigs?: string[]): { commands: string[]; matcher: string | string[] };
-    buildCommands(cfg: BuildConfig): { commands: string[]; matcher: string | string[] };
-    cleanCommands(cfg: BuildConfig): { commands: string[]; matcher: string | string[] };
+    qmakeCommands(cfg: BuildConfig, extraConfigs?: string[]): CommandPlan;
+    buildCommands(cfg: BuildConfig): CommandPlan;
+    cleanCommands(cfg: BuildConfig): CommandPlan;
     stopCommands(exeName: string): string[];
 }
 
 export function createBuilder(config: PlatformConfig): PlatformBuilder {
-    function assembleCommands(cfg: BuildConfig, specificCmds: string[]): string[] {
-        return [
-            ...config.initCommands(cfg),
-            config.cdCommand(cfg.projectDir),
-            ...specificCmds
-        ];
-    }
+    const shellBuilder = createShellPlanBuilder(config);
 
     return {
         makeExec(commands: string[]): vscode.ShellExecution {
-            const cmd = commands.join(config.commandJoiner);
-            if (config.shellExecutable) {
-                return new vscode.ShellExecution(cmd, {
-                    executable: config.shellExecutable,
-                    shellArgs: config.shellArgs || []
+            const exec = shellBuilder.makeCommandLine(commands);
+            if (exec.shellExecutable) {
+                return new vscode.ShellExecution(exec.commandLine, {
+                    executable: exec.shellExecutable,
+                    shellArgs: exec.shellArgs
                 });
             }
-            return new vscode.ShellExecution(cmd);
+            return new vscode.ShellExecution(exec.commandLine);
         },
 
         killApp(exeName: string): string {
             return config.killCommand(exeName);
         },
 
-        qmakeCommands(cfg: BuildConfig, extraConfigs: string[] = []) {
-            const modeConfigs = cfg.mode === 'debug'
-                ? ['CONFIG+=debug', 'CONFIG+=console']
-                : ['CONFIG+=release', 'CONFIG+=console'];
-            const extra = config.qmakeExtraArgs(cfg);
-            const targetArg = cfg.qmakeTarget ? ` "TARGET=${cfg.qmakeTarget}"` : '';
-            const configArgs = [...modeConfigs, ...extraConfigs].join(' ');
-            const qmakeCmd = `qmake ${cfg.proFile} -spec ${config.qmakeSpec} ${configArgs}${extra ? ' ' + extra : ''}${targetArg}`;
-            return {
-                commands: assembleCommands(cfg, [qmakeCmd]),
-                matcher: config.qmakeMatcher
-            };
+        qmakeCommands(cfg: BuildConfig, extraConfigs: string[] = []): CommandPlan {
+            return shellBuilder.qmakeCommands(cfg, extraConfigs);
         },
 
-        buildCommands(cfg: BuildConfig) {
-            return {
-                commands: assembleCommands(cfg, [config.buildCommand]),
-                matcher: config.buildMatcher
-            };
+        buildCommands(cfg: BuildConfig): CommandPlan {
+            return shellBuilder.buildCommands(cfg);
         },
 
-        cleanCommands(cfg: BuildConfig) {
-            return {
-                commands: assembleCommands(cfg, [config.cleanCommand]),
-                matcher: config.cleanMatcher
-            };
+        cleanCommands(cfg: BuildConfig): CommandPlan {
+            return shellBuilder.cleanCommands(cfg);
         },
 
         stopCommands(exeName: string): string[] {
-            return config.stopCommands(exeName);
+            return shellBuilder.stopCommands(exeName);
         }
     };
 }
