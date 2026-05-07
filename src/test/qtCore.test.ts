@@ -95,3 +95,29 @@ test('createActionPlan status returns resolved config and candidates without exe
     assert.equal(result.resolved?.mode, 'debug');
     assert.equal(result.resolved?.arch, 'x86');
 });
+
+test('createActionPlan qmake warns when Qt and VS environment are unresolved', async () => {
+    const workspace = makeWorkspace();
+
+    const result = await createActionPlan({
+        action: 'qmake',
+        executionMode: 'dryRun',
+        workspace,
+        project: path.join(workspace, 'demo.pro'),
+        mode: 'debug',
+        arch: 'x86',
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.project, path.join(workspace, 'demo.pro'));
+    assert.match(result.commands.join('\n'), /qmake/);
+    assert.ok(result.diagnostics.some(d => /Qt 路径未解析/.test(d.message)));
+    assert.ok(result.diagnostics.some(d => /VS DevShell 路径未解析/.test(d.message)));
+    assert.ok(result.nextActions.some(action => /--qt-path/.test(action)));
+    assert.ok(result.nextActions.some(action => /--vs-dev-shell/.test(action)));
+});

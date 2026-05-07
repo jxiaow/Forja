@@ -110,6 +110,31 @@ function buildResolvedConfig(
     };
 }
 
+function buildEnvironmentGuidance(
+    action: CliOptions['action'],
+    qtPath: string,
+    vsDevShell: string
+): { diagnostics: CliResult['diagnostics']; nextActions: string[] } {
+    const diagnostics: CliResult['diagnostics'] = [];
+    const nextActions: string[] = [];
+
+    if (!['qmake', 'build', 'run'].includes(action)) {
+        return { diagnostics, nextActions };
+    }
+
+    if (!qtPath) {
+        diagnostics.push({ level: 'warning', message: 'Qt 路径未解析，当前计划可能无法在执行阶段找到 qmake 或 Qt 工具链' });
+        nextActions.push('使用 --qt-path <path> 指定 Qt 安装路径，或先运行 init --execute 保存本地配置');
+    }
+
+    if (process.platform === 'win32' && !vsDevShell) {
+        diagnostics.push({ level: 'warning', message: 'VS DevShell 路径未解析，当前计划可能无法在执行阶段初始化 MSVC 构建环境' });
+        nextActions.push('使用 --vs-dev-shell <path> 指定 Launch-VsDevShell.ps1，或先运行 init --execute 保存本地配置');
+    }
+
+    return { diagnostics, nextActions };
+}
+
 async function detectAndCache(workspace: string, options: CliOptions): Promise<LocalCache> {
     const env = await detectEnv(options.qtPath || undefined, options.vsDevShell || undefined).catch(() => ({
         vs: null,
@@ -243,12 +268,15 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         commands = shellBuilder.stopCommands(path.basename(project || 'app', '.pro'));
     }
 
+    const environmentGuidance = buildEnvironmentGuidance(options.action, qtPath, vsDevShell);
+
     return {
         ...result,
         ok: true,
         project,
         commands,
-        diagnostics: [],
+        diagnostics: environmentGuidance.diagnostics,
+        nextActions: environmentGuidance.nextActions,
         resolved
     };
 }
