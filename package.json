@@ -3,9 +3,13 @@
   "displayName": "Qt Pilot",
   "publisher": "qtpilot",
   "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
-  "version": "0.3.9",
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Other"],
+  "version": "0.3.11",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [
     "workspaceContains:**/*.pro",
     "onView:qtPilot.configView",
@@ -22,15 +26,42 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      { "command": "qtPilot.selectProject", "title": "Qt Pilot: 选择项目" },
-      { "command": "qtPilot.showActions",   "title": "Qt Pilot: 显示操作菜单" },
-      { "command": "qtPilot.qmake",         "title": "Qt Pilot: QMake" },
-      { "command": "qtPilot.build",         "title": "Qt Pilot: Build" },
-      { "command": "qtPilot.clean",         "title": "Qt Pilot: Clean" },
-      { "command": "qtPilot.run",           "title": "Qt Pilot: Run" },
-      { "command": "qtPilot.stop",          "title": "Qt Pilot: 停止" },
-      { "command": "qtPilot.debug",         "title": "Qt Pilot: 调试" },
-      { "command": "qtPilot.openWithQtDesigner", "title": "Qt Pilot: 用 Qt Designer 打开" }
+      {
+        "command": "qtPilot.selectProject",
+        "title": "Qt Pilot: 选择项目"
+      },
+      {
+        "command": "qtPilot.showActions",
+        "title": "Qt Pilot: 显示操作菜单"
+      },
+      {
+        "command": "qtPilot.qmake",
+        "title": "Qt Pilot: QMake"
+      },
+      {
+        "command": "qtPilot.build",
+        "title": "Qt Pilot: Build"
+      },
+      {
+        "command": "qtPilot.clean",
+        "title": "Qt Pilot: Clean"
+      },
+      {
+        "command": "qtPilot.run",
+        "title": "Qt Pilot: Run"
+      },
+      {
+        "command": "qtPilot.stop",
+        "title": "Qt Pilot: 停止"
+      },
+      {
+        "command": "qtPilot.debug",
+        "title": "Qt Pilot: 调试"
+      },
+      {
+        "command": "qtPilot.openWithQtDesigner",
+        "title": "Qt Pilot: 用 Qt Designer 打开"
+      }
     ],
     "menus": {
       "explorer/context": [
@@ -86,7 +117,10 @@
           "type": "object",
           "default": {},
           "additionalProperties": false,
-          "required": ["root", "relative"],
+          "required": [
+            "root",
+            "relative"
+          ],
           "properties": {
             "root": {
               "type": "string"
@@ -100,18 +134,26 @@
         "qtPilot.arch": {
           "type": "string",
           "default": "x86",
-          "enum": ["x86", "x64"],
+          "enum": [
+            "x86",
+            "x64"
+          ],
           "description": "目标架构"
         },
         "qtPilot.mode": {
           "type": "string",
           "default": "debug",
-          "enum": ["debug", "release"],
+          "enum": [
+            "debug",
+            "release"
+          ],
           "description": "构建模式"
         },
         "qtPilot.scanExcludeDirs": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "生成 IntelliSense 配置时额外排除的目录名（已内置排除 build*/debug/release）"
         },
@@ -123,13 +165,24 @@
         "qtPilot.cStandard": {
           "type": "string",
           "default": "c11",
-          "enum": ["c89", "c99", "c11", "c17"],
+          "enum": [
+            "c89",
+            "c99",
+            "c11",
+            "c17"
+          ],
           "description": "IntelliSense C 标准版本"
         },
         "qtPilot.cppStandard": {
           "type": "string",
           "default": "c++11",
-          "enum": ["c++11", "c++14", "c++17", "c++20", "c++23"],
+          "enum": [
+            "c++11",
+            "c++14",
+            "c++17",
+            "c++20",
+            "c++23"
+          ],
           "description": "IntelliSense C++ 标准版本"
         },
         "qtPilot.proPath": {

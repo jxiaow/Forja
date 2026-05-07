@@ -27,13 +27,18 @@ function createTemplateData(): TemplateData {
     };
 }
 
-test('qmake target input saves while typing so reopening can restore it', () => {
+test('qmake target input saves after editing is committed', () => {
     const html = getHtml(createTemplateData());
 
     assert.match(
         html,
+        /<input id="qmakeTarget"[^>]*onchange="saveQmakeTarget\(\)"/,
+        'qmakeTarget input should persist committed edits without saving on every keystroke'
+    );
+    assert.doesNotMatch(
+        html,
         /<input id="qmakeTarget"[^>]*oninput="saveQmakeTarget\(\)"/,
-        'qmakeTarget input should persist edits on input instead of waiting for blur only'
+        'qmakeTarget input should not write configuration for each typed character'
     );
 });
 
@@ -73,8 +78,29 @@ test('qmake target save keeps fallback display from being persisted as a manual 
     assert.match(html, /data-default-qmake-target="DemoApp"/);
     assert.match(
         html,
-        /function saveQmakeTarget\(\) \{[\s\S]*value: value === defaultTarget \? '' : value[\s\S]*\}/,
+        /const savedValue = value === defaultTarget \? '' : value/,
         'saveQmakeTarget should clear the override when the input still matches the parsed .pro TARGET'
+    );
+});
+
+test('qmake target save skips duplicate values', () => {
+    const html = getHtml(createTemplateData());
+
+    assert.match(html, /let lastSavedQmakeTarget = null;/);
+    assert.match(
+        html,
+        /if \(savedValue === lastSavedQmakeTarget\) \{ return; \}/,
+        'saveQmakeTarget should avoid duplicate saves on unchanged values'
+    );
+});
+
+test('config panel does not reload html for its own setting writes', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'index.ts'), 'utf8');
+
+    assert.doesNotMatch(
+        source,
+        /onDidChangeConfiguration/,
+        'config panel should not rebuild the whole webview after every internal updateConfig call'
     );
 });
 

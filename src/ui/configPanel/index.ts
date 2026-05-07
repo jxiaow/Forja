@@ -30,6 +30,11 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         this._view = webviewView;
         webviewView.webview.options = { enableScripts: true };
         this._updateHtml();
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible) {
+                this._updateHtml();
+            }
+        });
 
         // 复用已有的 envInfo，避免重复检测
         const existingEnv = getState().envInfo;
