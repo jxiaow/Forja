@@ -44,6 +44,14 @@ function _sel(current: string, value: string): string {
     return current === value ? 'selected' : '';
 }
 
+function _escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 export function getHtml(data: TemplateData): string {
     const { env, project, vsDevShellPath, selectedProject, cStandard, cppStandard,
             scanExcludeDirs, qmakeTarget, isWin, autoDevShell, autoQtPath, qtPath } = data;
@@ -77,13 +85,13 @@ export function getHtml(data: TemplateData): string {
         dotVsClass: _dotClass(env, !!env?.vs),
         dotQtClass: _dotClass(env, !!env?.qt),
         dotJomClass: _dotClass(env, jomOk),
-        statusSummary,
-        textVs,
-        textQt,
-        textJom,
+        statusSummary: _escapeHtml(statusSummary),
+        textVs: _escapeHtml(textVs),
+        textQt: _escapeHtml(textQt),
+        textJom: _escapeHtml(textJom),
         refreshDisabled: !env ? 'disabled' : '',
         refreshLabel: !env ? '<span class="spin">↻</span> 检测中...' : '刷新检测',
-        projectName,
+        projectName: _escapeHtml(projectName),
         selC89: _sel(cStandard, 'c89'),
         selC99: _sel(cStandard, 'c99'),
         selC11: _sel(cStandard, 'c11'),
@@ -93,26 +101,27 @@ export function getHtml(data: TemplateData): string {
         'selCpp17': _sel(cppStandard, 'c++17'),
         'selCpp20': _sel(cppStandard, 'c++20'),
         'selCpp23': _sel(cppStandard, 'c++23'),
-        scanExcludeDirs,
-        effectiveQmakeTarget,
-        defaultQmakeTarget,
+        scanExcludeDirs: _escapeHtml(scanExcludeDirs),
+        effectiveQmakeTarget: _escapeHtml(effectiveQmakeTarget),
+        defaultQmakeTarget: _escapeHtml(defaultQmakeTarget),
+        savedQmakeTarget: _escapeHtml(qmakeTarget),
         dotVsBlockClass: effectiveDevShell ? 'dot-ok' : 'dot-warn',
-        devShellSource,
-        effectiveDevShell: effectiveDevShell || '未配置',
-        vsDevShellPath,
+        devShellSource: _escapeHtml(devShellSource),
+        effectiveDevShell: _escapeHtml(effectiveDevShell || '未配置'),
+        vsDevShellPath: _escapeHtml(vsDevShellPath),
         dotQtBlockClass: effectiveQtPath ? 'dot-ok' : 'dot-warn',
-        qtSource,
-        effectiveQtPath: effectiveQtPath || '未配置',
-        qtPathValue: qtPath,
-        designerPathValue: data.designerPath,
-        qtSourcePathValue: data.qtSourcePath,
+        qtSource: _escapeHtml(qtSource),
+        effectiveQtPath: _escapeHtml(effectiveQtPath || '未配置'),
+        qtPathValue: _escapeHtml(qtPath),
+        designerPathValue: _escapeHtml(data.designerPath),
+        qtSourcePathValue: _escapeHtml(data.qtSourcePath),
         qtCandidateOptions: (env?.qtCandidates ?? [])
-            .map((c: QtInfo) => `<option value="${c.path}">Qt ${c.version} (${c.compiler})</option>`)
+            .map((c: QtInfo) => `<option value="${_escapeHtml(c.path)}">Qt ${_escapeHtml(c.version)} (${_escapeHtml(c.compiler)})</option>`)
             .join(''),
-        manualProPath: data.manualProPath,
+        manualProPath: _escapeHtml(data.manualProPath),
         chkFileSyncPrompt: data.fileSyncPromptEnabled ? 'checked' : '',
         chkQmakeReminder: data.qmakeReminderEnabled ? 'checked' : '',
-        version: data.version
+        version: _escapeHtml(data.version)
     };
 
     let html = _loadTemplate();
