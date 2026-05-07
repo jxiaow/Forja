@@ -20,6 +20,9 @@
     "onCommand:qtPilot.openWithQtDesigner"
   ],
   "main": "./out/extension.js",
+  "bin": {
+    "qt-pilot": "./out/cli/index.js"
+  },
   "contributes": {
     "commands": [
       { "command": "qtPilot.selectProject", "title": "Qt Pilot: 选择项目" },
@@ -159,6 +162,7 @@
     "copy-html": "powershell -Command \"Copy-Item -Path src/ui/configPanel/configPanel.html -Destination out/ui/configPanel/ -Force\"",
     "compile": "tsc -p ./ && npm run copy-html",
     "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test out/test",
     "package": "npm run compile && vsce package --allow-missing-repository",
     "vsix": "vsce package --allow-missing-repository"
   },
