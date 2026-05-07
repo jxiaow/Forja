@@ -14,12 +14,15 @@ test('runCliResult leaves dry run results unexecuted', async () => {
         workspace,
         project: path.join(workspace, 'demo.pro'),
         commands: ['exit 12'],
+        candidates: [],
+        nextActions: [],
         exitCode: null,
         durationMs: 0,
         stdout: '',
         stderr: '',
         logFile: null,
-        diagnostics: []
+        diagnostics: [],
+        resolved: null
     });
 
     assert.equal(result.ok, true);
@@ -36,12 +39,15 @@ test('runCliResult executes commands and writes logs', async () => {
         workspace,
         project: path.join(workspace, 'demo.pro'),
         commands: ['node -e "console.log(123)"'],
+        candidates: [],
+        nextActions: [],
         exitCode: null,
         durationMs: 0,
         stdout: '',
         stderr: '',
         logFile: null,
-        diagnostics: []
+        diagnostics: [],
+        resolved: null
     });
 
     assert.equal(result.ok, true);

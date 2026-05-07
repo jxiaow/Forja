@@ -1,6 +1,6 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'detect', 'projects', 'qmake', 'build', 'run', 'stop'];
+const validActions: CliAction[] = ['init', 'detect', 'projects', 'status', 'qmake', 'build', 'run', 'stop'];
 
 function isCliAction(value: string): value is CliAction {
     return validActions.includes(value as CliAction);
@@ -29,7 +29,8 @@ function parseArch(value: string): CliArch {
 }
 
 export function parseCliArgs(args: string[]): CliOptions {
-    const actionText = args[0] || '';
+    const firstArg = args[0] || '';
+    const actionText = firstArg.startsWith('--') || firstArg === '' ? 'status' : firstArg;
     if (!isCliAction(actionText)) {
         throw new Error(`未知命令: ${actionText}`);
     }
@@ -51,7 +52,9 @@ export function parseCliArgs(args: string[]): CliOptions {
     let sawDryRun = false;
     let sawExecute = false;
 
-    for (let i = 1; i < args.length; i++) {
+    const startIndex = actionText === firstArg ? 1 : 0;
+
+    for (let i = startIndex; i < args.length; i++) {
         const arg = args[i];
 
         switch (arg) {

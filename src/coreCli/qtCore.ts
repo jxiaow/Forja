@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { CliOptions, CliResult } from '../cli/types';
+import { CliOptions, CliResolvedConfig, CliResult } from '../cli/types';
 import { detectEnv } from '../env/envDetector';
 import { createShellPlanBuilder } from '../platform/shellPlan';
 import { winConfig } from '../platform/win/builder';
@@ -26,12 +26,15 @@ function emptyResult(options: CliOptions, workspace: string): CliResult {
         workspace,
         project: null,
         commands: [],
+        candidates: [],
+        nextActions: [],
         exitCode: null,
         durationMs: 0,
         stdout: '',
         stderr: '',
         logFile: null,
-        diagnostics: []
+        diagnostics: [],
+        resolved: null
     };
 }
 
@@ -87,6 +90,26 @@ function resolveProject(workspace: string, options: CliOptions, config: LocalCon
     return { project: null, error: '未找到 .pro 文件。请使用 --project 指定。' };
 }
 
+function listProjectCandidates(workspace: string): string[] {
+    return scanProFiles(workspace).map(rel => path.join(workspace, rel));
+}
+
+function buildResolvedConfig(
+    mode: CliResolvedConfig['mode'],
+    arch: CliResolvedConfig['arch'],
+    qtPath: string,
+    vsDevShell: string,
+    qmakeTarget: string
+): CliResolvedConfig {
+    return {
+        mode,
+        arch,
+        qtPath,
+        vsDevShell,
+        qmakeTarget
+    };
+}
+
 async function detectAndCache(workspace: string, options: CliOptions): Promise<LocalCache> {
     const env = await detectEnv(options.qtPath || undefined, options.vsDevShell || undefined).catch(() => ({
         vs: null,
@@ -122,18 +145,57 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const config = readLocalConfig(workspace);
     const cache = readLocalCache(workspace);
 
-    if (options.action === 'detect' || options.action === 'projects') {
+    if (options.action === 'detect' || options.action === 'projects' || options.action === 'status') {
         const detected = await detectAndCache(workspace, options);
+        const candidates = detected.detected.projects;
+        const project = config?.project && fs.existsSync(config.project)
+            ? config.project
+            : candidates.length === 1
+                ? candidates[0]
+                : null;
+        const mode = options.mode || config?.mode || 'debug';
+        const arch = options.arch || config?.arch || 'x86';
+        const qtPath = options.qtPath || config?.qtPath || detected.detected.qt?.path || '';
+        const vsDevShell = options.vsDevShell || config?.vsDevShell || detected.detected.vs?.devShellPath || '';
+        const qmakeTarget = options.target || config?.qmakeTarget || '';
+        const diagnostics = [];
+        const nextActions: string[] = [];
+
+        if (options.action !== 'detect' && candidates.length > 1 && !project) {
+            diagnostics.push({ level: 'warning' as const, message: `发现多个 .pro 文件，共 ${candidates.length} 个` });
+            nextActions.push('使用 --project <path> 指定要操作的 .pro 文件');
+        } else if (options.action !== 'detect' && candidates.length === 0 && !project) {
+            diagnostics.push({ level: 'warning' as const, message: '当前 workspace 下未检测到 .pro 文件' });
+            nextActions.push('将工作目录切到 Qt 工程根目录，或使用 --project <path>');
+        }
+
         if (options.saveLocal) {
             ensureLocalStateDir(workspace);
             writeLocalCache(workspace, detected);
         }
-        return { ...result, ok: true, diagnostics: [], commands: [] };
+        return {
+            ...result,
+            ok: true,
+            project,
+            commands: [],
+            candidates,
+            diagnostics,
+            nextActions,
+            resolved: buildResolvedConfig(mode, arch, qtPath, vsDevShell, qmakeTarget)
+        };
     }
 
     const projectResult = resolveProject(workspace, options, config);
     if (projectResult.error && options.action !== 'init') {
+        result.candidates = listProjectCandidates(workspace);
         result.diagnostics.push({ level: 'error', message: projectResult.error });
+        if (result.candidates.length > 1) {
+            result.nextActions.push('从 candidates 中选择一个 .pro 文件，并使用 --project <path> 重试');
+        } else if (result.candidates.length === 1) {
+            result.nextActions.push(`使用 --project "${result.candidates[0]}" 重试，或先运行 init --execute 保存默认项目`);
+        } else {
+            result.nextActions.push('确认 workspace 正确，或使用 --project <path-to-pro> 指定项目');
+        }
         return result;
     }
 
@@ -145,6 +207,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const qtPath = options.qtPath || config?.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
     const vsDevShell = options.vsDevShell || config?.vsDevShell || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
     const qmakeTarget = options.target || config?.qmakeTarget || '';
+    const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, qmakeTarget);
 
     if (options.action === 'init') {
         if (options.executionMode === 'execute') {
@@ -165,7 +228,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 });
             }
         }
-        return { ...result, ok: true, project, diagnostics: [] };
+        return { ...result, ok: true, project, diagnostics: [], resolved };
     }
 
     const shellBuilder = createShellPlanBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
@@ -185,6 +248,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         ok: true,
         project,
         commands,
-        diagnostics: []
+        diagnostics: [],
+        resolved
     };
 }

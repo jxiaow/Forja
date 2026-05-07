@@ -20,10 +20,31 @@ function textOutput(result: CliResult): string {
             lines.push(`  ${cmd}`);
         }
     }
+    if (result.resolved) {
+        lines.push(`构建配置: ${result.resolved.mode} / ${result.resolved.arch}`);
+        if (result.resolved.qtPath) {
+            lines.push(`Qt: ${result.resolved.qtPath}`);
+        }
+        if (result.resolved.vsDevShell) {
+            lines.push(`VS Dev Shell: ${result.resolved.vsDevShell}`);
+        }
+    }
+    if (result.candidates.length > 0) {
+        lines.push('候选项目:');
+        for (const candidate of result.candidates) {
+            lines.push(`  ${candidate}`);
+        }
+    }
     for (const diagnostic of result.diagnostics) {
         lines.push(`${diagnostic.level}: ${diagnostic.message}`);
         if (diagnostic.hint) {
             lines.push(`hint: ${diagnostic.hint}`);
+        }
+    }
+    if (result.nextActions.length > 0) {
+        lines.push('下一步:');
+        for (const action of result.nextActions) {
+            lines.push(`  ${action}`);
         }
     }
     return lines.join('\n');

@@ -67,4 +67,31 @@ test('createActionPlan reports multiple projects without explicit project', asyn
     assert.equal(result.ok, false);
     assert.equal(result.diagnostics[0].level, 'error');
     assert.match(result.diagnostics[0].message, /发现多个 .pro 文件/);
+    assert.equal(result.candidates.length, 2);
+    assert.match(result.nextActions[0], /--project/);
+});
+
+test('createActionPlan status returns resolved config and candidates without executing', async () => {
+    const workspace = makeWorkspace();
+
+    const result = await createActionPlan({
+        action: 'status',
+        executionMode: 'dryRun',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.commands.length, 0);
+    assert.equal(result.project, path.join(workspace, 'demo.pro'));
+    assert.equal(result.candidates.length, 1);
+    assert.equal(result.resolved?.mode, 'debug');
+    assert.equal(result.resolved?.arch, 'x86');
 });

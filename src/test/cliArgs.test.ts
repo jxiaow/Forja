@@ -66,3 +66,19 @@ test('parseCliArgs rejects missing option values', () => {
         /--workspace 需要一个值/
     );
 });
+
+test('parseCliArgs accepts status action', () => {
+    const parsed = parseCliArgs(['status', '--json']);
+
+    assert.equal(parsed.action, 'status');
+    assert.equal(parsed.json, true);
+    assert.equal(parsed.executionMode, 'dryRun');
+});
+
+test('parseCliArgs defaults to status when only flags are provided', () => {
+    const parsed = parseCliArgs(['--json']);
+
+    assert.equal(parsed.action, 'status');
+    assert.equal(parsed.json, true);
+    assert.equal(parsed.executionMode, 'dryRun');
+});
