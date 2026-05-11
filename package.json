@@ -3,7 +3,8 @@
   "displayName": "Qt Pilot",
   "publisher": "qtpilot",
   "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
-  "version": "0.4.0",
+  "version": "0.4.2",
+  "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -218,7 +219,7 @@
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test out/test",
     "build:cli": "npm run compile && node scripts/build-cli.js",
-    "package": "npm run compile && vsce package --allow-missing-repository",
+    "package": "npm run compile && vsce package --allow-missing-repository -o dist/",
     "vsix": "vsce package --allow-missing-repository"
   },
   "devDependencies": {
