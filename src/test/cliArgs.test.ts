@@ -82,3 +82,11 @@ test('parseCliArgs defaults to status when only flags are provided', () => {
     assert.equal(parsed.json, true);
     assert.equal(parsed.executionMode, 'dryRun');
 });
+
+test('parseCliArgs accepts clean action', () => {
+    const parsed = parseCliArgs(['clean', '--json', '--execute']);
+
+    assert.equal(parsed.action, 'clean');
+    assert.equal(parsed.executionMode, 'execute');
+    assert.equal(parsed.json, true);
+});

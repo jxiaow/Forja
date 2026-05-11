@@ -5,6 +5,8 @@ import { detectEnv } from '../env/envDetector';
 import { createShellPlanBuilder } from '../platform/shellPlan';
 import { winConfig } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
+import { resolveBuildConfig } from './configResolver';
+import { scanProFiles } from './projectScanner';
 import {
     LocalCache,
     LocalConfig,
@@ -15,8 +17,6 @@ import {
     writeLocalCache,
     writeLocalConfig
 } from './localState';
-
-const maxScanDepth = 5;
 
 function emptyResult(options: CliOptions, workspace: string): CliResult {
     return {
@@ -36,28 +36,6 @@ function emptyResult(options: CliOptions, workspace: string): CliResult {
         diagnostics: [],
         resolved: null
     };
-}
-
-function scanProFiles(root: string): string[] {
-    const proFiles: string[] = [];
-
-    function scan(dir: string, depth: number): void {
-        if (depth > maxScanDepth) { return; }
-        try {
-            const entries = fs.readdirSync(dir, { withFileTypes: true });
-            for (const entry of entries) {
-                const skip = ['node_modules', '.git', '.work', 'build', 'debug', 'release', 'out'];
-                if (entry.isDirectory() && !skip.includes(entry.name.toLowerCase())) {
-                    scan(path.join(dir, entry.name), depth + 1);
-                } else if (entry.isFile() && entry.name.endsWith('.pro')) {
-                    proFiles.push(path.join(dir, entry.name));
-                }
-            }
-        } catch {}
-    }
-
-    scan(root, 0);
-    return proFiles.map(p => path.relative(root, p).replace(/\\/g, '/'));
 }
 
 function resolveWorkspace(input: string | null): string {
@@ -118,7 +96,7 @@ function buildEnvironmentGuidance(
     const diagnostics: CliResult['diagnostics'] = [];
     const nextActions: string[] = [];
 
-    if (!['qmake', 'build', 'run'].includes(action)) {
+    if (!['qmake', 'build', 'clean', 'run'].includes(action)) {
         return { diagnostics, nextActions };
     }
 
@@ -225,8 +203,6 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
 
     const project = projectResult.project;
-    const projectDir = project ? path.dirname(project) : workspace;
-    const proFile = project ? path.basename(project) : '';
     const mode = options.mode || config?.mode || 'debug';
     const arch = options.arch || config?.arch || 'x86';
     const qtPath = options.qtPath || config?.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
@@ -252,18 +228,70 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                     qmakeTarget
                 });
             }
+            return { ...result, ok: true, project, diagnostics: [], resolved };
         }
-        return { ...result, ok: true, project, diagnostics: [], resolved };
+
+        // dry-run: preview what init --execute would do
+        const detected = await detectAndCache(workspace, options);
+        const previewDiagnostics: CliResult['diagnostics'] = [];
+        const previewNextActions: string[] = [];
+
+        previewDiagnostics.push({ level: 'info', message: `将创建 .work/qt-pilot/ 目录` });
+        previewDiagnostics.push({ level: 'info', message: `将确保 .gitignore 包含 .work/` });
+        previewDiagnostics.push({ level: 'info', message: `将写入 cache.json（环境检测结果）` });
+
+        if (project) {
+            previewDiagnostics.push({ level: 'info', message: `将写入 config.json（选中项目: ${path.basename(project)}）` });
+        } else if (detected.detected.projects.length > 1) {
+            previewDiagnostics.push({ level: 'warning', message: `发现 ${detected.detected.projects.length} 个 .pro 文件，init 不会自动选择项目` });
+            previewNextActions.push('使用 --project <path> 指定要保存的默认项目');
+        } else if (detected.detected.projects.length === 0) {
+            previewDiagnostics.push({ level: 'warning', message: '未检测到 .pro 文件，config.json 不会包含项目路径' });
+        }
+
+        if (detected.detected.qt) {
+            previewDiagnostics.push({ level: 'info', message: `检测到 Qt: ${detected.detected.qt.path}` });
+        } else {
+            previewDiagnostics.push({ level: 'warning', message: 'Qt 路径未检测到，可使用 --qt-path 指定' });
+        }
+
+        if (detected.detected.vs) {
+            previewDiagnostics.push({ level: 'info', message: `检测到 VS DevShell: ${detected.detected.vs.devShellPath}` });
+        } else if (process.platform === 'win32') {
+            previewDiagnostics.push({ level: 'warning', message: 'VS DevShell 未检测到，可使用 --vs-dev-shell 指定' });
+        }
+
+        previewNextActions.push('确认无误后运行 init --execute --json 写入本地配置');
+
+        return {
+            ...result,
+            ok: true,
+            project,
+            candidates: detected.detected.projects,
+            diagnostics: previewDiagnostics,
+            nextActions: previewNextActions,
+            resolved
+        };
     }
 
     const shellBuilder = createShellPlanBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
-    const buildConfig = { vsDevShell, qtPath, projectDir, proFile, arch, mode, qmakeTarget };
+    const buildConfig = resolveBuildConfig({
+        workspace,
+        projectPath: project,
+        mode,
+        arch,
+        qtPath,
+        vsDevShell,
+        qmakeTarget
+    });
     let commands: string[] = [];
 
     if (options.action === 'qmake') {
         commands = shellBuilder.qmakeCommands(buildConfig).commands;
     } else if (options.action === 'build' || options.action === 'run') {
         commands = shellBuilder.buildCommands(buildConfig).commands;
+    } else if (options.action === 'clean') {
+        commands = shellBuilder.cleanCommands(buildConfig).commands;
     } else if (options.action === 'stop') {
         commands = shellBuilder.stopCommands(path.basename(project || 'app', '.pro'));
     }

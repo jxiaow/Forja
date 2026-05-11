@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { parseCliArgs } from './args';
+import { parseCliArgs, isHelpRequest, getHelpText } from './args';
 import { CliResult } from './types';
 import { createActionPlan } from '../coreCli/qtCore';
 import { runCliResult } from '../coreCli/commandRunner';
@@ -51,6 +51,11 @@ function textOutput(result: CliResult): string {
 }
 
 async function main(argv: string[]): Promise<void> {
+    if (isHelpRequest(argv)) {
+        console.log(getHelpText());
+        return;
+    }
+
     let wantsJson = argv.includes('--json');
     try {
         const options = parseCliArgs(argv);

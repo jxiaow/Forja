@@ -121,3 +121,52 @@ test('createActionPlan qmake warns when Qt and VS environment are unresolved', a
     assert.ok(result.nextActions.some(action => /--qt-path/.test(action)));
     assert.ok(result.nextActions.some(action => /--vs-dev-shell/.test(action)));
 });
+
+test('createActionPlan clean generates clean commands', async () => {
+    const workspace = makeWorkspace();
+
+    const result = await createActionPlan({
+        action: 'clean',
+        executionMode: 'dryRun',
+        workspace,
+        project: path.join(workspace, 'demo.pro'),
+        mode: 'debug',
+        arch: 'x86',
+        qtPath: 'D:/Qt',
+        vsDevShell: 'C:/VS/Launch-VsDevShell.ps1',
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, 'clean');
+    assert.ok(result.commands.length > 0);
+    assert.match(result.commands.join('\n'), /clean/i);
+});
+
+test('createActionPlan init dry-run previews what would be created', async () => {
+    const workspace = makeWorkspace();
+
+    const result = await createActionPlan({
+        action: 'init',
+        executionMode: 'dryRun',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, 'init');
+    assert.ok(result.diagnostics.length > 0);
+    assert.ok(result.diagnostics.some(d => /\.work\/qt-pilot/.test(d.message)));
+    assert.ok(result.diagnostics.some(d => /\.gitignore/.test(d.message)));
+    assert.ok(result.diagnostics.some(d => /cache\.json/.test(d.message)));
+    assert.ok(result.nextActions.some(a => /init --execute/.test(a)));
+});

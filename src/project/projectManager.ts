@@ -6,6 +6,7 @@ import { decodeSelectedProject, encodeSelectedProject } from '../core/selectedPr
 import { getEffectiveProjectName, getProjectSelectionLabel } from '../core/projectDisplay';
 import { getQmakeTarget } from '../core/configService';
 import { getState } from '../core/stateManager';
+import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../coreCli/projectScanner';
 
 export interface ProjectInfo {
     proPath: string;        // .pro 文件完整路径
@@ -22,29 +23,10 @@ export interface MakefileInfo {
     exePath: string;        // 完整可执行文件绝对路径
 }
 
-const maxScanDepth = 5;
 const logger = createLogger('Project');
 
 export function scanProFiles(root: string): string[] {
-    const proFiles: string[] = [];
-
-    function scan(dir: string, depth: number): void {
-        if (depth > maxScanDepth) { return; }
-        try {
-            const entries = fs.readdirSync(dir, { withFileTypes: true });
-            for (const entry of entries) {
-                const skip = ['node_modules', '.git', 'build', 'debug', 'release', 'out'];
-                if (entry.isDirectory() && !skip.includes(entry.name.toLowerCase())) {
-                    scan(path.join(dir, entry.name), depth + 1);
-                } else if (entry.isFile() && entry.name.endsWith('.pro')) {
-                    proFiles.push(path.join(dir, entry.name));
-                }
-            }
-        } catch {}
-    }
-
-    scan(root, 0);
-    return proFiles.map(p => path.relative(root, p).replace(/\\/g, '/'));
+    return sharedScanProFiles(root);
 }
 
 // ── Makefile 解析（qmake 生成的最终值，最可靠） ──
@@ -152,27 +134,20 @@ export function getMakefileInfo(projectDir: string, mode?: string, arch?: string
 // ── .pro 文件解析（只取显示名 + IntelliSense 需要的信息） ──
 
 export function parseProFile(proPath: string): ProjectInfo {
-    const content = fs.readFileSync(proPath, 'utf-8');
-    const projectDir = path.dirname(proPath);
-    const proFile = path.basename(proPath);
-
-    let target = path.basename(proFile, '.pro');
-    const targetMatch = content.match(/^\s*TARGET\s*=\s*(\S+)/m);
-    if (targetMatch) { target = targetMatch[1].trim(); }
-
-    const qtMatch = content.match(/^\s*QT\s*\+?=\s*(.+)$/m);
-    const qtModules = qtMatch ? qtMatch[1].trim().split(/\s+/) : ['core', 'gui', 'widgets'];
-
-    const definesMatch = content.match(/^\s*DEFINES\s*\+?=\s*(.+)$/m);
-    const defines = definesMatch ? definesMatch[1].trim().split(/\s+/) : [];
-
+    const info = sharedParseProFile(proPath);
+    if (!info) {
+        // Fallback for unreadable files — maintain existing behavior (throw)
+        fs.readFileSync(proPath, 'utf-8'); // will throw
+        // unreachable, but satisfies return type
+        return { proPath, projectDir: '', proFile: path.basename(proPath), target: path.basename(proPath, '.pro'), qtModules: [], defines: [] };
+    }
     return {
-        proPath,
-        projectDir: path.basename(projectDir),
-        proFile,
-        target,
-        qtModules,
-        defines
+        proPath: info.proPath,
+        projectDir: info.projectDir,
+        proFile: info.proFile,
+        target: info.target,
+        qtModules: info.qtModules,
+        defines: info.defines
     };
 }
 

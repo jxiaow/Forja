@@ -1,6 +1,50 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'detect', 'projects', 'status', 'qmake', 'build', 'run', 'stop'];
+const validActions: CliAction[] = ['init', 'detect', 'projects', 'status', 'qmake', 'build', 'clean', 'run', 'stop'];
+
+const helpText = `Qt Pilot CLI — qmake 项目构建工具
+
+用法: qt-pilot <command> [options]
+
+命令:
+  init        初始化本地配置（检测环境、保存 .work/qt-pilot/）
+  detect      检测 Qt/VS 环境（不写文件，除非 --save-local）
+  projects    列出工作区内的 .pro 文件
+  status      显示当前配置和项目状态
+  qmake       生成/查看 qmake 命令
+  build       生成/查看构建命令
+  clean       生成/查看清理命令
+  run         构建并运行（--execute 时先 build 再启动）
+  stop        停止运行中的程序
+
+选项:
+  --workspace <path>     工作区路径（默认当前目录）
+  --project <path>       指定 .pro 文件路径
+  --mode debug|release   构建模式（默认 debug）
+  --arch x86|x64         目标架构（默认 x86）
+  --qt-path <path>       Qt 安装路径
+  --vs-dev-shell <path>  Launch-VsDevShell.ps1 路径
+  --target <name>        QMake TARGET 覆盖
+  --dry-run              仅生成命令计划，不执行（默认）
+  --execute              执行命令（需显式传入）
+  --save-local           将检测结果写入 .work/qt-pilot/cache.json
+  --json                 输出 JSON 格式（适合 AI 工具解析）
+  --help, -h             显示此帮助信息
+
+示例:
+  qt-pilot init --execute --json    初始化并保存本地配置
+  qt-pilot build --json             查看构建命令（dry-run）
+  qt-pilot build --execute --json   执行构建
+  qt-pilot status --json            查看当前状态
+`;
+
+export function isHelpRequest(args: string[]): boolean {
+    return args.includes('--help') || args.includes('-h');
+}
+
+export function getHelpText(): string {
+    return helpText;
+}
 
 function isCliAction(value: string): value is CliAction {
     return validActions.includes(value as CliAction);

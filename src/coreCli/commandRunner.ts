@@ -12,10 +12,19 @@ function logFileFor(workspace: string, action: string): string {
 
 function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        cp.exec(commandLine, { cwd, windowsHide: true }, (error, stdout, stderr) => {
-            const exitCode = typeof (error as cp.ExecException | null)?.code === 'number'
-                ? ((error as cp.ExecException).code as number)
-                : 0;
+        cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+            let exitCode = 0;
+            if (error) {
+                // error.code is the process exit code (number) when available
+                if (typeof (error as any).code === 'number') {
+                    exitCode = (error as any).code;
+                } else if ((error as any).signal) {
+                    // Process killed by signal (e.g. SIGTERM, SIGKILL)
+                    exitCode = 128;
+                } else {
+                    exitCode = 1;
+                }
+            }
             resolve({ exitCode, stdout, stderr });
         });
     });
