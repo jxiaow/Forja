@@ -14,7 +14,7 @@ const dest = path.join(root, 'cli', 'out');
 // Directories to copy (relative to out/)
 const dirs = [
     'cli',
-    'coreCli',
+    'shared',
     'mcp',
     'env',
     'platform',

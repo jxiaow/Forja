@@ -7,10 +7,10 @@
     "qt-pilot": "./out/cli/index.js",
     "qt-pilot-mcp": "./out/mcp/server.js"
   },
-  "main": "./out/coreCli/qtCore.js",
+  "main": "./out/shared/qtCore.js",
   "files": [
     "out/cli/**",
-    "out/coreCli/**",
+    "out/shared/**",
     "out/mcp/**",
     "out/env/**",
     "out/platform/**",
