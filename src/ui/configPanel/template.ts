@@ -115,7 +115,6 @@ export function getHtml(data: TemplateData): string {
         'selCpp20': _sel(cppStandard, 'c++20'),
         'selCpp23': _sel(cppStandard, 'c++23'),
         scanExcludeDirs: _escapeHtml(scanExcludeDirs),
-        scanExcludeDirsLines: _escapeHtml(scanExcludeDirs.split(', ').filter(s => s).join('\n')),
         effectiveQmakeTarget: _escapeHtml(effectiveQmakeTarget),
         defaultQmakeTarget: _escapeHtml(defaultQmakeTarget),
         savedQmakeTarget: _escapeHtml(qmakeTarget),
@@ -147,7 +146,6 @@ export function getHtml(data: TemplateData): string {
             .join(''),
         syncRemotePath: _escapeHtml(data.syncRemotePath),
         syncIgnore: _escapeHtml(data.syncIgnore),
-        syncIgnoreLines: _escapeHtml(data.syncIgnore.split(', ').join('\n'))
     };
 
     let html = _loadTemplate();
