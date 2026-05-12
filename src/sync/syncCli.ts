@@ -5,7 +5,7 @@
 import * as path from 'path';
 import * as cp from 'child_process';
 import { filterNeedsSync, markSyncedBatch } from './syncState';
-import { readServers, readProjectSyncConfig, getServerByName, ServerConfig } from './serverStore';
+import { readServers, readProjectSyncConfig, getServerById, getServerByName, ServerConfig } from './serverStore';
 
 export interface SyncResult {
     ok: boolean;
@@ -130,7 +130,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string)
     }
 
     const targetName = serverName || project.selectedServer;
-    const server = getServerByName(targetName);
+    const server = getServerById(targetName) || getServerByName(targetName);
     if (!server) {
         return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetName}" 未找到，请检查 ~/.qt-pilot/servers.json` }], server: targetName, remotePath: '' };
     }

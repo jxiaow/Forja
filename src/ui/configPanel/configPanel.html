@@ -530,6 +530,7 @@ details[open] .arrow { transform: rotate(90deg); }
           <option value="__add__">➕ 添加服务器</option>
           {{syncServerOptions}}
         </select>
+        <button class="btn btn-sm" id="btnViewPwd" onclick="viewSavedPassword()" style="display:none">密码</button>
         <button class="btn btn-sm" id="btnTestConn" onclick="testSyncConnection()" style="display:none">测试</button>
       </div>
     </div>
@@ -703,14 +704,13 @@ function togglePasswordVisibility() {
   if (input.type === 'password') { input.type = 'text'; btn.textContent = '隐藏'; }
   else { input.type = 'password'; btn.textContent = '显示'; }
 }
-function viewSavedPassword() {
-  const name = document.getElementById('syncServerSelect').value;
-  if (!name || name === '__add__') { return; }
-  vscode.postMessage({ command: 'viewPassword', name });
-}
-
 // ── Server form interaction ──
 let _serverCache = {};
+function viewSavedPassword() {
+  const id = document.getElementById('syncServerSelect').value;
+  if (!id || id === '__add__') { return; }
+  vscode.postMessage({ command: 'viewPassword', id });
+}
 function onServerSelectChange() {
   const val = document.getElementById('syncServerSelect').value;
   if (val === '__add__') {
@@ -732,13 +732,14 @@ function _showAddMode() {
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '添加';
   document.getElementById('btnDeleteServer').style.display = 'none';
+  document.getElementById('btnViewPwd').style.display = 'none';
   document.getElementById('btnTestConn').style.display = 'none';
 }
-function _showEditMode(name) {
-  const s = _serverCache[name];
+function _showEditMode(id) {
+  const s = _serverCache[id];
   if (!s) { return; }
   document.getElementById('newServerName').value = s.name;
-  document.getElementById('newServerName').readOnly = true;
+  document.getElementById('newServerName').readOnly = false;
   document.getElementById('newServerHost').value = s.host;
   document.getElementById('newServerPort').value = String(s.port);
   document.getElementById('newServerUsername').value = s.username;
@@ -748,6 +749,7 @@ function _showEditMode(name) {
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '保存修改';
   document.getElementById('btnDeleteServer').style.display = '';
+  document.getElementById('btnViewPwd').style.display = '';
   document.getElementById('btnTestConn').style.display = '';
 }
 function submitServer() {
@@ -766,13 +768,14 @@ function submitServer() {
   if (isAdd) {
     vscode.postMessage({ command: 'addServer', server });
   } else {
+    server.id = select.value;
     vscode.postMessage({ command: 'updateServer', server });
   }
 }
 function removeSelectedServer() {
-  const name = document.getElementById('syncServerSelect').value;
-  if (!name || name === '__add__') { return; }
-  vscode.postMessage({ command: 'removeServer', name });
+  const id = document.getElementById('syncServerSelect').value;
+  if (!id || id === '__add__') { return; }
+  vscode.postMessage({ command: 'removeServer', id });
 }
 function testSyncConnection() { vscode.postMessage({ command: 'testSyncConnection' }); }
 
@@ -824,13 +827,13 @@ window.addEventListener('message', e => {
     const select = document.getElementById('syncServerSelect');
     const prev = d.select || select.value;
     const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    // Cache server details
+    // Cache server details by id
     _serverCache = {};
-    d.servers.forEach(s => { _serverCache[s.name] = s; });
+    d.servers.forEach(s => { _serverCache[s.id] = s; });
     // Rebuild options
     select.innerHTML = '<option value="__add__">➕ 添加服务器</option>' +
-      d.servers.map(s => '<option value="' + esc(s.name) + '">' + esc(s.name) + ' (' + esc(s.username) + '@' + esc(s.host) + ')</option>').join('');
-    if (d.servers.some(s => s.name === prev)) {
+      d.servers.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + esc(s.username) + '@' + esc(s.host) + ')</option>').join('');
+    if (d.servers.some(s => s.id === prev)) {
       select.value = prev;
       _showEditMode(prev);
     } else {
@@ -958,7 +961,7 @@ window.addEventListener('blur', () => {
 // 初始化服务器表单
 (function() {
   const servers = JSON.parse('{{syncServerData}}');
-  servers.forEach(s => { _serverCache[s.name] = s; });
+  servers.forEach(s => { _serverCache[s.id] = s; });
   const select = document.getElementById('syncServerSelect');
   const selected = select.value;
   if (selected && selected !== '__add__' && _serverCache[selected]) {

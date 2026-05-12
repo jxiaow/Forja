@@ -17,7 +17,7 @@ const logger = createLogger('SftpClient');
 // ── Re-exports（保持现有消费者不变） ──
 
 export { ServerConfig, ProjectSyncConfig } from './serverStore';
-export { readServers, readProjectSyncConfig, writeProjectSyncConfig, getServerByName } from './serverStore';
+export { readServers, readProjectSyncConfig, writeProjectSyncConfig, getServerByName, getServerById } from './serverStore';
 export { addServer, removeServer, updateServer, writeServers, updateProjectSyncField } from './serverStore';
 export { ResolvedSyncConfig, getResolvedConfig } from './resolver';
 export { testConnection, TestConnectionResult } from './transport';

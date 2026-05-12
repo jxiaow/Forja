@@ -13,6 +13,7 @@ import { encrypt, decrypt } from './crypto';
 export type AuthMode = 'key' | 'password';
 
 export interface ServerConfig {
+    id: string;
     name: string;
     host: string;
     port: number;
@@ -24,7 +25,7 @@ export interface ServerConfig {
 
 export interface ProjectSyncConfig {
     enabled: boolean;
-    selectedServer: string;
+    selectedServer: string; // server id
     remotePath: string;
     ignore: string[];
 }
@@ -43,9 +44,14 @@ function _projectSyncConfigPath(workspaceRoot: string): string {
     return path.join(workspaceRoot, '.qtpilot', 'sync-config.json');
 }
 
+function _generateId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
 // ── 全局服务器列表 ──
 
 interface StoredServer {
+    id?: string;
     name: string;
     host: string;
     port: number;
@@ -60,15 +66,22 @@ export function readServers(): ServerConfig[] {
     try {
         if (fs.existsSync(filePath)) {
             const raw: StoredServer[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-            return raw.map(s => ({
-                name: s.name || '',
-                host: s.host || '',
-                port: s.port || 22,
-                username: s.username || '',
-                authMode: (s.authMode === 'password' ? 'password' : 'key') as AuthMode,
-                privateKeyPath: s.privateKeyPath || '',
-                password: s.password ? decrypt(s.password) : ''
-            }));
+            let needsMigration = false;
+            const servers = raw.map(s => {
+                if (!s.id) { needsMigration = true; }
+                return {
+                    id: s.id || _generateId(),
+                    name: s.name || '',
+                    host: s.host || '',
+                    port: s.port || 22,
+                    username: s.username || '',
+                    authMode: (s.authMode === 'password' ? 'password' : 'key') as AuthMode,
+                    privateKeyPath: s.privateKeyPath || '',
+                    password: s.password ? decrypt(s.password) : ''
+                };
+            });
+            if (needsMigration) { writeServers(servers); }
+            return servers;
         }
     } catch {}
     return [];
@@ -80,6 +93,7 @@ export function writeServers(servers: ServerConfig[]): void {
         fs.mkdirSync(dir, { recursive: true });
     }
     const stored: StoredServer[] = servers.map(s => ({
+        id: s.id,
         name: s.name,
         host: s.host,
         port: s.port,
@@ -91,30 +105,34 @@ export function writeServers(servers: ServerConfig[]): void {
     fs.writeFileSync(_serversFilePath(), JSON.stringify(stored, null, 2), 'utf-8');
 }
 
-export function addServer(server: ServerConfig): boolean {
+export function addServer(server: Omit<ServerConfig, 'id'>): ServerConfig {
     const servers = readServers();
-    if (servers.some(s => s.name === server.name)) {
-        return false; // 已存在
-    }
-    servers.push(server);
+    const newServer: ServerConfig = { ...server, id: _generateId() };
+    servers.push(newServer);
     writeServers(servers);
-    return true;
+    return newServer;
 }
 
-export function removeServer(name: string): void {
+export function removeServer(id: string): void {
     const servers = readServers();
-    writeServers(servers.filter(s => s.name !== name));
+    writeServers(servers.filter(s => s.id !== id));
 }
 
-export function updateServer(server: ServerConfig): boolean {
+export function updateServer(id: string, updates: Partial<Omit<ServerConfig, 'id'>>): boolean {
     const servers = readServers();
-    const idx = servers.findIndex(s => s.name === server.name);
+    const idx = servers.findIndex(s => s.id === id);
     if (idx < 0) { return false; }
-    servers[idx] = server;
+    servers[idx] = { ...servers[idx], ...updates };
     writeServers(servers);
     return true;
 }
 
+export function getServerById(id: string): ServerConfig | null {
+    const servers = readServers();
+    return servers.find(s => s.id === id) || null;
+}
+
+/** @deprecated 兼容旧代码，优先使用 getServerById */
 export function getServerByName(name: string): ServerConfig | null {
     const servers = readServers();
     return servers.find(s => s.name === name) || null;

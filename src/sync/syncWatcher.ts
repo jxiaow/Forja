@@ -116,7 +116,7 @@ export async function executeTestConnection(): Promise<void> {
 
     let server: ServerConfig | undefined;
     if (project?.selectedServer) {
-        server = servers.find(s => s.name === project.selectedServer);
+        server = servers.find(s => s.id === project.selectedServer) || servers.find(s => s.name === project.selectedServer);
     }
     if (!server) {
         if (servers.length === 0) {

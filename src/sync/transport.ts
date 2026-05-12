@@ -1,8 +1,49 @@
 /**
  * SSH/SCP 传输层 — 负责远程文件操作。
+ * Windows 密码模式通过 SSH_ASKPASS + 临时脚本实现（无需 sshpass）。
  */
 import * as cp from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { ServerConfig } from './serverStore';
+
+/**
+ * 创建临时 askpass 脚本，用于 SSH_ASKPASS 非交互式密码传入。
+ * Windows 下生成 .bat，Linux/Mac 下生成 .sh。
+ */
+function _createAskpassScript(password: string): string {
+    const tmpDir = os.tmpdir();
+    if (process.platform === 'win32') {
+        const script = path.join(tmpDir, `qt-pilot-askpass-${process.pid}.bat`);
+        fs.writeFileSync(script, `@echo off\r\necho ${password}\r\n`, { mode: 0o700 });
+        return script;
+    } else {
+        const script = path.join(tmpDir, `qt-pilot-askpass-${process.pid}.sh`);
+        fs.writeFileSync(script, `#!/bin/sh\necho '${password.replace(/'/g, "'\\''")}'\\n`, { mode: 0o700 });
+        return script;
+    }
+}
+
+function _removeAskpassScript(): void {
+    const tmpDir = os.tmpdir();
+    const ext = process.platform === 'win32' ? '.bat' : '.sh';
+    const script = path.join(tmpDir, `qt-pilot-askpass-${process.pid}${ext}`);
+    try { fs.unlinkSync(script); } catch {}
+}
+
+/**
+ * 构建密码模式的 spawn 环境变量。
+ * 使用 SSH_ASKPASS + DISPLAY 让 ssh/scp 从脚本读取密码。
+ */
+function _passwordEnv(askpassScript: string): NodeJS.ProcessEnv {
+    return {
+        ...process.env,
+        SSH_ASKPASS: askpassScript,
+        SSH_ASKPASS_REQUIRE: 'force',
+        DISPLAY: ':0'
+    };
+}
 
 /** SCP 上传单个文件 */
 export function scpUpload(server: ServerConfig, localFile: string, remoteFile: string, password: string | null): Promise<void> {
@@ -20,36 +61,27 @@ export function scpUpload(server: ServerConfig, localFile: string, remoteFile: s
         }
 
         const dest = `${server.username}@${server.host}:${remoteFile}`;
+        const args = [...baseArgs, localFile, dest];
 
+        let env: NodeJS.ProcessEnv | undefined;
+        let askpass: string | null = null;
         if (server.authMode === 'password' && password) {
-            const args = ['-p', password, 'scp', ...baseArgs, localFile, dest];
-            const proc = cp.spawn('sshpass', args, { windowsHide: true });
-            let stderr = '';
-            proc.stderr.on('data', (d) => { stderr += d.toString(); });
-            proc.on('close', (code) => {
-                if (code === 0) { resolve(); }
-                else { reject(new Error(`scp 失败 (code=${code}): ${stderr.trim()}`)); }
-            });
-            proc.on('error', () => {
-                reject(new Error(
-                    '密码认证需要 sshpass 工具。解决方案：\n' +
-                    '1. 安装 Git for Windows 并使用 Git Bash 中的 sshpass\n' +
-                    '2. 或改用 SSH 密钥认证（推荐）：ssh-keygen 生成密钥后 ssh-copy-id 推送到服务器'
-                ));
-            });
-        } else {
-            const args = [...baseArgs, localFile, dest];
-            const proc = cp.spawn('scp', args, { windowsHide: true });
-            let stderr = '';
-            proc.stderr.on('data', (d) => { stderr += d.toString(); });
-            proc.on('close', (code) => {
-                if (code === 0) { resolve(); }
-                else { reject(new Error(`scp 失败 (code=${code}): ${stderr.trim()}`)); }
-            });
-            proc.on('error', (e) => {
-                reject(new Error(`scp 启动失败: ${e.message}`));
-            });
+            askpass = _createAskpassScript(password);
+            env = _passwordEnv(askpass);
         }
+
+        const proc = cp.spawn('scp', args, { windowsHide: true, env });
+        let stderr = '';
+        proc.stderr.on('data', (d) => { stderr += d.toString(); });
+        proc.on('close', (code) => {
+            if (askpass) { _removeAskpassScript(); }
+            if (code === 0) { resolve(); }
+            else { reject(new Error(`scp 失败 (code=${code}): ${stderr.trim()}`)); }
+        });
+        proc.on('error', (e) => {
+            if (askpass) { _removeAskpassScript(); }
+            reject(new Error(`scp 启动失败: ${e.message}`));
+        });
     });
 }
 
@@ -67,18 +99,18 @@ export function ensureRemoteDir(server: ServerConfig, remoteDir: string, passwor
         }
 
         const cmd = `mkdir -p "${remoteDir}"`;
+        const args = [...sshArgs, `${server.username}@${server.host}`, cmd];
 
+        let env: NodeJS.ProcessEnv | undefined;
+        let askpass: string | null = null;
         if (server.authMode === 'password' && password) {
-            const args = ['-p', password, 'ssh', ...sshArgs, `${server.username}@${server.host}`, cmd];
-            const proc = cp.spawn('sshpass', args, { windowsHide: true });
-            proc.on('close', () => resolve());
-            proc.on('error', () => resolve());
-        } else {
-            const args = [...sshArgs, `${server.username}@${server.host}`, cmd];
-            const proc = cp.spawn('ssh', args, { windowsHide: true });
-            proc.on('close', () => resolve());
-            proc.on('error', () => resolve());
+            askpass = _createAskpassScript(password);
+            env = _passwordEnv(askpass);
         }
+
+        const proc = cp.spawn('ssh', args, { windowsHide: true, env });
+        proc.on('close', () => { if (askpass) { _removeAskpassScript(); } resolve(); });
+        proc.on('error', () => { if (askpass) { _removeAskpassScript(); } resolve(); });
     });
 }
 
@@ -102,31 +134,28 @@ export function testConnection(server: ServerConfig, password: string | null): P
         }
 
         const target = `${server.username}@${server.host}`;
+        const args = [...sshArgs, target, 'echo ok'];
 
+        let env: NodeJS.ProcessEnv | undefined;
+        let askpass: string | null = null;
         if (server.authMode === 'password' && password) {
-            const args = ['-p', password, 'ssh', ...sshArgs, target, 'echo ok'];
-            const proc = cp.spawn('sshpass', args, { windowsHide: true });
-            let stdout = '';
-            let stderr = '';
-            proc.stdout.on('data', (d) => { stdout += d.toString(); });
-            proc.stderr.on('data', (d) => { stderr += d.toString(); });
-            proc.on('close', (code) => {
-                if (code === 0 && stdout.trim() === 'ok') { resolve({ ok: true }); }
-                else { resolve({ ok: false, error: stderr.trim() || `exit code ${code}` }); }
-            });
-            proc.on('error', (e) => resolve({ ok: false, error: e.message }));
-        } else {
-            const args = [...sshArgs, target, 'echo ok'];
-            const proc = cp.spawn('ssh', args, { windowsHide: true });
-            let stdout = '';
-            let stderr = '';
-            proc.stdout.on('data', (d) => { stdout += d.toString(); });
-            proc.stderr.on('data', (d) => { stderr += d.toString(); });
-            proc.on('close', (code) => {
-                if (code === 0 && stdout.trim() === 'ok') { resolve({ ok: true }); }
-                else { resolve({ ok: false, error: stderr.trim() || `exit code ${code}` }); }
-            });
-            proc.on('error', (e) => resolve({ ok: false, error: e.message }));
+            askpass = _createAskpassScript(password);
+            env = _passwordEnv(askpass);
         }
+
+        const proc = cp.spawn('ssh', args, { windowsHide: true, env });
+        let stdout = '';
+        let stderr = '';
+        proc.stdout.on('data', (d) => { stdout += d.toString(); });
+        proc.stderr.on('data', (d) => { stderr += d.toString(); });
+        proc.on('close', (code) => {
+            if (askpass) { _removeAskpassScript(); }
+            if (code === 0 && stdout.trim() === 'ok') { resolve({ ok: true }); }
+            else { resolve({ ok: false, error: stderr.trim() || `exit code ${code}` }); }
+        });
+        proc.on('error', (e) => {
+            if (askpass) { _removeAskpassScript(); }
+            resolve({ ok: false, error: e.message });
+        });
     });
 }

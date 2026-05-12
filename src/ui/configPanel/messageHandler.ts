@@ -162,60 +162,57 @@ export async function handleMessage(
         }
         case 'addServer': {
             logger.info(`添加服务器: ${msg.server?.name}`);
-            const newServer: ServerConfig = {
+            const newServerData = {
                 name: msg.server.name || '',
                 host: msg.server.host || '',
                 port: msg.server.port || 22,
                 username: msg.server.username || '',
-                authMode: msg.server.authMode || 'key',
+                authMode: (msg.server.authMode || 'key') as 'key' | 'password',
                 privateKeyPath: msg.server.privateKeyPath || '',
                 password: msg.server.password || ''
             };
-            if (!newServer.name || !newServer.host || !newServer.username) {
+            if (!newServerData.name || !newServerData.host || !newServerData.username) {
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
                 break;
             }
-            const added = addServer(newServer);
-            if (!added) {
-                vscode.window.showWarningMessage(`服务器 "${newServer.name}" 已存在`);
-                break;
-            }
-            _pushServerList(webview, newServer.name);
+            const created = addServer(newServerData);
+            _pushServerList(webview, created.id);
             break;
         }
         case 'removeServer': {
-            logger.info(`删除服务器: "${msg.name}"`);
-            removeServer(msg.name);
+            logger.info(`删除服务器: "${msg.id}"`);
+            removeServer(msg.id);
             _pushServerList(webview);
             break;
         }
         case 'updateServer': {
-            logger.info(`修改服务器: ${msg.server?.name}`);
-            const updatedServer: ServerConfig = {
+            logger.info(`修改服务器: id=${msg.server?.id}, name=${msg.server?.name}`);
+            const serverId: string = msg.server.id || '';
+            const updates = {
                 name: msg.server.name || '',
                 host: msg.server.host || '',
                 port: msg.server.port || 22,
                 username: msg.server.username || '',
-                authMode: msg.server.authMode || 'key',
+                authMode: (msg.server.authMode || 'key') as 'key' | 'password',
                 privateKeyPath: msg.server.privateKeyPath || '',
                 password: msg.server.password || ''
             };
-            if (!updatedServer.name || !updatedServer.host || !updatedServer.username) {
+            if (!updates.name || !updates.host || !updates.username) {
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
                 break;
             }
             // 如果密码为空，保留原密码
-            if (!updatedServer.password) {
-                const existing = readServers().find(s => s.name === updatedServer.name);
-                if (existing) { updatedServer.password = existing.password; }
+            if (!updates.password) {
+                const existing = readServers().find(s => s.id === serverId);
+                if (existing) { updates.password = existing.password; }
             }
-            const updated = updateServer(updatedServer);
+            const updated = updateServer(serverId, updates);
             if (!updated) {
-                vscode.window.showWarningMessage(`服务器 "${updatedServer.name}" 不存在`);
+                vscode.window.showWarningMessage('服务器不存在');
                 break;
             }
-            vscode.window.showInformationMessage(`服务器 "${updatedServer.name}" 已更新`);
-            _pushServerList(webview, updatedServer.name);
+            vscode.window.showInformationMessage(`服务器 "${updates.name}" 已更新`);
+            _pushServerList(webview, serverId);
             break;
         }
         case 'testSyncConnection': {
@@ -224,9 +221,9 @@ export async function handleMessage(
             break;
         }
         case 'viewPassword': {
-            logger.info(`查看密码: "${msg.name}"`);
+            logger.info(`查看密码: "${msg.id}"`);
             const servers = readServers();
-            const srv = servers.find(s => s.name === msg.name);
+            const srv = servers.find(s => s.id === msg.id);
             if (srv && srv.password) {
                 // 通过 VSCode 原生输入框显示（不发送到 webview）
                 const action = await vscode.window.showInformationMessage(
@@ -249,11 +246,12 @@ export async function handleMessage(
     }
 }
 
-function _pushServerList(webview: vscode.Webview, selectName?: string): void {
+function _pushServerList(webview: vscode.Webview, selectId?: string): void {
     const servers = readServers();
     webview.postMessage({
         command: 'serversUpdated',
         servers: servers.map(s => ({
+            id: s.id,
             name: s.name,
             host: s.host,
             port: s.port,
@@ -261,6 +259,6 @@ function _pushServerList(webview: vscode.Webview, selectName?: string): void {
             authMode: s.authMode,
             privateKeyPath: s.privateKeyPath
         })),
-        select: selectName || ''
+        select: selectId || ''
     });
 }
