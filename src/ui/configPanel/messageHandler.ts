@@ -257,7 +257,8 @@ function _pushServerList(webview: vscode.Webview, selectId?: string): void {
             port: s.port,
             username: s.username,
             authMode: s.authMode,
-            privateKeyPath: s.privateKeyPath
+            privateKeyPath: s.privateKeyPath,
+            password: s.password
         })),
         select: selectId || ''
     });

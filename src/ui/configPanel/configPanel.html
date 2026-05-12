@@ -739,7 +739,7 @@ function _showEditMode(id) {
   document.getElementById('newServerUsername').value = s.username;
   document.getElementById('newServerAuthMode').value = s.authMode || 'key';
   document.getElementById('newServerKeyPath').value = s.privateKeyPath || '';
-  document.getElementById('newServerPassword').value = '';
+  document.getElementById('newServerPassword').value = s.password || '';
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '保存修改';
   document.getElementById('btnDeleteServer').style.display = '';

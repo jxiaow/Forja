@@ -8,7 +8,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { encrypt, decrypt } from './crypto';
 
 export type AuthMode = 'key' | 'password';
 
@@ -77,7 +76,7 @@ export function readServers(): ServerConfig[] {
                     username: s.username || '',
                     authMode: (s.authMode === 'password' ? 'password' : 'key') as AuthMode,
                     privateKeyPath: s.privateKeyPath || '',
-                    password: s.password ? decrypt(s.password) : ''
+                    password: s.password || ''
                 };
             });
             if (needsMigration) { writeServers(servers); }
@@ -100,7 +99,7 @@ export function writeServers(servers: ServerConfig[]): void {
         username: s.username,
         authMode: s.authMode,
         privateKeyPath: s.privateKeyPath,
-        password: s.password ? encrypt(s.password) : undefined
+        password: s.password || undefined
     }));
     fs.writeFileSync(_serversFilePath(), JSON.stringify(stored, null, 2), 'utf-8');
 }

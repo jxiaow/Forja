@@ -25,7 +25,7 @@ export interface TemplateData {
     version: string;
     syncEnabled: boolean;
     syncSelectedServer: string;
-    syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string }[];
+    syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string }[];
     syncRemotePath: string;
     syncIgnore: string;
 }
