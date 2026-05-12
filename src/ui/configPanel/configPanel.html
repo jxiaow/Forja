@@ -14,35 +14,38 @@ body {
   color-scheme: var(--vscode-color-scheme, dark);
   overflow-x: hidden;
 }
-/* ── Tabs ── */
-.tab-bar {
+/* ── Sections (accordion) ── */
+.section-header {
   display: flex;
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--vscode-sideBarSectionHeader-background, var(--vscode-editor-background));
+  border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+  cursor: pointer;
+  user-select: none;
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--vscode-sideBar-background);
 }
-.tab-btn {
+.section-header:first-child { border-top: none; }
+.section-header:hover { background: var(--vscode-list-hoverBackground); }
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-foreground));
   flex: 1;
-  padding: 10px 0;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 500;
+}
+.section-arrow {
+  font-size: 10px;
+  margin-right: 6px;
+  transition: transform 0.15s;
   color: var(--vscode-descriptionForeground);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
 }
-.tab-btn:hover { color: var(--vscode-foreground); }
-.tab-btn.active {
-  color: var(--vscode-foreground);
-  border-bottom-color: var(--vscode-focusBorder);
-}
-.tab-panel { display: none; padding: 12px; min-width: 0; overflow: hidden; }
-.tab-panel.active { display: block; }
+.section-header.collapsed .section-arrow { transform: rotate(-90deg); }
+.section-body { padding: 12px; min-width: 0; overflow: hidden; }
+.section-header.collapsed + .section-body { display: none; }
 
 /* ── Cards ── */
 .card {
@@ -321,15 +324,13 @@ details[open] .arrow { transform: rotate(90deg); }
 </head>
 <body>
 
-<!-- Tab Bar -->
-<div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('overview')">概览</button>
-  <button class="tab-btn" onclick="switchTab('env')">环境</button>
-  <button class="tab-btn" onclick="switchTab('sync')">同步</button>
-</div>
 
-<!-- ═══════════ Tab: 概览 ═══════════ -->
-<div id="tab-overview" class="tab-panel active">
+<!-- ═══════════ Section: 概览 ═══════════ -->
+<div class="section-header" onclick="toggleSection(this)">
+  <span class="section-arrow">▼</span>
+  <span class="section-title">概览</span>
+</div>
+<div class="section-body">
 
   <!-- Project -->
   <div class="project-hero">
@@ -421,8 +422,12 @@ details[open] .arrow { transform: rotate(90deg); }
 
 </div>
 
-<!-- ═══════════ Tab: 环境 ═══════════ -->
-<div id="tab-env" class="tab-panel">
+<!-- ═══════════ Section: 环境 ═══════════ -->
+<div class="section-header" onclick="toggleSection(this)">
+  <span class="section-arrow">▼</span>
+  <span class="section-title">环境</span>
+</div>
+<div class="section-body">
 
   <!--IF_WIN-->
   <!-- Visual Studio -->
@@ -503,8 +508,12 @@ details[open] .arrow { transform: rotate(90deg); }
 
 </div>
 
-<!-- ═══════════ Tab: 同步 ═══════════ -->
-<div id="tab-sync" class="tab-panel">
+<!-- ═══════════ Section: 同步 ═══════════ -->
+<div class="section-header" onclick="toggleSection(this)">
+  <span class="section-arrow">▼</span>
+  <span class="section-title">同步</span>
+</div>
+<div id="tab-sync" class="section-body">
 
   <!-- Enable toggle -->
   <div class="card">
@@ -611,12 +620,20 @@ details[open] .arrow { transform: rotate(90deg); }
 <script>
 const vscode = acquireVsCodeApi();
 
-// ── Tab switching ──
+// ── Section toggle ──
+function toggleSection(header) {
+  header.classList.toggle('collapsed');
+}
 function switchTab(name) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  document.querySelector('[onclick="switchTab(\'' + name + '\')"]').classList.add('active');
+  // 兼容 postMessage switchTab：展开对应 section
+  const el = document.getElementById('tab-' + name);
+  if (el) {
+    const header = el.previousElementSibling;
+    if (header && header.classList.contains('collapsed')) {
+      header.classList.remove('collapsed');
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 // ── VS paths ──
