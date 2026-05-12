@@ -2,13 +2,13 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../core/logger';
-import { decodeSelectedProject, encodeSelectedProject } from '../core/selectedProject';
-import { getEffectiveProjectName, getProjectSelectionLabel } from '../core/projectDisplay';
+import { decodeSelectedProject, encodeSelectedProject } from './selectedProject';
+import { getEffectiveProjectName, getProjectSelectionLabel } from './projectDisplay';
 import { getQmakeTarget } from '../core/configService';
 import { getState } from '../core/stateManager';
 import { getSetting, setSetting } from '../core/settingsStore';
 import { setProjectRoot } from '../core/workspaceResolver';
-import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../coreCli/projectScanner';
+import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../shared/projectScanner';
 
 export interface ProjectInfo {
     proPath: string;        // .pro 文件完整路径

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { createActionPlan } from '../coreCli/qtCore';
-import { writeLocalConfig } from '../coreCli/localState';
+import { createActionPlan } from '../shared/qtCore';
+import { writeLocalConfig } from '../shared/localState';
 
 function makeWorkspace(): string {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'qt-pilot-core-'));

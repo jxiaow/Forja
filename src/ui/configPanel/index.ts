@@ -7,7 +7,7 @@ import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
          getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath,
          getFileSyncPromptEnabled, getQmakeReminderEnabled, getWorkspaceRoot } from '../../core/configService';
 import { createLogger } from '../../core/logger';
-import { getEffectiveProjectName } from '../../core/projectDisplay';
+import { getEffectiveProjectName } from '../../project/projectDisplay';
 import { readServers, readProjectSyncConfig } from '../../sync/sftpClient';
 
 const logger = createLogger('ConfigPanelView');

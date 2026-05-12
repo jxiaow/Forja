@@ -13,6 +13,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 let _resolved: string | null = null;
+let _watcherRegistered = false;
+
+/** 注册 workspace folder 变化监听，自动重置缓存 */
+export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void {
+    if (_watcherRegistered) { return; }
+    _watcherRegistered = true;
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            _resolved = null;
+        })
+    );
+}
 
 /** 解析并缓存项目根目录 */
 export function resolveProjectRoot(): string {

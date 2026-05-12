@@ -4,7 +4,7 @@ import { generateCppProperties, updateCppPropertiesStandard } from '../../build/
 import { getState, setState } from '../../core/stateManager';
 import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget, getWorkspaceRoot } from '../../core/configService';
 import { createLogger } from '../../core/logger';
-import { getEffectiveProjectName } from '../../core/projectDisplay';
+import { getEffectiveProjectName } from '../../project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, readServers, ServerConfig } from '../../sync/sftpClient';
 import { executeSyncChangedFiles, executeTestConnection } from '../../sync/syncWatcher';
 

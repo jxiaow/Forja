@@ -1,9 +1,9 @@
 import * as path from 'path';
 import { BuildConfig } from '../platform/builder';
 import { getState } from './stateManager';
-import { decodeSelectedProject } from './selectedProject';
-import { resolveBuildConfig, mergeConfigInputs } from '../coreCli/configResolver';
-import { readLocalCache, readLocalConfig } from '../coreCli/localState';
+import { decodeSelectedProject } from '../project/selectedProject';
+import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
+import { readLocalCache, readLocalConfig } from '../shared/localState';
 import { getSetting, setSetting } from './settingsStore';
 import { resolveProjectRoot } from './workspaceResolver';
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeSelectedProject, encodeSelectedProject } from '../core/selectedProject';
+import { decodeSelectedProject, encodeSelectedProject } from '../project/selectedProject';
 
 test('selectedProject setting is managed in .qtpilot/settings.json (not in package.json contributes)', () => {
     // Configuration is now self-managed in .qtpilot/settings.json

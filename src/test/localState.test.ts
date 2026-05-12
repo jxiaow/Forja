@@ -9,7 +9,7 @@ import {
     readLocalConfig,
     writeLocalConfig,
     writeLocalCache
-} from '../coreCli/localState';
+} from '../shared/localState';
 
 function makeWorkspace(): string {
     return fs.mkdtempSync(path.join(os.tmpdir(), 'qt-pilot-local-state-'));

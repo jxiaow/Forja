@@ -8,9 +8,29 @@ const logger = createLogger('SyncManager');
 let _statusItem: vscode.StatusBarItem | null = null;
 
 export function registerSyncWatcher(context: vscode.ExtensionContext): void {
-    // 定期检查配置变化刷新状态栏（文件系统配置不会触发 onDidChangeConfiguration）
-    const interval = setInterval(() => _refreshStatusBar(), 5000);
-    context.subscriptions.push(new vscode.Disposable(() => clearInterval(interval)));
+    const wsRoot = getWorkspaceRoot();
+    if (wsRoot) {
+        // 监听 sync-config.json 和 servers.json 变化来刷新状态栏
+        const syncPattern = new vscode.RelativePattern(wsRoot, '.qtpilot/sync-config.json');
+        const syncWatcher = vscode.workspace.createFileSystemWatcher(syncPattern);
+        syncWatcher.onDidChange(() => _refreshStatusBar());
+        syncWatcher.onDidCreate(() => _refreshStatusBar());
+        syncWatcher.onDidDelete(() => _refreshStatusBar());
+        context.subscriptions.push(syncWatcher);
+    }
+
+    // 监听全局 servers.json（位于 ~/.qt-pilot/）
+    const os = require('os');
+    const path = require('path');
+    const globalServersDir = path.join(os.homedir(), '.qt-pilot');
+    const globalPattern = new vscode.RelativePattern(vscode.Uri.file(globalServersDir), 'servers.json');
+    const globalWatcher = vscode.workspace.createFileSystemWatcher(globalPattern);
+    globalWatcher.onDidChange(() => _refreshStatusBar());
+    globalWatcher.onDidCreate(() => _refreshStatusBar());
+    globalWatcher.onDidDelete(() => _refreshStatusBar());
+    context.subscriptions.push(globalWatcher);
+
+    context.subscriptions.push(new vscode.Disposable(() => disposeSyncWatcher()));
 
     _refreshStatusBar();
 }

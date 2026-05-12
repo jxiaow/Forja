@@ -8,8 +8,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { createActionPlan } from '../coreCli/qtCore';
-import { runCliResult } from '../coreCli/commandRunner';
+import { createActionPlan } from '../shared/qtCore';
+import { runCliResult } from '../shared/commandRunner';
 import { CliOptions } from '../cli/types';
 
 const server = new McpServer({

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { parseCliArgs, isHelpRequest, getHelpText } from './args';
 import { CliResult } from './types';
-import { createActionPlan } from '../coreCli/qtCore';
-import { runCliResult } from '../coreCli/commandRunner';
+import { createActionPlan } from '../shared/qtCore';
+import { runCliResult } from '../shared/commandRunner';
 import { executeSyncCli } from '../sync/syncCli';
 import * as path from 'path';
 

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getState, setState, onStateChange, BuildMode, Arch } from '../core/stateManager';
 import { getQmakeTarget } from '../core/configService';
-import { getEffectiveProjectName } from '../core/projectDisplay';
+import { getEffectiveProjectName } from '../project/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';
 
 // 3 个状态栏按钮

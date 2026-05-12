@@ -13,10 +13,11 @@ import { registerDebugSessionWatcher, startDebug } from './build/debugger';
 import { generateCppProperties } from './build/configGenerator';
 import { createLogger, initLogger } from './core/logger';
 import { detectEnv } from './env/envDetector';
-import { writeLocalCache, ensureLocalStateDir, LocalCache } from './coreCli/localState';
-import { scanProFiles } from './coreCli/projectScanner';
+import { writeLocalCache, ensureLocalStateDir, LocalCache } from './shared/localState';
+import { scanProFiles } from './shared/projectScanner';
 import { registerSyncWatcher, executeSyncChangedFiles, executeTestConnection } from './sync/syncWatcher';
 import { initSettingsStore } from './core/settingsStore';
+import { registerWorkspaceWatcher } from './core/workspaceResolver';
 
 const logger = createLogger('Extension');
 
@@ -24,6 +25,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const channel = initLogger();
     context.subscriptions.push(channel);
     logger.info('扩展激活');
+
+    // 注册 workspace folder 变化监听（多文件夹工作区切换时自动重置缓存）
+    registerWorkspaceWatcher(context);
 
     // 初始化配置存储（必须在其他模块使用配置之前）
     initSettingsStore(context);
