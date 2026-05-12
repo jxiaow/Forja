@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import * as path from 'path';
 import { BuildConfig } from '../platform/builder';
 import { getState } from './stateManager';
@@ -6,11 +5,12 @@ import { decodeSelectedProject } from './selectedProject';
 import { resolveBuildConfig, mergeConfigInputs } from '../coreCli/configResolver';
 import { readLocalCache, readLocalConfig } from '../coreCli/localState';
 import { getSetting, setSetting } from './settingsStore';
+import { resolveProjectRoot } from './workspaceResolver';
 
 // ── 配置读取 ──
 
 export function getWorkspaceRoot(): string {
-    return vscode.workspace.workspaceFolders?.[0].uri.fsPath ?? '';
+    return resolveProjectRoot();
 }
 
 export function getVsDevShellPath(): string {

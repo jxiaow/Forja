@@ -1,12 +1,12 @@
 /**
- * 自管理配置存储 — 替代 vscode.workspace.getConfiguration('qtPilot')
- * 配置文件位于 .qtpilot/settings.json
+ * 自管理配置存储 — 配置文件位于 .qtpilot/settings.json
  *
  * 纯 IO 逻辑在 settingsIO.ts 中，本模块负责 vscode 集成（workspace 路径、文件监听）。
  */
 import * as vscode from 'vscode';
 import { createLogger } from './logger';
 import { QtPilotSettings, DEFAULT_SETTINGS, loadSettings, saveSettings } from './settingsIO';
+import { resolveProjectRoot } from './workspaceResolver';
 
 export type { QtPilotSettings } from './settingsIO';
 export { DEFAULT_SETTINGS } from './settingsIO';
@@ -22,7 +22,8 @@ let _watcher: vscode.FileSystemWatcher | null = null;
 const _listeners: SettingsListener[] = [];
 
 function _getWorkspace(): string | null {
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+    const root = resolveProjectRoot();
+    return root || null;
 }
 
 function _load(): QtPilotSettings {
@@ -56,7 +57,7 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
         context.subscriptions.push(_watcher);
     }
 
-    logger.info('配置存储已初始化');
+    logger.info(`配置存储已初始化 (root: ${ws || 'none'})`);
 }
 
 function _reload(): void {

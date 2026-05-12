@@ -111,7 +111,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             version: this._version,
             ...(() => {
                 const wsRoot = getWorkspaceRoot();
-                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', remotePath: '', ignore: ['.git', 'node_modules', 'out', '.work', 'build', 'debug', 'release'] };
+                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', remotePath: '', ignore: ['.git', 'node_modules', 'out', '.qtpilot', 'build', 'debug', 'release'] };
                 const servers = readServers();
                 return {
                     syncEnabled: sync.enabled,

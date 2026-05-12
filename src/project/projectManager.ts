@@ -7,6 +7,7 @@ import { getEffectiveProjectName, getProjectSelectionLabel } from '../core/proje
 import { getQmakeTarget } from '../core/configService';
 import { getState } from '../core/stateManager';
 import { getSetting, setSetting } from '../core/settingsStore';
+import { setProjectRoot } from '../core/workspaceResolver';
 import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../coreCli/projectScanner';
 
 export interface ProjectInfo {
@@ -224,6 +225,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const fullPath = path.join(item.root, item.relative);
         const info = parseProFile(fullPath);
         info.projectDir = path.dirname(item.relative);
+        setProjectRoot(item.root);
         setSetting('selectedProject', encodeSelectedProject(item.root, item.relative));
         return info;
     }
@@ -239,6 +241,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
             const fullPath = path.join(item.root, item.relative);
             const info = parseProFile(fullPath);
             info.projectDir = path.dirname(item.relative);
+            setProjectRoot(item.root);
             setSetting('selectedProject', encodeSelectedProject(item.root, item.relative));
             return info;
         }

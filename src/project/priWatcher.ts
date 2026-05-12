@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getFileSyncPromptEnabled, getQmakeReminderEnabled } from '../core/configService';
+import { resolveProjectRoot } from '../core/workspaceResolver';
 
 // 找到文件所在目录最近的 .pri 或 .pro 文件
 function findPriOrPro(dir: string, root: string): string | null {
@@ -69,7 +70,7 @@ function removeFromPri(content: string, relPath: string): string {
 }
 
 export function registerPriWatcher(context: vscode.ExtensionContext): void {
-    const root = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+    const root = resolveProjectRoot();
     if (!root) return;
 
     const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.{cpp,h,ui}');
