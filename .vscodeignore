@@ -11,6 +11,7 @@ docs/**
 .opencode/**
 .superpowers/**
 .work/**
+.qtpilot/**
 **/tsconfig.json
 **/.eslintrc.json
 **/*.map
