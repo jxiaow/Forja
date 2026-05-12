@@ -516,7 +516,8 @@ details[open] .arrow { transform: rotate(90deg); }
     </div>
   </div>
 
-  <!-- Server selector -->
+  <!-- Server selector (only shown when sync enabled) -->
+  <div id="sync-config" style="{{syncConfigDisplay}}">
   <div class="card">
     <div class="card-header">
       <span class="card-title">服务器</span>
@@ -557,19 +558,15 @@ details[open] .arrow { transform: rotate(90deg); }
           <option value="password">密码</option>
         </select>
       </div>
-      <div id="newServerKeyPathField">
-        <div class="field">
-          <label>私钥路径</label>
-          <input id="newServerKeyPath" placeholder="留空使用 ~/.ssh/id_rsa" />
-        </div>
+      <div id="newServerKeyPathField" class="field">
+        <label>私钥路径</label>
+        <input id="newServerKeyPath" placeholder="留空使用 ~/.ssh/id_rsa" />
       </div>
-      <div id="newServerPasswordField" style="display:none">
-        <div class="field">
-          <label>密码</label>
-          <div class="input-row">
-            <input id="newServerPassword" type="password" placeholder="输入密码" />
-            <button class="btn btn-sm" onclick="togglePasswordVisibility()" id="togglePwdBtn">显示</button>
-          </div>
+      <div id="newServerPasswordField" class="field" style="display:none">
+        <label>密码</label>
+        <div class="input-row">
+          <input id="newServerPassword" type="password" placeholder="输入密码" />
+          <button class="btn btn-sm" onclick="togglePasswordVisibility()" id="togglePwdBtn">显示</button>
         </div>
       </div>
       <div class="field">
@@ -584,22 +581,21 @@ details[open] .arrow { transform: rotate(90deg); }
     </div>
   </div>
 
-  <!-- Project sync config -->
-  <div id="sync-config" style="{{syncConfigDisplay}}">
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">同步选项</span>
-        <span class="card-badge badge-muted">当前项目</span>
-      </div>
-      <div class="field">
-        <label>忽略目录</label>
-        <div class="tag-input" id="syncIgnoreWrap">
-          <input id="syncIgnoreInput" placeholder="输入目录名，回车添加" onkeydown="onTagKey(event, 'syncIgnore')" />
-        </div>
-        <div class="hint">回车添加，点击标签删除</div>
-      </div>
-      <button class="btn btn-primary btn-full" style="margin-top:10px;" onclick="syncChangedFiles()">同步变更文件</button>
+  <!-- Sync options -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">同步选项</span>
+      <span class="card-badge badge-muted">当前项目</span>
     </div>
+    <div class="field">
+      <label>忽略目录</label>
+      <div class="tag-input" id="syncIgnoreWrap">
+        <input id="syncIgnoreInput" placeholder="输入目录名，回车添加" onkeydown="onTagKey(event, 'syncIgnore')" />
+      </div>
+      <div class="hint">回车添加，点击标签删除</div>
+    </div>
+    <button class="btn btn-primary btn-full" style="margin-top:10px;" onclick="syncChangedFiles()">同步变更文件</button>
+  </div>
   </div>
 
 </div>
