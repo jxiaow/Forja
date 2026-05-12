@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getResolvedConfig, getServers, getSyncConfig, syncChangedFiles, testConnection, askPassword, clearPasswordCache, ServerConfig, writeSyncConfigForCli } from './sftpClient';
+import { getResolvedConfig, readServers, readProjectSyncConfig, syncChangedFiles, testConnection, askPassword, clearPasswordCache, ServerConfig } from './sftpClient';
 import { getWorkspaceRoot } from '../core/configService';
 import { createLogger } from '../core/logger';
 
@@ -8,50 +8,45 @@ const logger = createLogger('SyncManager');
 let _statusItem: vscode.StatusBarItem | null = null;
 
 export function registerSyncWatcher(context: vscode.ExtensionContext): void {
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration('qtPilot.remoteSync')) {
-                _refreshStatusBar();
-                // 同步配置变更时写入 CLI 可读的文件
-                const wsRoot = getWorkspaceRoot();
-                if (wsRoot) { writeSyncConfigForCli(wsRoot); }
-            }
-        })
-    );
+    // 定期检查配置变化刷新状态栏（文件系统配置不会触发 onDidChangeConfiguration）
+    const interval = setInterval(() => _refreshStatusBar(), 5000);
+    context.subscriptions.push(new vscode.Disposable(() => clearInterval(interval)));
 
     _refreshStatusBar();
-    // 启动时也写一次
-    const wsRoot = getWorkspaceRoot();
-    if (wsRoot) { writeSyncConfigForCli(wsRoot); }
 }
 
 function _refreshStatusBar(): void {
-    if (_statusItem) {
-        _statusItem.dispose();
-        _statusItem = null;
+    const wsRoot = getWorkspaceRoot();
+    const resolved = wsRoot ? getResolvedConfig(wsRoot) : null;
+
+    if (!resolved) {
+        if (_statusItem) {
+            _statusItem.dispose();
+            _statusItem = null;
+        }
+        return;
     }
 
-    const resolved = getResolvedConfig();
-    if (!resolved) { return; }
-
-    _statusItem = vscode.window.createStatusBarItem('qtPilot.sync', vscode.StatusBarAlignment.Left, 110);
-    _statusItem.name = 'Qt Pilot: Sync';
+    if (!_statusItem) {
+        _statusItem = vscode.window.createStatusBarItem('qtPilot.sync', vscode.StatusBarAlignment.Left, 110);
+        _statusItem.name = 'Qt Pilot: Sync';
+        _statusItem.command = 'qtPilot.syncChangedFiles';
+    }
     _statusItem.text = '$(cloud-upload)';
     _statusItem.tooltip = `Qt Pilot: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
-    _statusItem.command = 'qtPilot.syncChangedFiles';
     _statusItem.show();
 }
 
 export async function executeSyncChangedFiles(): Promise<void> {
-    const resolved = getResolvedConfig();
-    if (!resolved) {
-        vscode.window.showWarningMessage('请先在配置面板中选择服务器并设置远程路径');
-        return;
-    }
-
     const wsRoot = getWorkspaceRoot();
     if (!wsRoot) {
         vscode.window.showWarningMessage('无工作区');
+        return;
+    }
+
+    const resolved = getResolvedConfig(wsRoot);
+    if (!resolved) {
+        vscode.window.showWarningMessage('请先在配置面板中选择服务器并设置远程路径');
         return;
     }
 
@@ -85,19 +80,19 @@ export async function executeSyncChangedFiles(): Promise<void> {
 }
 
 export async function executeTestConnection(): Promise<void> {
-    const sync = getSyncConfig();
-    const servers = getServers();
+    const wsRoot = getWorkspaceRoot();
+    const project = wsRoot ? readProjectSyncConfig(wsRoot) : null;
+    const servers = readServers();
 
     let server: ServerConfig | undefined;
-    if (sync.selectedServer) {
-        server = servers.find(s => s.name === sync.selectedServer);
+    if (project?.selectedServer) {
+        server = servers.find(s => s.name === project.selectedServer);
     }
     if (!server) {
         if (servers.length === 0) {
             vscode.window.showWarningMessage('请先添加服务器');
             return;
         }
-        // 让用户选一个
         const pick = await vscode.window.showQuickPick(
             servers.map(s => ({ label: s.name, description: `${s.username}@${s.host}:${s.port}` })),
             { placeHolder: '选择要测试的服务器' }
@@ -109,7 +104,7 @@ export async function executeTestConnection(): Promise<void> {
 
     let password: string | null = null;
     if (server.authMode === 'password') {
-        password = await askPassword(server.host, server.username, server.name);
+        password = await askPassword(server);
         if (!password) { return; }
     }
 

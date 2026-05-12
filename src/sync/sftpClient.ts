@@ -3,26 +3,15 @@ import * as path from 'path';
 import * as cp from 'child_process';
 import { createLogger } from '../core/logger';
 import { filterNeedsSync, markSyncedBatch } from './syncState';
+import { readServers, readProjectSyncConfig, writeProjectSyncConfig, ServerConfig, ProjectSyncConfig, getServerByName } from './serverStore';
 
 const logger = createLogger('SftpClient');
 
-export type AuthMode = 'key' | 'password';
+export { ServerConfig, ProjectSyncConfig } from './serverStore';
+export { readServers, readProjectSyncConfig, writeProjectSyncConfig, getServerByName } from './serverStore';
+export { addServer, removeServer, writeServers, updateProjectSyncField } from './serverStore';
 
-export interface ServerConfig {
-    name: string;
-    host: string;
-    port: number;
-    username: string;
-    authMode: AuthMode;
-    privateKeyPath: string;
-}
-
-export interface SyncConfig {
-    enabled: boolean;
-    selectedServer: string;
-    remotePath: string;
-    ignore: string[];
-}
+// ── 解析配置 ──
 
 export interface ResolvedSyncConfig {
     server: ServerConfig;
@@ -30,107 +19,32 @@ export interface ResolvedSyncConfig {
     ignore: string[];
 }
 
-const DEFAULT_IGNORE = ['.git', 'node_modules', 'out', '.work', 'build', 'debug', 'release'];
-
-// ── 配置读取 ──
-
-export function getServers(): ServerConfig[] {
-    const cfg = vscode.workspace.getConfiguration('qtPilot.remoteSync');
-    const raw = cfg.get<any[]>('servers', []);
-    return raw.map(s => ({
-        name: s.name || '',
-        host: s.host || '',
-        port: s.port || 22,
-        username: s.username || '',
-        authMode: (s.authMode === 'password' ? 'password' : 'key') as AuthMode,
-        privateKeyPath: s.privateKeyPath || ''
-    })).filter(s => s.name && s.host);
-}
-
-export function getSyncConfig(): SyncConfig {
-    const cfg = vscode.workspace.getConfiguration('qtPilot.remoteSync');
-    return {
-        enabled: cfg.get<boolean>('enabled', false),
-        selectedServer: cfg.get<string>('selectedServer', ''),
-        remotePath: cfg.get<string>('remotePath', ''),
-        ignore: cfg.get<string[]>('ignore', DEFAULT_IGNORE)
-    };
-}
-
-export function getResolvedConfig(): ResolvedSyncConfig | null {
-    const sync = getSyncConfig();
-    if (!sync.enabled || !sync.selectedServer || !sync.remotePath) { return null; }
-    const servers = getServers();
-    const server = servers.find(s => s.name === sync.selectedServer);
+export function getResolvedConfig(workspaceRoot: string): ResolvedSyncConfig | null {
+    if (!workspaceRoot) { return null; }
+    const project = readProjectSyncConfig(workspaceRoot);
+    if (!project.enabled || !project.selectedServer || !project.remotePath) { return null; }
+    const server = getServerByName(project.selectedServer);
     if (!server) { return null; }
-    return { server, remotePath: sync.remotePath, ignore: sync.ignore };
+    return { server, remotePath: project.remotePath, ignore: project.ignore };
 }
 
-export async function updateServers(servers: ServerConfig[]): Promise<void> {
-    const cfg = vscode.workspace.getConfiguration('qtPilot.remoteSync');
-    await cfg.update('servers', servers, vscode.ConfigurationTarget.Global);
-}
-
-export async function updateSyncConfigWorkspace(key: string, value: unknown): Promise<void> {
-    const cfg = vscode.workspace.getConfiguration('qtPilot.remoteSync');
-    await cfg.update(key, value, vscode.ConfigurationTarget.Workspace);
-}
-
-/**
- * 将当前同步配置写入 .work/qt-pilot/sync-config.json 供 CLI 读取
- */
-export function writeSyncConfigForCli(workspaceRoot: string): void {
-    if (!workspaceRoot) { return; }
-    const fs = require('fs');
-    const path = require('path');
-    const servers = getServers();
-    const sync = getSyncConfig();
-    const data = {
-        servers: servers.map(s => ({
-            name: s.name,
-            host: s.host,
-            port: s.port,
-            username: s.username,
-            authMode: s.authMode,
-            privateKeyPath: s.privateKeyPath
-        })),
-        project: {
-            enabled: sync.enabled,
-            selectedServer: sync.selectedServer,
-            remotePath: sync.remotePath,
-            ignore: sync.ignore
-        }
-    };
-    const dir = path.join(workspaceRoot, '.work', 'qt-pilot');
-    const filePath = path.join(dir, 'sync-config.json');
-    try {
-        if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-    } catch {}
-}
-
-// ── 密码缓存（会话级） ──
+// ── 密码处理 ──
 
 const _passwordCache: Map<string, string> = new Map();
-let _secrets: import('vscode').SecretStorage | null = null;
 
-export function setSecretStorage(secrets: import('vscode').SecretStorage): void {
-    _secrets = secrets;
-}
+export async function askPassword(server: ServerConfig): Promise<string | null> {
+    const key = `${server.username}@${server.host}`;
 
-export async function askPassword(host: string, username: string, serverName?: string): Promise<string | null> {
-    const key = `${username}@${host}`;
+    // 缓存
     if (_passwordCache.has(key)) { return _passwordCache.get(key)!; }
 
-    // 尝试从 SecretStorage 读取
-    if (_secrets && serverName) {
-        const stored = await _secrets.get(`qtPilot.sync.password.${serverName}`);
-        if (stored) {
-            _passwordCache.set(key, stored);
-            return stored;
-        }
+    // 从 serverStore 读取（已解密）
+    if (server.password) {
+        _passwordCache.set(key, server.password);
+        return server.password;
     }
 
+    // 弹窗输入
     const pwd = await vscode.window.showInputBox({
         prompt: `输入 ${key} 的密码`,
         password: true,
@@ -278,7 +192,7 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
 
     let password: string | null = null;
     if (server.authMode === 'password') {
-        password = await askPassword(server.host, server.username, server.name);
+        password = await askPassword(server);
         if (!password) {
             throw new Error('未输入密码，取消同步');
         }

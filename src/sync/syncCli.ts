@@ -1,35 +1,11 @@
 /**
  * CLI-compatible sync module — no vscode dependency.
- * Reads sync config from .work/qt-pilot/sync-config.json
+ * Reads config from ~/.qt-pilot/servers.json and .work/qt-pilot/sync-config.json
  */
 import * as path from 'path';
-import * as fs from 'fs';
 import * as cp from 'child_process';
 import { filterNeedsSync, markSyncedBatch } from './syncState';
-
-export type AuthMode = 'key' | 'password';
-
-export interface CliServerConfig {
-    name: string;
-    host: string;
-    port: number;
-    username: string;
-    authMode: AuthMode;
-    privateKeyPath: string;
-    password?: string;
-}
-
-export interface CliSyncProjectConfig {
-    enabled: boolean;
-    selectedServer: string;
-    remotePath: string;
-    ignore: string[];
-}
-
-export interface CliSyncFullConfig {
-    servers: CliServerConfig[];
-    project: CliSyncProjectConfig;
-}
+import { readServers, readProjectSyncConfig, getServerByName, ServerConfig } from './serverStore';
 
 export interface SyncResult {
     ok: boolean;
@@ -38,33 +14,6 @@ export interface SyncResult {
     failed: { file: string; error: string }[];
     server: string;
     remotePath: string;
-}
-
-const DEFAULT_IGNORE = ['.git', 'node_modules', 'out', '.work', 'build', 'debug', 'release'];
-
-// ── 配置文件路径 ──
-
-function _configPath(workspaceRoot: string): string {
-    return path.join(workspaceRoot, '.work', 'qt-pilot', 'sync-config.json');
-}
-
-export function readSyncConfig(workspaceRoot: string): CliSyncFullConfig | null {
-    const filePath = _configPath(workspaceRoot);
-    try {
-        if (fs.existsSync(filePath)) {
-            return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-        }
-    } catch {}
-    return null;
-}
-
-export function writeSyncConfig(workspaceRoot: string, config: CliSyncFullConfig): void {
-    const filePath = _configPath(workspaceRoot);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf-8');
 }
 
 // ── Git diff ──
@@ -110,7 +59,7 @@ function isIgnored(relativePath: string, ignoreList: string[]): boolean {
 
 // ── SCP 上传 ──
 
-function scpUpload(server: CliServerConfig, localFile: string, remoteFile: string): Promise<void> {
+function scpUpload(server: ServerConfig, localFile: string, remoteFile: string): Promise<void> {
     return new Promise((resolve, reject) => {
         const baseArgs: string[] = [];
         if (server.authMode === 'key' && server.privateKeyPath) {
@@ -144,7 +93,7 @@ function scpUpload(server: CliServerConfig, localFile: string, remoteFile: strin
     });
 }
 
-function ensureRemoteDir(server: CliServerConfig, remoteDir: string): Promise<void> {
+function ensureRemoteDir(server: ServerConfig, remoteDir: string): Promise<void> {
     return new Promise((resolve) => {
         const sshArgs: string[] = [];
         if (server.authMode === 'key' && server.privateKeyPath) {
@@ -175,20 +124,15 @@ function ensureRemoteDir(server: CliServerConfig, remoteDir: string): Promise<vo
 // ── 主入口 ──
 
 export async function executeSyncCli(workspaceRoot: string, serverName?: string): Promise<SyncResult> {
-    const config = readSyncConfig(workspaceRoot);
-    if (!config) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未找到同步配置，请先在 VSCode 扩展中配置或创建 .work/qt-pilot/sync-config.json' }], server: '', remotePath: '' };
-    }
-
-    const { servers, project } = config;
+    const project = readProjectSyncConfig(workspaceRoot);
     if (!project.enabled) {
         return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '远程同步未启用' }], server: '', remotePath: '' };
     }
 
     const targetName = serverName || project.selectedServer;
-    const server = servers.find(s => s.name === targetName);
+    const server = getServerByName(targetName);
     if (!server) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetName}" 未找到` }], server: targetName, remotePath: '' };
+        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetName}" 未找到，请检查 ~/.qt-pilot/servers.json` }], server: targetName, remotePath: '' };
     }
 
     if (!project.remotePath) {
@@ -200,7 +144,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string)
     const changedFiles = await getGitChangedFiles(workspaceRoot);
     if (changedFiles.length === 0) { return result; }
 
-    const ignore = project.ignore || DEFAULT_IGNORE;
+    const ignore = project.ignore;
     const notIgnored: string[] = [];
     for (const f of changedFiles) {
         if (isIgnored(f, ignore)) { result.skipped.push(f); }

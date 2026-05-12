@@ -5,7 +5,7 @@ import { getState, setState } from '../../core/stateManager';
 import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget } from '../../core/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../core/projectDisplay';
-import { updateSyncConfigWorkspace, getServers, updateServers, ServerConfig } from '../../sync/sftpClient';
+import { updateProjectSyncField, addServer, removeServer, readServers, ServerConfig } from '../../sync/sftpClient';
 import { executeSyncChangedFiles, executeTestConnection } from '../../sync/syncWatcher';
 
 const logger = createLogger('ConfigPanel');
@@ -14,8 +14,7 @@ export async function handleMessage(
     msg: any,
     webview: vscode.Webview,
     pushEnvUpdate: () => void,
-    updateHtml: () => void,
-    secrets: vscode.SecretStorage
+    updateHtml: () => void
 ): Promise<void> {
     logger.info(`收到消息: ${msg.command}`);
 
@@ -139,59 +138,57 @@ export async function handleMessage(
         }
         case 'saveSyncEnabled': {
             logger.info(`保存远程同步开关: ${!!msg.value}`);
-            await updateSyncConfigWorkspace('enabled', !!msg.value);
+            const { getWorkspaceRoot: getWsRoot } = require('../../core/configService');
+            const ws1 = getWsRoot();
+            if (ws1) { updateProjectSyncField(ws1, 'enabled', !!msg.value); }
             break;
         }
         case 'saveSyncSelectedServer': {
             logger.info(`选择服务器: "${msg.value}"`);
-            await updateSyncConfigWorkspace('selectedServer', msg.value || '');
+            const { getWorkspaceRoot: getWsRoot2 } = require('../../core/configService');
+            const ws2 = getWsRoot2();
+            if (ws2) { updateProjectSyncField(ws2, 'selectedServer', msg.value || ''); }
             break;
         }
         case 'saveSyncRemotePath': {
             logger.info(`保存远程路径: "${msg.value}"`);
-            await updateSyncConfigWorkspace('remotePath', msg.value || '');
+            const { getWorkspaceRoot: getWsRoot3 } = require('../../core/configService');
+            const ws3 = getWsRoot3();
+            if (ws3) { updateProjectSyncField(ws3, 'remotePath', msg.value || ''); }
             break;
         }
         case 'saveSyncIgnore': {
             logger.info(`保存同步忽略列表: ${JSON.stringify(msg.value)}`);
-            await updateSyncConfigWorkspace('ignore', msg.value || []);
+            const { getWorkspaceRoot: getWsRoot4 } = require('../../core/configService');
+            const ws4 = getWsRoot4();
+            if (ws4) { updateProjectSyncField(ws4, 'ignore', msg.value || []); }
             break;
         }
         case 'addServer': {
-            logger.info(`添加服务器: ${JSON.stringify(msg.server)}`);
-            const servers = getServers();
+            logger.info(`添加服务器: ${msg.server?.name}`);
             const newServer: ServerConfig = {
                 name: msg.server.name || '',
                 host: msg.server.host || '',
                 port: msg.server.port || 22,
                 username: msg.server.username || '',
                 authMode: msg.server.authMode || 'key',
-                privateKeyPath: msg.server.privateKeyPath || ''
+                privateKeyPath: msg.server.privateKeyPath || '',
+                password: msg.server.password || ''
             };
             if (!newServer.name || !newServer.host || !newServer.username) {
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
                 break;
             }
-            if (servers.some(s => s.name === newServer.name)) {
+            const added = addServer(newServer);
+            if (!added) {
                 vscode.window.showWarningMessage(`服务器 "${newServer.name}" 已存在`);
-                break;
             }
-            // 存储密码到 SecretStorage
-            if (newServer.authMode === 'password' && msg.server.password) {
-                await secrets.store(`qtPilot.sync.password.${newServer.name}`, msg.server.password);
-            }
-            servers.push(newServer);
-            await updateServers(servers);
             updateHtml();
             break;
         }
         case 'removeServer': {
             logger.info(`删除服务器: "${msg.name}"`);
-            const currentServers = getServers();
-            const filtered = currentServers.filter(s => s.name !== msg.name);
-            await updateServers(filtered);
-            // 清除密码
-            await secrets.delete(`qtPilot.sync.password.${msg.name}`);
+            removeServer(msg.name);
             updateHtml();
             break;
         }
@@ -202,9 +199,10 @@ export async function handleMessage(
         }
         case 'viewPassword': {
             logger.info(`查看密码: "${msg.name}"`);
-            const pwd = await secrets.get(`qtPilot.sync.password.${msg.name}`);
-            if (pwd) {
-                webview.postMessage({ command: 'showPassword', password: pwd });
+            const servers = readServers();
+            const srv = servers.find(s => s.name === msg.name);
+            if (srv && srv.password) {
+                webview.postMessage({ command: 'showPassword', password: srv.password });
             } else {
                 vscode.window.showInformationMessage('该服务器未保存密码（可能使用密钥认证）');
             }
