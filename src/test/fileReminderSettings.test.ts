@@ -27,7 +27,6 @@ function createTemplateData(): TemplateData {
         syncEnabled: false,
         syncSelectedServer: '',
         syncServers: [],
-        syncRemotePath: '',
         syncIgnore: '.git, node_modules, out'
     };
 }

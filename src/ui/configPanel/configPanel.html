@@ -573,6 +573,11 @@ details[open] .arrow { transform: rotate(90deg); }
           </div>
         </div>
       </div>
+      <div class="field">
+        <label>远程根路径</label>
+        <input id="newServerRemotePath" placeholder="/home/user/project" />
+        <div class="hint">多文件夹工作区时，同步到 根路径/文件夹名</div>
+      </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button class="btn btn-primary" style="flex:1;" id="btnServerAction" onclick="submitServer()">添加</button>
         <button class="btn" style="flex:1; display:none;" id="btnDeleteServer" onclick="removeSelectedServer()">删除</button>
@@ -584,13 +589,8 @@ details[open] .arrow { transform: rotate(90deg); }
   <div id="sync-config" style="{{syncConfigDisplay}}">
     <div class="card">
       <div class="card-header">
-        <span class="card-title">项目路径</span>
+        <span class="card-title">同步选项</span>
         <span class="card-badge badge-muted">当前项目</span>
-      </div>
-      <div class="field">
-        <label>远程根路径</label>
-        <input id="syncRemotePath" value="{{syncRemotePath}}" placeholder="/home/user/project" onblur="saveSyncRemotePath()" />
-        <div class="hint">多文件夹工作区时，每个文件夹同步到 根路径/文件夹名</div>
       </div>
       <div class="field">
         <label>忽略目录</label>
@@ -599,6 +599,7 @@ details[open] .arrow { transform: rotate(90deg); }
         </div>
         <div class="hint">回车添加，点击标签删除</div>
       </div>
+      <button class="btn btn-primary btn-full" style="margin-top:10px;" onclick="syncChangedFiles()">同步变更文件</button>
     </div>
   </div>
 
@@ -686,7 +687,6 @@ function saveSyncSelectedServer() {
     vscode.postMessage({ command: 'saveSyncSelectedServer', value: val });
   }
 }
-function saveSyncRemotePath() { vscode.postMessage({ command: 'saveSyncRemotePath', value: document.getElementById('syncRemotePath').value }); }
 function saveSyncIgnore() {
   const tags = Array.from(document.querySelectorAll('#syncIgnoreWrap .tag-item')).map(el => el.dataset.value);
   vscode.postMessage({ command: 'saveSyncIgnore', value: tags });
@@ -723,6 +723,7 @@ function _showAddMode() {
   document.getElementById('newServerAuthMode').value = 'key';
   document.getElementById('newServerKeyPath').value = '';
   document.getElementById('newServerPassword').value = '';
+  document.getElementById('newServerRemotePath').value = '';
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '添加';
   document.getElementById('btnDeleteServer').style.display = 'none';
@@ -740,6 +741,7 @@ function _showEditMode(id) {
   document.getElementById('newServerAuthMode').value = s.authMode || 'key';
   document.getElementById('newServerKeyPath').value = s.privateKeyPath || '';
   document.getElementById('newServerPassword').value = s.password || '';
+  document.getElementById('newServerRemotePath').value = s.remotePath || '';
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '保存修改';
   document.getElementById('btnDeleteServer').style.display = '';
@@ -755,7 +757,8 @@ function submitServer() {
     username: document.getElementById('newServerUsername').value.trim(),
     authMode: document.getElementById('newServerAuthMode').value,
     privateKeyPath: document.getElementById('newServerKeyPath').value.trim(),
-    password: document.getElementById('newServerPassword').value
+    password: document.getElementById('newServerPassword').value,
+    remotePath: document.getElementById('newServerRemotePath').value.trim()
   };
   if (!server.name || !server.host || !server.username) { return; }
   if (isAdd) {

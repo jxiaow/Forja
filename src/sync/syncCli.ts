@@ -135,11 +135,12 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string)
         return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetName}" 未找到，请检查 ~/.qt-pilot/servers.json` }], server: targetName, remotePath: '' };
     }
 
-    if (!project.remotePath) {
+    if (!server.remotePath) {
         return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未配置远程路径' }], server: server.name, remotePath: '' };
     }
 
-    const result: SyncResult = { ok: true, uploaded: [], skipped: [], failed: [], server: server.name, remotePath: project.remotePath };
+    const remotePath = server.remotePath;
+    const result: SyncResult = { ok: true, uploaded: [], skipped: [], failed: [], server: server.name, remotePath };
 
     const changedFiles = await getGitChangedFiles(workspaceRoot);
     if (changedFiles.length === 0) { return result; }
@@ -161,7 +162,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string)
 
     for (const relativePath of needSync) {
         const localFile = path.join(workspaceRoot, relativePath);
-        const remoteFile = project.remotePath.replace(/\/$/, '') + '/' + relativePath.replace(/\\/g, '/');
+        const remoteFile = remotePath.replace(/\/$/, '') + '/' + relativePath.replace(/\\/g, '/');
         const remoteDir = path.posix.dirname(remoteFile);
 
         if (!remoteDirs.has(remoteDir)) {

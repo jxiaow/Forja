@@ -19,13 +19,13 @@ export interface ServerConfig {
     username: string;
     authMode: AuthMode;
     privateKeyPath: string;
-    password: string; // 加密存储
+    password: string;
+    remotePath: string;
 }
 
 export interface ProjectSyncConfig {
     enabled: boolean;
     selectedServer: string; // server id
-    remotePath: string;
     ignore: string[];
 }
 
@@ -57,7 +57,8 @@ interface StoredServer {
     username: string;
     authMode: AuthMode;
     privateKeyPath: string;
-    password?: string; // 加密后的字符串
+    password?: string;
+    remotePath?: string;
 }
 
 export function readServers(): ServerConfig[] {
@@ -76,7 +77,8 @@ export function readServers(): ServerConfig[] {
                     username: s.username || '',
                     authMode: (s.authMode === 'password' ? 'password' : 'key') as AuthMode,
                     privateKeyPath: s.privateKeyPath || '',
-                    password: s.password || ''
+                    password: s.password || '',
+                    remotePath: s.remotePath || ''
                 };
             });
             if (needsMigration) { writeServers(servers); }
@@ -99,7 +101,8 @@ export function writeServers(servers: ServerConfig[]): void {
         username: s.username,
         authMode: s.authMode,
         privateKeyPath: s.privateKeyPath,
-        password: s.password || undefined
+        password: s.password || undefined,
+        remotePath: s.remotePath || undefined
     }));
     fs.writeFileSync(_serversFilePath(), JSON.stringify(stored, null, 2), 'utf-8');
 }
@@ -149,12 +152,11 @@ export function readProjectSyncConfig(workspaceRoot: string): ProjectSyncConfig 
             return {
                 enabled: !!raw.enabled,
                 selectedServer: raw.selectedServer || '',
-                remotePath: raw.remotePath || '',
                 ignore: Array.isArray(raw.ignore) ? raw.ignore : DEFAULT_IGNORE
             };
         }
     } catch {}
-    return { enabled: false, selectedServer: '', remotePath: '', ignore: DEFAULT_IGNORE };
+    return { enabled: false, selectedServer: '', ignore: DEFAULT_IGNORE };
 }
 
 export function writeProjectSyncConfig(workspaceRoot: string, config: ProjectSyncConfig): void {

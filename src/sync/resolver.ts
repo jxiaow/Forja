@@ -12,9 +12,9 @@ export interface ResolvedSyncConfig {
 export function getResolvedConfig(workspaceRoot: string): ResolvedSyncConfig | null {
     if (!workspaceRoot) { return null; }
     const project = readProjectSyncConfig(workspaceRoot);
-    if (!project.enabled || !project.selectedServer || !project.remotePath) { return null; }
+    if (!project.enabled || !project.selectedServer) { return null; }
     // 优先按 id 查找，兼容旧配置按 name 查找
     const server = getServerById(project.selectedServer) || getServerByName(project.selectedServer);
-    if (!server) { return null; }
-    return { server, remotePath: project.remotePath, ignore: project.ignore };
+    if (!server || !server.remotePath) { return null; }
+    return { server, remotePath: server.remotePath, ignore: project.ignore };
 }

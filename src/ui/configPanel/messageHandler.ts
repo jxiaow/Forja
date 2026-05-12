@@ -148,12 +148,6 @@ export async function handleMessage(
             if (ws2) { updateProjectSyncField(ws2, 'selectedServer', msg.value || ''); }
             break;
         }
-        case 'saveSyncRemotePath': {
-            logger.info(`保存远程路径: "${msg.value}"`);
-            const ws3 = getWorkspaceRoot();
-            if (ws3) { updateProjectSyncField(ws3, 'remotePath', msg.value || ''); }
-            break;
-        }
         case 'saveSyncIgnore': {
             logger.info(`保存同步忽略列表: ${JSON.stringify(msg.value)}`);
             const ws4 = getWorkspaceRoot();
@@ -169,7 +163,8 @@ export async function handleMessage(
                 username: msg.server.username || '',
                 authMode: (msg.server.authMode || 'key') as 'key' | 'password',
                 privateKeyPath: msg.server.privateKeyPath || '',
-                password: msg.server.password || ''
+                password: msg.server.password || '',
+                remotePath: msg.server.remotePath || ''
             };
             if (!newServerData.name || !newServerData.host || !newServerData.username) {
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
@@ -195,7 +190,8 @@ export async function handleMessage(
                 username: msg.server.username || '',
                 authMode: (msg.server.authMode || 'key') as 'key' | 'password',
                 privateKeyPath: msg.server.privateKeyPath || '',
-                password: msg.server.password || ''
+                password: msg.server.password || '',
+                remotePath: msg.server.remotePath || ''
             };
             if (!updates.name || !updates.host || !updates.username) {
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
@@ -258,7 +254,8 @@ function _pushServerList(webview: vscode.Webview, selectId?: string): void {
             username: s.username,
             authMode: s.authMode,
             privateKeyPath: s.privateKeyPath,
-            password: s.password
+            password: s.password,
+            remotePath: s.remotePath
         })),
         select: selectId || ''
     });

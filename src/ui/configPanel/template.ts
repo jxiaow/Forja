@@ -25,8 +25,7 @@ export interface TemplateData {
     version: string;
     syncEnabled: boolean;
     syncSelectedServer: string;
-    syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string }[];
-    syncRemotePath: string;
+    syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string; remotePath: string }[];
     syncIgnore: string;
 }
 
@@ -137,7 +136,7 @@ export function getHtml(data: TemplateData): string {
         chkFileSyncPrompt: data.fileSyncPromptEnabled ? 'checked' : '',
         chkQmakeReminder: data.qmakeReminderEnabled ? 'checked' : '',
         version: _escapeHtml(data.version),
-        dotSyncClass: data.syncEnabled && data.syncSelectedServer && data.syncRemotePath ? 'dot-ok' : (data.syncEnabled ? 'dot-warn' : 'dot-detecting'),
+        dotSyncClass: data.syncEnabled && data.syncSelectedServer ? 'dot-ok' : (data.syncEnabled ? 'dot-warn' : 'dot-detecting'),
         syncStatus: data.syncEnabled ? (data.syncSelectedServer ? '已启用' : '未配置') : '未启用',
         chkSyncEnabled: data.syncEnabled ? 'checked' : '',
         syncConfigDisplay: data.syncEnabled ? '' : 'display:none',
@@ -145,7 +144,6 @@ export function getHtml(data: TemplateData): string {
             .map(s => `<option value="${_escapeHtml(s.id)}" ${s.id === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
             .join(''),
         syncServerData: JSON.stringify(data.syncServers).replace(/\\/g, '\\\\').replace(/'/g, "\\'"),
-        syncRemotePath: _escapeHtml(data.syncRemotePath),
         syncIgnore: _escapeHtml(data.syncIgnore),
     };
 
