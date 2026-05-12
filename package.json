@@ -110,7 +110,7 @@
     "copy-html": "powershell -Command \"Copy-Item -Path src/ui/configPanel/configPanel.html -Destination out/ui/configPanel/ -Force\"",
     "compile": "tsc -p ./ && npm run copy-html",
     "watch": "tsc -watch -p ./",
-    "test": "npm run compile && node --test out/test",
+    "test": "npm run compile && node --test --test-reporter=spec out/test",
     "build:cli": "npm run compile && node scripts/build-cli.js",
     "package": "npm run compile && vsce package --allow-missing-repository -o dist/",
     "package:cli": "npm run build:cli && cd cli && npm pack --pack-destination ../dist",

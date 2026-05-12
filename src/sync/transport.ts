@@ -82,8 +82,13 @@ export function ensureRemoteDir(server: ServerConfig, remoteDir: string, passwor
     });
 }
 
+export interface TestConnectionResult {
+    ok: boolean;
+    error?: string;
+}
+
 /** 测试 SSH 连接 */
-export function testConnection(server: ServerConfig, password: string | null): Promise<boolean> {
+export function testConnection(server: ServerConfig, password: string | null): Promise<TestConnectionResult> {
     return new Promise((resolve) => {
         const sshArgs: string[] = [];
         if (server.authMode === 'key' && server.privateKeyPath) {
@@ -102,16 +107,26 @@ export function testConnection(server: ServerConfig, password: string | null): P
             const args = ['-p', password, 'ssh', ...sshArgs, target, 'echo ok'];
             const proc = cp.spawn('sshpass', args, { windowsHide: true });
             let stdout = '';
+            let stderr = '';
             proc.stdout.on('data', (d) => { stdout += d.toString(); });
-            proc.on('close', (code) => { resolve(code === 0 && stdout.trim() === 'ok'); });
-            proc.on('error', () => resolve(false));
+            proc.stderr.on('data', (d) => { stderr += d.toString(); });
+            proc.on('close', (code) => {
+                if (code === 0 && stdout.trim() === 'ok') { resolve({ ok: true }); }
+                else { resolve({ ok: false, error: stderr.trim() || `exit code ${code}` }); }
+            });
+            proc.on('error', (e) => resolve({ ok: false, error: e.message }));
         } else {
             const args = [...sshArgs, target, 'echo ok'];
             const proc = cp.spawn('ssh', args, { windowsHide: true });
             let stdout = '';
+            let stderr = '';
             proc.stdout.on('data', (d) => { stdout += d.toString(); });
-            proc.on('close', (code) => { resolve(code === 0 && stdout.trim() === 'ok'); });
-            proc.on('error', () => resolve(false));
+            proc.stderr.on('data', (d) => { stderr += d.toString(); });
+            proc.on('close', (code) => {
+                if (code === 0 && stdout.trim() === 'ok') { resolve({ ok: true }); }
+                else { resolve({ ok: false, error: stderr.trim() || `exit code ${code}` }); }
+            });
+            proc.on('error', (e) => resolve({ ok: false, error: e.message }));
         }
     });
 }

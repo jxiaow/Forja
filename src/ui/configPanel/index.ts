@@ -26,6 +26,13 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         this._updateHtml();
     }
 
+    switchTab(tab: string): void {
+        if (this._view) {
+            this._view.show?.(true);
+            this._view.webview.postMessage({ command: 'switchTab', tab });
+        }
+    }
+
     resolveWebviewView(webviewView: vscode.WebviewView): void {
         logger.info('resolveWebviewView() called');
         this._view = webviewView;

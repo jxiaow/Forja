@@ -12,6 +12,7 @@ body {
   background: var(--vscode-sideBar-background);
   line-height: 1.5;
   color-scheme: var(--vscode-color-scheme, dark);
+  overflow-x: hidden;
 }
 /* ── Tabs ── */
 .tab-bar {
@@ -40,7 +41,7 @@ body {
   color: var(--vscode-foreground);
   border-bottom-color: var(--vscode-focusBorder);
 }
-.tab-panel { display: none; padding: 12px; }
+.tab-panel { display: none; padding: 12px; min-width: 0; overflow: hidden; }
 .tab-panel.active { display: block; }
 
 /* ── Cards ── */
@@ -50,6 +51,7 @@ body {
   border-radius: 8px;
   padding: 14px;
   margin-bottom: 12px;
+  overflow: hidden;
 }
 .card:last-child { margin-bottom: 0; }
 .card-header {
@@ -91,19 +93,21 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 16px 14px;
   background: var(--vscode-editor-background);
   border: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
   border-radius: 8px;
   margin-bottom: 12px;
+  overflow: hidden;
 }
-.project-hero-name { font-size: 15px; font-weight: 600; }
+.project-hero-name { font-size: 15px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Form elements ── */
 .field { margin-bottom: 10px; }
 .field:last-child { margin-bottom: 0; }
-.field-row { display: flex; gap: 8px; margin-bottom: 10px; }
-.field-row .field { flex: 1; margin-bottom: 0; }
+.field-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.field-row .field { flex: 1; min-width: 0; margin-bottom: 0; }
 label { display: block; font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; }
 input, select, textarea {
   width: 100%;
@@ -169,8 +173,8 @@ select {
   padding-right: 28px;
 }
 select option { background: var(--vscode-dropdown-background, var(--vscode-input-background)); color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground)); }
-.input-row { display: flex; gap: 6px; }
-.input-row input { flex: 1; }
+.input-row { display: flex; gap: 6px; min-width: 0; }
+.input-row input { flex: 1; min-width: 0; }
 .hint { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 3px; }
 
 /* ── Buttons ── */
@@ -184,6 +188,7 @@ select option { background: var(--vscode-dropdown-background, var(--vscode-input
   cursor: pointer;
   transition: background 0.15s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
 .btn-primary {
@@ -741,7 +746,9 @@ function setText(id, text) { const el = document.getElementById(id); if (el) { e
 // ── Message listener ──
 window.addEventListener('message', e => {
   const d = e.data;
-  if (d.command === 'setPath') {
+  if (d.command === 'switchTab') {
+    switchTab(d.tab);
+  } else if (d.command === 'setPath') {
     document.getElementById(d.targetId).value = d.value;
     if (d.targetId === 'vsDevShellPath') { saveVsPath(); }
     else if (d.targetId === 'qtPath') { saveQtPath(); }
@@ -775,6 +782,13 @@ window.addEventListener('message', e => {
     reveal.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:10px 12px;background:var(--vscode-editor-background);border-bottom:1px solid var(--vscode-panel-border);z-index:100;font-size:13px;display:flex;align-items:center;gap:8px;';
     reveal.innerHTML = '<span style="flex:1;word-break:break-all;font-family:monospace;">' + d.password.replace(/</g,'&lt;') + '</span><button class="btn btn-sm" onclick="this.parentElement.remove()">关闭</button>';
     document.body.prepend(reveal);
+  } else if (d.command === 'serversUpdated') {
+    const select = document.getElementById('syncServerSelect');
+    const prev = d.select || select.value;
+    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    select.innerHTML = '<option value="">-- 选择服务器 --</option>' +
+      d.servers.map(s => '<option value="' + esc(s.name) + '">' + esc(s.name) + ' (' + esc(s.username) + '@' + esc(s.host) + ')</option>').join('');
+    if (d.servers.some(s => s.name === prev)) { select.value = prev; }
   }
 });
 

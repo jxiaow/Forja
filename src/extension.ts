@@ -39,6 +39,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(ConfigPanel.viewId, panel)
     );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('qtPilot.showSyncTab', () => panel.switchTab('sync'))
+    );
 
     registerPriWatcher(context);
     registerDebugSessionWatcher(context);

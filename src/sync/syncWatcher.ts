@@ -37,23 +37,33 @@ export function registerSyncWatcher(context: vscode.ExtensionContext): void {
 
 function _refreshStatusBar(): void {
     const wsRoot = getWorkspaceRoot();
-    const resolved = wsRoot ? getResolvedConfig(wsRoot) : null;
+    if (!wsRoot) {
+        if (_statusItem) { _statusItem.dispose(); _statusItem = null; }
+        return;
+    }
 
-    if (!resolved) {
-        if (_statusItem) {
-            _statusItem.dispose();
-            _statusItem = null;
-        }
+    const project = readProjectSyncConfig(wsRoot);
+
+    if (!project.enabled) {
+        if (_statusItem) { _statusItem.dispose(); _statusItem = null; }
         return;
     }
 
     if (!_statusItem) {
         _statusItem = vscode.window.createStatusBarItem('qtPilot.sync', vscode.StatusBarAlignment.Left, 110);
         _statusItem.name = 'Qt Pilot: Sync';
-        _statusItem.command = 'qtPilot.syncChangedFiles';
     }
-    _statusItem.text = '$(cloud-upload)';
-    _statusItem.tooltip = `Qt Pilot: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
+
+    const resolved = getResolvedConfig(wsRoot);
+    if (resolved) {
+        _statusItem.text = '$(cloud-upload)';
+        _statusItem.tooltip = `Qt Pilot: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
+        _statusItem.command = 'qtPilot.syncChangedFiles';
+    } else {
+        _statusItem.text = '$(cloud) 同步未就绪';
+        _statusItem.tooltip = 'Qt Pilot: 同步已启用，请选择服务器并设置远程路径';
+        _statusItem.command = 'qtPilot.showSyncTab';
+    }
     _statusItem.show();
 }
 
@@ -133,12 +143,14 @@ export async function executeTestConnection(): Promise<void> {
         title: `正在测试连接 ${server.name}...`,
         cancellable: false
     }, async () => {
-        const ok = await testConnection(server!, password);
-        if (ok) {
+        const result = await testConnection(server!, password);
+        if (result.ok) {
+            logger.info(`连接成功: ${server!.name} (${server!.username}@${server!.host})`);
             vscode.window.showInformationMessage(`连接成功: ${server!.name} (${server!.username}@${server!.host})`);
         } else {
             clearPasswordCache();
-            vscode.window.showErrorMessage(`连接失败: ${server!.name} (${server!.username}@${server!.host}:${server!.port})`);
+            logger.error(`连接失败: ${server!.name} (${server!.username}@${server!.host}:${server!.port}) - ${result.error}`);
+            vscode.window.showErrorMessage(`连接失败: ${server!.name} — ${result.error || '未知错误'}`);
         }
     });
 }

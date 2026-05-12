@@ -178,14 +178,15 @@ export async function handleMessage(
             const added = addServer(newServer);
             if (!added) {
                 vscode.window.showWarningMessage(`服务器 "${newServer.name}" 已存在`);
+                break;
             }
-            updateHtml();
+            _pushServerList(webview, newServer.name);
             break;
         }
         case 'removeServer': {
             logger.info(`删除服务器: "${msg.name}"`);
             removeServer(msg.name);
-            updateHtml();
+            _pushServerList(webview);
             break;
         }
         case 'testSyncConnection': {
@@ -217,4 +218,13 @@ export async function handleMessage(
             break;
         }
     }
+}
+
+function _pushServerList(webview: vscode.Webview, selectName?: string): void {
+    const servers = readServers();
+    webview.postMessage({
+        command: 'serversUpdated',
+        servers: servers.map(s => ({ name: s.name, host: s.host, username: s.username })),
+        select: selectName || ''
+    });
 }

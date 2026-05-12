@@ -20,7 +20,7 @@ export { ServerConfig, ProjectSyncConfig } from './serverStore';
 export { readServers, readProjectSyncConfig, writeProjectSyncConfig, getServerByName } from './serverStore';
 export { addServer, removeServer, writeServers, updateProjectSyncField } from './serverStore';
 export { ResolvedSyncConfig, getResolvedConfig } from './resolver';
-export { testConnection } from './transport';
+export { testConnection, TestConnectionResult } from './transport';
 
 // ── 密码处理 ──
 
