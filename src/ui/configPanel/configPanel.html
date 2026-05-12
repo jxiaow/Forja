@@ -13,12 +13,15 @@ body {
   line-height: 1.5;
   color-scheme: var(--vscode-color-scheme, dark);
   overflow-x: hidden;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 /* ── Sections (accordion) ── */
 .section-header {
   display: flex;
   align-items: center;
-  padding: 10px 14px;
+  padding: 8px 10px;
+  margin: 0 10px;
   background: var(--vscode-sideBarSectionHeader-background, var(--vscode-editor-background));
   border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
   cursor: pointer;
@@ -44,7 +47,7 @@ body {
   color: var(--vscode-descriptionForeground);
 }
 .section-header.collapsed .section-arrow { transform: rotate(-90deg); }
-.section-body { padding: 12px 14px; min-width: 0; overflow: hidden; }
+.section-body { padding: 8px 10px; min-width: 0; overflow: hidden; }
 .section-header.collapsed + .section-body { display: none; }
 
 /* ── Cards ── */
