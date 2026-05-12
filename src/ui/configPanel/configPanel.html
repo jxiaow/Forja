@@ -105,7 +105,7 @@ body {
 .field-row { display: flex; gap: 8px; margin-bottom: 10px; }
 .field-row .field { flex: 1; margin-bottom: 0; }
 label { display: block; font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; }
-input, select {
+input, select, textarea {
   width: 100%;
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
@@ -117,7 +117,8 @@ input, select {
   outline: none;
   transition: border-color 0.15s;
 }
-input:focus, select:focus { border-color: var(--vscode-focusBorder); }
+textarea { resize: vertical; line-height: 1.6; }
+input:focus, select:focus, textarea:focus { border-color: var(--vscode-focusBorder); }
 input::placeholder { color: var(--vscode-input-placeholderForeground); }
 select {
   color-scheme: var(--vscode-color-scheme, dark);
@@ -338,8 +339,8 @@ details[open] .arrow { transform: rotate(90deg); }
     </div>
     <div class="field">
       <label>排除目录</label>
-      <input id="scanExcludeDirs" value="{{scanExcludeDirs}}" placeholder="thirdparty, vendor" onblur="saveExcludeDirs()" />
-      <div class="hint">仅影响 IntelliSense 扫描；已内置排除 build*, debug, release</div>
+      <textarea id="scanExcludeDirs" rows="3" placeholder="thirdparty&#10;vendor" onblur="saveExcludeDirs()">{{scanExcludeDirsLines}}</textarea>
+      <div class="hint">每行一个；仅影响 IntelliSense 扫描；已内置排除 build*, debug, release</div>
     </div>
     <button class="btn btn-primary btn-full" style="margin-top:10px;" onclick="generateIntelliSense()">生成 IntelliSense 配置</button>
 
@@ -551,8 +552,8 @@ details[open] .arrow { transform: rotate(90deg); }
       </div>
       <div class="field">
         <label>忽略目录</label>
-        <input id="syncIgnore" value="{{syncIgnore}}" placeholder=".git, node_modules, out" onblur="saveSyncIgnore()" />
-        <div class="hint">逗号分隔</div>
+        <textarea id="syncIgnore" rows="4" placeholder=".git&#10;node_modules&#10;out" onblur="saveSyncIgnore()">{{syncIgnoreLines}}</textarea>
+        <div class="hint">每行一个目录</div>
       </div>
       <button class="btn btn-primary btn-full" style="margin-top:10px;" onclick="syncChangedFiles()">同步变更文件</button>
     </div>
@@ -608,7 +609,7 @@ function saveQtSourcePath() { vscode.postMessage({ command: 'saveQtSourcePath', 
 function saveStandard() { vscode.postMessage({ command: 'saveStandard', cStandard: document.getElementById('cStandard').value, cppStandard: document.getElementById('cppStandard').value }); }
 function saveExcludeDirs() {
   const val = document.getElementById('scanExcludeDirs').value;
-  const dirs = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  const dirs = val.split('\n').map(s => s.trim()).filter(s => s.length > 0);
   vscode.postMessage({ command: 'saveExcludeDirs', dirs });
 }
 let lastSavedQmakeTarget = null;
@@ -643,7 +644,7 @@ function saveSyncSelectedServer() {
 function saveSyncRemotePath() { vscode.postMessage({ command: 'saveSyncRemotePath', value: document.getElementById('syncRemotePath').value }); }
 function saveSyncIgnore() {
   const val = document.getElementById('syncIgnore').value;
-  const dirs = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  const dirs = val.split('\n').map(s => s.trim()).filter(s => s.length > 0);
   vscode.postMessage({ command: 'saveSyncIgnore', value: dirs });
 }
 function toggleNewServerKeyPath() {
@@ -805,6 +806,11 @@ document.addEventListener('mousedown', (e) => {
   document.querySelectorAll('.custom-select.open').forEach(s => {
     if (!s.contains(e.target)) { s.classList.remove('open'); }
   });
+});
+
+// webview 失去焦点时关闭下拉
+window.addEventListener('blur', () => {
+  document.querySelectorAll('.custom-select.open').forEach(s => s.classList.remove('open'));
 });
 
 // 初始化
