@@ -524,17 +524,15 @@ details[open] .arrow { transform: rotate(90deg); }
       <span class="card-badge badge-muted">全局</span>
     </div>
     <div class="field">
-      <label>选择服务器</label>
       <div class="input-row">
         <select id="syncServerSelect" onchange="onServerSelectChange()">
-          <option value="__add__">➕ 添加服务器</option>
+          <option value="__add__">— 添加服务器 —</option>
           {{syncServerOptions}}
         </select>
-        <button class="btn btn-sm" id="btnViewPwd" onclick="viewSavedPassword()" style="display:none">密码</button>
         <button class="btn btn-sm" id="btnTestConn" onclick="testSyncConnection()" style="display:none">测试</button>
       </div>
     </div>
-    <div id="serverFormSection" style="margin-top:10px;">
+    <div id="serverFormSection" style="margin-top:10px; display:none;">
       <div class="field">
         <label>名称</label>
         <input id="newServerName" placeholder="例: 开发服务器" />
@@ -706,11 +704,6 @@ function togglePasswordVisibility() {
 }
 // ── Server form interaction ──
 let _serverCache = {};
-function viewSavedPassword() {
-  const id = document.getElementById('syncServerSelect').value;
-  if (!id || id === '__add__') { return; }
-  vscode.postMessage({ command: 'viewPassword', id });
-}
 function onServerSelectChange() {
   const val = document.getElementById('syncServerSelect').value;
   if (val === '__add__') {
@@ -721,6 +714,7 @@ function onServerSelectChange() {
   }
 }
 function _showAddMode() {
+  document.getElementById('serverFormSection').style.display = '';
   document.getElementById('newServerName').value = '';
   document.getElementById('newServerName').readOnly = false;
   document.getElementById('newServerHost').value = '';
@@ -732,12 +726,12 @@ function _showAddMode() {
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '添加';
   document.getElementById('btnDeleteServer').style.display = 'none';
-  document.getElementById('btnViewPwd').style.display = 'none';
   document.getElementById('btnTestConn').style.display = 'none';
 }
 function _showEditMode(id) {
   const s = _serverCache[id];
   if (!s) { return; }
+  document.getElementById('serverFormSection').style.display = '';
   document.getElementById('newServerName').value = s.name;
   document.getElementById('newServerName').readOnly = false;
   document.getElementById('newServerHost').value = s.host;
@@ -749,7 +743,6 @@ function _showEditMode(id) {
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '保存修改';
   document.getElementById('btnDeleteServer').style.display = '';
-  document.getElementById('btnViewPwd').style.display = '';
   document.getElementById('btnTestConn').style.display = '';
 }
 function submitServer() {
@@ -831,7 +824,7 @@ window.addEventListener('message', e => {
     _serverCache = {};
     d.servers.forEach(s => { _serverCache[s.id] = s; });
     // Rebuild options
-    select.innerHTML = '<option value="__add__">➕ 添加服务器</option>' +
+    select.innerHTML = '<option value="__add__">\u2014 添加服务器 \u2014</option>' +
       d.servers.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + esc(s.username) + '@' + esc(s.host) + ')</option>').join('');
     if (d.servers.some(s => s.id === prev)) {
       select.value = prev;
