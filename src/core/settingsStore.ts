@@ -4,6 +4,8 @@
  * 纯 IO 逻辑在 settingsIO.ts 中，本模块负责 vscode 集成（workspace 路径、文件监听）。
  */
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { createLogger } from './logger';
 import { QtPilotSettings, DEFAULT_SETTINGS, loadSettings, saveSettings } from './settingsIO';
 import { resolveProjectRoot } from './workspaceResolver';
@@ -35,6 +37,8 @@ function _load(): QtPilotSettings {
 function _save(): void {
     const ws = _getWorkspace();
     if (!ws) { return; }
+    // 仅在 .qtpilot/ 已存在时写入，避免自动创建污染项目
+    if (!fs.existsSync(path.join(ws, '.qtpilot'))) { return; }
     try {
         saveSettings(ws, _settings);
     } catch (e) {

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as buildManager from './build/buildManager';
-import { setState, loadPersistedState } from './core/stateManager';
+import { getState, setState, loadPersistedState } from './core/stateManager';
 import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, getDesignerPath } from './core/configService';
 import { createStatusBar, showActions } from './ui/statusBar';
 import { registerPriWatcher } from './project/priWatcher';
@@ -65,31 +65,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     detectEnv(getQtPath(), getVsDevShellPath()).then((env) => {
         setState('envInfo', env);
         logger.info('启动环境检测完成');
-
-        // 写入 .qtpilot/cache.json 供 CLI 读取
-        const wsRoot = getWorkspaceRoot();
-        if (wsRoot) {
-            try {
-                const qtPath = env.qt?.path || '';
-                const cache: LocalCache = {
-                    version: 1,
-                    updatedAt: new Date().toISOString(),
-                    detected: {
-                        qt: qtPath ? {
-                            path: qtPath,
-                            qmake: path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake')
-                        } : null,
-                        vs: env.vs?.devShellPath ? { devShellPath: env.vs.devShellPath } : null,
-                        projects: scanProFiles(wsRoot).map(rel => path.join(wsRoot, rel))
-                    }
-                };
-                ensureLocalStateDir(wsRoot);
-                writeLocalCache(wsRoot, cache);
-                logger.info('cache.json 已更新');
-            } catch (e) {
-                logger.warn(`写入 cache.json 失败: ${e instanceof Error ? e.message : e}`);
-            }
-        }
     }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
 
     // 启动时优先恢复手动指定项目，其次再走工作区扫描/记忆选择
@@ -104,6 +79,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         project = await selectProject(context);
     }
     setState('currentProject', project);
+
+    // 有项目时确保 .qtpilot/ 存在并写入 cache.json
+    if (project) {
+        const wsRoot = getWorkspaceRoot();
+        if (wsRoot) {
+            ensureLocalStateDir(wsRoot);
+            const env = getState().envInfo;
+            if (env) {
+                try {
+                    const qtPath = env.qt?.path || '';
+                    const cache: LocalCache = {
+                        version: 1,
+                        updatedAt: new Date().toISOString(),
+                        detected: {
+                            qt: qtPath ? {
+                                path: qtPath,
+                                qmake: path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake')
+                            } : null,
+                            vs: env.vs?.devShellPath ? { devShellPath: env.vs.devShellPath } : null,
+                            projects: scanProFiles(wsRoot).map(rel => path.join(wsRoot, rel))
+                        }
+                    };
+                    writeLocalCache(wsRoot, cache);
+                    logger.info('cache.json 已更新');
+                } catch (e) {
+                    logger.warn(`写入 cache.json 失败: ${e instanceof Error ? e.message : e}`);
+                }
+            }
+        }
+    }
 
     // 自动生成 c_cpp_properties.json
     if (project) {
@@ -147,6 +152,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const cmds: [string, (...args: any[]) => void][] = [
         ['qtPilot.selectProject', async () => {
             const p = await selectProject(context, true);
+            if (p) {
+                const wsRoot = getWorkspaceRoot();
+                if (wsRoot) { ensureLocalStateDir(wsRoot); }
+            }
             setState('currentProject', p);
             panel.refresh();
         }],
@@ -155,6 +164,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             if (proPath && fs.existsSync(proPath)) {
                 const info = parseProFile(proPath);
                 info.projectDir = path.dirname(proPath);
+                const wsRoot = getWorkspaceRoot();
+                if (wsRoot) { ensureLocalStateDir(wsRoot); }
                 setState('currentProject', info);
                 panel.refresh();
                 logger.info(`手动加载项目: ${proPath}`);
