@@ -18,7 +18,7 @@ const logger = createLogger('SftpClient');
 
 export { ServerConfig, ProjectSyncConfig } from './serverStore';
 export { readServers, readProjectSyncConfig, writeProjectSyncConfig, getServerByName } from './serverStore';
-export { addServer, removeServer, writeServers, updateProjectSyncField } from './serverStore';
+export { addServer, removeServer, updateServer, writeServers, updateProjectSyncField } from './serverStore';
 export { ResolvedSyncConfig, getResolvedConfig } from './resolver';
 export { testConnection, TestConnectionResult } from './transport';
 

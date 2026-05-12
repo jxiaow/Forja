@@ -51,7 +51,7 @@ body {
   border-radius: 8px;
   padding: 14px;
   margin-bottom: 12px;
-  overflow: hidden;
+  min-width: 0;
 }
 .card:last-child { margin-bottom: 0; }
 .card-header {
@@ -526,63 +526,59 @@ details[open] .arrow { transform: rotate(90deg); }
     <div class="field">
       <label>选择服务器</label>
       <div class="input-row">
-        <select id="syncServerSelect" onchange="saveSyncSelectedServer()">
-          <option value="">-- 选择服务器 --</option>
+        <select id="syncServerSelect" onchange="onServerSelectChange()">
+          <option value="__add__">➕ 添加服务器</option>
           {{syncServerOptions}}
         </select>
-        <button class="btn btn-sm" onclick="viewSavedPassword()">密码</button>
-        <button class="btn btn-sm" onclick="testSyncConnection()">测试</button>
+        <button class="btn btn-sm" id="btnTestConn" onclick="testSyncConnection()" style="display:none">测试</button>
       </div>
     </div>
-    <details>
-      <summary><span class="arrow">▶</span> 管理服务器</summary>
-      <div class="details-content">
+    <div id="serverFormSection" style="margin-top:10px;">
+      <div class="field">
+        <label>名称</label>
+        <input id="newServerName" placeholder="例: 开发服务器" />
+      </div>
+      <div class="field">
+        <label>地址</label>
+        <input id="newServerHost" placeholder="192.168.1.100" />
+      </div>
+      <div class="field-row">
         <div class="field">
-          <label>名称</label>
-          <input id="newServerName" placeholder="例: 开发服务器" />
-        </div>
-        <div class="field">
-          <label>地址</label>
-          <input id="newServerHost" placeholder="192.168.1.100" />
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label>端口</label>
-            <input id="newServerPort" type="number" value="22" placeholder="22" />
-          </div>
-          <div class="field">
-            <label>用户名</label>
-            <input id="newServerUsername" placeholder="root" />
-          </div>
+          <label>端口</label>
+          <input id="newServerPort" type="number" value="22" placeholder="22" />
         </div>
         <div class="field">
-          <label>认证方式</label>
-          <select id="newServerAuthMode" onchange="toggleNewServerKeyPath()">
-            <option value="key">SSH 密钥</option>
-            <option value="password">密码</option>
-          </select>
-        </div>
-        <div id="newServerKeyPathField">
-          <div class="field">
-            <label>私钥路径</label>
-            <input id="newServerKeyPath" placeholder="留空使用 ~/.ssh/id_rsa" />
-          </div>
-        </div>
-        <div id="newServerPasswordField" style="display:none">
-          <div class="field">
-            <label>密码</label>
-            <div class="input-row">
-              <input id="newServerPassword" type="password" placeholder="输入密码" />
-              <button class="btn btn-sm" onclick="togglePasswordVisibility()" id="togglePwdBtn">显示</button>
-            </div>
-          </div>
-        </div>
-        <div style="display:flex; gap:8px; margin-top:8px;">
-          <button class="btn btn-primary" style="flex:1;" onclick="addServer()">添加</button>
-          <button class="btn" style="flex:1;" onclick="removeSelectedServer()">删除选中</button>
+          <label>用户名</label>
+          <input id="newServerUsername" placeholder="root" />
         </div>
       </div>
-    </details>
+      <div class="field">
+        <label>认证方式</label>
+        <select id="newServerAuthMode" onchange="toggleNewServerKeyPath()">
+          <option value="key">SSH 密钥</option>
+          <option value="password">密码</option>
+        </select>
+      </div>
+      <div id="newServerKeyPathField">
+        <div class="field">
+          <label>私钥路径</label>
+          <input id="newServerKeyPath" placeholder="留空使用 ~/.ssh/id_rsa" />
+        </div>
+      </div>
+      <div id="newServerPasswordField" style="display:none">
+        <div class="field">
+          <label>密码</label>
+          <div class="input-row">
+            <input id="newServerPassword" type="password" placeholder="输入密码" />
+            <button class="btn btn-sm" onclick="togglePasswordVisibility()" id="togglePwdBtn">显示</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn btn-primary" style="flex:1;" id="btnServerAction" onclick="submitServer()">添加</button>
+        <button class="btn" style="flex:1; display:none;" id="btnDeleteServer" onclick="removeSelectedServer()">删除</button>
+      </div>
+    </div>
   </div>
 
   <!-- Project sync config -->
@@ -604,7 +600,6 @@ details[open] .arrow { transform: rotate(90deg); }
         </div>
         <div class="hint">回车添加，点击标签删除</div>
       </div>
-      <button class="btn btn-primary btn-full" style="margin-top:10px;" onclick="syncChangedFiles()">同步变更文件</button>
     </div>
   </div>
 
@@ -687,7 +682,10 @@ function saveSyncEnabled() {
   document.getElementById('sync-config').style.display = checked ? '' : 'none';
 }
 function saveSyncSelectedServer() {
-  vscode.postMessage({ command: 'saveSyncSelectedServer', value: document.getElementById('syncServerSelect').value });
+  const val = document.getElementById('syncServerSelect').value;
+  if (val !== '__add__') {
+    vscode.postMessage({ command: 'saveSyncSelectedServer', value: val });
+  }
 }
 function saveSyncRemotePath() { vscode.postMessage({ command: 'saveSyncRemotePath', value: document.getElementById('syncRemotePath').value }); }
 function saveSyncIgnore() {
@@ -707,10 +705,54 @@ function togglePasswordVisibility() {
 }
 function viewSavedPassword() {
   const name = document.getElementById('syncServerSelect').value;
-  if (!name) { return; }
+  if (!name || name === '__add__') { return; }
   vscode.postMessage({ command: 'viewPassword', name });
 }
-function addServer() {
+
+// ── Server form interaction ──
+let _serverCache = {};
+function onServerSelectChange() {
+  const val = document.getElementById('syncServerSelect').value;
+  if (val === '__add__') {
+    _showAddMode();
+  } else {
+    _showEditMode(val);
+    saveSyncSelectedServer();
+  }
+}
+function _showAddMode() {
+  document.getElementById('newServerName').value = '';
+  document.getElementById('newServerName').readOnly = false;
+  document.getElementById('newServerHost').value = '';
+  document.getElementById('newServerPort').value = '22';
+  document.getElementById('newServerUsername').value = '';
+  document.getElementById('newServerAuthMode').value = 'key';
+  document.getElementById('newServerKeyPath').value = '';
+  document.getElementById('newServerPassword').value = '';
+  toggleNewServerKeyPath();
+  document.getElementById('btnServerAction').textContent = '添加';
+  document.getElementById('btnDeleteServer').style.display = 'none';
+  document.getElementById('btnTestConn').style.display = 'none';
+}
+function _showEditMode(name) {
+  const s = _serverCache[name];
+  if (!s) { return; }
+  document.getElementById('newServerName').value = s.name;
+  document.getElementById('newServerName').readOnly = true;
+  document.getElementById('newServerHost').value = s.host;
+  document.getElementById('newServerPort').value = String(s.port);
+  document.getElementById('newServerUsername').value = s.username;
+  document.getElementById('newServerAuthMode').value = s.authMode || 'key';
+  document.getElementById('newServerKeyPath').value = s.privateKeyPath || '';
+  document.getElementById('newServerPassword').value = '';
+  toggleNewServerKeyPath();
+  document.getElementById('btnServerAction').textContent = '保存修改';
+  document.getElementById('btnDeleteServer').style.display = '';
+  document.getElementById('btnTestConn').style.display = '';
+}
+function submitServer() {
+  const select = document.getElementById('syncServerSelect');
+  const isAdd = select.value === '__add__';
   const server = {
     name: document.getElementById('newServerName').value.trim(),
     host: document.getElementById('newServerHost').value.trim(),
@@ -721,22 +763,18 @@ function addServer() {
     password: document.getElementById('newServerPassword').value
   };
   if (!server.name || !server.host || !server.username) { return; }
-  vscode.postMessage({ command: 'addServer', server });
-  // 清空表单
-  document.getElementById('newServerName').value = '';
-  document.getElementById('newServerHost').value = '';
-  document.getElementById('newServerPort').value = '22';
-  document.getElementById('newServerUsername').value = '';
-  document.getElementById('newServerKeyPath').value = '';
-  document.getElementById('newServerPassword').value = '';
+  if (isAdd) {
+    vscode.postMessage({ command: 'addServer', server });
+  } else {
+    vscode.postMessage({ command: 'updateServer', server });
+  }
 }
 function removeSelectedServer() {
   const name = document.getElementById('syncServerSelect').value;
-  if (!name) { return; }
+  if (!name || name === '__add__') { return; }
   vscode.postMessage({ command: 'removeServer', name });
 }
 function testSyncConnection() { vscode.postMessage({ command: 'testSyncConnection' }); }
-function syncChangedFiles() { vscode.postMessage({ command: 'syncChangedFiles' }); }
 
 // ── Utilities ──
 function preserveBrowseInputFocus(event) { event.preventDefault(); }
@@ -786,9 +824,20 @@ window.addEventListener('message', e => {
     const select = document.getElementById('syncServerSelect');
     const prev = d.select || select.value;
     const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    select.innerHTML = '<option value="">-- 选择服务器 --</option>' +
+    // Cache server details
+    _serverCache = {};
+    d.servers.forEach(s => { _serverCache[s.name] = s; });
+    // Rebuild options
+    select.innerHTML = '<option value="__add__">➕ 添加服务器</option>' +
       d.servers.map(s => '<option value="' + esc(s.name) + '">' + esc(s.name) + ' (' + esc(s.username) + '@' + esc(s.host) + ')</option>').join('');
-    if (d.servers.some(s => s.name === prev)) { select.value = prev; }
+    if (d.servers.some(s => s.name === prev)) {
+      select.value = prev;
+      _showEditMode(prev);
+    } else {
+      select.value = '__add__';
+      _showAddMode();
+    }
+    if (select._customRefresh) { select._customRefresh(); }
   }
 });
 
@@ -905,6 +954,20 @@ document.addEventListener('mousedown', (e) => {
 window.addEventListener('blur', () => {
   document.querySelectorAll('.custom-select.open').forEach(s => s.classList.remove('open'));
 });
+
+// 初始化服务器表单
+(function() {
+  const servers = JSON.parse('{{syncServerData}}');
+  servers.forEach(s => { _serverCache[s.name] = s; });
+  const select = document.getElementById('syncServerSelect');
+  const selected = select.value;
+  if (selected && selected !== '__add__' && _serverCache[selected]) {
+    _showEditMode(selected);
+  } else {
+    select.value = '__add__';
+    _showAddMode();
+  }
+})();
 
 // 初始化
 initCustomSelects();

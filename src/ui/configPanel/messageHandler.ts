@@ -5,7 +5,7 @@ import { getState, setState } from '../../core/stateManager';
 import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget, getWorkspaceRoot } from '../../core/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, readServers, ServerConfig } from '../../sync/sftpClient';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, ServerConfig } from '../../sync/sftpClient';
 import { executeSyncChangedFiles, executeTestConnection } from '../../sync/syncWatcher';
 
 const logger = createLogger('ConfigPanel');
@@ -189,6 +189,35 @@ export async function handleMessage(
             _pushServerList(webview);
             break;
         }
+        case 'updateServer': {
+            logger.info(`修改服务器: ${msg.server?.name}`);
+            const updatedServer: ServerConfig = {
+                name: msg.server.name || '',
+                host: msg.server.host || '',
+                port: msg.server.port || 22,
+                username: msg.server.username || '',
+                authMode: msg.server.authMode || 'key',
+                privateKeyPath: msg.server.privateKeyPath || '',
+                password: msg.server.password || ''
+            };
+            if (!updatedServer.name || !updatedServer.host || !updatedServer.username) {
+                vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
+                break;
+            }
+            // 如果密码为空，保留原密码
+            if (!updatedServer.password) {
+                const existing = readServers().find(s => s.name === updatedServer.name);
+                if (existing) { updatedServer.password = existing.password; }
+            }
+            const updated = updateServer(updatedServer);
+            if (!updated) {
+                vscode.window.showWarningMessage(`服务器 "${updatedServer.name}" 不存在`);
+                break;
+            }
+            vscode.window.showInformationMessage(`服务器 "${updatedServer.name}" 已更新`);
+            _pushServerList(webview, updatedServer.name);
+            break;
+        }
         case 'testSyncConnection': {
             logger.info('测试远程连接');
             await executeTestConnection();
@@ -224,7 +253,14 @@ function _pushServerList(webview: vscode.Webview, selectName?: string): void {
     const servers = readServers();
     webview.postMessage({
         command: 'serversUpdated',
-        servers: servers.map(s => ({ name: s.name, host: s.host, username: s.username })),
+        servers: servers.map(s => ({
+            name: s.name,
+            host: s.host,
+            port: s.port,
+            username: s.username,
+            authMode: s.authMode,
+            privateKeyPath: s.privateKeyPath
+        })),
         select: selectName || ''
     });
 }

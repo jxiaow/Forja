@@ -60,8 +60,8 @@ function _refreshStatusBar(): void {
         _statusItem.tooltip = `Qt Pilot: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
         _statusItem.command = 'qtPilot.syncChangedFiles';
     } else {
-        _statusItem.text = '$(cloud) 同步未就绪';
-        _statusItem.tooltip = 'Qt Pilot: 同步已启用，请选择服务器并设置远程路径';
+        _statusItem.text = '$(cloud-download)';
+        _statusItem.tooltip = 'Qt Pilot: 同步未就绪，请选择服务器并设置远程路径';
         _statusItem.command = 'qtPilot.showSyncTab';
     }
     _statusItem.show();

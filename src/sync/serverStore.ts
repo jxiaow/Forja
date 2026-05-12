@@ -106,6 +106,15 @@ export function removeServer(name: string): void {
     writeServers(servers.filter(s => s.name !== name));
 }
 
+export function updateServer(server: ServerConfig): boolean {
+    const servers = readServers();
+    const idx = servers.findIndex(s => s.name === server.name);
+    if (idx < 0) { return false; }
+    servers[idx] = server;
+    writeServers(servers);
+    return true;
+}
+
 export function getServerByName(name: string): ServerConfig | null {
     const servers = readServers();
     return servers.find(s => s.name === name) || null;

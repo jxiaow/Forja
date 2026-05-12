@@ -25,7 +25,7 @@ export interface TemplateData {
     version: string;
     syncEnabled: boolean;
     syncSelectedServer: string;
-    syncServers: { name: string; host: string; username: string }[];
+    syncServers: { name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string }[];
     syncRemotePath: string;
     syncIgnore: string;
 }
@@ -144,6 +144,7 @@ export function getHtml(data: TemplateData): string {
         syncServerOptions: data.syncServers
             .map(s => `<option value="${_escapeHtml(s.name)}" ${s.name === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
             .join(''),
+        syncServerData: JSON.stringify(data.syncServers).replace(/\\/g, '\\\\').replace(/'/g, "\\'"),
         syncRemotePath: _escapeHtml(data.syncRemotePath),
         syncIgnore: _escapeHtml(data.syncIgnore),
     };
