@@ -1,0 +1,17 @@
+{
+  "servers": [],
+  "project": {
+    "enabled": true,
+    "selectedServer": "",
+    "remotePath": "",
+    "ignore": [
+      ".git",
+      "node_modules",
+      "out",
+      ".work",
+      "build",
+      "debug",
+      "release"
+    ]
+  }
+}

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { detectEnv } from '../../env/envDetector';
 import { generateCppProperties, updateCppPropertiesStandard } from '../../build/configGenerator';
 import { getState, setState } from '../../core/stateManager';
-import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget } from '../../core/configService';
+import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget, getWorkspaceRoot } from '../../core/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../core/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, readServers, ServerConfig } from '../../sync/sftpClient';
@@ -138,29 +138,25 @@ export async function handleMessage(
         }
         case 'saveSyncEnabled': {
             logger.info(`保存远程同步开关: ${!!msg.value}`);
-            const { getWorkspaceRoot: getWsRoot } = require('../../core/configService');
-            const ws1 = getWsRoot();
+            const ws1 = getWorkspaceRoot();
             if (ws1) { updateProjectSyncField(ws1, 'enabled', !!msg.value); }
             break;
         }
         case 'saveSyncSelectedServer': {
             logger.info(`选择服务器: "${msg.value}"`);
-            const { getWorkspaceRoot: getWsRoot2 } = require('../../core/configService');
-            const ws2 = getWsRoot2();
+            const ws2 = getWorkspaceRoot();
             if (ws2) { updateProjectSyncField(ws2, 'selectedServer', msg.value || ''); }
             break;
         }
         case 'saveSyncRemotePath': {
             logger.info(`保存远程路径: "${msg.value}"`);
-            const { getWorkspaceRoot: getWsRoot3 } = require('../../core/configService');
-            const ws3 = getWsRoot3();
+            const ws3 = getWorkspaceRoot();
             if (ws3) { updateProjectSyncField(ws3, 'remotePath', msg.value || ''); }
             break;
         }
         case 'saveSyncIgnore': {
             logger.info(`保存同步忽略列表: ${JSON.stringify(msg.value)}`);
-            const { getWorkspaceRoot: getWsRoot4 } = require('../../core/configService');
-            const ws4 = getWsRoot4();
+            const ws4 = getWorkspaceRoot();
             if (ws4) { updateProjectSyncField(ws4, 'ignore', msg.value || []); }
             break;
         }
@@ -202,7 +198,14 @@ export async function handleMessage(
             const servers = readServers();
             const srv = servers.find(s => s.name === msg.name);
             if (srv && srv.password) {
-                webview.postMessage({ command: 'showPassword', password: srv.password });
+                // 通过 VSCode 原生输入框显示（不发送到 webview）
+                const action = await vscode.window.showInformationMessage(
+                    `${srv.name} 的密码已复制到剪贴板`,
+                    '复制'
+                );
+                if (action === '复制') {
+                    await vscode.env.clipboard.writeText(srv.password);
+                }
             } else {
                 vscode.window.showInformationMessage('该服务器未保存密码（可能使用密钥认证）');
             }

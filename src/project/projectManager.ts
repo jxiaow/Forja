@@ -6,6 +6,7 @@ import { decodeSelectedProject, encodeSelectedProject } from '../core/selectedPr
 import { getEffectiveProjectName, getProjectSelectionLabel } from '../core/projectDisplay';
 import { getQmakeTarget } from '../core/configService';
 import { getState } from '../core/stateManager';
+import { getSetting, setSetting } from '../core/settingsStore';
 import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../coreCli/projectScanner';
 
 export interface ProjectInfo {
@@ -177,8 +178,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         return null;
     }
 
-    const config = vscode.workspace.getConfiguration('qtPilot');
-    const savedProject = config.get<unknown>('selectedProject');
+    const savedProject = getSetting('selectedProject');
 
     if (!forceSelect && savedProject) {
         const savedRef = decodeSelectedProject(savedProject);
@@ -188,15 +188,6 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
                 const info = parseProFile(fullPath);
                 info.projectDir = path.dirname(savedRef.relative);
                 return info;
-            }
-        } else if (typeof savedProject === 'string') {
-            for (const folder of folders) {
-                const fullPath = path.join(folder.uri.fsPath, savedProject);
-                if (fs.existsSync(fullPath)) {
-                    const info = parseProFile(fullPath);
-                    info.projectDir = path.dirname(savedProject);
-                    return info;
-                }
             }
         }
     }
@@ -233,7 +224,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const fullPath = path.join(item.root, item.relative);
         const info = parseProFile(fullPath);
         info.projectDir = path.dirname(item.relative);
-        await config.update('selectedProject', encodeSelectedProject(item.root, item.relative), vscode.ConfigurationTarget.Workspace);
+        setSetting('selectedProject', encodeSelectedProject(item.root, item.relative));
         return info;
     }
 
@@ -248,7 +239,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
             const fullPath = path.join(item.root, item.relative);
             const info = parseProFile(fullPath);
             info.projectDir = path.dirname(item.relative);
-            await config.update('selectedProject', encodeSelectedProject(item.root, item.relative), vscode.ConfigurationTarget.Workspace);
+            setSetting('selectedProject', encodeSelectedProject(item.root, item.relative));
             return info;
         }
     }

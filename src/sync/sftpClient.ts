@@ -62,7 +62,9 @@ export function clearPasswordCache(): void {
 
 export function getGitChangedFiles(workspaceRoot: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
-        const cmd = 'git diff --name-only HEAD & git diff --name-only --cached & git ls-files --others --exclude-standard';
+        const isWin = process.platform === 'win32';
+        const sep = isWin ? ' & ' : ' ; ';
+        const cmd = `git diff --name-only HEAD${sep}git diff --name-only --cached${sep}git ls-files --others --exclude-standard`;
         cp.exec(cmd, { cwd: workspaceRoot }, (err, stdout) => {
             if (err) {
                 cp.exec('git status --porcelain -uall', { cwd: workspaceRoot }, (err2, stdout2) => {
@@ -129,8 +131,12 @@ function scpUpload(server: ServerConfig, localFile: string, remoteFile: string, 
                 if (code === 0) { resolve(); }
                 else { reject(new Error(`scp 失败 (code=${code}): ${stderr.trim()}`)); }
             });
-            proc.on('error', (e) => {
-                reject(new Error(`sshpass 未安装或不可用: ${e.message}。密码认证需要安装 sshpass，或改用密钥认证。`));
+            proc.on('error', () => {
+                reject(new Error(
+                    '密码认证需要 sshpass 工具。解决方案：\n' +
+                    '1. 安装 Git for Windows 并使用 Git Bash 中的 sshpass\n' +
+                    '2. 或改用 SSH 密钥认证（推荐）：ssh-keygen 生成密钥后 ssh-copy-id 推送到服务器'
+                ));
             });
         } else {
             const args = [...baseArgs, localFile, dest];

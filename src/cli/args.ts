@@ -7,7 +7,7 @@ const helpText = `Qt Pilot CLI — qmake 项目构建工具
 用法: qt-pilot <command> [options]
 
 命令:
-  init        初始化本地配置（检测环境、保存 .work/qt-pilot/）
+  init        初始化本地配置（检测环境、保存 .qtpilot/）
   detect      检测 Qt/VS 环境（不写文件，除非 --save-local）
   projects    列出工作区内的 .pro 文件
   status      显示当前配置和项目状态
@@ -29,7 +29,7 @@ const helpText = `Qt Pilot CLI — qmake 项目构建工具
   --server <name>        同步时指定服务器名称
   --dry-run              仅生成命令计划，不执行（默认）
   --execute              执行命令（需显式传入）
-  --save-local           将检测结果写入 .work/qt-pilot/cache.json
+  --save-local           将检测结果写入 .qtpilot/cache.json
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
 

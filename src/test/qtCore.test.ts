@@ -165,7 +165,7 @@ test('createActionPlan init dry-run previews what would be created', async () =>
     assert.equal(result.ok, true);
     assert.equal(result.action, 'init');
     assert.ok(result.diagnostics.length > 0);
-    assert.ok(result.diagnostics.some(d => /\.work\/qt-pilot/.test(d.message)));
+    assert.ok(result.diagnostics.some(d => /\.qtpilot/.test(d.message)));
     assert.ok(result.diagnostics.some(d => /\.gitignore/.test(d.message)));
     assert.ok(result.diagnostics.some(d => /cache\.json/.test(d.message)));
     assert.ok(result.nextActions.some(a => /init --execute/.test(a)));

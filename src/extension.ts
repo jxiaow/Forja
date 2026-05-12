@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as buildManager from './build/buildManager';
-import { setState } from './core/stateManager';
+import { setState, loadPersistedState } from './core/stateManager';
 import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, getDesignerPath } from './core/configService';
 import { createStatusBar, showActions } from './ui/statusBar';
 import { registerPriWatcher } from './project/priWatcher';
@@ -16,6 +16,7 @@ import { detectEnv } from './env/envDetector';
 import { writeLocalCache, ensureLocalStateDir, LocalCache } from './coreCli/localState';
 import { scanProFiles } from './coreCli/projectScanner';
 import { registerSyncWatcher, executeSyncChangedFiles, executeTestConnection } from './sync/syncWatcher';
+import { initSettingsStore } from './core/settingsStore';
 
 const logger = createLogger('Extension');
 
@@ -23,6 +24,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const channel = initLogger();
     context.subscriptions.push(channel);
     logger.info('扩展激活');
+
+    // 初始化配置存储（必须在其他模块使用配置之前）
+    initSettingsStore(context);
+    loadPersistedState();
 
     createStatusBar(context);
 
@@ -54,7 +59,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         setState('envInfo', env);
         logger.info('启动环境检测完成');
 
-        // 写入 .work/qt-pilot/cache.json 供 CLI 读取
+        // 写入 .qtpilot/cache.json 供 CLI 读取
         const wsRoot = getWorkspaceRoot();
         if (wsRoot) {
             try {

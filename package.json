@@ -3,7 +3,7 @@
   "displayName": "Qt Pilot",
   "publisher": "qtpilot",
   "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
@@ -104,123 +104,6 @@
           "name": "配置"
         }
       ]
-    },
-    "configuration": {
-      "title": "Qt Pilot",
-      "properties": {
-        "qtPilot.qtPath": {
-          "type": "string",
-          "default": "",
-          "description": "Qt 安装路径（手动指定，留空则自动检测）"
-        },
-        "qtPilot.designerPath": {
-          "type": "string",
-          "default": "",
-          "description": "Qt Designer 可执行文件路径（可选，优先于自动推断）"
-        },
-        "qtPilot.qtSourcePath": {
-          "type": "string",
-          "default": "",
-          "description": "Qt 源码根目录（可选，用于调试时定位 Qt 源码）"
-        },
-        "qtPilot.vsDevShellPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to Launch-VsDevShell.ps1 (VsDevCmd.bat will be used automatically)"
-        },
-        "qtPilot.selectedProject": {
-          "type": "object",
-          "default": {},
-          "additionalProperties": false,
-          "required": [
-            "root",
-            "relative"
-          ],
-          "properties": {
-            "root": {
-              "type": "string"
-            },
-            "relative": {
-              "type": "string"
-            }
-          },
-          "description": "当前选中的 .pro 文件记录（扩展内部维护）"
-        },
-        "qtPilot.arch": {
-          "type": "string",
-          "default": "x86",
-          "enum": [
-            "x86",
-            "x64"
-          ],
-          "description": "目标架构"
-        },
-        "qtPilot.mode": {
-          "type": "string",
-          "default": "debug",
-          "enum": [
-            "debug",
-            "release"
-          ],
-          "description": "构建模式"
-        },
-        "qtPilot.scanExcludeDirs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "生成 IntelliSense 配置时额外排除的目录名（已内置排除 build*/debug/release）"
-        },
-        "qtPilot.qmakeTarget": {
-          "type": "string",
-          "default": "",
-          "description": "QMake 时指定的 TARGET 名称（留空则使用 .pro 文件默认值）"
-        },
-        "qtPilot.cStandard": {
-          "type": "string",
-          "default": "c11",
-          "enum": [
-            "c89",
-            "c99",
-            "c11",
-            "c17"
-          ],
-          "description": "IntelliSense C 标准版本"
-        },
-        "qtPilot.cppStandard": {
-          "type": "string",
-          "default": "c++11",
-          "enum": [
-            "c++11",
-            "c++14",
-            "c++17",
-            "c++20",
-            "c++23"
-          ],
-          "description": "IntelliSense C++ 标准版本"
-        },
-        "qtPilot.proPath": {
-          "type": "string",
-          "default": "",
-          "description": "（已废弃）请使用 qtPilot.selectedProject"
-        },
-        "qtPilot.manualProPath": {
-          "type": "string",
-          "default": "",
-          "description": "手动指定 .pro 文件绝对路径（扫描不到时使用）"
-        },
-        "qtPilot.fileSyncPromptEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "新增/删除 .cpp/.h/.ui 文件时是否提示同步 .pri/.pro"
-        },
-        "qtPilot.qmakeReminderEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": ".pro/.pri 文件变更后是否提示重新运行 QMake"
-        }
-      }
     }
   },
   "scripts": {

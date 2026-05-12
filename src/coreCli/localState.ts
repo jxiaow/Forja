@@ -24,7 +24,7 @@ export interface LocalCache {
 }
 
 export function localRoot(workspace: string): string {
-    return path.join(workspace, '.work', 'qt-pilot');
+    return path.join(workspace, '.qtpilot');
 }
 
 export function configPath(workspace: string): string {
@@ -60,7 +60,7 @@ export function writeLocalCache(workspace: string, cache: LocalCache): void {
     writeJson(cachePath(workspace), cache);
 }
 
-export function ensureWorkGitignored(workspace: string): void {
+export function ensureQtpilotGitignored(workspace: string): void {
     const gitignorePath = path.join(workspace, '.gitignore');
     let lines: string[] = [];
 
@@ -68,8 +68,10 @@ export function ensureWorkGitignored(workspace: string): void {
         lines = fs.readFileSync(gitignorePath, 'utf8').split(/\r?\n/);
     } catch {}
 
-    const otherLines = lines.filter(line => line.trim() !== '.work/' && line.length > 0);
-    otherLines.push('.work/');
+    const otherLines = lines.filter(line =>
+        line.trim() !== '.qtpilot/' && line.length > 0
+    );
+    otherLines.push('.qtpilot/');
     fs.mkdirSync(path.dirname(gitignorePath), { recursive: true });
     fs.writeFileSync(gitignorePath, `${otherLines.join('\n')}\n`, 'utf8');
 }

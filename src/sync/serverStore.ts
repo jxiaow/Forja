@@ -1,7 +1,7 @@
 /**
  * 统一的服务器配置存储。
  * 全局服务器列表：~/.qt-pilot/servers.json
- * 项目同步配置：.work/qt-pilot/sync-config.json
+ * 项目同步配置：.qtpilot/sync-config.json
  * 
  * 扩展和 CLI 共用，不依赖 vscode。
  */
@@ -40,7 +40,7 @@ function _serversFilePath(): string {
 }
 
 function _projectSyncConfigPath(workspaceRoot: string): string {
-    return path.join(workspaceRoot, '.work', 'qt-pilot', 'sync-config.json');
+    return path.join(workspaceRoot, '.qtpilot', 'sync-config.json');
 }
 
 // ── 全局服务器列表 ──
@@ -113,7 +113,7 @@ export function getServerByName(name: string): ServerConfig | null {
 
 // ── 项目同步配置 ──
 
-const DEFAULT_IGNORE = ['.git', 'node_modules', 'out', '.work', 'build', 'debug', 'release'];
+const DEFAULT_IGNORE = ['.git', 'node_modules', 'out', '.qtpilot', 'build', 'debug', 'release'];
 
 export function readProjectSyncConfig(workspaceRoot: string): ProjectSyncConfig {
     const filePath = _projectSyncConfigPath(workspaceRoot);

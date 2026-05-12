@@ -5,7 +5,7 @@ import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
          getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath,
-         getFileSyncPromptEnabled, getQmakeReminderEnabled } from '../../core/configService';
+         getFileSyncPromptEnabled, getQmakeReminderEnabled, getWorkspaceRoot } from '../../core/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../core/projectDisplay';
 import { readServers, readProjectSyncConfig } from '../../sync/sftpClient';
@@ -110,7 +110,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             qmakeReminderEnabled: getQmakeReminderEnabled(),
             version: this._version,
             ...(() => {
-                const wsRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath ?? '';
+                const wsRoot = getWorkspaceRoot();
                 const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', remotePath: '', ignore: ['.git', 'node_modules', 'out', '.work', 'build', 'debug', 'release'] };
                 const servers = readServers();
                 return {

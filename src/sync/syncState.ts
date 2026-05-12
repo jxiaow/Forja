@@ -17,7 +17,7 @@ interface SyncStateData {
 }
 
 function _stateFilePath(workspaceRoot: string): string {
-    return path.join(workspaceRoot, '.work', 'qt-pilot', 'sync-state.json');
+    return path.join(workspaceRoot, '.qtpilot', 'sync-state.json');
 }
 
 function _readState(workspaceRoot: string): SyncStateData {

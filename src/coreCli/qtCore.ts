@@ -11,7 +11,7 @@ import {
     LocalCache,
     LocalConfig,
     ensureLocalStateDir,
-    ensureWorkGitignored,
+    ensureQtpilotGitignored,
     readLocalCache,
     readLocalConfig,
     writeLocalCache,
@@ -213,7 +213,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     if (options.action === 'init') {
         if (options.executionMode === 'execute') {
             ensureLocalStateDir(workspace);
-            ensureWorkGitignored(workspace);
+            ensureQtpilotGitignored(workspace);
             const detected = await detectAndCache(workspace, options);
             writeLocalCache(workspace, detected);
             if (project) {
@@ -236,8 +236,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const previewDiagnostics: CliResult['diagnostics'] = [];
         const previewNextActions: string[] = [];
 
-        previewDiagnostics.push({ level: 'info', message: `将创建 .work/qt-pilot/ 目录` });
-        previewDiagnostics.push({ level: 'info', message: `将确保 .gitignore 包含 .work/` });
+        previewDiagnostics.push({ level: 'info', message: `将创建 .qtpilot/ 目录` });
+        previewDiagnostics.push({ level: 'info', message: `将确保 .gitignore 包含 .qtpilot/` });
         previewDiagnostics.push({ level: 'info', message: `将写入 cache.json（环境检测结果）` });
 
         if (project) {

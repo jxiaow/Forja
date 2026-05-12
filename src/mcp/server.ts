@@ -76,7 +76,7 @@ server.tool(
 
 server.tool(
     'qt_init',
-    '初始化 Qt 项目本地配置：检测环境、扫描 .pro 文件、写入 .work/qt-pilot/',
+    '初始化 Qt 项目本地配置：检测环境、扫描 .pro 文件、写入 .qtpilot/',
     {
         workspace: workspaceSchema,
         project: projectSchema,
