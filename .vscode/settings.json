@@ -4,5 +4,17 @@
     "xyQt.vsDevShellPath": "",
     "xyQt.qmakeTarget": "",
     "xyQt.cStandard": "c11",
-    "xyQt.cppStandard": "c++11"
+    "xyQt.cppStandard": "c++11",
+    "qtPilot.scanExcludeDirs": [],
+    "qtPilot.remoteSync.enabled": true,
+    "qtPilot.remoteSync.ignore": [
+        ".git",
+        "node_modules",
+        "out",
+        ".work",
+        "build",
+        "debug",
+        "release"
+    ],
+    "qtPilot.remoteSync.remotePath": ""
 }

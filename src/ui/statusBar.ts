@@ -10,16 +10,19 @@ let _runItem: vscode.StatusBarItem;
 let _debugItem: vscode.StatusBarItem;
 
 export function createStatusBar(context: vscode.ExtensionContext): void {
-    _projectModeItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 113);
+    _projectModeItem = vscode.window.createStatusBarItem('qtPilot.projectMode', vscode.StatusBarAlignment.Left, 113);
+    _projectModeItem.name = 'Qt Pilot: Project';
     _projectModeItem.command = 'qtPilot.showActions';
     context.subscriptions.push(_projectModeItem);
 
-    _runItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 112);
+    _runItem = vscode.window.createStatusBarItem('qtPilot.run', vscode.StatusBarAlignment.Left, 112);
+    _runItem.name = 'Qt Pilot: Run';
     context.subscriptions.push(_runItem);
 
-    _debugItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 111);
+    _debugItem = vscode.window.createStatusBarItem('qtPilot.debug', vscode.StatusBarAlignment.Left, 111);
+    _debugItem.name = 'Qt Pilot: Debug';
     _debugItem.command = 'qtPilot.debug';
-    _debugItem.text = '$(debug-alt) Debug';
+    _debugItem.text = '$(debug-alt)';
     _debugItem.tooltip = '构建并启动调试';
     context.subscriptions.push(_debugItem);
 
@@ -40,47 +43,37 @@ function _updateDisplay(): void {
     const state = getState();
     const projectName = getEffectiveProjectName(state.currentProject, getQmakeTarget(), '未选择项目');
     _projectModeItem.text = `${_modeIcon()} ${projectName} · ${_modeDisplayLabel()}`;
-    _projectModeItem.tooltip = '点击选择模式/架构、构建操作、切换项目';
+    _projectModeItem.tooltip = 'Qt Pilot: 点击选择模式/架构、构建操作、切换项目';
     _projectModeItem.color = state.mode === 'debug'
         ? new vscode.ThemeColor('statusBarItem.warningForeground')
         : undefined;
     _projectModeItem.show();
 
     if (state.isBuilding && state.buildAction === 'run') {
-        _runItem.text = '$(sync~spin) Compiling';
-        _runItem.tooltip = '正在为运行编译';
+        _runItem.text = '$(sync~spin)';
+        _runItem.tooltip = 'Qt Pilot: 正在为运行编译';
         _runItem.command = undefined;
     } else if (state.isRunning) {
-        _runItem.text = '$(debug-stop) Stop';
-        _runItem.tooltip = '终止程序';
+        _runItem.text = '$(debug-stop)';
+        _runItem.tooltip = 'Qt Pilot: 终止程序';
         _runItem.command = 'qtPilot.stop';
-    } else if (state.isBuilding) {
-        _runItem.text = '$(play) Run';
-        _runItem.tooltip = '构建并运行';
-        _runItem.command = 'qtPilot.run';
     } else {
-        _runItem.text = '$(play) Run';
-        _runItem.tooltip = '构建并运行';
+        _runItem.text = '$(play)';
+        _runItem.tooltip = 'Qt Pilot: 构建并运行';
         _runItem.command = 'qtPilot.run';
     }
     _runItem.show();
 
     if (state.isBuilding && state.buildAction === 'debug') {
-        _debugItem.text = '$(sync~spin) Debug';
-        _debugItem.tooltip = '正在为调试编译';
+        _debugItem.text = '$(sync~spin)';
+        _debugItem.tooltip = 'Qt Pilot: 正在为调试编译';
         _debugItem.command = undefined;
-        _debugItem.show();
-    } else if (state.isBuilding) {
-        _debugItem.text = '$(debug-alt) Debug';
-        _debugItem.tooltip = '构建并启动调试';
-        _debugItem.command = 'qtPilot.debug';
-        _debugItem.show();
     } else {
-        _debugItem.text = '$(debug-alt) Debug';
-        _debugItem.tooltip = '构建并启动调试';
+        _debugItem.text = '$(debug-alt)';
+        _debugItem.tooltip = 'Qt Pilot: 构建并启动调试';
         _debugItem.command = 'qtPilot.debug';
-        _debugItem.show();
     }
+    _debugItem.show();
 }
 
 export async function showActions(): Promise<void> {

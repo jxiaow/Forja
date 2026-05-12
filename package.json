@@ -3,7 +3,7 @@
   "displayName": "Qt Pilot",
   "publisher": "qtpilot",
   "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
-  "version": "0.4.4",
+  "version": "0.5.4",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
@@ -22,7 +22,9 @@
     "onCommand:qtPilot.run",
     "onCommand:qtPilot.stop",
     "onCommand:qtPilot.debug",
-    "onCommand:qtPilot.openWithQtDesigner"
+    "onCommand:qtPilot.openWithQtDesigner",
+    "onCommand:qtPilot.syncTestConnection",
+    "onCommand:qtPilot.syncChangedFiles"
   ],
   "main": "./out/extension.js",
   "bin": {
@@ -66,6 +68,14 @@
       {
         "command": "qtPilot.openWithQtDesigner",
         "title": "Qt Pilot: 用 Qt Designer 打开"
+      },
+      {
+        "command": "qtPilot.syncTestConnection",
+        "title": "Qt Pilot: 测试远程连接"
+      },
+      {
+        "command": "qtPilot.syncChangedFiles",
+        "title": "Qt Pilot: 同步变更文件到远程"
       }
     ],
     "menus": {
@@ -209,6 +219,84 @@
           "type": "boolean",
           "default": true,
           "description": ".pro/.pri 文件变更后是否提示重新运行 QMake"
+        },
+        "qtPilot.remoteSync.servers": {
+          "type": "array",
+          "default": [],
+          "description": "远程服务器列表（全局共享）",
+          "scope": "application",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "host",
+              "username"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "服务器名称（用于标识）"
+              },
+              "host": {
+                "type": "string",
+                "description": "服务器地址"
+              },
+              "port": {
+                "type": "number",
+                "default": 22,
+                "description": "SSH 端口"
+              },
+              "username": {
+                "type": "string",
+                "description": "SSH 用户名"
+              },
+              "authMode": {
+                "type": "string",
+                "enum": [
+                  "key",
+                  "password"
+                ],
+                "default": "key",
+                "description": "认证方式"
+              },
+              "privateKeyPath": {
+                "type": "string",
+                "default": "",
+                "description": "SSH 私钥路径"
+              }
+            }
+          }
+        },
+        "qtPilot.remoteSync.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "当前项目启用远程同步"
+        },
+        "qtPilot.remoteSync.selectedServer": {
+          "type": "string",
+          "default": "",
+          "description": "当前项目使用的服务器名称"
+        },
+        "qtPilot.remoteSync.remotePath": {
+          "type": "string",
+          "default": "",
+          "description": "远程项目路径"
+        },
+        "qtPilot.remoteSync.ignore": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            ".git",
+            "node_modules",
+            "out",
+            ".work",
+            "build",
+            "debug",
+            "release"
+          ],
+          "description": "同步时忽略的目录/文件"
         }
       }
     }
@@ -220,6 +308,8 @@
     "test": "npm run compile && node --test out/test",
     "build:cli": "npm run compile && node scripts/build-cli.js",
     "package": "npm run compile && vsce package --allow-missing-repository -o dist/",
+    "package:cli": "npm run build:cli && cd cli && npm pack --pack-destination ../dist",
+    "package:all": "node scripts/bump-version.js && npm run package && npm run package:cli",
     "vsix": "vsce package --allow-missing-repository"
   },
   "devDependencies": {

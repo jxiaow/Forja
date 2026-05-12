@@ -5,6 +5,8 @@ import { getState, setState } from '../../core/stateManager';
 import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget } from '../../core/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../core/projectDisplay';
+import { updateSyncConfigWorkspace, getServers, updateServers, ServerConfig } from '../../sync/sftpClient';
+import { executeSyncChangedFiles, executeTestConnection } from '../../sync/syncWatcher';
 
 const logger = createLogger('ConfigPanel');
 
@@ -12,7 +14,8 @@ export async function handleMessage(
     msg: any,
     webview: vscode.Webview,
     pushEnvUpdate: () => void,
-    updateHtml: () => void
+    updateHtml: () => void,
+    secrets: vscode.SecretStorage
 ): Promise<void> {
     logger.info(`收到消息: ${msg.command}`);
 
@@ -132,6 +135,84 @@ export async function handleMessage(
                 logger.warn('无项目，无法生成 IntelliSense');
                 vscode.window.showWarningMessage('请先选择项目');
             }
+            break;
+        }
+        case 'saveSyncEnabled': {
+            logger.info(`保存远程同步开关: ${!!msg.value}`);
+            await updateSyncConfigWorkspace('enabled', !!msg.value);
+            break;
+        }
+        case 'saveSyncSelectedServer': {
+            logger.info(`选择服务器: "${msg.value}"`);
+            await updateSyncConfigWorkspace('selectedServer', msg.value || '');
+            break;
+        }
+        case 'saveSyncRemotePath': {
+            logger.info(`保存远程路径: "${msg.value}"`);
+            await updateSyncConfigWorkspace('remotePath', msg.value || '');
+            break;
+        }
+        case 'saveSyncIgnore': {
+            logger.info(`保存同步忽略列表: ${JSON.stringify(msg.value)}`);
+            await updateSyncConfigWorkspace('ignore', msg.value || []);
+            break;
+        }
+        case 'addServer': {
+            logger.info(`添加服务器: ${JSON.stringify(msg.server)}`);
+            const servers = getServers();
+            const newServer: ServerConfig = {
+                name: msg.server.name || '',
+                host: msg.server.host || '',
+                port: msg.server.port || 22,
+                username: msg.server.username || '',
+                authMode: msg.server.authMode || 'key',
+                privateKeyPath: msg.server.privateKeyPath || ''
+            };
+            if (!newServer.name || !newServer.host || !newServer.username) {
+                vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
+                break;
+            }
+            if (servers.some(s => s.name === newServer.name)) {
+                vscode.window.showWarningMessage(`服务器 "${newServer.name}" 已存在`);
+                break;
+            }
+            // 存储密码到 SecretStorage
+            if (newServer.authMode === 'password' && msg.server.password) {
+                await secrets.store(`qtPilot.sync.password.${newServer.name}`, msg.server.password);
+            }
+            servers.push(newServer);
+            await updateServers(servers);
+            updateHtml();
+            break;
+        }
+        case 'removeServer': {
+            logger.info(`删除服务器: "${msg.name}"`);
+            const currentServers = getServers();
+            const filtered = currentServers.filter(s => s.name !== msg.name);
+            await updateServers(filtered);
+            // 清除密码
+            await secrets.delete(`qtPilot.sync.password.${msg.name}`);
+            updateHtml();
+            break;
+        }
+        case 'testSyncConnection': {
+            logger.info('测试远程连接');
+            await executeTestConnection();
+            break;
+        }
+        case 'viewPassword': {
+            logger.info(`查看密码: "${msg.name}"`);
+            const pwd = await secrets.get(`qtPilot.sync.password.${msg.name}`);
+            if (pwd) {
+                webview.postMessage({ command: 'showPassword', password: pwd });
+            } else {
+                vscode.window.showInformationMessage('该服务器未保存密码（可能使用密钥认证）');
+            }
+            break;
+        }
+        case 'syncChangedFiles': {
+            logger.info('面板触发同步变更文件');
+            await executeSyncChangedFiles();
             break;
         }
     }

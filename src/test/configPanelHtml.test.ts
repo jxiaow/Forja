@@ -23,7 +23,12 @@ function createTemplateData(): TemplateData {
         manualProPath: '',
         fileSyncPromptEnabled: true,
         qmakeReminderEnabled: true,
-        version: 'test'
+        version: 'test',
+        syncEnabled: false,
+        syncSelectedServer: '',
+        syncServers: [],
+        syncRemotePath: '',
+        syncIgnore: '.git, node_modules, out'
     };
 }
 
@@ -120,7 +125,7 @@ test('config panel project name prefers qmake target override', () => {
 
     assert.match(
         html,
-        /<span class="project-name">OverrideApp<\/span>/,
+        /<span class="project-hero-name">OverrideApp<\/span>/,
         'config panel should show the effective qmake target as the project name'
     );
 });

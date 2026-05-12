@@ -48,6 +48,7 @@ function buildOptions(params: {
         qtPath: params.qtPath || null,
         vsDevShell: params.vsDevShell || null,
         target: params.target || null,
+        server: null,
         saveLocal: false,
         json: true
     };

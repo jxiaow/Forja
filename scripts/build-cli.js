@@ -19,7 +19,8 @@ const dirs = [
     'env',
     'platform',
     'platform/win',
-    'platform/linux'
+    'platform/linux',
+    'sync'
 ];
 
 // Individual files needed from core/ (logger is used by envDetector)

@@ -23,6 +23,11 @@ export interface TemplateData {
     fileSyncPromptEnabled: boolean;
     qmakeReminderEnabled: boolean;
     version: string;
+    syncEnabled: boolean;
+    syncSelectedServer: string;
+    syncServers: { name: string; host: string; username: string }[];
+    syncRemotePath: string;
+    syncIgnore: string;
 }
 
 let _templateCache: string | null = null;
@@ -81,6 +86,11 @@ export function getHtml(data: TemplateData): string {
     const textQt = env ? (env.qt ? 'Qt ' + env.qt.version + ' (' + env.qt.compiler + ')' : '未检测到 Qt') : '检测中...';
     const textJom = env ? (jomOk ? makeLabel + ' 可用' : makeLabel + ' 未找到') : '检测中...';
 
+    // Chip 文本（紧凑版）
+    const textVsChip = env ? (env.vs ? 'VS ' + env.vs.version : 'VS 未检测') : '检测中...';
+    const textQtChip = env ? (env.qt ? 'Qt ' + env.qt.version : 'Qt 未检测') : '检测中...';
+    const textJomChip = env ? (jomOk ? makeLabel : makeLabel + ' ✗') : '检测中...';
+
     const vars: Record<string, string> = {
         dotVsClass: _dotClass(env, !!env?.vs),
         dotQtClass: _dotClass(env, !!env?.qt),
@@ -89,8 +99,11 @@ export function getHtml(data: TemplateData): string {
         textVs: _escapeHtml(textVs),
         textQt: _escapeHtml(textQt),
         textJom: _escapeHtml(textJom),
+        textVsChip: _escapeHtml(textVsChip),
+        textQtChip: _escapeHtml(textQtChip),
+        textJomChip: _escapeHtml(textJomChip),
         refreshDisabled: !env ? 'disabled' : '',
-        refreshLabel: !env ? '<span class="spin">↻</span> 检测中...' : '刷新检测',
+        refreshLabel: !env ? '<span class="spin">↻</span>' : '刷新',
         projectName: _escapeHtml(projectName),
         selC89: _sel(cStandard, 'c89'),
         selC99: _sel(cStandard, 'c99'),
@@ -106,10 +119,12 @@ export function getHtml(data: TemplateData): string {
         defaultQmakeTarget: _escapeHtml(defaultQmakeTarget),
         savedQmakeTarget: _escapeHtml(qmakeTarget),
         dotVsBlockClass: effectiveDevShell ? 'dot-ok' : 'dot-warn',
+        vsBadgeClass: effectiveDevShell ? 'badge-ok' : 'badge-warn',
         devShellSource: _escapeHtml(devShellSource),
         effectiveDevShell: _escapeHtml(effectiveDevShell || '未配置'),
         vsDevShellPath: _escapeHtml(vsDevShellPath),
         dotQtBlockClass: effectiveQtPath ? 'dot-ok' : 'dot-warn',
+        qtBadgeClass: effectiveQtPath ? 'badge-ok' : 'badge-warn',
         qtSource: _escapeHtml(qtSource),
         effectiveQtPath: _escapeHtml(effectiveQtPath || '未配置'),
         qtPathValue: _escapeHtml(qtPath),
@@ -121,7 +136,16 @@ export function getHtml(data: TemplateData): string {
         manualProPath: _escapeHtml(data.manualProPath),
         chkFileSyncPrompt: data.fileSyncPromptEnabled ? 'checked' : '',
         chkQmakeReminder: data.qmakeReminderEnabled ? 'checked' : '',
-        version: _escapeHtml(data.version)
+        version: _escapeHtml(data.version),
+        dotSyncClass: data.syncEnabled && data.syncSelectedServer && data.syncRemotePath ? 'dot-ok' : (data.syncEnabled ? 'dot-warn' : 'dot-detecting'),
+        syncStatus: data.syncEnabled ? (data.syncSelectedServer ? '已启用' : '未配置') : '未启用',
+        chkSyncEnabled: data.syncEnabled ? 'checked' : '',
+        syncConfigDisplay: data.syncEnabled ? '' : 'display:none',
+        syncServerOptions: data.syncServers
+            .map(s => `<option value="${_escapeHtml(s.name)}" ${s.name === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
+            .join(''),
+        syncRemotePath: _escapeHtml(data.syncRemotePath),
+        syncIgnore: _escapeHtml(data.syncIgnore)
     };
 
     let html = _loadTemplate();

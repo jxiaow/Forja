@@ -8,6 +8,7 @@ import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
          getFileSyncPromptEnabled, getQmakeReminderEnabled } from '../../core/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../core/projectDisplay';
+import { getSyncConfig, getServers } from '../../sync/sftpClient';
 
 const logger = createLogger('ConfigPanelView');
 
@@ -15,9 +16,11 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
     static readonly viewId = 'qtPilot.configView';
     private _view?: vscode.WebviewView;
     private readonly _version: string;
+    private readonly _secrets: vscode.SecretStorage;
 
     constructor(context: vscode.ExtensionContext) {
         this._version = context.extension.packageJSON.version ?? '';
+        this._secrets = context.secrets;
     }
 
     refresh(): void {
@@ -56,7 +59,8 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         webviewView.webview.onDidReceiveMessage(msg =>
             handleMessage(msg, webviewView.webview,
                 () => this._pushEnvUpdate(),
-                () => this._updateHtml())
+                () => this._updateHtml(),
+                this._secrets)
         );
     }
 
@@ -107,7 +111,18 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             manualProPath: getManualProPath(),
             fileSyncPromptEnabled: getFileSyncPromptEnabled(),
             qmakeReminderEnabled: getQmakeReminderEnabled(),
-            version: this._version
+            version: this._version,
+            ...(() => {
+                const sync = getSyncConfig();
+                const servers = getServers();
+                return {
+                    syncEnabled: sync.enabled,
+                    syncSelectedServer: sync.selectedServer,
+                    syncServers: servers.map(s => ({ name: s.name, host: s.host, username: s.username })),
+                    syncRemotePath: sync.remotePath,
+                    syncIgnore: sync.ignore.join(', ')
+                };
+            })()
         };
         this._view.webview.html = getHtml(data);
     }

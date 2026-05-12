@@ -33,6 +33,12 @@ qt-pilot run --execute --json
 
 # 清理
 qt-pilot clean --execute --json
+
+# 同步变更文件到远程
+qt-pilot sync --execute --json
+
+# 同步到指定服务器
+qt-pilot sync --execute --server "开发服务器" --json
 ```
 
 ## MCP Server
@@ -132,6 +138,7 @@ macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 | `qt_clean` | 生成/执行清理 |
 | `qt_run` | 构建并运行 |
 | `qt_stop` | 停止程序 |
+| `qt_sync` | 同步变更文件到远程 |
 
 每个 tool 都支持 `execute` 参数：
 - `false`（默认）：dry-run，仅返回命令计划
@@ -143,9 +150,11 @@ macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ```
 .work/qt-pilot/
-├── config.json   # 用户配置（项目、路径等）
-├── cache.json    # 环境检测缓存
-└── logs/         # 执行日志
+├── config.json       # 用户配置（项目、路径等）
+├── cache.json        # 环境检测缓存
+├── sync-config.json  # 远程同步配置（服务器列表 + 项目路径）
+├── sync-state.json   # 同步状态记录（已同步文件的 mtime）
+└── logs/             # 执行日志
 ```
 
 ## 配置优先级
@@ -153,6 +162,59 @@ macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 ```
 CLI 参数 > .work/qt-pilot/config.json > .work/qt-pilot/cache.json > 环境变量 > 自动检测 > 默认值
 ```
+
+## 远程同步
+
+CLI 支持将 git 变更文件同步到远程服务器。配置存储在 `.work/qt-pilot/sync-config.json`。
+
+### 配置文件格式
+
+```json
+{
+  "servers": [
+    {
+      "name": "开发服务器",
+      "host": "192.168.1.100",
+      "port": 22,
+      "username": "dev",
+      "authMode": "key",
+      "privateKeyPath": ""
+    },
+    {
+      "name": "测试服务器",
+      "host": "10.0.0.50",
+      "port": 22,
+      "username": "root",
+      "authMode": "password",
+      "password": "xxx"
+    }
+  ],
+  "project": {
+    "enabled": true,
+    "selectedServer": "开发服务器",
+    "remotePath": "/home/dev/myproject",
+    "ignore": [".git", "node_modules", "out", ".work", "build"]
+  }
+}
+```
+
+### 使用
+
+```bash
+# 同步变更文件（使用配置中的默认服务器）
+qt-pilot sync --execute --json
+
+# 指定服务器
+qt-pilot sync --execute --server "测试服务器" --json
+```
+
+### 同步逻辑
+
+1. 通过 `git diff` 获取变更文件
+2. 过滤忽略列表
+3. 对比 `sync-state.json` 跳过已同步且未再修改的文件
+4. 通过 SCP 上传需要同步的文件
+5. 成功后更新同步状态记录
 
 ## 支持平台
 
@@ -188,6 +250,7 @@ qt-pilot init --execute --json
 - 运行：qt-pilot run --execute --json
 - 清理：qt-pilot clean --execute --json
 - 停止：qt-pilot stop --execute --json
+- 同步到远程：qt-pilot sync --execute --json
 
 ## 规则
 

@@ -1,6 +1,6 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'detect', 'projects', 'status', 'qmake', 'build', 'clean', 'run', 'stop'];
+const validActions: CliAction[] = ['init', 'detect', 'projects', 'status', 'qmake', 'build', 'clean', 'run', 'stop', 'sync'];
 
 const helpText = `Qt Pilot CLI — qmake 项目构建工具
 
@@ -16,6 +16,7 @@ const helpText = `Qt Pilot CLI — qmake 项目构建工具
   clean       生成/查看清理命令
   run         构建并运行（--execute 时先 build 再启动）
   stop        停止运行中的程序
+  sync        同步变更文件到远程服务器（基于 git diff）
 
 选项:
   --workspace <path>     工作区路径（默认当前目录）
@@ -25,6 +26,7 @@ const helpText = `Qt Pilot CLI — qmake 项目构建工具
   --qt-path <path>       Qt 安装路径
   --vs-dev-shell <path>  Launch-VsDevShell.ps1 路径
   --target <name>        QMake TARGET 覆盖
+  --server <name>        同步时指定服务器名称
   --dry-run              仅生成命令计划，不执行（默认）
   --execute              执行命令（需显式传入）
   --save-local           将检测结果写入 .work/qt-pilot/cache.json
@@ -35,6 +37,7 @@ const helpText = `Qt Pilot CLI — qmake 项目构建工具
   qt-pilot init --execute --json    初始化并保存本地配置
   qt-pilot build --json             查看构建命令（dry-run）
   qt-pilot build --execute --json   执行构建
+  qt-pilot sync --execute --json    同步变更文件到远程
   qt-pilot status --json            查看当前状态
 `;
 
@@ -89,6 +92,7 @@ export function parseCliArgs(args: string[]): CliOptions {
         qtPath: null,
         vsDevShell: null,
         target: null,
+        server: null,
         saveLocal: false,
         json: false
     };
@@ -136,6 +140,10 @@ export function parseCliArgs(args: string[]): CliOptions {
                 break;
             case '--target':
                 options.target = readValue(args, i, arg);
+                i++;
+                break;
+            case '--server':
+                options.server = readValue(args, i, arg);
                 i++;
                 break;
             case '--save-local':

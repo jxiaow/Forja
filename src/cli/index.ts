@@ -3,6 +3,8 @@ import { parseCliArgs, isHelpRequest, getHelpText } from './args';
 import { CliResult } from './types';
 import { createActionPlan } from '../coreCli/qtCore';
 import { runCliResult } from '../coreCli/commandRunner';
+import { executeSyncCli } from '../sync/syncCli';
+import * as path from 'path';
 
 function textOutput(result: CliResult): string {
     const status = result.ok ? '成功' : '失败';
@@ -60,6 +62,31 @@ async function main(argv: string[]): Promise<void> {
     try {
         const options = parseCliArgs(argv);
         wantsJson = options.json;
+
+        // sync 走独立路径
+        if (options.action === 'sync') {
+            const workspace = options.workspace || process.cwd();
+            if (options.executionMode === 'dryRun') {
+                const output = { ok: true, action: 'sync', mode: 'dryRun', message: '使用 --execute 执行同步' };
+                if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
+                else { console.log('Sync (dry-run): 使用 --execute 执行同步'); }
+                return;
+            }
+            const result = await executeSyncCli(workspace, options.server || undefined);
+            if (wantsJson) {
+                console.log(JSON.stringify(result, null, 2));
+            } else {
+                if (result.ok) {
+                    console.log(`同步完成: ${result.uploaded.length} 个文件已上传`);
+                    if (result.skipped.length > 0) { console.log(`跳过: ${result.skipped.length} 个`); }
+                } else {
+                    console.error(`同步失败: ${result.failed.map(f => f.error).join(', ')}`);
+                }
+            }
+            process.exitCode = result.ok ? 0 : 1;
+            return;
+        }
+
         const planned = await createActionPlan(options);
         const result = await runCliResult(planned);
         if (wantsJson) {

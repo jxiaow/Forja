@@ -15,6 +15,8 @@ import { createLogger, initLogger } from './core/logger';
 import { detectEnv } from './env/envDetector';
 import { writeLocalCache, ensureLocalStateDir, LocalCache } from './coreCli/localState';
 import { scanProFiles } from './coreCli/projectScanner';
+import { registerSyncWatcher, executeSyncChangedFiles, executeTestConnection } from './sync/syncWatcher';
+import { setSecretStorage } from './sync/sftpClient';
 
 const logger = createLogger('Extension');
 
@@ -32,6 +34,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     registerPriWatcher(context);
     registerDebugSessionWatcher(context);
+    setSecretStorage(context.secrets);
+    registerSyncWatcher(context);
 
     // 全局任务结束监听：兜底重置 isBuilding / isRunning（防止关闭终端后状态卡住）
     context.subscriptions.push(
@@ -182,7 +186,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 vscode.window.showErrorMessage('启动 Qt Designer 失败，请在 Qt Pilot 配置面板设置 Qt Designer 路径');
             });
             proc.unref();
-        }]
+        }],
+        ['qtPilot.syncTestConnection', () => executeTestConnection()],
+        ['qtPilot.syncChangedFiles', () => executeSyncChangedFiles()]
     ];
 
     cmds.forEach(([cmd, handler]) => {
