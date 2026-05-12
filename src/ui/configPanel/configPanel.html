@@ -18,7 +18,7 @@ body {
 .section-header {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 10px 14px;
   background: var(--vscode-sideBarSectionHeader-background, var(--vscode-editor-background));
   border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
   cursor: pointer;
@@ -30,7 +30,7 @@ body {
 .section-header:first-child { border-top: none; }
 .section-header:hover { background: var(--vscode-list-hoverBackground); }
 .section-title {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -44,7 +44,7 @@ body {
   color: var(--vscode-descriptionForeground);
 }
 .section-header.collapsed .section-arrow { transform: rotate(-90deg); }
-.section-body { padding: 10px 12px; min-width: 0; overflow: hidden; }
+.section-body { padding: 12px 14px; min-width: 0; overflow: hidden; }
 .section-header.collapsed + .section-body { display: none; }
 
 /* ── Cards ── */
@@ -60,9 +60,9 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
-.card-title { font-size: 12px; font-weight: 600; color: var(--vscode-foreground); }
+.card-title { font-size: 13px; font-weight: 600; color: var(--vscode-foreground); }
 .card-badge {
   font-size: 10px;
   padding: 1px 6px;
@@ -96,17 +96,20 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
   overflow: hidden;
 }
-.project-hero-name { font-size: 14px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-hero-name { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Form elements ── */
 .field { margin-bottom: 10px; }
 .field:last-child { margin-bottom: 0; }
 .field-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
 .field-row .field { flex: 1; min-width: 0; margin-bottom: 0; }
-label { display: block; font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; }
+label { display: block; font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 3px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.3px; }
 input, select, textarea {
   width: 100%;
   background: var(--vscode-input-background);
@@ -597,7 +600,6 @@ details[open] .arrow { transform: rotate(90deg); }
       </div>
       <div class="hint">回车添加，点击标签删除</div>
     </div>
-    <button class="btn btn-primary btn-full" style="margin-top:10px;" onclick="syncChangedFiles()">同步变更文件</button>
   </div>
   </div>
 
