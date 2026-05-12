@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { getResolvedConfig, readServers, readProjectSyncConfig, syncChangedFiles, testConnection, askPassword, clearPasswordCache, ServerConfig } from './sftpClient';
+import * as path from 'path';
+import { getResolvedConfig, readServers, readProjectSyncConfig, syncChangedFiles, testConnection, askPassword, clearPasswordCache, ServerConfig, ResolvedSyncConfig } from './sftpClient';
 import { getWorkspaceRoot } from '../core/configService';
 import { createLogger } from '../core/logger';
 
@@ -80,27 +81,49 @@ export async function executeSyncChangedFiles(): Promise<void> {
         return;
     }
 
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+        vscode.window.showWarningMessage('无工作区文件夹');
+        return;
+    }
+
     await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: `正在同步到 ${resolved.server.name}...`,
         cancellable: false
     }, async () => {
         try {
-            const result = await syncChangedFiles(resolved, wsRoot);
+            let totalUploaded = 0;
+            let totalSkipped = 0;
+            let totalFailed: { file: string; error: string }[] = [];
 
-            if (result.uploaded.length === 0 && result.failed.length === 0 && result.skipped.length === 0) {
+            for (const folder of folders) {
+                const folderPath = folder.uri.fsPath;
+                const folderName = path.basename(folderPath);
+                // 每个文件夹映射到 远程根路径/文件夹名
+                const folderResolved: ResolvedSyncConfig = {
+                    ...resolved,
+                    remotePath: resolved.remotePath.replace(/\/$/, '') + '/' + folderName
+                };
+                const result = await syncChangedFiles(folderResolved, folderPath);
+                totalUploaded += result.uploaded.length;
+                totalSkipped += result.skipped.length;
+                totalFailed.push(...result.failed.map(f => ({ file: `${folderName}/${f.file}`, error: f.error })));
+            }
+
+            if (totalUploaded === 0 && totalFailed.length === 0 && totalSkipped === 0) {
                 vscode.window.showInformationMessage('没有需要同步的变更文件');
                 return;
             }
 
-            if (result.failed.length > 0) {
-                const failedList = result.failed.map(f => f.file).join(', ');
-                vscode.window.showErrorMessage(`同步完成，${result.uploaded.length} 个成功，${result.failed.length} 个失败: ${failedList}`);
+            if (totalFailed.length > 0) {
+                const failedList = totalFailed.map(f => f.file).join(', ');
+                vscode.window.showErrorMessage(`同步完成，${totalUploaded} 个成功，${totalFailed.length} 个失败: ${failedList}`);
             } else {
-                vscode.window.showInformationMessage(`同步完成: ${result.uploaded.length} 个文件已上传${result.skipped.length > 0 ? `，${result.skipped.length} 个已跳过` : ''}`);
+                vscode.window.showInformationMessage(`同步完成: ${totalUploaded} 个文件已上传${totalSkipped > 0 ? `，${totalSkipped} 个已跳过` : ''}`);
             }
 
-            logger.info(`同步结果: 上传=${result.uploaded.length}, 跳过=${result.skipped.length}, 失败=${result.failed.length}`);
+            logger.info(`同步结果: 上传=${totalUploaded}, 跳过=${totalSkipped}, 失败=${totalFailed.length}`);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             vscode.window.showErrorMessage(`同步失败: ${msg}`);
