@@ -4,7 +4,9 @@ import { CliResult } from './types';
 import { createActionPlan } from '../shared/qtCore';
 import { runCliResult } from '../shared/commandRunner';
 import { executeSyncCli } from '../sync/syncCli';
+import { readRunState, isProcessRunning, runLogPath } from '../shared/localState';
 import * as path from 'path';
+import * as fs from 'fs';
 
 /**
  * Compact JSON output: omit empty/null/default fields to reduce token consumption.
@@ -91,6 +93,45 @@ async function main(argv: string[]): Promise<void> {
         const options = parseCliArgs(argv);
         wantsJson = options.json;
 
+        // logs 查看运行日志
+        if (options.action === 'logs') {
+            const workspace = path.resolve(options.workspace || process.cwd());
+            const state = readRunState(workspace);
+            const logFile = runLogPath(workspace);
+
+            if (!fs.existsSync(logFile)) {
+                const msg = '没有运行日志（程序可能未以 --detach 模式启动过）';
+                if (wantsJson) { console.log(JSON.stringify({ ok: false, diagnostics: [{ level: 'info', message: msg }] })); }
+                else { console.log(msg); }
+                return;
+            }
+
+            const content = fs.readFileSync(logFile, 'utf8');
+            const lines = content.split(/\r?\n/);
+            const tail = lines.slice(-100).join('\n');
+
+            if (wantsJson) {
+                const running = state ? isProcessRunning(state.pid) : false;
+                console.log(JSON.stringify({
+                    ok: true,
+                    action: 'logs',
+                    pid: state?.pid || null,
+                    running,
+                    logFile,
+                    tail
+                }, null, 2));
+            } else {
+                if (state) {
+                    const running = isProcessRunning(state.pid);
+                    console.log(`PID: ${state.pid} (${running ? 'running' : 'exited'})`);
+                    console.log(`Log: ${logFile}`);
+                    console.log('---');
+                }
+                console.log(tail);
+            }
+            return;
+        }
+
         // sync 走独立路径
         if (options.action === 'sync') {
             const workspace = options.workspace || process.cwd();
@@ -116,7 +157,7 @@ async function main(argv: string[]): Promise<void> {
         }
 
         const planned = await createActionPlan(options);
-        const result = await runCliResult(planned, { streaming: !wantsJson });
+        const result = await runCliResult(planned, { streaming: !wantsJson, detach: options.detach });
         if (wantsJson) {
             console.log(JSON.stringify(compactResult(result), null, 2));
         } else {

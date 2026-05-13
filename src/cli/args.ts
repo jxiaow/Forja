@@ -1,6 +1,6 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'detect', 'projects', 'status', 'qmake', 'build', 'clean', 'run', 'stop', 'sync'];
+const validActions: CliAction[] = ['init', 'detect', 'projects', 'status', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs'];
 
 const helpText = `Qt Pilot CLI — qmake 项目构建工具
 
@@ -16,6 +16,7 @@ const helpText = `Qt Pilot CLI — qmake 项目构建工具
   clean       生成/查看清理命令
   run         构建并运行（--execute 时先 build 再启动）
   stop        停止运行中的程序
+  logs        查看运行日志（--detach 模式启动后的程序输出）
   sync        同步变更文件到远程服务器（基于 git diff）
 
 选项:
@@ -29,6 +30,7 @@ const helpText = `Qt Pilot CLI — qmake 项目构建工具
   --server <name>        同步时指定服务器名称
   --dry-run              仅生成命令计划，不执行（默认）
   --execute              执行命令（需显式传入）
+  --detach               run 时后台启动程序，日志落文件，CLI 立即返回
   --save-local           将检测结果写入 .qtpilot/cache.json
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
@@ -93,6 +95,7 @@ export function parseCliArgs(args: string[]): CliOptions {
         vsDevShell: null,
         target: null,
         server: null,
+        detach: false,
         saveLocal: false,
         json: false
     };
@@ -148,6 +151,9 @@ export function parseCliArgs(args: string[]): CliOptions {
                 break;
             case '--save-local':
                 options.saveLocal = true;
+                break;
+            case '--detach':
+                options.detach = true;
                 break;
             case '--json':
                 options.json = true;

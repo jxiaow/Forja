@@ -67,3 +67,41 @@ function writeJson(filePath: string, value: unknown): void {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
+
+// ── Run state (detach mode) ──
+
+export interface RunState {
+    pid: number;
+    exePath: string;
+    logFile: string;
+    startedAt: string;
+}
+
+export function runStatePath(workspace: string): string {
+    return path.join(localRoot(workspace), 'run-state.json');
+}
+
+export function runLogPath(workspace: string): string {
+    return path.join(logsDir(workspace), 'run.log');
+}
+
+export function readRunState(workspace: string): RunState | null {
+    return readJson<RunState>(runStatePath(workspace));
+}
+
+export function writeRunState(workspace: string, state: RunState): void {
+    writeJson(runStatePath(workspace), state);
+}
+
+export function clearRunState(workspace: string): void {
+    try { fs.unlinkSync(runStatePath(workspace)); } catch {}
+}
+
+export function isProcessRunning(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch {
+        return false;
+    }
+}
