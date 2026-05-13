@@ -23,8 +23,8 @@ const dirs = [
     'sync'
 ];
 
-// Individual files needed from core/ (logger is used by envDetector)
-const coreFiles = ['core/logger.js'];
+// Individual files needed from core/ (logger is used by envDetector, settingsIO by qtCore)
+const coreFiles = ['core/logger.js', 'core/settingsIO.js'];
 
 function copyDir(src, dst) {
     if (!fs.existsSync(src)) { return; }
