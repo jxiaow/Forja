@@ -140,7 +140,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             child = cp.spawn('cmd', ['/c', batFile], {
                 cwd,
                 detached: true,
-                windowsHide: false,
+                windowsHide: true,
                 stdio: ['ignore', logFd, logFd]
             });
         } else {
