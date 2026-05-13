@@ -1,6 +1,6 @@
 {
   "name": "qt-pilot-cli",
-  "version": "0.5.36",
+  "version": "0.5.38",
   "description": "CLI for qmake-based Qt/C++ project builds",
   "license": "MIT",
   "bin": {

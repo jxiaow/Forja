@@ -206,4 +206,4 @@ qt-pilot run --execute
 - **Claude Code**: `~/.claude/skills/qt-pilot-cli/`
 - **OpenCode**: `~/.opencode/skills/qt-pilot-cli/`
 
-详细命令说明见 [cli/README.md](cli/README.md)。
+详细命令说明见 cli/README.md。
