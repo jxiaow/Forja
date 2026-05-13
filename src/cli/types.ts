@@ -16,6 +16,7 @@ export interface CliOptions {
     target: string | null;
     server?: string | null;
     detach?: boolean;
+    brief?: boolean;
     saveLocal: boolean;
     json: boolean;
 }
@@ -49,6 +50,8 @@ export interface CliResult {
     durationMs: number;
     stdout: string;
     stderr: string;
+    /** Extracted error lines from compiler output (when exitCode !== 0) */
+    errors: string[];
     logFile: string | null;
     diagnostics: CliDiagnostic[];
     resolved: CliResolvedConfig | null;

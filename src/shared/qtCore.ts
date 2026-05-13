@@ -33,6 +33,7 @@ function emptyResult(options: CliOptions, workspace: string): CliResult {
         durationMs: 0,
         stdout: '',
         stderr: '',
+        errors: [],
         logFile: null,
         diagnostics: [],
         resolved: null

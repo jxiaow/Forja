@@ -10,10 +10,22 @@ import * as fs from 'fs';
 
 /**
  * Compact JSON output: omit empty/null/default fields to reduce token consumption.
- * Candidates use relative paths (relative to workspace).
+ * brief mode: only ok, action, diagnostics, nextActions, logFile, exitCode.
  */
-function compactResult(result: CliResult): Record<string, unknown> {
+function compactResult(result: CliResult, brief?: boolean): Record<string, unknown> {
     const out: Record<string, unknown> = { ok: result.ok, action: result.action };
+
+    if (brief) {
+        if (result.diagnostics.length > 0) { out.diagnostics = result.diagnostics; }
+        if (result.nextActions.length > 0) { out.nextActions = result.nextActions; }
+        if (result.exitCode !== null) { out.exitCode = result.exitCode; }
+        if (result.errors.length > 0) { out.errors = result.errors; }
+        if (result.logFile) { out.logFile = result.logFile; }
+        if (result.candidates.length > 0) {
+            out.candidates = result.candidates.map(c => path.relative(result.workspace, c) || c);
+        }
+        return out;
+    }
 
     if (result.mode !== 'dryRun') { out.mode = result.mode; }
     if (result.project) {
@@ -28,6 +40,7 @@ function compactResult(result: CliResult): Record<string, unknown> {
     if (result.nextActions.length > 0) { out.nextActions = result.nextActions; }
     if (result.exitCode !== null) { out.exitCode = result.exitCode; }
     if (result.durationMs > 0) { out.durationMs = result.durationMs; }
+    if (result.errors.length > 0) { out.errors = result.errors; }
     if (result.stdout) { out.stdout = result.stdout; }
     if (result.stderr) { out.stderr = result.stderr; }
     if (result.logFile) { out.logFile = result.logFile; }
@@ -159,7 +172,7 @@ async function main(argv: string[]): Promise<void> {
         const planned = await createActionPlan(options);
         const result = await runCliResult(planned, { streaming: !wantsJson, detach: options.detach });
         if (wantsJson) {
-            console.log(JSON.stringify(compactResult(result), null, 2));
+            console.log(JSON.stringify(compactResult(result, options.brief), null, 2));
         } else {
             console.log(textOutput(result));
         }

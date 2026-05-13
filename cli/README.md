@@ -100,8 +100,13 @@ qt-pilot build --execute --mode release --arch x86
 
 先杀掉已运行的程序，再编译，编译成功后启动程序。
 
+- 在终端中直接运行时：实时输出编译过程和程序日志，程序退出后命令才结束
+- 被脚本/AI 工具调用时（非 TTY）：自动后台启动程序，日志落文件，CLI 立即返回
+- 显式 `--detach`：无论什么环境都后台启动
+
 ```bash
 qt-pilot run --execute
+qt-pilot run --execute --detach
 qt-pilot run --execute --project "qt_linux_pc_client/qt_linux_pc_client.pro" --mode release
 ```
 
@@ -113,7 +118,23 @@ qt-pilot run --execute --project "qt_linux_pc_client/qt_linux_pc_client.pro" --m
 | `--arch x86\|x64` | 目标架构 |
 | `--target <name>` | QMake TARGET 覆盖 |
 | `--execute` | 执行（不加则仅显示命令计划） |
-| `--json` | 输出 JSON（不建议，无实时输出） |
+| `--detach` | 强制后台启动，日志落文件，CLI 立即返回 |
+| `--json` | 输出 JSON |
+| `--brief` | 精简 JSON（仅 ok、diagnostics、logFile） |
+
+### `qt-pilot logs`
+
+查看后台启动的程序运行日志（`--detach` 或非 TTY 模式启动后的输出）。
+
+```bash
+qt-pilot logs
+qt-pilot logs --json
+```
+
+| 选项 | 说明 |
+|------|------|
+| `--workspace <path>` | 工作区路径 |
+| `--json` | 输出 JSON（含 PID、运行状态、日志尾部） |
 
 ### `qt-pilot clean`
 

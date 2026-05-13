@@ -21,6 +21,7 @@ test('runCliResult leaves dry run results unexecuted', async () => {
         durationMs: 0,
         stdout: '',
         stderr: '',
+        errors: [],
         logFile: null,
         diagnostics: [],
         resolved: null
@@ -47,6 +48,7 @@ test('runCliResult executes commands and writes logs', async () => {
         durationMs: 0,
         stdout: '',
         stderr: '',
+        errors: [],
         logFile: null,
         diagnostics: [],
         resolved: null

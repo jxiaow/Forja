@@ -80,6 +80,17 @@ export function buildRunCommand(project: string, mode: string, arch: string): st
     return `export LD_LIBRARY_PATH=${shellQuote(`${libraryPaths.join(':')}:$LD_LIBRARY_PATH`)} && ${shellQuote(runtimeTarget.exePath)}`;
 }
 
+/**
+ * Extract error lines from compiler output (MSVC and GCC patterns).
+ */
+function extractErrors(output: string): string[] {
+    const lines = output.split(/\r?\n/);
+    const errorPattern = /\): error |: error:|: fatal error |: fatal error:/i;
+    const errors = lines.filter(line => errorPattern.test(line));
+    // Limit to 20 error lines to avoid token bloat
+    return errors.slice(0, 20);
+}
+
 export interface RunOptions {
     /** When true, pipes stdout/stderr to the terminal in real-time */
     streaming?: boolean;
@@ -127,31 +138,31 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         ensureLocalStateDir(result.workspace);
         const logFile = runLogPath(result.workspace);
         fs.mkdirSync(path.dirname(logFile), { recursive: true });
-        const logFd = fs.openSync(logFile, 'w');
 
         const cwd = result.project ? path.dirname(result.project) : result.workspace;
         const isWin = process.platform === 'win32';
 
         let child: cp.ChildProcess;
         if (isWin) {
-            // Write a temp bat file to avoid cmd /c quoting issues
+            // Use VBScript to launch without visible console window
             const batFile = path.join(path.dirname(logFile), 'run.bat');
-            fs.writeFileSync(batFile, `@echo off\r\ncd /d "${cwd}"\r\n${runCommand}\r\n`, 'utf8');
-            child = cp.spawn('cmd', ['/c', batFile], {
+            const vbsFile = path.join(path.dirname(logFile), 'run.vbs');
+            fs.writeFileSync(batFile, `@echo off\r\ncd /d "${cwd}"\r\n${runCommand} >"${logFile}" 2>&1\r\n`, 'utf8');
+            fs.writeFileSync(vbsFile, `CreateObject("Wscript.Shell").Run "cmd /c ""${batFile}""", 0, False\r\n`, 'utf8');
+            child = cp.spawn('wscript', [vbsFile], {
                 cwd,
                 detached: true,
                 windowsHide: true,
-                stdio: ['ignore', logFd, logFd]
+                stdio: 'ignore'
             });
         } else {
-            child = cp.spawn('/bin/sh', ['-c', `cd "${cwd}" && ${runCommand}`], {
+            child = cp.spawn('/bin/sh', ['-c', `cd "${cwd}" && ${runCommand} >"${logFile}" 2>&1 &`], {
                 cwd,
                 detached: true,
-                stdio: ['ignore', logFd, logFd]
+                stdio: 'ignore'
             });
         }
         child.unref();
-        fs.closeSync(logFd);
 
         const pid = child.pid || 0;
         writeRunState(result.workspace, {
@@ -189,6 +200,10 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         executed.stderr
     ].join('\n'), 'utf8');
 
+    const errors = executed.exitCode !== 0
+        ? extractErrors(executed.stdout + '\n' + executed.stderr)
+        : [];
+
     return {
         ...result,
         ok: executed.exitCode === 0,
@@ -196,6 +211,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         durationMs,
         stdout: executed.stdout,
         stderr: executed.stderr,
+        errors,
         logFile: filePath,
         commands: commandParts,
         diagnostics: executed.exitCode === 0
@@ -205,7 +221,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 {
                     level: 'error',
                     message: '命令执行失败',
-                    hint: '请查看 logFile 中的 stdout 和 stderr'
+                    hint: errors.length > 0 ? undefined : '请查看 logFile 中的 stdout 和 stderr'
                 }
             ]
     };
