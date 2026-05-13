@@ -28,6 +28,44 @@ function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; 
     });
 }
 
+/**
+ * Streaming execute: pipes stdout/stderr to the current process in real-time,
+ * while also collecting output for logging.
+ */
+function executeStreaming(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    return new Promise(resolve => {
+        const child = cp.spawn(commandLine, {
+            cwd,
+            windowsHide: true,
+            shell: true,
+            stdio: ['ignore', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', (chunk: Buffer) => {
+            const text = chunk.toString();
+            stdout += text;
+            process.stdout.write(text);
+        });
+
+        child.stderr.on('data', (chunk: Buffer) => {
+            const text = chunk.toString();
+            stderr += text;
+            process.stderr.write(text);
+        });
+
+        child.on('close', (code) => {
+            resolve({ exitCode: code ?? 0, stdout, stderr });
+        });
+
+        child.on('error', (err) => {
+            resolve({ exitCode: 1, stdout, stderr: stderr + err.message });
+        });
+    });
+}
+
 function shellQuote(value: string): string {
     return `"${value.replace(/"/g, '\\"')}"`;
 }
@@ -50,13 +88,19 @@ export function buildRunCommand(project: string, mode: string, arch: string): st
     return `export LD_LIBRARY_PATH=${shellQuote(`${libraryPaths.join(':')}:$LD_LIBRARY_PATH`)} && ${shellQuote(runtimeTarget.exePath)}`;
 }
 
-export async function runCliResult(result: CliResult): Promise<CliResult> {
+export interface RunOptions {
+    /** When true, pipes stdout/stderr to the terminal in real-time */
+    streaming?: boolean;
+}
+
+export async function runCliResult(result: CliResult, options?: RunOptions): Promise<CliResult> {
     if (!result.ok || result.mode === 'dryRun' || result.commands.length === 0) {
         return result;
     }
 
     const started = Date.now();
     const commandParts = [...result.commands];
+
     if (result.action === 'run') {
         if (!result.project || !result.resolved) {
             return {
@@ -98,8 +142,10 @@ export async function runCliResult(result: CliResult): Promise<CliResult> {
         commandParts.push(runCommand);
     }
 
+    // Execute commands
     const commandLine = commandParts.join(' && ');
-    const executed = await execute(commandLine, result.workspace);
+    const exec = options?.streaming ? executeStreaming : execute;
+    const executed = await exec(commandLine, result.workspace);
     const durationMs = Date.now() - started;
     ensureLocalStateDir(result.workspace);
     const filePath = logFileFor(result.workspace, result.action);

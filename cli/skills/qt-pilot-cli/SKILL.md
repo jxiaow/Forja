@@ -63,7 +63,8 @@ qt-pilot build --execute --mode release --arch x86
 ## 执行规则
 
 - **直接执行**：构建、运行、清理等操作直接带 `--execute`，不需要先 dry-run 再问用户
-- **在 IDE 终端中执行**：所有 `--execute` 命令必须在 IDE 的终端中执行（不要用后台进程），这样用户能看到实时编译输出
+- **在 IDE 终端中执行**：build、qmake、clean 命令在终端中执行，用户能看到实时编译输出
+- **run 用后台进程**：`qt-pilot run --execute` 会先编译再启动程序，程序不会自动退出，必须用后台进程方式执行（不要用普通 Command，否则会一直等待程序退出）
 - **不要拆解命令**：`qt-pilot run --execute` 会先编译再启动程序，不要自己拆成 build + 手动启动 exe
 - **不要猜路径**：不要自己拼 qmake/jom/make/VsDevCmd 命令，统一用 qt-pilot
 - **判断成功失败**：看命令退出码，0 为成功，非 0 为失败；失败时从终端输出中分析错误原因

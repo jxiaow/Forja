@@ -88,7 +88,7 @@ async function main(argv: string[]): Promise<void> {
         }
 
         const planned = await createActionPlan(options);
-        const result = await runCliResult(planned);
+        const result = await runCliResult(planned, { streaming: !wantsJson });
         if (wantsJson) {
             console.log(JSON.stringify(result, null, 2));
         } else {
