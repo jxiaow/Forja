@@ -20,7 +20,7 @@ export const winConfig: PlatformConfig = {
     },
 
     killCommand(exeName: string): string {
-        return `taskkill /F /IM ${exeName}.exe 2>nul & timeout /t 1 /nobreak >nul`;
+        return `taskkill /F /IM ${exeName}.exe >nul 2>nul & timeout /t 1 /nobreak >nul`;
     },
 
     stopCommands(exeName: string): string[] {
