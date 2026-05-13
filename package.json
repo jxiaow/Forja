@@ -3,7 +3,7 @@
   "displayName": "Compilot",
   "publisher": "compilot",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
@@ -144,14 +144,20 @@
           },
           "compilot.qt.mode": {
             "type": "string",
-            "enum": ["debug", "release"],
+            "enum": [
+              "debug",
+              "release"
+            ],
             "default": "debug",
             "description": "编译模式",
             "scope": "resource"
           },
           "compilot.qt.arch": {
             "type": "string",
-            "enum": ["x86", "x64"],
+            "enum": [
+              "x86",
+              "x64"
+            ],
             "default": "x86",
             "description": "目标架构",
             "scope": "resource"
@@ -169,14 +175,20 @@
           },
           "compilot.sdk.mode": {
             "type": "string",
-            "enum": ["debug", "release"],
+            "enum": [
+              "debug",
+              "release"
+            ],
             "default": "debug",
             "description": "编译模式",
             "scope": "resource"
           },
           "compilot.sdk.arch": {
             "type": "string",
-            "enum": ["x86", "x64"],
+            "enum": [
+              "x86",
+              "x64"
+            ],
             "default": "x86",
             "description": "目标架构（仅 Windows 有效）",
             "scope": "resource"
