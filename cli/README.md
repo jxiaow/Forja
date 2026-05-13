@@ -7,7 +7,8 @@
 ## 安装
 
 ```bash
-npm install -g qt-pilot-cli
+# 从本地打包文件安装
+npm install -g qt-pilot-cli-x.x.x.tgz
 ```
 
 ## 快速开始
