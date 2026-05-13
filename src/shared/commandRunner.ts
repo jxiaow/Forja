@@ -29,31 +29,23 @@ function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; 
 }
 
 /**
- * Streaming execute: pipes stdout/stderr to the current process in real-time,
- * while also collecting output for logging.
+ * Streaming execute: uses cp.exec but pipes stdout/stderr to the current process in real-time.
  */
 function executeStreaming(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        const child = cp.spawn(commandLine, {
-            cwd,
-            windowsHide: true,
-            shell: true,
-            stdio: ['ignore', 'pipe', 'pipe']
-        });
+        const child = cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 });
 
         let stdout = '';
         let stderr = '';
 
-        child.stdout.on('data', (chunk: Buffer) => {
-            const text = chunk.toString();
-            stdout += text;
-            process.stdout.write(text);
+        child.stdout?.on('data', (chunk: string) => {
+            stdout += chunk;
+            process.stdout.write(chunk);
         });
 
-        child.stderr.on('data', (chunk: Buffer) => {
-            const text = chunk.toString();
-            stderr += text;
-            process.stderr.write(text);
+        child.stderr?.on('data', (chunk: string) => {
+            stderr += chunk;
+            process.stderr.write(chunk);
         });
 
         child.on('close', (code) => {
