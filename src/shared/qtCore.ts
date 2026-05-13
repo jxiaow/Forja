@@ -16,6 +16,7 @@ import {
 } from './localState';
 import { loadSettings, saveSettings, QtPilotSettings } from '../core/settingsIO';
 import { buildRunCommand } from './commandRunner';
+import { resolveRuntimeTarget } from './runtimeTarget';
 
 function emptyResult(options: CliOptions, workspace: string): CliResult {
     return {
@@ -298,21 +299,28 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     } else if (options.action === 'build') {
         commands = shellBuilder.buildCommands(buildConfig).commands;
     } else if (options.action === 'run') {
-        commands = shellBuilder.buildCommands(buildConfig).commands;
+        const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
         // Append run command (launch executable) for both dry-run and execute
         if (project) {
             const runCmd = buildRunCommand(project, mode, arch);
             if (runCmd) {
-                commands = [...commands, runCmd];
+                // Kill existing process before build (use actual exe name from Makefile)
+                const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
+                const exeName = runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro');
+                const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
+                commands = [killCmd, ...buildCmds, runCmd];
             } else {
                 // Makefile not yet generated — can't resolve executable path
                 const environmentGuidance = buildEnvironmentGuidance(options.action, qtPath, vsDevShell);
+                const fallbackExeName = path.basename(project, '.pro');
+                const fallbackKillCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(fallbackExeName);
+                const fallbackCmds = [fallbackKillCmd, ...shellBuilder.buildCommands(buildConfig).commands];
                 return {
                     ...result,
                     ok: true,
                     project,
-                    commands: shellBuilder.buildCommands(buildConfig).commands,
-                    shellCommand: shellBuilder.buildCommands(buildConfig).commands.join(' && '),
+                    commands: fallbackCmds,
+                    shellCommand: fallbackCmds.join(' && '),
                     diagnostics: [
                         ...environmentGuidance.diagnostics,
                         { level: 'warning', message: '无法解析可执行文件路径（Makefile 可能尚未生成），仅返回 build 命令' }

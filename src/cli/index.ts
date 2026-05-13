@@ -6,6 +6,34 @@ import { runCliResult } from '../shared/commandRunner';
 import { executeSyncCli } from '../sync/syncCli';
 import * as path from 'path';
 
+/**
+ * Compact JSON output: omit empty/null/default fields to reduce token consumption.
+ * Candidates use relative paths (relative to workspace).
+ */
+function compactResult(result: CliResult): Record<string, unknown> {
+    const out: Record<string, unknown> = { ok: result.ok, action: result.action };
+
+    if (result.mode !== 'dryRun') { out.mode = result.mode; }
+    if (result.project) {
+        out.project = path.relative(result.workspace, result.project) || result.project;
+    }
+    if (result.commands.length > 0) { out.commands = result.commands; }
+    if (result.shellCommand) { out.shellCommand = result.shellCommand; }
+    if (result.candidates.length > 0) {
+        out.candidates = result.candidates.map(c => path.relative(result.workspace, c) || c);
+    }
+    if (result.diagnostics.length > 0) { out.diagnostics = result.diagnostics; }
+    if (result.nextActions.length > 0) { out.nextActions = result.nextActions; }
+    if (result.exitCode !== null) { out.exitCode = result.exitCode; }
+    if (result.durationMs > 0) { out.durationMs = result.durationMs; }
+    if (result.stdout) { out.stdout = result.stdout; }
+    if (result.stderr) { out.stderr = result.stderr; }
+    if (result.logFile) { out.logFile = result.logFile; }
+    if (!result.ok && result.resolved) { out.resolved = result.resolved; }
+
+    return out;
+}
+
 function textOutput(result: CliResult): string {
     const status = result.ok ? '成功' : '失败';
     const lines = [
@@ -90,7 +118,7 @@ async function main(argv: string[]): Promise<void> {
         const planned = await createActionPlan(options);
         const result = await runCliResult(planned, { streaming: !wantsJson });
         if (wantsJson) {
-            console.log(JSON.stringify(result, null, 2));
+            console.log(JSON.stringify(compactResult(result), null, 2));
         } else {
             console.log(textOutput(result));
         }
