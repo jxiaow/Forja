@@ -15,11 +15,9 @@ function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; 
         cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
             let exitCode = 0;
             if (error) {
-                // error.code is the process exit code (number) when available
                 if (typeof (error as any).code === 'number') {
                     exitCode = (error as any).code;
                 } else if ((error as any).signal) {
-                    // Process killed by signal (e.g. SIGTERM, SIGKILL)
                     exitCode = 128;
                 } else {
                     exitCode = 1;
@@ -34,12 +32,8 @@ function shellQuote(value: string): string {
     return `"${value.replace(/"/g, '\\"')}"`;
 }
 
-function buildRunCommand(result: CliResult): string | null {
-    if (!result.project || !result.resolved) {
-        return null;
-    }
-
-    const runtimeTarget = resolveRuntimeTarget(path.dirname(result.project), result.resolved.mode, result.resolved.arch);
+export function buildRunCommand(project: string, mode: string, arch: string): string | null {
+    const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
     if (!runtimeTarget) {
         return null;
     }
@@ -48,7 +42,7 @@ function buildRunCommand(result: CliResult): string | null {
         return shellQuote(runtimeTarget.exePath);
     }
 
-    const libraryPaths = parseRuntimeLibPaths(path.dirname(result.project));
+    const libraryPaths = parseRuntimeLibPaths(path.dirname(project));
     if (libraryPaths.length === 0) {
         return shellQuote(runtimeTarget.exePath);
     }
@@ -64,7 +58,25 @@ export async function runCliResult(result: CliResult): Promise<CliResult> {
     const started = Date.now();
     const commandParts = [...result.commands];
     if (result.action === 'run') {
-        const runCommand = buildRunCommand(result);
+        if (!result.project || !result.resolved) {
+            return {
+                ...result,
+                ok: false,
+                diagnostics: [
+                    ...result.diagnostics,
+                    {
+                        level: 'error',
+                        message: '无法确定可执行文件路径',
+                        hint: '请先运行 qmake/build 生成 Makefile，或检查 project/mode/arch 是否匹配'
+                    }
+                ],
+                nextActions: [
+                    ...result.nextActions,
+                    '先执行 qmake --execute，然后重新运行 run --execute'
+                ]
+            };
+        }
+        const runCommand = buildRunCommand(result.project, result.resolved.mode, result.resolved.arch);
         if (!runCommand) {
             return {
                 ...result,

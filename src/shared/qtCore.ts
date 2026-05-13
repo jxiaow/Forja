@@ -15,6 +15,7 @@ import {
     writeLocalCache
 } from './localState';
 import { loadSettings, saveSettings, QtPilotSettings } from '../core/settingsIO';
+import { buildRunCommand } from './commandRunner';
 
 function emptyResult(options: CliOptions, workspace: string): CliResult {
     return {
@@ -24,6 +25,7 @@ function emptyResult(options: CliOptions, workspace: string): CliResult {
         workspace,
         project: null,
         commands: [],
+        shellCommand: '',
         candidates: [],
         nextActions: [],
         exitCode: null,
@@ -293,8 +295,36 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
 
     if (options.action === 'qmake') {
         commands = shellBuilder.qmakeCommands(buildConfig).commands;
-    } else if (options.action === 'build' || options.action === 'run') {
+    } else if (options.action === 'build') {
         commands = shellBuilder.buildCommands(buildConfig).commands;
+    } else if (options.action === 'run') {
+        commands = shellBuilder.buildCommands(buildConfig).commands;
+        // Append run command (launch executable) for both dry-run and execute
+        if (project) {
+            const runCmd = buildRunCommand(project, mode, arch);
+            if (runCmd) {
+                commands = [...commands, runCmd];
+            } else {
+                // Makefile not yet generated — can't resolve executable path
+                const environmentGuidance = buildEnvironmentGuidance(options.action, qtPath, vsDevShell);
+                return {
+                    ...result,
+                    ok: true,
+                    project,
+                    commands: shellBuilder.buildCommands(buildConfig).commands,
+                    shellCommand: shellBuilder.buildCommands(buildConfig).commands.join(' && '),
+                    diagnostics: [
+                        ...environmentGuidance.diagnostics,
+                        { level: 'warning', message: '无法解析可执行文件路径（Makefile 可能尚未生成），仅返回 build 命令' }
+                    ],
+                    nextActions: [
+                        ...environmentGuidance.nextActions,
+                        '先执行 qmake 生成 Makefile，再重新调用 run'
+                    ],
+                    resolved
+                };
+            }
+        }
     } else if (options.action === 'clean') {
         commands = shellBuilder.cleanCommands(buildConfig).commands;
     } else if (options.action === 'stop') {
@@ -308,6 +338,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         ok: true,
         project,
         commands,
+        shellCommand: commands.length > 0 ? commands.join(' && ') : '',
         diagnostics: environmentGuidance.diagnostics,
         nextActions: environmentGuidance.nextActions,
         resolved

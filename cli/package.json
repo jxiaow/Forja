@@ -1,22 +1,21 @@
 {
   "name": "qt-pilot-cli",
   "version": "0.5.31",
-  "description": "CLI and MCP server for qmake-based Qt/C++ project builds",
+  "description": "CLI for qmake-based Qt/C++ project builds",
   "license": "MIT",
   "bin": {
-    "qt-pilot": "./out/cli/index.js",
-    "qt-pilot-mcp": "./out/mcp/server.js"
+    "qt-pilot": "./out/cli/index.js"
   },
   "main": "./out/shared/qtCore.js",
   "files": [
     "out/cli/**",
     "out/shared/**",
-    "out/mcp/**",
     "out/env/**",
     "out/platform/**",
     "out/sync/**",
     "out/core/logger.js",
     "out/core/settingsIO.js",
+    "skills/**",
     "README.md"
   ],
   "engines": {
@@ -27,14 +26,9 @@
     "qmake",
     "cpp",
     "build",
-    "mcp",
-    "model-context-protocol",
     "ai-tools"
   ],
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^4.4.3"
-  },
+  "dependencies": {},
   "scripts": {
     "prepublishOnly": "echo 'Run npm run build:cli from the root project first'"
   }

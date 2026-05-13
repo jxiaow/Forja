@@ -40,6 +40,8 @@ export interface CliResult {
     workspace: string;
     project: string | null;
     commands: string[];
+    /** 拼接好的完整 shell 命令，可直接在 workspace 目录下执行 */
+    shellCommand: string;
     candidates: string[];
     nextActions: string[];
     exitCode: number | null;
