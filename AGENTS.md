@@ -181,7 +181,7 @@ src/
 │   ├── qtCore.ts                   # CLI 核心逻辑 (createActionPlan)
 │   ├── commandRunner.ts            # 命令执行器 (runCliResult)
 │   ├── configResolver.ts           # BuildConfig 解析
-│   ├── localState.ts               # .qtpilot/ 本地状态读写
+│   ├── localState.ts               # .qtpilot/ 目录管理 + cache 读写
 │   ├── projectScanner.ts           # .pro 文件扫描 + 解析
 │   └── runtimeTarget.ts            # 运行时目标解析
 ├── cli/
@@ -195,10 +195,9 @@ src/
 │   ├── sftpClient.ts              # 同步编排层（密码管理 + git diff + 上传流程）
 │   ├── resolver.ts                 # 同步配置解析
 │   ├── transport.ts                # SSH/SCP 传输操作
-│   ├── serverStore.ts              # 服务器配置存储
+│   ├── serverStore.ts              # 服务器配置存储（全局 ~/.qt-pilot/servers.json）
 │   ├── syncState.ts                # 同步状态追踪
-│   ├── syncCli.ts                  # CLI 同步模块（不依赖 vscode）
-│   └── crypto.ts                   # 密码加解密
+│   └── syncCli.ts                  # CLI 同步模块（不依赖 vscode）
 └── test/                           # 单元测试（node:test）
 out/                                # 编译输出 (gitignored)
 ```

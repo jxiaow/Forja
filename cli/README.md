@@ -149,54 +149,70 @@ macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 配置保存在项目目录下：
 
 ```
-.work/qt-pilot/
-├── config.json       # 用户配置（项目、路径等）
-├── cache.json        # 环境检测缓存
-├── sync-config.json  # 远程同步配置（服务器列表 + 项目路径）
-├── sync-state.json   # 同步状态记录（已同步文件的 mtime）
+.qtpilot/
+├── settings.json     # 唯一配置源（mode、arch、路径、项目选择等）
+├── cache.json        # 环境检测缓存（自动生成）
+├── sync-config.json  # 同步开关 + 忽略列表（项目级）
 └── logs/             # 执行日志
+```
+
+全局服务器列表：
+
+```
+~/.qt-pilot/
+└── servers.json      # 服务器配置（含远程根路径、密码明文）
 ```
 
 ## 配置优先级
 
 ```
-CLI 参数 > .work/qt-pilot/config.json > .work/qt-pilot/cache.json > 环境变量 > 自动检测 > 默认值
+CLI 参数 > .qtpilot/settings.json > .qtpilot/cache.json > 环境变量 > 自动检测 > 默认值
 ```
 
 ## 远程同步
 
-CLI 支持将 git 变更文件同步到远程服务器。配置存储在 `.work/qt-pilot/sync-config.json`。
+CLI 支持将 git 变更文件同步到远程服务器。服务器配置存储在 `~/.qt-pilot/servers.json`，项目同步开关存储在 `.qtpilot/sync-config.json`。
 
 ### 配置文件格式
 
+服务器配置（`~/.qt-pilot/servers.json`）：
+
+```json
+[
+  {
+    "id": "abc123",
+    "name": "开发服务器",
+    "host": "192.168.1.100",
+    "port": 22,
+    "username": "dev",
+    "authMode": "key",
+    "privateKeyPath": "",
+    "remotePath": "/home/dev/myproject"
+  },
+  {
+    "id": "def456",
+    "name": "测试服务器",
+    "host": "10.0.0.50",
+    "port": 22,
+    "username": "root",
+    "authMode": "password",
+    "password": "xxx",
+    "remotePath": "/opt/build/myproject"
+  }
+]
+```
+
+项目同步配置（`.qtpilot/sync-config.json`）：
+
 ```json
 {
-  "servers": [
-    {
-      "name": "开发服务器",
-      "host": "192.168.1.100",
-      "port": 22,
-      "username": "dev",
-      "authMode": "key",
-      "privateKeyPath": ""
-    },
-    {
-      "name": "测试服务器",
-      "host": "10.0.0.50",
-      "port": 22,
-      "username": "root",
-      "authMode": "password",
-      "password": "xxx"
-    }
-  ],
-  "project": {
-    "enabled": true,
-    "selectedServer": "开发服务器",
-    "remotePath": "/home/dev/myproject",
-    "ignore": [".git", "node_modules", "out", ".work", "build"]
-  }
+  "enabled": true,
+  "selectedServer": "abc123",
+  "ignore": [".git", "node_modules", "out", ".qtpilot", "build"]
 }
 ```
+
+多文件夹工作区时，每个 workspace folder 同步到 `服务器.remotePath/文件夹名/`。
 
 ### 使用
 
@@ -240,7 +256,7 @@ MIT
 
 qt-pilot init --execute --json
 
-该命令会检测 Qt 和 VS 环境，保存到 .work/qt-pilot/，后续命令自动读取。
+该命令会检测 Qt 和 VS 环境，保存到 .qtpilot/，后续命令自动读取。
 
 ## 常用命令
 
