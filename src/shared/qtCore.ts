@@ -17,6 +17,7 @@ import {
     writeLocalCache,
     writeLocalConfig
 } from './localState';
+import { loadSettings } from '../core/settingsIO';
 
 function emptyResult(options: CliOptions, workspace: string): CliResult {
     return {
@@ -147,6 +148,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
 
     const config = readLocalConfig(workspace);
     const cache = readLocalCache(workspace);
+    const settings = loadSettings(workspace);
 
     if (options.action === 'detect' || options.action === 'projects' || options.action === 'status') {
         const detected = await detectAndCache(workspace, options);
@@ -156,11 +158,11 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             : candidates.length === 1
                 ? candidates[0]
                 : null;
-        const mode = options.mode || config?.mode || 'debug';
-        const arch = options.arch || config?.arch || 'x86';
-        const qtPath = options.qtPath || config?.qtPath || detected.detected.qt?.path || '';
-        const vsDevShell = options.vsDevShell || config?.vsDevShell || detected.detected.vs?.devShellPath || '';
-        const qmakeTarget = options.target || config?.qmakeTarget || '';
+        const mode = options.mode || config?.mode || settings.mode || 'debug';
+        const arch = options.arch || config?.arch || settings.arch || 'x86';
+        const qtPath = options.qtPath || config?.qtPath || settings.qtPath || detected.detected.qt?.path || '';
+        const vsDevShell = options.vsDevShell || config?.vsDevShell || settings.vsDevShellPath || detected.detected.vs?.devShellPath || '';
+        const qmakeTarget = options.target || config?.qmakeTarget || settings.qmakeTarget || '';
         const diagnostics = [];
         const nextActions: string[] = [];
 
@@ -203,11 +205,11 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
 
     const project = projectResult.project;
-    const mode = options.mode || config?.mode || 'debug';
-    const arch = options.arch || config?.arch || 'x86';
-    const qtPath = options.qtPath || config?.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = options.vsDevShell || config?.vsDevShell || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
-    const qmakeTarget = options.target || config?.qmakeTarget || '';
+    const mode = options.mode || config?.mode || settings.mode || 'debug';
+    const arch = options.arch || config?.arch || settings.arch || 'x86';
+    const qtPath = options.qtPath || config?.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
+    const vsDevShell = options.vsDevShell || config?.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const qmakeTarget = options.target || config?.qmakeTarget || settings.qmakeTarget || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, qmakeTarget);
 
     if (options.action === 'init') {
