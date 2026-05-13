@@ -101,47 +101,6 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
     const started = Date.now();
     const commandParts = [...result.commands];
 
-    if (result.action === 'run') {
-        if (!result.project || !result.resolved) {
-            return {
-                ...result,
-                ok: false,
-                diagnostics: [
-                    ...result.diagnostics,
-                    {
-                        level: 'error',
-                        message: '无法确定可执行文件路径',
-                        hint: '请先运行 qmake/build 生成 Makefile，或检查 project/mode/arch 是否匹配'
-                    }
-                ],
-                nextActions: [
-                    ...result.nextActions,
-                    '先执行 qmake --execute，然后重新运行 run --execute'
-                ]
-            };
-        }
-        const runCommand = buildRunCommand(result.project, result.resolved.mode, result.resolved.arch);
-        if (!runCommand) {
-            return {
-                ...result,
-                ok: false,
-                diagnostics: [
-                    ...result.diagnostics,
-                    {
-                        level: 'error',
-                        message: '无法确定可执行文件路径',
-                        hint: '请先运行 qmake/build 生成 Makefile，或检查 project/mode/arch 是否匹配'
-                    }
-                ],
-                nextActions: [
-                    ...result.nextActions,
-                    '先执行 qmake --execute，然后重新运行 run --execute'
-                ]
-            };
-        }
-        commandParts.push(runCommand);
-    }
-
     // Execute commands
     const commandLine = commandParts.join(' && ');
     const exec = options?.streaming ? executeStreaming : execute;
