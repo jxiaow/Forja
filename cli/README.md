@@ -17,29 +17,35 @@ npm install -g qt-pilot-cli
 qt-pilot --help
 
 # 初始化（检测环境、保存本地配置）
-qt-pilot init --execute --json
+qt-pilot init --execute
 
-# 查看状态
+# 查看状态（结构化输出，适合脚本/AI 解析）
 qt-pilot status --json
 
-# 构建（dry-run，查看命令）
+# 构建（dry-run，查看命令计划）
 qt-pilot build --json
 
-# 构建（执行）
-qt-pilot build --execute --json
+# 构建（执行，终端实时输出）
+qt-pilot build --execute
 
-# 运行
-qt-pilot run --execute --json
+# 运行（先编译再启动程序）
+qt-pilot run --execute
 
 # 清理
-qt-pilot clean --execute --json
+qt-pilot clean --execute
 
 # 同步变更文件到远程
-qt-pilot sync --execute --json
+qt-pilot sync --execute
 
 # 同步到指定服务器
-qt-pilot sync --execute --server "开发服务器" --json
+qt-pilot sync --execute --server "开发服务器"
 ```
+
+### `--json` 说明
+
+- `--json` 输出结构化 JSON，适合脚本或 AI 工具解析返回值
+- 执行类命令（build、run、qmake、clean）**不建议加 `--json`**，因为会等进程结束才一次性输出，看不到实时编译过程
+- 查询类命令（status、projects、detect）建议加 `--json` 方便解析
 
 ## AI 工具集成（Skill）
 
