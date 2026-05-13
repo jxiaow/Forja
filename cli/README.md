@@ -10,6 +10,20 @@
 npm install -g qt-pilot-cli
 ```
 
+## 快速开始
+
+```bash
+# 1. 在 Qt 项目目录下初始化（检测环境、保存配置，只需一次）
+cd your-qt-project
+qt-pilot init --execute
+
+# 2. 之后直接用，无需额外参数
+qt-pilot build --execute
+qt-pilot run --execute
+```
+
+`init` 会将检测到的 Qt 路径、VS 环境、项目选择等保存到 `.qtpilot/settings.json`，后续命令自动读取，不需要每次指定 `--project`、`--mode`、`--arch`。
+
 ## 命令
 
 ### `qt-pilot init`
