@@ -20,7 +20,10 @@ export function cachePath(workspace: string): string {
 }
 
 export function logsDir(workspace: string): string {
-    return path.join(localRoot(workspace), 'logs');
+    const tmpBase = process.env.TEMP || process.env.TMP || require('os').tmpdir();
+    // Use a hash-like folder name based on workspace path to avoid collisions
+    const folderName = workspace.replace(/[\\/:*?"<>|]/g, '_');
+    return path.join(tmpBase, 'qt-pilot-logs', folderName);
 }
 
 export function ensureLocalStateDir(workspace: string): void {
