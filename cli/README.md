@@ -41,6 +41,37 @@ qt-pilot sync --execute
 qt-pilot sync --execute --server "开发服务器"
 ```
 
+### 选项说明
+
+| 选项 | 说明 |
+|------|------|
+| `--workspace <path>` | 工作区路径，默认当前目录 |
+| `--project <path>` | 指定 `.pro` 文件路径（支持相对路径，相对于 workspace） |
+| `--mode debug\|release` | 构建模式，默认 debug |
+| `--arch x86\|x64` | 目标架构，默认 x86 |
+| `--qt-path <path>` | Qt 安装路径（覆盖自动检测） |
+| `--vs-dev-shell <path>` | Launch-VsDevShell.ps1 路径（覆盖自动检测） |
+| `--target <name>` | QMake TARGET 覆盖（生成的 exe 名） |
+| `--server <name>` | 同步时指定服务器名称 |
+| `--execute` | 实际执行命令（不加则为 dry-run，仅显示命令计划） |
+| `--json` | 输出结构化 JSON |
+
+### 常用组合示例
+
+```bash
+# 指定项目编译（workspace 下有多个 .pro 时）
+qt-pilot build --execute --project "qt_linux_pc_client/qt_linux_pc_client.pro"
+
+# 指定模式和架构
+qt-pilot build --execute --mode release --arch x86
+
+# 指定 workspace（在其他目录下操作）
+qt-pilot build --execute --workspace "c:\Code\workspace\dev\qt_client"
+
+# 组合使用
+qt-pilot run --execute --project "qt_linux_pc_client/qt_linux_pc_client.pro" --mode release
+```
+
 ### `--json` 说明
 
 - `--json` 输出结构化 JSON，适合脚本或 AI 工具解析返回值
@@ -74,9 +105,10 @@ npm root -g
 .qtpilot/
 ├── settings.json     # 唯一配置源（mode、arch、路径、项目选择等）
 ├── cache.json        # 环境检测缓存（自动生成）
-├── sync-config.json  # 同步开关 + 忽略列表（项目级）
-└── logs/             # 执行日志
+└── sync-config.json  # 同步开关 + 忽略列表（项目级）
 ```
+
+执行日志保存在系统临时目录：`%TEMP%/qt-pilot-logs/<workspace>/`（Linux: `/tmp/qt-pilot-logs/<workspace>/`）
 
 全局服务器列表：
 
