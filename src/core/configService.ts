@@ -3,7 +3,7 @@ import { BuildConfig } from '../platform/builder';
 import { getState } from './stateManager';
 import { decodeSelectedProject } from '../project/selectedProject';
 import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
-import { readLocalCache, readLocalConfig } from '../shared/localState';
+import { readLocalCache } from '../shared/localState';
 import { getSetting, setSetting } from './settingsStore';
 import { resolveProjectRoot } from './workspaceResolver';
 
@@ -90,9 +90,8 @@ export function getBuildConfig(): BuildConfig {
         }
     }
 
-    // Priority: settings > env detection > .qtpilot/config.json > .qtpilot/cache.json > defaults
+    // Priority: settings > env detection > .qtpilot/cache.json > defaults
     const localCache = root ? readLocalCache(root) : null;
-    const localConfig = root ? readLocalConfig(root) : null;
 
     const inputs = mergeConfigInputs(
         // Lowest priority: local cache (auto-detected values)
@@ -104,11 +103,6 @@ export function getBuildConfig(): BuildConfig {
         {
             qtPath: env?.qt?.path || '',
             vsDevShell: env?.vs?.devShellPath || ''
-        },
-        // Local config (user-saved CLI config — higher than auto-detection)
-        {
-            qtPath: localConfig?.qtPath || '',
-            vsDevShell: localConfig?.vsDevShell || ''
         },
         // Highest priority: explicit settings + current state
         {
@@ -130,10 +124,8 @@ export function getBuildConfig(): BuildConfig {
 export function getEffectiveVsDevShell(): string {
     const state = getState();
     const root = getWorkspaceRoot();
-    const localConfig = root ? readLocalConfig(root) : null;
     const localCache = root ? readLocalCache(root) : null;
     return getVsDevShellPath()
-        || localConfig?.vsDevShell
         || state.envInfo?.vs?.devShellPath
         || localCache?.detected.vs?.devShellPath
         || '';
@@ -142,10 +134,8 @@ export function getEffectiveVsDevShell(): string {
 export function getEffectiveQtPath(): string {
     const state = getState();
     const root = getWorkspaceRoot();
-    const localConfig = root ? readLocalConfig(root) : null;
     const localCache = root ? readLocalCache(root) : null;
     return getQtPath()
-        || localConfig?.qtPath
         || state.envInfo?.qt?.path
         || localCache?.detected.qt?.path
         || '';

@@ -9,15 +9,12 @@ import { resolveBuildConfig } from './configResolver';
 import { scanProFiles } from './projectScanner';
 import {
     LocalCache,
-    LocalConfig,
     ensureLocalStateDir,
     ensureQtpilotGitignored,
     readLocalCache,
-    readLocalConfig,
-    writeLocalCache,
-    writeLocalConfig
+    writeLocalCache
 } from './localState';
-import { loadSettings } from '../core/settingsIO';
+import { loadSettings, saveSettings, QtPilotSettings } from '../core/settingsIO';
 
 function emptyResult(options: CliOptions, workspace: string): CliResult {
     return {
@@ -48,7 +45,7 @@ function insideWorkspace(workspace: string, filePath: string): boolean {
     return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-function resolveProject(workspace: string, options: CliOptions, config: LocalConfig | null): { project: string | null; error: string | null } {
+function resolveProject(workspace: string, options: CliOptions, settings: QtPilotSettings): { project: string | null; error: string | null } {
     const explicitProject = options.project ? path.resolve(options.project) : null;
     if (explicitProject) {
         if (!insideWorkspace(workspace, explicitProject)) {
@@ -56,8 +53,14 @@ function resolveProject(workspace: string, options: CliOptions, config: LocalCon
         }
         return { project: explicitProject, error: null };
     }
-    if (config?.project && fs.existsSync(config.project)) {
-        return { project: config.project, error: null };
+    // From settings: selectedProject or manualProPath
+    const selectedProj = settings.selectedProject;
+    const savedProject = selectedProj ? path.join(selectedProj.root, selectedProj.relative) : null;
+    if (savedProject && fs.existsSync(savedProject)) {
+        return { project: savedProject, error: null };
+    }
+    if (settings.manualProPath && fs.existsSync(settings.manualProPath)) {
+        return { project: settings.manualProPath, error: null };
     }
     const found = scanProFiles(workspace).map(rel => path.join(workspace, rel));
     if (found.length === 1) {
@@ -146,23 +149,24 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         return result;
     }
 
-    const config = readLocalConfig(workspace);
     const cache = readLocalCache(workspace);
     const settings = loadSettings(workspace);
 
     if (options.action === 'detect' || options.action === 'projects' || options.action === 'status') {
         const detected = await detectAndCache(workspace, options);
         const candidates = detected.detected.projects;
-        const project = config?.project && fs.existsSync(config.project)
-            ? config.project
+        const selectedProj = settings.selectedProject;
+        const savedProject = selectedProj ? path.join(selectedProj.root, selectedProj.relative) : null;
+        const project = savedProject && fs.existsSync(savedProject)
+            ? savedProject
             : candidates.length === 1
                 ? candidates[0]
                 : null;
-        const mode = options.mode || config?.mode || settings.mode || 'debug';
-        const arch = options.arch || config?.arch || settings.arch || 'x86';
-        const qtPath = options.qtPath || config?.qtPath || settings.qtPath || detected.detected.qt?.path || '';
-        const vsDevShell = options.vsDevShell || config?.vsDevShell || settings.vsDevShellPath || detected.detected.vs?.devShellPath || '';
-        const qmakeTarget = options.target || config?.qmakeTarget || settings.qmakeTarget || '';
+        const mode = options.mode || settings.mode || 'debug';
+        const arch = options.arch || settings.arch || 'x86';
+        const qtPath = options.qtPath || settings.qtPath || detected.detected.qt?.path || '';
+        const vsDevShell = options.vsDevShell || settings.vsDevShellPath || detected.detected.vs?.devShellPath || '';
+        const qmakeTarget = options.target || settings.qmakeTarget || '';
         const diagnostics = [];
         const nextActions: string[] = [];
 
@@ -190,7 +194,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         };
     }
 
-    const projectResult = resolveProject(workspace, options, config);
+    const projectResult = resolveProject(workspace, options, settings);
     if (projectResult.error && options.action !== 'init') {
         result.candidates = listProjectCandidates(workspace);
         result.diagnostics.push({ level: 'error', message: projectResult.error });
@@ -205,11 +209,11 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
 
     const project = projectResult.project;
-    const mode = options.mode || config?.mode || settings.mode || 'debug';
-    const arch = options.arch || config?.arch || settings.arch || 'x86';
-    const qtPath = options.qtPath || config?.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = options.vsDevShell || config?.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
-    const qmakeTarget = options.target || config?.qmakeTarget || settings.qmakeTarget || '';
+    const mode = options.mode || settings.mode || 'debug';
+    const arch = options.arch || settings.arch || 'x86';
+    const qtPath = options.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
+    const vsDevShell = options.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const qmakeTarget = options.target || settings.qmakeTarget || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, qmakeTarget);
 
     if (options.action === 'init') {
@@ -219,16 +223,15 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             const detected = await detectAndCache(workspace, options);
             writeLocalCache(workspace, detected);
             if (project) {
-                writeLocalConfig(workspace, {
-                    version: 1,
-                    workspace,
-                    project,
+                const updatedSettings: QtPilotSettings = {
+                    ...settings,
                     mode,
                     arch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
-                    vsDevShell: vsDevShell || detected.detected.vs?.devShellPath || '',
+                    vsDevShellPath: vsDevShell || detected.detected.vs?.devShellPath || '',
                     qmakeTarget
-                });
+                };
+                saveSettings(workspace, updatedSettings);
             }
             return { ...result, ok: true, project, diagnostics: [], resolved };
         }

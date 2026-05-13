@@ -1,17 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { CliArch, CliBuildMode } from '../cli/types';
-
-export interface LocalConfig {
-    version: 1;
-    workspace: string;
-    project: string;
-    mode: CliBuildMode;
-    arch: CliArch;
-    qtPath: string;
-    vsDevShell: string;
-    qmakeTarget: string;
-}
 
 export interface LocalCache {
     version: 1;
@@ -27,10 +15,6 @@ export function localRoot(workspace: string): string {
     return path.join(workspace, '.qtpilot');
 }
 
-export function configPath(workspace: string): string {
-    return path.join(localRoot(workspace), 'config.json');
-}
-
 export function cachePath(workspace: string): string {
     return path.join(localRoot(workspace), 'cache.json');
 }
@@ -42,14 +26,6 @@ export function logsDir(workspace: string): string {
 export function ensureLocalStateDir(workspace: string): void {
     fs.mkdirSync(localRoot(workspace), { recursive: true });
     fs.mkdirSync(logsDir(workspace), { recursive: true });
-}
-
-export function readLocalConfig(workspace: string): LocalConfig | null {
-    return readJson<LocalConfig>(configPath(workspace));
-}
-
-export function writeLocalConfig(workspace: string, config: LocalConfig): void {
-    writeJson(configPath(workspace), config);
 }
 
 export function readLocalCache(workspace: string): LocalCache | null {

@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createActionPlan } from '../shared/qtCore';
-import { writeLocalConfig } from '../shared/localState';
+import { saveSettings, DEFAULT_SETTINGS } from '../core/settingsIO';
 
 function makeWorkspace(): string {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'qt-pilot-core-'));
@@ -12,18 +12,15 @@ function makeWorkspace(): string {
     return workspace;
 }
 
-test('createActionPlan uses local config when CLI args are omitted', async () => {
+test('createActionPlan uses settings.json when CLI args are omitted', async () => {
     const workspace = makeWorkspace();
     const project = path.join(workspace, 'demo.pro');
-    writeLocalConfig(workspace, {
-        version: 1,
-        workspace,
-        project,
+    saveSettings(workspace, {
+        ...DEFAULT_SETTINGS,
         mode: 'release',
         arch: 'x64',
         qtPath: 'D:/Qt',
-        vsDevShell: 'C:/VS/Launch-VsDevShell.ps1',
-        qmakeTarget: ''
+        vsDevShellPath: 'C:/VS/Launch-VsDevShell.ps1'
     });
 
     const result = await createActionPlan({

@@ -6,33 +6,12 @@ import * as path from 'path';
 import {
     ensureLocalStateDir,
     ensureQtpilotGitignored,
-    readLocalConfig,
-    writeLocalConfig,
     writeLocalCache
 } from '../shared/localState';
 
 function makeWorkspace(): string {
     return fs.mkdtempSync(path.join(os.tmpdir(), 'qt-pilot-local-state-'));
 }
-
-test('local state writes and reads config under .qtpilot', () => {
-    const workspace = makeWorkspace();
-    ensureLocalStateDir(workspace);
-    writeLocalConfig(workspace, {
-        version: 1,
-        workspace,
-        project: path.join(workspace, 'demo.pro'),
-        mode: 'debug',
-        arch: 'x86',
-        qtPath: 'D:/Qt',
-        vsDevShell: 'C:/VS/Launch-VsDevShell.ps1',
-        qmakeTarget: ''
-    });
-
-    const config = readLocalConfig(workspace);
-    assert.equal(config?.workspace, workspace);
-    assert.equal(config?.mode, 'debug');
-});
 
 test('ensureQtpilotGitignored appends .qtpilot/ once', () => {
     const workspace = makeWorkspace();
@@ -43,7 +22,7 @@ test('ensureQtpilotGitignored appends .qtpilot/ once', () => {
     assert.equal(gitignore.split('.qtpilot/').length - 1, 1);
 });
 
-test('writeLocalCache records detected data separately from config', () => {
+test('writeLocalCache records detected data under .qtpilot', () => {
     const workspace = makeWorkspace();
     writeLocalCache(workspace, {
         version: 1,
@@ -56,5 +35,4 @@ test('writeLocalCache records detected data separately from config', () => {
     });
 
     assert.equal(fs.existsSync(path.join(workspace, '.qtpilot', 'cache.json')), true);
-    assert.equal(fs.existsSync(path.join(workspace, '.qtpilot', 'config.json')), false);
 });
