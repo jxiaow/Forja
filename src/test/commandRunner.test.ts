@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { runCliResult } from '../shared/commandRunner';
+import { runCliResult } from '../qt/shared/commandRunner';
 
 test('runCliResult leaves dry run results unexecuted', async () => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'qt-pilot-runner-'));

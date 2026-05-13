@@ -2,13 +2,13 @@ import * as vscode from 'vscode';
 import { getState, setState } from '../../core/stateManager';
 import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
-import { detectEnv } from '../../env/envDetector';
+import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
          getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath,
          getFileSyncPromptEnabled, getQmakeReminderEnabled, getWorkspaceRoot } from '../../core/configService';
 import { createLogger } from '../../core/logger';
-import { getEffectiveProjectName } from '../../project/projectDisplay';
-import { readServers, readProjectSyncConfig } from '../../sync/sftpClient';
+import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
+import { readServers, readProjectSyncConfig } from '../../qt/sync/sftpClient';
 
 const logger = createLogger('ConfigPanelView');
 

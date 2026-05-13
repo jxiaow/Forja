@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { createActionPlan } from '../shared/qtCore';
+import { createActionPlan } from '../qt/shared/qtCore';
 import { saveSettings, DEFAULT_SETTINGS } from '../core/settingsIO';
 
 function makeWorkspace(): string {

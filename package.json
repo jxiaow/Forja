@@ -1,9 +1,9 @@
 {
-  "name": "qt-pilot",
-  "displayName": "Qt Pilot",
-  "publisher": "qtpilot",
-  "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
-  "version": "0.5.38",
+  "name": "compilot",
+  "displayName": "Compilot",
+  "publisher": "compilot",
+  "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
+  "version": "0.6.0",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
@@ -13,75 +13,84 @@
   ],
   "activationEvents": [
     "workspaceContains:**/*.pro",
-    "onView:qtPilot.configView",
-    "onCommand:qtPilot.selectProject",
-    "onCommand:qtPilot.showActions",
-    "onCommand:qtPilot.qmake",
-    "onCommand:qtPilot.build",
-    "onCommand:qtPilot.clean",
-    "onCommand:qtPilot.run",
-    "onCommand:qtPilot.stop",
-    "onCommand:qtPilot.debug",
-    "onCommand:qtPilot.openWithQtDesigner",
-    "onCommand:qtPilot.syncTestConnection",
-    "onCommand:qtPilot.syncChangedFiles"
+    "workspaceContains:**/*.sln",
+    "workspaceContains:**/Makefile"
   ],
   "main": "./out/extension.js",
   "bin": {
-    "qt-pilot": "./out/cli/index.js",
-    "qt-pilot-mcp": "./out/mcp/server.js"
+    "compilot": "./out/cli/index.js"
   },
   "contributes": {
     "commands": [
       {
-        "command": "qtPilot.selectProject",
-        "title": "Qt Pilot: 选择项目"
+        "command": "compilot.qt.selectProject",
+        "title": "Compilot Qt: 选择项目"
       },
       {
-        "command": "qtPilot.showActions",
-        "title": "Qt Pilot: 显示操作菜单"
+        "command": "compilot.qt.showActions",
+        "title": "Compilot Qt: 显示操作菜单"
       },
       {
-        "command": "qtPilot.qmake",
-        "title": "Qt Pilot: QMake"
+        "command": "compilot.qt.qmake",
+        "title": "Compilot Qt: QMake"
       },
       {
-        "command": "qtPilot.build",
-        "title": "Qt Pilot: Build"
+        "command": "compilot.qt.build",
+        "title": "Compilot Qt: Build"
       },
       {
-        "command": "qtPilot.clean",
-        "title": "Qt Pilot: Clean"
+        "command": "compilot.qt.clean",
+        "title": "Compilot Qt: Clean"
       },
       {
-        "command": "qtPilot.run",
-        "title": "Qt Pilot: Run"
+        "command": "compilot.qt.run",
+        "title": "Compilot Qt: Run"
       },
       {
-        "command": "qtPilot.stop",
-        "title": "Qt Pilot: 停止"
+        "command": "compilot.qt.stop",
+        "title": "Compilot Qt: 停止"
       },
       {
-        "command": "qtPilot.debug",
-        "title": "Qt Pilot: 调试"
+        "command": "compilot.qt.debug",
+        "title": "Compilot Qt: 调试"
       },
       {
-        "command": "qtPilot.openWithQtDesigner",
-        "title": "Qt Pilot: 用 Qt Designer 打开"
+        "command": "compilot.qt.openWithQtDesigner",
+        "title": "Compilot Qt: 用 Qt Designer 打开"
       },
       {
-        "command": "qtPilot.syncTestConnection",
-        "title": "Qt Pilot: 测试远程连接"
+        "command": "compilot.qt.syncTestConnection",
+        "title": "Compilot Qt: 测试远程连接"
       },
       {
-        "command": "qtPilot.syncChangedFiles",
-        "title": "Qt Pilot: 同步变更文件到远程"
+        "command": "compilot.qt.syncChangedFiles",
+        "title": "Compilot Qt: 同步变更文件到远程"
+      },
+      {
+        "command": "compilot.sdk.build",
+        "title": "Compilot SDK: Build",
+        "enablement": "compilot.sdk.activated"
+      },
+      {
+        "command": "compilot.sdk.rebuild",
+        "title": "Compilot SDK: Rebuild",
+        "enablement": "compilot.sdk.activated"
+      },
+      {
+        "command": "compilot.sdk.clean",
+        "title": "Compilot SDK: Clean",
+        "enablement": "compilot.sdk.activated"
+      },
+      {
+        "command": "compilot.sdk.showActions",
+        "title": "Compilot SDK: Show Actions",
+        "enablement": "compilot.sdk.activated"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "command": "qtPilot.openWithQtDesigner",
+          "command": "compilot.qt.openWithQtDesigner",
           "when": "resourceExtname == .ui",
           "group": "navigation@100"
         }
@@ -90,21 +99,105 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "qt-pilot",
-          "title": "Qt Pilot",
+          "id": "compilot",
+          "title": "Compilot",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "qt-pilot": [
+      "compilot": [
         {
           "type": "webview",
-          "id": "qtPilot.configView",
+          "id": "compilot.configView",
           "name": "配置"
         }
       ]
-    }
+    },
+    "configuration": [
+      {
+        "title": "Compilot Qt",
+        "properties": {
+          "compilot.qt.qtPath": {
+            "type": "string",
+            "default": "",
+            "description": "Qt 安装路径（如 C:\\Qt\\5.15.2\\msvc2019）",
+            "scope": "machine"
+          },
+          "compilot.qt.vsDevShellPath": {
+            "type": "string",
+            "default": "",
+            "description": "Launch-VsDevShell.ps1 的完整路径（留空则自动检测）",
+            "scope": "machine"
+          },
+          "compilot.qt.manualProPath": {
+            "type": "string",
+            "default": "",
+            "description": "手动指定 .pro 文件路径",
+            "scope": "resource"
+          },
+          "compilot.qt.designerPath": {
+            "type": "string",
+            "default": "",
+            "description": "Qt Designer 可执行文件路径",
+            "scope": "machine"
+          },
+          "compilot.qt.mode": {
+            "type": "string",
+            "enum": ["debug", "release"],
+            "default": "debug",
+            "description": "编译模式",
+            "scope": "resource"
+          },
+          "compilot.qt.arch": {
+            "type": "string",
+            "enum": ["x86", "x64"],
+            "default": "x86",
+            "description": "目标架构",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "Compilot SDK",
+        "properties": {
+          "compilot.sdk.selectedProject": {
+            "type": "string",
+            "default": "",
+            "description": "当前选中的 SDK 项目入口文件绝对路径",
+            "scope": "resource"
+          },
+          "compilot.sdk.mode": {
+            "type": "string",
+            "enum": ["debug", "release"],
+            "default": "debug",
+            "description": "编译模式",
+            "scope": "resource"
+          },
+          "compilot.sdk.arch": {
+            "type": "string",
+            "enum": ["x86", "x64"],
+            "default": "x86",
+            "description": "目标架构（仅 Windows 有效）",
+            "scope": "resource"
+          },
+          "compilot.sdk.vsDevCmdPath": {
+            "type": "string",
+            "default": "",
+            "description": "VsDevCmd.bat 的完整路径（留空则自动检测）",
+            "scope": "machine"
+          },
+          "compilot.sdk.scanDepth": {
+            "type": "number",
+            "default": 4,
+            "minimum": 1,
+            "maximum": 10,
+            "description": "项目扫描最大目录深度",
+            "scope": "resource"
+          }
+        }
+      }
+    ]
   },
   "scripts": {
     "copy-html": "powershell -Command \"Copy-Item -Path src/ui/configPanel/configPanel.html -Destination out/ui/configPanel/ -Force\"",
@@ -113,7 +206,7 @@
     "test": "npm run compile && node --test --test-reporter=spec out/test",
     "build:cli": "npm run compile && node scripts/build-cli.js",
     "package": "npm run compile && vsce package --allow-missing-repository -o dist/",
-    "package:cli": "npm run build:cli && cd cli && npm pack --pack-destination ../dist",
+    "package:cli": "npm run build:cli",
     "package:all": "node scripts/bump-version.js && npm run package && npm run package:cli",
     "vsix": "vsce package --allow-missing-repository"
   },

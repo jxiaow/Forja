@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createShellPlanBuilder, BuildConfig } from '../platform/shellPlan';
-import { winConfig } from '../platform/win/builder';
+import { createShellPlanBuilder, BuildConfig } from '../qt/platform/shellPlan';
+import { winConfig } from '../qt/platform/win/builder';
 
 const cfg: BuildConfig = {
     vsDevShell: 'C:/VS/Common7/Tools/Launch-VsDevShell.ps1',

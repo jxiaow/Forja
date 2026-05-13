@@ -26,7 +26,7 @@ test('status bar uses full display label instead of short label text', () => {
 });
 
 test('project selection and logs use effective project display helpers', () => {
-    const projectManagerPath = path.join(process.cwd(), 'src', 'project', 'projectManager.ts');
+    const projectManagerPath = path.join(process.cwd(), 'src', 'qt', 'project', 'projectManager.ts');
     const projectManagerSource = fs.readFileSync(projectManagerPath, 'utf8');
     const configPanelPath = path.join(process.cwd(), 'src', 'ui', 'configPanel', 'index.ts');
     const configPanelSource = fs.readFileSync(configPanelPath, 'utf8');

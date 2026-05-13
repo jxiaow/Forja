@@ -39,7 +39,7 @@ test('config panel html includes file reminder toggles', () => {
 });
 
 test('pri watcher consults reminder settings before showing prompts', () => {
-    const watcherSource = fs.readFileSync(path.join(process.cwd(), 'src', 'project', 'priWatcher.ts'), 'utf8');
+    const watcherSource = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'project', 'priWatcher.ts'), 'utf8');
 
     assert.match(watcherSource, /getFileSyncPromptEnabled/);
     assert.match(watcherSource, /getQmakeReminderEnabled/);

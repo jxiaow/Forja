@@ -1,10 +1,10 @@
 import * as path from 'path';
-import { BuildConfig } from '../platform/builder';
+import { BuildConfig } from '../qt/platform/builder';
 import { getState } from './stateManager';
-import { decodeSelectedProject } from '../project/selectedProject';
-import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
-import { readLocalCache } from '../shared/localState';
-import { getSetting, setSetting } from './settingsStore';
+import { decodeSelectedProject } from '../qt/project/selectedProject';
+import { resolveBuildConfig, mergeConfigInputs } from '../qt/shared/configResolver';
+import { readLocalCache } from '../qt/shared/localState';
+import { getSetting, setSetting, QtPilotSettings } from './settingsStore';
 import { resolveProjectRoot } from './workspaceResolver';
 
 // ── 配置读取 ──
@@ -66,8 +66,8 @@ export function getQmakeReminderEnabled(): boolean {
     return getSetting('qmakeReminderEnabled');
 }
 
-export function updateConfig(key: string, value: unknown): void {
-    setSetting(key as any, value as any);
+export function updateConfig<K extends keyof QtPilotSettings>(key: K, value: QtPilotSettings[K]): void {
+    setSetting(key, value);
 }
 
 // ── BuildConfig 组装 ──

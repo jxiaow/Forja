@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCliArgs } from '../cli/args';
+import { parseCliArgs } from '../qt/cli/args';
 
 test('parseCliArgs defaults build to dryRun and current workspace marker', () => {
     const parsed = parseCliArgs(['build']);

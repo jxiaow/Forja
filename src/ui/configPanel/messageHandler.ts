@@ -1,17 +1,40 @@
 import * as vscode from 'vscode';
-import { detectEnv } from '../../env/envDetector';
-import { generateCppProperties, updateCppPropertiesStandard } from '../../build/configGenerator';
+import { detectEnv } from '../../qt/env/envDetector';
+import { generateCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
 import { getState, setState } from '../../core/stateManager';
 import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget, getWorkspaceRoot } from '../../core/configService';
 import { createLogger } from '../../core/logger';
-import { getEffectiveProjectName } from '../../project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, ServerConfig } from '../../sync/sftpClient';
-import { executeSyncChangedFiles, executeTestConnection } from '../../sync/syncWatcher';
+import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, ServerConfig } from '../../qt/sync/sftpClient';
+import { executeSyncChangedFiles, executeTestConnection } from '../../qt/sync/syncWatcher';
 
 const logger = createLogger('ConfigPanel');
 
+/** Webview 面板消息类型 */
+interface PanelMessage {
+    command: string;
+    value?: unknown;
+    targetId?: string;
+    isDir?: boolean;
+    dirs?: string[];
+    cStandard?: string;
+    cppStandard?: string;
+    id?: string;
+    server?: {
+        id?: string;
+        name?: string;
+        host?: string;
+        port?: number;
+        username?: string;
+        authMode?: string;
+        privateKeyPath?: string;
+        password?: string;
+        remotePath?: string;
+    };
+}
+
 export async function handleMessage(
-    msg: any,
+    msg: PanelMessage,
     webview: vscode.Webview,
     pushEnvUpdate: () => void,
     updateHtml: () => void
@@ -32,32 +55,32 @@ export async function handleMessage(
         }
         case 'saveVsPath': {
             logger.info(`保存 VS 路径: "${msg.value}"`);
-            await updateConfig('vsDevShellPath', msg.value || '');
+            await updateConfig('vsDevShellPath', String(msg.value || ''));
             webview.postMessage({ command: 'envDetecting' });
             const qtPath = getQtPath();
-            const env = await detectEnv(qtPath, msg.value || '');
+            const env = await detectEnv(qtPath, String(msg.value || ''));
             setState('envInfo', env);
             pushEnvUpdate();
             break;
         }
         case 'saveQtPath': {
             logger.info(`保存 Qt 路径: "${msg.value}"`);
-            await updateConfig('qtPath', msg.value || '');
+            await updateConfig('qtPath', String(msg.value || ''));
             webview.postMessage({ command: 'envDetecting' });
             const vsPath = getVsDevShellPath();
-            const env = await detectEnv(msg.value || '', vsPath);
+            const env = await detectEnv(String(msg.value || ''), vsPath);
             setState('envInfo', env);
             pushEnvUpdate();
             break;
         }
         case 'saveDesignerPath': {
             logger.info(`保存 Designer 路径: "${msg.value}"`);
-            await updateConfig('designerPath', msg.value || '');
+            await updateConfig('designerPath', String(msg.value || ''));
             break;
         }
         case 'saveQtSourcePath': {
             logger.info(`保存 Qt 源码路径: "${msg.value}"`);
-            await updateConfig('qtSourcePath', msg.value || '');
+            await updateConfig('qtSourcePath', String(msg.value || ''));
             break;
         }
         case 'saveStandard': {
@@ -95,17 +118,17 @@ export async function handleMessage(
         }
         case 'saveExcludeDirs': {
             logger.info(`保存排除目录: ${JSON.stringify(msg.dirs)}`);
-            await updateConfig('scanExcludeDirs', msg.dirs);
+            await updateConfig('scanExcludeDirs', msg.dirs || []);
             break;
         }
         case 'saveQmakeTarget': {
             logger.info(`保存 QMake TARGET: "${msg.value}"`);
-            await updateConfig('qmakeTarget', msg.value || '');
+            await updateConfig('qmakeTarget', String(msg.value || ''));
             break;
         }
         case 'saveManualProPath': {
             logger.info(`手动指定 .pro: "${msg.value}"`);
-            await updateConfig('manualProPath', msg.value || '');
+            await updateConfig('manualProPath', String(msg.value || ''));
             if (msg.value) {
                 await vscode.commands.executeCommand('qtPilot.loadManualProject');
             }
@@ -145,17 +168,18 @@ export async function handleMessage(
         case 'saveSyncSelectedServer': {
             logger.info(`选择服务器: "${msg.value}"`);
             const ws2 = getWorkspaceRoot();
-            if (ws2) { updateProjectSyncField(ws2, 'selectedServer', msg.value || ''); }
+            if (ws2) { updateProjectSyncField(ws2, 'selectedServer', String(msg.value || '')); }
             break;
         }
         case 'saveSyncIgnore': {
             logger.info(`保存同步忽略列表: ${JSON.stringify(msg.value)}`);
             const ws4 = getWorkspaceRoot();
-            if (ws4) { updateProjectSyncField(ws4, 'ignore', msg.value || []); }
+            if (ws4) { updateProjectSyncField(ws4, 'ignore', Array.isArray(msg.value) ? msg.value as string[] : []); }
             break;
         }
         case 'addServer': {
             logger.info(`添加服务器: ${msg.server?.name}`);
+            if (!msg.server) { break; }
             const newServerData = {
                 name: msg.server.name || '',
                 host: msg.server.host || '',
@@ -176,12 +200,13 @@ export async function handleMessage(
         }
         case 'removeServer': {
             logger.info(`删除服务器: "${msg.id}"`);
-            removeServer(msg.id);
+            if (msg.id) { removeServer(msg.id); }
             _pushServerList(webview);
             break;
         }
         case 'updateServer': {
             logger.info(`修改服务器: id=${msg.server?.id}, name=${msg.server?.name}`);
+            if (!msg.server) { break; }
             const serverId: string = msg.server.id || '';
             const updates = {
                 name: msg.server.name || '',

@@ -2,29 +2,30 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as cp from 'child_process';
-import * as buildManager from './build/buildManager';
+import * as buildManager from './qt/build/buildManager';
 import { getState, setState, loadPersistedState } from './core/stateManager';
 import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, getDesignerPath } from './core/configService';
 import { createStatusBar, showActions } from './ui/statusBar';
-import { registerPriWatcher } from './project/priWatcher';
+import { registerPriWatcher } from './qt/project/priWatcher';
 import { ConfigPanel } from './ui/configPanel/index';
-import { selectProject, parseProFile } from './project/projectManager';
-import { registerDebugSessionWatcher, startDebug } from './build/debugger';
-import { generateCppProperties } from './build/configGenerator';
+import { selectProject, parseProFile } from './qt/project/projectManager';
+import { registerDebugSessionWatcher, startDebug } from './qt/build/debugger';
+import { generateCppProperties } from './qt/build/configGenerator';
 import { createLogger, initLogger } from './core/logger';
-import { detectEnv } from './env/envDetector';
-import { writeLocalCache, ensureLocalStateDir, LocalCache } from './shared/localState';
-import { scanProFiles } from './shared/projectScanner';
-import { registerSyncWatcher, executeSyncChangedFiles, executeTestConnection } from './sync/syncWatcher';
+import { detectEnv } from './qt/env/envDetector';
+import { writeLocalCache, ensureLocalStateDir, LocalCache } from './qt/shared/localState';
+import { scanProFiles } from './qt/shared/projectScanner';
+import { registerSyncWatcher, executeSyncChangedFiles, executeTestConnection } from './qt/sync/syncWatcher';
 import { initSettingsStore } from './core/settingsStore';
 import { registerWorkspaceWatcher } from './core/workspaceResolver';
+import { activateSdk } from './sdk/sdkExtension';
 
 const logger = createLogger('Extension');
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const channel = initLogger();
     context.subscriptions.push(channel);
-    logger.info('扩展激活');
+    logger.info('Compilot 扩展激活');
 
     // 注册 workspace folder 变化监听（多文件夹工作区切换时自动重置缓存）
     registerWorkspaceWatcher(context);
@@ -40,7 +41,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.window.registerWebviewViewProvider(ConfigPanel.viewId, panel)
     );
     context.subscriptions.push(
-        vscode.commands.registerCommand('qtPilot.showSyncTab', () => panel.switchTab('sync'))
+        vscode.commands.registerCommand('compilot.qt.showSyncTab', () => panel.switchTab('sync'))
     );
 
     registerPriWatcher(context);
@@ -149,8 +150,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return 'designer';
     };
 
-    const cmds: [string, (...args: any[]) => void][] = [
-        ['qtPilot.selectProject', async () => {
+    const cmds: [string, (...args: any[]) => void][] = [ // eslint-disable-line @typescript-eslint/no-explicit-any
+        ['compilot.qt.selectProject', async () => {
             const p = await selectProject(context, true);
             if (p) {
                 const wsRoot = getWorkspaceRoot();
@@ -159,7 +160,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             setState('currentProject', p);
             panel.refresh();
         }],
-        ['qtPilot.loadManualProject', () => {
+        ['compilot.qt.loadManualProject', () => {
             const proPath = getManualProPath();
             if (proPath && fs.existsSync(proPath)) {
                 const info = parseProFile(proPath);
@@ -173,14 +174,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 vscode.window.showWarningMessage('.pro 文件不存在: ' + proPath);
             }
         }],
-        ['qtPilot.showActions',   () => showActions()],
-        ['qtPilot.qmake',         () => buildManager.qmake()],
-        ['qtPilot.build',         () => buildManager.build()],
-        ['qtPilot.clean',         () => buildManager.clean()],
-        ['qtPilot.run',           () => buildManager.run().catch(err)],
-        ['qtPilot.stop',          () => buildManager.stop()],
-        ['qtPilot.debug',         () => startDebug()],
-        ['qtPilot.openWithQtDesigner', (uri?: vscode.Uri) => {
+        ['compilot.qt.showActions',   () => showActions()],
+        ['compilot.qt.qmake',         () => buildManager.qmake()],
+        ['compilot.qt.build',         () => buildManager.build()],
+        ['compilot.qt.clean',         () => buildManager.clean()],
+        ['compilot.qt.run',           () => buildManager.run().catch(err)],
+        ['compilot.qt.stop',          () => buildManager.stop()],
+        ['compilot.qt.debug',         () => startDebug()],
+        ['compilot.qt.openWithQtDesigner', (uri?: vscode.Uri) => {
             const target = uri ?? vscode.window.activeTextEditor?.document.uri;
             if (!target || target.scheme !== 'file') {
                 vscode.window.showWarningMessage('请选择一个本地 .ui 文件');
@@ -204,15 +205,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 windowsHide: true
             });
             proc.on('error', () => {
-                vscode.window.showErrorMessage('启动 Qt Designer 失败，请在 Qt Pilot 配置面板设置 Qt Designer 路径');
+                vscode.window.showErrorMessage('启动 Qt Designer 失败，请在配置面板设置 Qt Designer 路径');
             });
             proc.unref();
         }],
-        ['qtPilot.syncTestConnection', () => executeTestConnection()],
-        ['qtPilot.syncChangedFiles', () => executeSyncChangedFiles()]
+        ['compilot.qt.syncTestConnection', () => executeTestConnection()],
+        ['compilot.qt.syncChangedFiles', () => executeSyncChangedFiles()]
     ];
 
     cmds.forEach(([cmd, handler]) => {
         context.subscriptions.push(vscode.commands.registerCommand(cmd, handler));
     });
+
+    // 激活 SDK 模块
+    await activateSdk(context);
+
+    logger.info('Compilot 扩展激活完成');
+}
+
+export function deactivate(): void {
+    // 资源清理由 context.subscriptions 自动处理
 }

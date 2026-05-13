@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getEffectiveProjectName } from '../../project/projectDisplay';
-import { EnvInfo, QtInfo } from '../../env/envDetector';
-import type { ProjectInfo } from '../../project/projectManager';
+import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
+import { EnvInfo, QtInfo } from '../../qt/env/envDetector';
+import type { ProjectInfo } from '../../qt/project/projectManager';
 
 export interface TemplateData {
     env: EnvInfo | null;
