@@ -1,6 +1,8 @@
 /**
- * Generate a 128x128 PNG icon for the extension.
+ * Generate a 256x256 PNG icon for the Compilot extension.
  * Uses raw PNG encoding (no external dependencies).
+ *
+ * Design: Indigo rounded rect background + white "C" with gear teeth accent
  */
 const fs = require('fs');
 const path = require('path');
@@ -12,8 +14,10 @@ const SIZE = 256;
 const pixels = Buffer.alloc(SIZE * SIZE * 4);
 
 // Colors
-const BG = [65, 205, 82, 255];       // Qt green #41cd52
+const BG = [55, 71, 133, 255];        // Indigo blue #374785
+const ACCENT = [44, 62, 120, 255];    // Darker accent for depth
 const WHITE = [255, 255, 255, 255];
+const HIGHLIGHT = [99, 179, 237, 255]; // Light blue accent #63B3ED
 const TRANSPARENT = [0, 0, 0, 0];
 
 function setPixel(x, y, color) {
@@ -25,21 +29,37 @@ function setPixel(x, y, color) {
     pixels[i + 3] = color[3];
 }
 
+function getPixel(x, y) {
+    if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return TRANSPARENT;
+    const i = (y * SIZE + x) * 4;
+    return [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]];
+}
+
 function dist(x1, y1, x2, y2) {
     return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
 }
 
-// Draw rounded rectangle background
+function blendColor(base, overlay, alpha) {
+    return [
+        Math.round(base[0] * (1 - alpha) + overlay[0] * alpha),
+        Math.round(base[1] * (1 - alpha) + overlay[1] * alpha),
+        Math.round(base[2] * (1 - alpha) + overlay[2] * alpha),
+        255
+    ];
+}
+
+// Draw rounded rectangle background with subtle gradient
+const margin = 8;
+const radius = 48;
+
 for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-        const margin = 8;
-        const radius = 48;
         const inX = x >= margin && x < SIZE - margin;
         const inY = y >= margin && y < SIZE - margin;
 
         if (!inX || !inY) { setPixel(x, y, TRANSPARENT); continue; }
 
-        // Check corners
+        // Check corners for rounded rect
         let inside = true;
         const corners = [
             [margin + radius, margin + radius],
@@ -58,44 +78,83 @@ for (let y = 0; y < SIZE; y++) {
             inside = dist(x, y, corners[3][0], corners[3][1]) <= radius;
         }
 
-        setPixel(x, y, inside ? BG : TRANSPARENT);
+        if (inside) {
+            // Subtle vertical gradient
+            const gradientT = (y - margin) / (SIZE - 2 * margin);
+            const color = blendColor(BG, ACCENT, gradientT * 0.4);
+            setPixel(x, y, color);
+        } else {
+            setPixel(x, y, TRANSPARENT);
+        }
     }
 }
 
-// Draw "Q" circle (center 116, 116, radius 60, stroke 16)
-const cx = 116, cy = 116, r = 60, stroke = 16;
+// Draw "C" letter (arc) - center at 120, 128, outer radius 68, inner radius 48
+const cx = 120, cy = 128;
+const outerR = 68, innerR = 48;
+const gapAngle = Math.PI * 0.35; // Opening angle on the right side
+
 for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
         const d = dist(x, y, cx, cy);
-        if (d >= r - stroke / 2 && d <= r + stroke / 2) {
+        if (d >= innerR && d <= outerR) {
+            // Check if we're in the gap (right side opening)
+            const angle = Math.atan2(y - cy, x - cx);
+            if (Math.abs(angle) < gapAngle) continue; // Skip the gap
             setPixel(x, y, WHITE);
         }
     }
 }
 
-// Draw Q tail (line from 152,152 to 200,200, width 16)
-for (let t = 0; t <= 1; t += 0.001) {
-    const lx = 152 + (200 - 152) * t;
-    const ly = 152 + (200 - 152) * t;
-    for (let dy = -8; dy <= 8; dy++) {
-        for (let dx = -8; dx <= 8; dx++) {
-            if (dx * dx + dy * dy <= 64) {
-                setPixel(Math.round(lx + dx), Math.round(ly + dy), WHITE);
+// Draw small gear/cog in the opening of the C (bottom-right area)
+const gearCx = 178, gearCy = 148;
+const gearOuterR = 24, gearInnerR = 14;
+const gearTeeth = 8;
+const toothHeight = 8;
+
+for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+        const d = dist(x, y, gearCx, gearCy);
+        const angle = Math.atan2(y - gearCy, x - gearCx);
+
+        // Gear body (ring)
+        if (d >= gearInnerR && d <= gearOuterR) {
+            setPixel(x, y, HIGHLIGHT);
+        }
+
+        // Gear teeth
+        if (d > gearOuterR && d <= gearOuterR + toothHeight) {
+            const toothAngle = (angle + Math.PI) / (2 * Math.PI) * gearTeeth;
+            const toothPhase = toothAngle - Math.floor(toothAngle);
+            if (toothPhase > 0.25 && toothPhase < 0.75) {
+                setPixel(x, y, HIGHLIGHT);
             }
         }
+
+        // Center hole
+        if (d < 7) {
+            // Restore background
+            const gradientT = (y - margin) / (SIZE - 2 * margin);
+            const color = blendColor(BG, ACCENT, gradientT * 0.4);
+            setPixel(x, y, color);
+        }
     }
 }
 
-// Draw play triangle (vertices: 100,88  148,116  100,144)
-for (let y = 88; y <= 144; y++) {
-    for (let x = 100; x <= 148; x++) {
-        // Point in triangle test
-        const x0 = 100, y0 = 88, x1 = 148, y1 = 116, x2 = 100, y2 = 144;
+// Draw a small "play" triangle inside the C (subtle, represents "run")
+const triCx = 126, triCy = 128;
+const triSize = 16;
+for (let y = triCy - triSize; y <= triCy + triSize; y++) {
+    for (let x = triCx - triSize; x <= triCx + triSize; x++) {
+        // Triangle pointing right: left vertex at (triCx-8, triCy-12), (triCx-8, triCy+12), (triCx+12, triCy)
+        const x0 = triCx - 8, y0 = triCy - 12;
+        const x1 = triCx + 12, y1 = triCy;
+        const x2 = triCx - 8, y2 = triCy + 12;
         const area = 0.5 * (-y1 * x2 + y0 * (-x1 + x2) + x0 * (y1 - y2) + x1 * y2);
         const s = (y0 * x2 - x0 * y2 + (y2 - y0) * x + (x0 - x2) * y) / (2 * area);
-        const t2 = (x0 * y1 - y0 * x1 + (y0 - y1) * x + (x1 - x0) * y) / (2 * area);
-        if (s >= 0 && t2 >= 0 && (s + t2) <= 1) {
-            setPixel(x, y, WHITE);
+        const t = (x0 * y1 - y0 * x1 + (y0 - y1) * x + (x1 - x0) * y) / (2 * area);
+        if (s >= 0 && t >= 0 && (s + t) <= 1) {
+            setPixel(x, y, HIGHLIGHT);
         }
     }
 }
@@ -131,7 +190,7 @@ ihdr[10] = 0; // compression
 ihdr[11] = 0; // filter
 ihdr[12] = 0; // interlace
 
-// IDAT - raw image data with filter bytes
+// IDAT
 const raw = Buffer.alloc(SIZE * (SIZE * 4 + 1));
 for (let y = 0; y < SIZE; y++) {
     raw[y * (SIZE * 4 + 1)] = 0; // no filter
