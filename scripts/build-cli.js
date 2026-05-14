@@ -35,6 +35,9 @@ const syncFiles = [
 // Individual files needed from core/
 const coreFiles = ['core/logger.js', 'core/settingsIO.js'];
 
+// Individual files needed from sdk/ (non-vscode ones)
+const sdkFiles = ['sdk/constants.js'];
+
 function copyDir(src, dst) {
     if (!fs.existsSync(src)) { return; }
     fs.mkdirSync(dst, { recursive: true });
@@ -69,6 +72,16 @@ for (const file of coreFiles) {
 
 // Copy individual sync files (non-vscode only)
 for (const file of syncFiles) {
+    const srcFile = path.join(srcOut, file);
+    const dstFile = path.join(dest, file);
+    if (fs.existsSync(srcFile)) {
+        fs.mkdirSync(path.dirname(dstFile), { recursive: true });
+        fs.copyFileSync(srcFile, dstFile);
+    }
+}
+
+// Copy individual sdk files (non-vscode only)
+for (const file of sdkFiles) {
     const srcFile = path.join(srcOut, file);
     const dstFile = path.join(dest, file);
     if (fs.existsSync(srcFile)) {
