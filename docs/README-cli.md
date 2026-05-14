@@ -7,18 +7,28 @@
 ## 安装
 
 ```bash
-# 从本地打包文件安装
+# CLI
 npm install -g compilot-cli-x.x.x.tgz
+
+# AI Skill（Kiro 全局）
+cp -r skills/compilot/ ~/.kiro/skills/compilot/
+
+# AI Skill（仅当前项目）
+cp -r skills/compilot/ <project>/.kiro/skills/compilot/
 ```
+
+Skill 文件位于 CLI 包的 `skills/compilot/` 目录下，安装后 AI 助手可直接调用 compilot 命令。
 
 ## 快速开始
 
 ```bash
-# 1. 在 Qt 项目目录下初始化（检测环境、保存配置，只需一次）
-cd your-qt-project
-compilot qt init --execute
+# 1. 查看环境状态
+compilot qt status --json --brief
 
-# 2. 之后直接用，无需额外参数
+# 2. 初始化（检测环境、保存配置，只需一次）
+compilot qt init --execute --json --brief
+
+# 3. 之后直接用
 compilot qt build --execute
 compilot qt run --execute
 
@@ -29,40 +39,83 @@ compilot sdk status --json
 
 `init` 会将检测到的 Qt 路径、VS 环境、项目选择等保存到 `.compilot/settings.json`，后续命令自动读取，不需要每次指定 `--project`、`--mode`、`--arch`。
 
-## Qt 命令
+## 通用选项
 
-### `compilot qt init`
-
-检测 Qt 和 Visual Studio 环境，保存到 `.compilot/`。
-
-```bash
-compilot qt init --execute
-```
+所有命令都支持以下选项：
 
 | 选项 | 说明 |
 |------|------|
 | `--workspace <path>` | 工作区路径，默认当前目录 |
-| `--project <path>` | 指定 `.pro` 文件（支持相对路径） |
-| `--mode debug\|release` | 构建模式 |
-| `--arch x86\|x64` | 目标架构 |
-| `--qt-path <path>` | 手动指定 Qt 路径 |
-| `--vs-dev-shell <path>` | 手动指定 VsDevShell 路径 |
-| `--execute` | 执行初始化（不加则仅预览） |
-| `--json` | 输出 JSON |
+| `--execute` | 执行命令（不加则为 dry-run，仅显示命令计划） |
+| `--json` | 输出结构化 JSON |
+| `--brief` | 精简 JSON（仅 ok、diagnostics、logFile 等关键字段） |
+
+提示：
+
+- `--json --brief` 组合适合 AI 工具调用，输出精简且结构化
+- 不加 `--json` 时输出人类可读文本，适合终端直接使用
+- 执行类命令（build、run）加 `--json` 会等进程结束才一次性输出，看不到实时编译过程；如果只需要知道成功/失败，用 `--json --brief`
+- `--project` 支持相对路径（相对于 workspace），workspace 下只有一个 `.pro` 时可省略
+
+## JSON 输出结构
+
+所有 `--json` 输出共享以下关键字段：
+
+```jsonc
+{
+  "ok": true,              // 是否成功
+  "action": "build",       // 当前动作
+  "project": "app.pro",   // 当前项目（相对路径）
+  "commands": [...],       // 将要/已执行的 shell 命令列表
+  "candidates": [...],     // 候选 .pro 文件列表（status 时）
+  "diagnostics": [         // 诊断信息（warning/error/info）
+    { "level": "warning", "message": "..." }
+  ],
+  "nextActions": [...],    // 建议的下一步操作
+  "resolved": {            // 当前生效的构建配置
+    "mode": "debug",
+    "arch": "x86",
+    "qtPath": "...",
+    "vsDevShell": "..."
+  },
+  "rccProjectPath": "...", // RCC 项目路径（status 时）
+  "errors": [...],         // 编译错误行（build/run 失败时）
+  "logFile": "...",        // 日志文件路径（detach 模式）
+  "exitCode": 0            // 进程退出码（execute 模式）
+}
+```
+
+`--brief` 模式只保留 `ok`、`action`、`project`、`candidates`、`diagnostics`、`nextActions`、`resolved`、`rccProjectPath`、`errors`、`logFile`、`exitCode` 中的非空字段。
+
+## Qt 命令
 
 ### `compilot qt status`
 
 查看当前项目状态、环境检测结果、候选 `.pro` 文件列表。
 
 ```bash
-compilot qt status --json
+compilot qt status --json --brief
 ```
 
 | 选项 | 说明 |
 |------|------|
-| `--workspace <path>` | 工作区路径 |
 | `--save-local` | 将检测结果写入 .compilot/cache.json |
-| `--json` | 输出 JSON（推荐） |
+
+### `compilot qt init`
+
+检测 Qt 和 Visual Studio 环境，保存到 `.compilot/`。
+
+```bash
+compilot qt init --execute --json --brief
+```
+
+| 选项 | 说明 |
+|------|------|
+| `--project <path>` | 指定 `.pro` 文件（支持相对路径） |
+| `--mode debug\|release` | 构建模式 |
+| `--arch x86\|x64` | 目标架构 |
+| `--qt-path <path>` | 手动指定 Qt 路径 |
+| `--vs-dev-shell <path>` | 手动指定 VsDevShell 路径 |
 
 ### `compilot qt qmake`
 
@@ -74,13 +127,10 @@ compilot qt qmake --execute
 
 | 选项 | 说明 |
 |------|------|
-| `--workspace <path>` | 工作区路径 |
 | `--project <path>` | 指定 `.pro` 文件 |
 | `--mode debug\|release` | 构建模式 |
 | `--arch x86\|x64` | 目标架构 |
 | `--target <name>` | QMake TARGET 覆盖 |
-| `--execute` | 执行（不加则仅显示命令计划） |
-| `--json` | 输出 JSON |
 
 ### `compilot qt build`
 
@@ -88,23 +138,19 @@ compilot qt qmake --execute
 
 ```bash
 compilot qt build --execute
-compilot qt build --execute --project "app/app.pro"
-compilot qt build --execute --mode release --arch x86
+compilot qt build --execute --project "app/app.pro" --mode release
 ```
 
 | 选项 | 说明 |
 |------|------|
-| `--workspace <path>` | 工作区路径 |
 | `--project <path>` | 指定 `.pro` 文件 |
 | `--mode debug\|release` | 构建模式 |
 | `--arch x86\|x64` | 目标架构 |
 | `--target <name>` | QMake TARGET 覆盖 |
-| `--execute` | 执行编译（不加则仅显示命令计划） |
-| `--json` | 输出 JSON（不建议，无实时输出） |
 
 ### `compilot qt run`
 
-先杀掉已运行的程序，再编译，编译成功后启动程序。
+先杀掉已运行的程序，再编译（含 RCC 增量检查），编译成功后启动程序。
 
 ```bash
 compilot qt run --execute
@@ -114,46 +160,19 @@ compilot qt run --execute --project "app/app.pro" --mode release
 
 | 选项 | 说明 |
 |------|------|
-| `--workspace <path>` | 工作区路径 |
 | `--project <path>` | 指定 `.pro` 文件 |
 | `--mode debug\|release` | 构建模式 |
 | `--arch x86\|x64` | 目标架构 |
 | `--target <name>` | QMake TARGET 覆盖 |
-| `--execute` | 执行（不加则仅显示命令计划） |
 | `--detach` | 后台启动，日志落文件，CLI 立即返回 |
-| `--json` | 输出 JSON |
-| `--brief` | 精简 JSON（仅 ok、diagnostics、logFile） |
 
 ### `compilot qt logs`
 
 查看后台启动的程序运行日志（`--detach` 模式启动后的输出）。
 
 ```bash
-compilot qt logs
 compilot qt logs --json
 ```
-
-| 选项 | 说明 |
-|------|------|
-| `--workspace <path>` | 工作区路径 |
-| `--json` | 输出 JSON（含 PID、运行状态、日志尾部） |
-
-### `compilot qt clean`
-
-清理构建产物。
-
-```bash
-compilot qt clean --execute
-```
-
-| 选项 | 说明 |
-|------|------|
-| `--workspace <path>` | 工作区路径 |
-| `--project <path>` | 指定 `.pro` 文件 |
-| `--mode debug\|release` | 构建模式 |
-| `--arch x86\|x64` | 目标架构 |
-| `--execute` | 执行清理 |
-| `--json` | 输出 JSON |
 
 ### `compilot qt stop`
 
@@ -165,10 +184,21 @@ compilot qt stop --execute
 
 | 选项 | 说明 |
 |------|------|
-| `--workspace <path>` | 工作区路径 |
 | `--project <path>` | 指定 `.pro` 文件（用于推断进程名） |
-| `--execute` | 执行停止 |
-| `--json` | 输出 JSON |
+
+### `compilot qt clean`
+
+清理构建产物。
+
+```bash
+compilot qt clean --execute
+```
+
+| 选项 | 说明 |
+|------|------|
+| `--project <path>` | 指定 `.pro` 文件 |
+| `--mode debug\|release` | 构建模式 |
+| `--arch x86\|x64` | 目标架构 |
 
 ### `compilot qt sync`
 
@@ -181,26 +211,26 @@ compilot qt sync --execute --server "开发服务器"
 
 | 选项 | 说明 |
 |------|------|
-| `--workspace <path>` | 工作区路径 |
 | `--server <name>` | 指定服务器名称（对应 servers.json 中的 name） |
-| `--execute` | 执行同步 |
-| `--json` | 输出 JSON |
 
 ### `compilot qt rcc`
 
-编译 `.qrc` 资源文件为 `.rcc` 二进制。
+编译 `.qrc` 资源文件为 `.rcc` 二进制，并复制到可执行文件输出目录。
 
 ```bash
 compilot qt rcc --execute
 ```
 
-| 选项 | 说明 |
-|------|------|
-| `--workspace <path>` | 工作区路径 |
-| `--execute` | 执行编译 |
-| `--json` | 输出 JSON |
+RCC 项目路径解析顺序：
+1. `.compilot/settings.json` 中的 `rccProjectPath` 配置
+2. 自动扫描 workspace 下的 `XYRcc/` 目录
+3. 自动扫描 workspace 父目录下的 `XYRcc/` 目录
+
+`run` 命令会自动检查 RCC 资源是否有变更，有变更时自动插入 rcc 编译步骤。
 
 ## SDK 命令
+
+SDK 命令用于 `.sln` 或 `Makefile` 项目。支持 `--workspace`、`--execute`、`--json` 通用选项。
 
 ### `compilot sdk status`
 
@@ -235,13 +265,6 @@ compilot sdk rebuild --execute
 compilot sdk clean --execute
 ```
 
-## 通用说明
-
-- `--execute`：不加时为 dry-run，仅显示将要执行的命令，不实际执行
-- `--json`：输出结构化 JSON。执行类命令（build、run）不建议加，因为会等进程结束才一次性输出，看不到实时编译过程
-- `--project`：支持相对路径（相对于 workspace）。workspace 下只有一个 `.pro` 时可省略，自动选中
-- 所有路径选项都支持绝对路径和相对路径
-
 ## 本地状态
 
 配置保存在项目目录下：
@@ -267,22 +290,6 @@ compilot sdk clean --execute
 ```
 CLI 参数 > .compilot/settings.json > .compilot/cache.json > 环境变量 > 自动检测 > 默认值
 ```
-
-## AI Skill
-
-CLI 包附带 AI Skill 文件，可让 AI 编程助手（Kiro、Cursor 等）直接调用 compilot 命令。
-
-安装方式：
-
-```bash
-# Kiro — 项目级（仅当前项目生效）
-cp -r skills/compilot/ <project>/.kiro/skills/compilot/
-
-# Kiro — 全局（所有项目生效）
-cp -r skills/compilot/ ~/.kiro/skills/compilot/
-```
-
-Skill 文件位于 CLI 包的 `skills/compilot/` 目录下。
 
 ## 支持平台
 
