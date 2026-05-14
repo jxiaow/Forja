@@ -13,6 +13,7 @@ export class StatusBar implements vscode.Disposable {
       vscode.StatusBarAlignment.Left,
       100
     );
+    this.statusBarItem.name = 'Compilot SDK: 项目';
     this.statusBarItem.command = CMD_SHOW_ACTIONS;
 
     // Build 快捷按钮（紧挨主状态栏项右侧）
@@ -20,9 +21,10 @@ export class StatusBar implements vscode.Disposable {
       vscode.StatusBarAlignment.Left,
       99
     );
+    this.buildButton.name = 'Compilot SDK: 构建';
     this.buildButton.command = CMD_BUILD;
     this.buildButton.text = '$(play)';
-    this.buildButton.tooltip = 'SDK Pilot: Build';
+    this.buildButton.tooltip = 'Compilot SDK: Build';
 
     this.disposable = this.stateManager.onStateChanged(() => this.update());
     this.update();
@@ -40,7 +42,7 @@ export class StatusBar implements vscode.Disposable {
       const mode = this.stateManager.mode === 'debug' ? 'Debug' : 'Release';
       const arch = this.stateManager.arch;
       this.statusBarItem.text = `$(tools) ${project.name} · ${mode} ${arch}`;
-      this.statusBarItem.tooltip = '点击打开 SDK Pilot 操作菜单';
+      this.statusBarItem.tooltip = '点击打开 Compilot SDK 操作菜单';
       this.buildButton.show();
     } else {
       this.statusBarItem.text = '$(tools) No Project';

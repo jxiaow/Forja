@@ -11,16 +11,16 @@ let _debugItem: vscode.StatusBarItem;
 
 export function createStatusBar(context: vscode.ExtensionContext): void {
     _projectModeItem = vscode.window.createStatusBarItem('compilot.projectMode', vscode.StatusBarAlignment.Left, 113);
-    _projectModeItem.name = 'Compilot: Project';
+    _projectModeItem.name = 'Compilot Qt: 项目';
     _projectModeItem.command = 'compilot.qt.showActions';
     context.subscriptions.push(_projectModeItem);
 
     _runItem = vscode.window.createStatusBarItem('compilot.run', vscode.StatusBarAlignment.Left, 112);
-    _runItem.name = 'Compilot: Run';
+    _runItem.name = 'Compilot Qt: 运行';
     context.subscriptions.push(_runItem);
 
     _debugItem = vscode.window.createStatusBarItem('compilot.debug', vscode.StatusBarAlignment.Left, 111);
-    _debugItem.name = 'Compilot: Debug';
+    _debugItem.name = 'Compilot Qt: 调试';
     _debugItem.command = 'compilot.qt.debug';
     _debugItem.text = '$(debug-alt)';
     _debugItem.tooltip = '构建并启动调试';
