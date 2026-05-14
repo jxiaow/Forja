@@ -26,8 +26,9 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
 2. 多个候选项目时，必须从 `candidates` 选择并显式加 `--project`
 3. `build`、`run`、`clean`、`sync`、`init` 都有副作用；只有用户明确要执行时才加 `--execute`
 4. 加 `--json --brief` 获取精简结构化输出，省 token
-5. `build`、`run`、`clean`、`rebuild` 执行时必须加 `--detach`，否则会阻塞当前进程
-6. `--detach` 模式下命令立即返回，通过 `logs` 查看实际执行结果
+5. `build`、`run`、`rebuild` 执行时必须加 `--detach`（编译耗时长，避免阻塞）
+6. `clean`、`sync`、`init`、`stop` 不需要 `--detach`（执行很快，直接等结果）
+7. `--detach` 模式下命令立即返回，通过 `logs` 查看实际执行结果
 
 ## Qt 命令参考
 
@@ -35,7 +36,7 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
 # 查看状态（含环境检测、项目列表）
 compilot qt status --json --brief
 
-# 初始化并保存本地配置（仅在 status 显示环境未配置，且用户要初始化时执行）
+# 初始化并保存本地配置
 compilot qt init --execute --json --brief
 
 # 查看编译计划（默认 dry-run）
@@ -47,14 +48,14 @@ compilot qt build --execute --detach --json --brief
 # 编译并运行
 compilot qt run --execute --detach --json --brief
 
-# 查看运行日志（build/run 后查看实际输出）
+# 查看运行日志（build/run 后查看实际输出和错误）
 compilot qt logs --json
 
 # 停止程序
 compilot qt stop --execute --json --brief
 
 # 执行清理
-compilot qt clean --execute --detach --json --brief
+compilot qt clean --execute --json --brief
 
 # 执行远程同步
 compilot qt sync --execute --json --brief
@@ -73,17 +74,18 @@ compilot sdk build --execute --detach --json
 compilot sdk rebuild --execute --detach --json
 
 # 执行清理
-compilot sdk clean --execute --detach --json
+compilot sdk clean --execute --json
 ```
 
 ## 执行规则
 
 - **不要拆解命令**：`compilot qt run` 会先杀旧进程、编译、再启动，不要自己拆步骤
 - **不要猜路径**：不要自己拼 qmake/jom/msbuild 命令，统一用 compilot
-- **必须加 --detach**：`build`、`run`、`clean`、`rebuild` 执行时必须加 `--detach`，避免阻塞
-- **判断成功失败**：`--detach` 返回 `ok: true` 只表示任务已启动；必须再看 `compilot qt logs --json` 确认实际结果
+- **build/run/rebuild 必须加 --detach**：编译耗时长，不加会阻塞
+- **clean/sync/init/stop 不加 --detach**：执行很快，直接拿结果
+- **detach 后看 logs**：`--detach` 返回 `ok: true` 只表示任务已启动；必须再看 `compilot qt logs --json` 确认编译是否成功
+- **非 detach 直接看结果**：`ok` 字段直接反映成功/失败，`errors` 字段包含错误行
 - **执行前确认目标**：看 `project`、`candidates`、`diagnostics`、`commands`、`nextActions`
-- **编译失败时**：查看 `logs` 输出中的错误行，直接分析
 - **需要完整日志时**：读 `logFile` 路径指向的文件
 
 ## 错误处理
