@@ -26,9 +26,9 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
 2. 多个候选项目时，必须从 `candidates` 选择并显式加 `--project`
 3. `build`、`run`、`clean`、`sync`、`init` 都有副作用；只有用户明确要执行时才加 `--execute`
 4. 加 `--json --brief` 获取精简结构化输出，省 token
-5. `build`、`run`、`rebuild` 执行时必须加 `--detach`（编译耗时长，避免阻塞）
-6. `clean`、`sync`、`init`、`stop` 不需要 `--detach`（执行很快，直接等结果）
-7. `--detach` 模式下命令立即返回，通过 `logs` 查看实际执行结果
+5. `run` 执行时必须加 `--detach`（程序启动后不会自行退出，不加会阻塞）
+6. `build`、`clean`、`qmake` 不需要 `--detach`，前台执行完直接返回结果
+7. 所有 `--execute` 命令都会返回 `logFile` 路径，可查看完整日志
 
 ## Qt 命令参考
 
@@ -46,7 +46,7 @@ compilot qt qmake --execute --json --brief
 compilot qt build --json --brief
 
 # 执行编译
-compilot qt build --execute --detach --json --brief
+compilot qt build --execute --json --brief
 
 # 编译并运行
 compilot qt run --execute --detach --json --brief
@@ -71,10 +71,10 @@ compilot qt sync --execute --json --brief
 compilot sdk status --json
 
 # 执行编译
-compilot sdk build --execute --detach --json
+compilot sdk build --execute --json
 
 # 执行重新编译（clean + build）
-compilot sdk rebuild --execute --detach --json
+compilot sdk rebuild --execute --json
 
 # 执行清理
 compilot sdk clean --execute --json
@@ -84,9 +84,9 @@ compilot sdk clean --execute --json
 
 - **不要拆解命令**：`compilot qt run` 会先杀旧进程、编译、再启动，不要自己拆步骤
 - **不要猜路径**：不要自己拼 qmake/jom/msbuild 命令，统一用 compilot
-- **build/run/rebuild 必须加 --detach**：编译耗时长，不加会阻塞
-- **clean/sync/init/stop 不加 --detach**：执行很快，直接拿结果
-- **detach 后看 logs**：`--detach` 返回 `ok: true` 只表示任务已启动；必须再看 `compilot qt logs --json` 确认编译是否成功
+- **只有 run 加 --detach**：程序启动后不会自行退出，不加会阻塞
+- **build/clean/qmake 不加 --detach**：前台执行完直接返回 `errors`、`exitCode`、`logFile`
+- **detach 后看 logs**：`run --detach` 返回 `ok: true` 只表示程序已启动；看 `compilot qt logs --json` 确认运行状态
 - **非 detach 直接看结果**：`ok` 字段直接反映成功/失败，`errors` 字段包含错误行
 - **执行前确认目标**：看 `project`、`candidates`、`diagnostics`、`commands`、`nextActions`
 - **需要完整日志时**：读 `logFile` 路径指向的文件
