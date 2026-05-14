@@ -156,7 +156,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const cache = readLocalCache(workspace);
     const settings = loadSettings(workspace);
 
-    if (options.action === 'detect' || options.action === 'projects' || options.action === 'status') {
+    if (options.action === 'status') {
         const detected = await detectAndCache(workspace, options);
         const candidates = detected.detected.projects;
         const selectedProj = settings.selectedProject;
@@ -174,10 +174,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const diagnostics = [];
         const nextActions: string[] = [];
 
-        if (options.action !== 'detect' && candidates.length > 1 && !project) {
+        if (candidates.length > 1 && !project) {
             diagnostics.push({ level: 'warning' as const, message: `发现多个 .pro 文件，共 ${candidates.length} 个` });
             nextActions.push('使用 --project <path> 指定要操作的 .pro 文件');
-        } else if (options.action !== 'detect' && candidates.length === 0 && !project) {
+        } else if (candidates.length === 0 && !project) {
             diagnostics.push({ level: 'warning' as const, message: '当前 workspace 下未检测到 .pro 文件' });
             nextActions.push('将工作目录切到 Qt 工程根目录，或使用 --project <path>');
         }

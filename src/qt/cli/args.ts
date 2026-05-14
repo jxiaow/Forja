@@ -1,6 +1,6 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'detect', 'projects', 'status', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs'];
+const validActions: CliAction[] = ['init', 'status', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs'];
 
 const helpText = `Compilot Qt CLI — qmake 项目构建工具
 
@@ -8,9 +8,7 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
 
 命令:
   init        初始化本地配置（检测环境、保存 .compilot/）
-  detect      检测 Qt/VS 环境（不写文件，除非 --save-local）
-  projects    列出工作区内的 .pro 文件
-  status      显示当前配置和项目状态
+  status      显示当前配置、环境和项目状态
   qmake       生成/查看 qmake 命令
   build       生成/查看构建命令
   clean       生成/查看清理命令

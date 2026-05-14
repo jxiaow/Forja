@@ -1,4 +1,4 @@
-export type CliAction = 'init' | 'detect' | 'projects' | 'status' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'logs';
+export type CliAction = 'init' | 'status' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'logs';
 export type CliExecutionMode = 'dryRun' | 'execute';
 export type CliBuildMode = 'debug' | 'release';
 export type CliArch = 'x86' | 'x64';
