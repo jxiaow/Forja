@@ -10,11 +10,11 @@
 # CLI
 npm install -g compilot-cli-x.x.x.tgz
 
-# AI Skill（Kiro 全局）
-cp -r skills/compilot/ ~/.kiro/skills/compilot/
+# AI Skill（全局，所有项目生效）
+cp -r skills/compilot/ <ai-tool-skills-dir>/compilot/
 
-# AI Skill（仅当前项目）
-cp -r skills/compilot/ <project>/.kiro/skills/compilot/
+# AI Skill（项目级，仅当前项目）
+cp -r skills/compilot/ <project>/<ai-tool-skills-dir>/compilot/
 ```
 
 Skill 文件位于 CLI 包的 `skills/compilot/` 目录下，安装后 AI 助手可直接调用 compilot 命令。

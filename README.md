@@ -30,14 +30,14 @@ npm install -g compilot-cli-x.x.x.tgz
 
 ### AI Skill
 
-将 `skills/compilot/SKILL.md` 复制到对应 AI 工具的 skills 目录：
+将 `skills/compilot/` 复制到 AI 工具的 skills 目录：
 
 ```bash
-# Kiro（项目级自动加载）
-cp -r skills/compilot/ .kiro/skills/compilot/
+# 项目级
+cp -r skills/compilot/ <project>/<ai-tool-skills-dir>/compilot/
 
 # 全局
-cp -r skills/compilot/ ~/.kiro/skills/compilot/
+cp -r skills/compilot/ <ai-tool-skills-dir>/compilot/
 ```
 
 ## 构建与打包

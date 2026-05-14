@@ -12,11 +12,11 @@ compilot --version
 ## 安装
 
 ```bash
-# Kiro — 全局（所有项目生效）
-cp -r skills/compilot/ ~/.kiro/skills/compilot/
+# 全局（所有项目生效）
+cp -r skills/compilot/ <ai-tool-skills-dir>/compilot/
 
-# Kiro — 项目级（仅当前项目）
-cp -r skills/compilot/ <project>/.kiro/skills/compilot/
+# 项目级（仅当前项目）
+cp -r skills/compilot/ <project>/<ai-tool-skills-dir>/compilot/
 ```
 
 ## 使用
