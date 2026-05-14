@@ -4,7 +4,7 @@ let outputChannel: vscode.OutputChannel | undefined;
 
 export function initLogger(): vscode.OutputChannel {
   if (!outputChannel) {
-    outputChannel = vscode.window.createOutputChannel('SDK Pilot');
+    outputChannel = vscode.window.createOutputChannel('Compilot SDK');
   }
   return outputChannel;
 }

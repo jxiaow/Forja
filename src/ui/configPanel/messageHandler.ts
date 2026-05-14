@@ -49,7 +49,7 @@ export async function handleMessage(
             break;
         }
         case 'selectProject': {
-            await vscode.commands.executeCommand('qtPilot.selectProject');
+            await vscode.commands.executeCommand('compilot.qt.selectProject');
             updateHtml();
             break;
         }
@@ -130,7 +130,7 @@ export async function handleMessage(
             logger.info(`手动指定 .pro: "${msg.value}"`);
             await updateConfig('manualProPath', String(msg.value || ''));
             if (msg.value) {
-                await vscode.commands.executeCommand('qtPilot.loadManualProject');
+                await vscode.commands.executeCommand('compilot.qt.loadManualProject');
             }
             updateHtml();
             break;

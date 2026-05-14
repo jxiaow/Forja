@@ -13,7 +13,7 @@ import { readServers, readProjectSyncConfig } from '../../qt/sync/sftpClient';
 const logger = createLogger('ConfigPanelView');
 
 export class ConfigPanel implements vscode.WebviewViewProvider {
-    static readonly viewId = 'qtPilot.configView';
+    static readonly viewId = 'compilot.configView';
     private _view?: vscode.WebviewView;
     private readonly _version: string;
 

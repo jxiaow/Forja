@@ -15,7 +15,7 @@ import { ServerConfig } from './serverStore';
  */
 function _createAskpassScript(password: string): string {
     const tmpDir = os.tmpdir();
-    const scriptPath = path.join(tmpDir, `qt-pilot-askpass-${process.pid}.bat`);
+    const scriptPath = path.join(tmpDir, `compilot-askpass-${process.pid}.bat`);
     // .bat 脚本：输出密码到 stdout
     fs.writeFileSync(scriptPath, `@echo off\r\necho ${password}\r\n`);
     return scriptPath;
@@ -23,7 +23,7 @@ function _createAskpassScript(password: string): string {
 
 function _removeAskpassScript(): void {
     const tmpDir = os.tmpdir();
-    const scriptPath = path.join(tmpDir, `qt-pilot-askpass-${process.pid}.bat`);
+    const scriptPath = path.join(tmpDir, `compilot-askpass-${process.pid}.bat`);
     try { fs.unlinkSync(scriptPath); } catch {}
 }
 

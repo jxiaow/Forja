@@ -10,18 +10,18 @@ let _runItem: vscode.StatusBarItem;
 let _debugItem: vscode.StatusBarItem;
 
 export function createStatusBar(context: vscode.ExtensionContext): void {
-    _projectModeItem = vscode.window.createStatusBarItem('qtPilot.projectMode', vscode.StatusBarAlignment.Left, 113);
-    _projectModeItem.name = 'Qt Pilot: Project';
-    _projectModeItem.command = 'qtPilot.showActions';
+    _projectModeItem = vscode.window.createStatusBarItem('compilot.projectMode', vscode.StatusBarAlignment.Left, 113);
+    _projectModeItem.name = 'Compilot: Project';
+    _projectModeItem.command = 'compilot.qt.showActions';
     context.subscriptions.push(_projectModeItem);
 
-    _runItem = vscode.window.createStatusBarItem('qtPilot.run', vscode.StatusBarAlignment.Left, 112);
-    _runItem.name = 'Qt Pilot: Run';
+    _runItem = vscode.window.createStatusBarItem('compilot.run', vscode.StatusBarAlignment.Left, 112);
+    _runItem.name = 'Compilot: Run';
     context.subscriptions.push(_runItem);
 
-    _debugItem = vscode.window.createStatusBarItem('qtPilot.debug', vscode.StatusBarAlignment.Left, 111);
-    _debugItem.name = 'Qt Pilot: Debug';
-    _debugItem.command = 'qtPilot.debug';
+    _debugItem = vscode.window.createStatusBarItem('compilot.debug', vscode.StatusBarAlignment.Left, 111);
+    _debugItem.name = 'Compilot: Debug';
+    _debugItem.command = 'compilot.qt.debug';
     _debugItem.text = '$(debug-alt)';
     _debugItem.tooltip = '构建并启动调试';
     context.subscriptions.push(_debugItem);
@@ -43,7 +43,7 @@ function _updateDisplay(): void {
     const state = getState();
     const projectName = getEffectiveProjectName(state.currentProject, getQmakeTarget(), '未选择项目');
     _projectModeItem.text = `${_modeIcon()} ${projectName} · ${_modeDisplayLabel()}`;
-    _projectModeItem.tooltip = 'Qt Pilot: 点击选择模式/架构、构建操作、切换项目';
+    _projectModeItem.tooltip = 'Compilot: 点击选择模式/架构、构建操作、切换项目';
     _projectModeItem.color = state.mode === 'debug'
         ? new vscode.ThemeColor('statusBarItem.warningForeground')
         : undefined;
@@ -51,27 +51,27 @@ function _updateDisplay(): void {
 
     if (state.isBuilding && state.buildAction === 'run') {
         _runItem.text = '$(sync~spin)';
-        _runItem.tooltip = 'Qt Pilot: 正在为运行编译';
+        _runItem.tooltip = 'Compilot: 正在为运行编译';
         _runItem.command = undefined;
     } else if (state.isRunning) {
         _runItem.text = '$(debug-stop)';
-        _runItem.tooltip = 'Qt Pilot: 终止程序';
-        _runItem.command = 'qtPilot.stop';
+        _runItem.tooltip = 'Compilot: 终止程序';
+        _runItem.command = 'compilot.qt.stop';
     } else {
         _runItem.text = '$(play)';
-        _runItem.tooltip = 'Qt Pilot: 构建并运行';
-        _runItem.command = 'qtPilot.run';
+        _runItem.tooltip = 'Compilot: 构建并运行';
+        _runItem.command = 'compilot.qt.run';
     }
     _runItem.show();
 
     if (state.isBuilding && state.buildAction === 'debug') {
         _debugItem.text = '$(sync~spin)';
-        _debugItem.tooltip = 'Qt Pilot: 正在为调试编译';
+        _debugItem.tooltip = 'Compilot: 正在为调试编译';
         _debugItem.command = undefined;
     } else {
         _debugItem.text = '$(debug-alt)';
-        _debugItem.tooltip = 'Qt Pilot: 构建并启动调试';
-        _debugItem.command = 'qtPilot.debug';
+        _debugItem.tooltip = 'Compilot: 构建并启动调试';
+        _debugItem.command = 'compilot.qt.debug';
     }
     _debugItem.show();
 }
@@ -123,15 +123,15 @@ export async function showActions(): Promise<void> {
         setState('mode', m as BuildMode);
         setState('arch', a as Arch);
         if (changed) {
-            await vscode.commands.executeCommand('qtPilot.qmake');
+            await vscode.commands.executeCommand('compilot.qt.qmake');
         }
     } else if (selected.action === 'qmake') {
-        vscode.commands.executeCommand('qtPilot.qmake');
+        vscode.commands.executeCommand('compilot.qt.qmake');
     } else if (selected.action === 'build') {
-        vscode.commands.executeCommand('qtPilot.build');
+        vscode.commands.executeCommand('compilot.qt.build');
     } else if (selected.action === 'clean') {
-        vscode.commands.executeCommand('qtPilot.clean');
+        vscode.commands.executeCommand('compilot.qt.clean');
     } else if (selected.action === 'selectProject') {
-        vscode.commands.executeCommand('qtPilot.selectProject');
+        vscode.commands.executeCommand('compilot.qt.selectProject');
     }
 }
