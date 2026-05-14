@@ -5,7 +5,7 @@ let _channel: vscode.OutputChannel | null = null;
 export function initLogger(): vscode.OutputChannel {
     if (!_channel) {
         const vscodeApi = require('vscode') as typeof vscode;
-        _channel = vscodeApi.window.createOutputChannel('Compilot');
+        _channel = vscodeApi.window.createOutputChannel('Compilot Qt');
     }
     return _channel;
 }
