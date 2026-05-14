@@ -95,7 +95,7 @@ function extractErrors(output: string): string[] {
 export interface RunOptions {
     /** When true, pipes stdout/stderr to the terminal in real-time */
     streaming?: boolean;
-    /** When true (run action only), launches the program detached with output to log file */
+    /** When true, launches commands detached with output to log file. For run: builds first then detaches exe. For build/clean/rebuild: detaches entire command sequence. */
     detach?: boolean;
 }
 
@@ -107,7 +107,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
     const started = Date.now();
     const commandParts = [...result.commands];
 
-    // Detach mode: build first, then launch exe separately
+    // Detach mode for run: build first, then launch exe separately
     if (options?.detach && result.action === 'run' && commandParts.length > 1) {
         const buildCommands = commandParts.slice(0, -1);
         const runCommand = commandParts[commandParts.length - 1];
@@ -184,6 +184,50 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             logFile,
             commands: commandParts,
             diagnostics: [{ level: 'info', message: `程序已后台启动 (PID: ${pid})，日志: ${logFile}` }]
+        };
+    }
+
+    // Detach mode for build/clean/rebuild: run entire command sequence in background
+    if (options?.detach && result.action !== 'run' && commandParts.length > 0) {
+        ensureLocalStateDir(result.workspace);
+        const logFile = logFileFor(result.workspace, result.action);
+        fs.mkdirSync(path.dirname(logFile), { recursive: true });
+
+        const commandLine = commandParts.join(' && ');
+        const cwd = result.project ? path.dirname(result.project) : result.workspace;
+        const isWin = process.platform === 'win32';
+
+        let child: cp.ChildProcess;
+        if (isWin) {
+            const batFile = path.join(path.dirname(logFile), `${result.action}.bat`);
+            const vbsFile = path.join(path.dirname(logFile), `${result.action}.vbs`);
+            fs.writeFileSync(batFile, `@echo off\r\ncd /d "${cwd}"\r\n${commandLine} >"${logFile}" 2>&1\r\n`, 'utf8');
+            fs.writeFileSync(vbsFile, `CreateObject("Wscript.Shell").Run "cmd /c ""${batFile}""", 0, False\r\n`, 'utf8');
+            child = cp.spawn('wscript', [vbsFile], {
+                cwd,
+                detached: true,
+                windowsHide: true,
+                stdio: 'ignore'
+            });
+        } else {
+            child = cp.spawn('/bin/sh', ['-c', `cd "${cwd}" && ${commandLine} >"${logFile}" 2>&1 &`], {
+                cwd,
+                detached: true,
+                stdio: 'ignore'
+            });
+        }
+        child.unref();
+
+        const pid = child.pid || 0;
+        const durationMs = Date.now() - started;
+        return {
+            ...result,
+            ok: true,
+            exitCode: null,
+            durationMs,
+            logFile,
+            commands: commandParts,
+            diagnostics: [{ level: 'info', message: `${result.action} 已后台启动 (PID: ${pid})，日志: ${logFile}` }]
         };
     }
 

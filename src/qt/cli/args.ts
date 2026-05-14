@@ -29,7 +29,7 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   --server <name>        同步时指定服务器名称
   --dry-run              仅生成命令计划，不执行（默认）
   --execute              执行命令（需显式传入）
-  --detach               run 时后台启动程序，日志落文件，CLI 立即返回
+  --detach               后台执行，日志落文件，CLI 立即返回
   --brief                精简输出（仅 ok、diagnostics、logFile 等关键字段）
   --save-local           将检测结果写入 .compilot/cache.json
   --json                 输出 JSON 格式（适合 AI 工具解析）
