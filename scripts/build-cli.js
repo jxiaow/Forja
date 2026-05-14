@@ -13,7 +13,7 @@ const root = path.resolve(__dirname, '..');
 const srcOut = path.join(root, 'out');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const version = pkg.version;
-const distCli = path.join(root, 'dist', version, 'cli');
+const distCli = path.join(root, 'dist', `compilot-${version}`, 'cli');
 const tmpBuild = path.join(root, 'dist', '_cli-build');
 
 // Directories to copy (relative to out/)
@@ -165,7 +165,7 @@ for (const tgz of tgzFiles) {
     const src = path.join(tmpBuild, tgz);
     const dst = path.join(distCli, tgz);
     fs.renameSync(src, dst);
-    console.log(`Packed: dist/${version}/cli/${tgz}`);
+    console.log(`Packed: dist/compilot-${version}/cli/${tgz}`);
 }
 
 // Remove temp build directory
@@ -177,7 +177,7 @@ fs.rmSync(tmpBuild, { recursive: true });
 const cliReadmeFinal = path.join(root, 'docs', 'README-cli.md');
 if (fs.existsSync(cliReadmeFinal)) {
     fs.copyFileSync(cliReadmeFinal, path.join(distCli, 'README.md'));
-    console.log('Copied: dist/' + version + '/cli/README.md');
+    console.log('Copied: dist/compilot-' + version + '/cli/README.md');
 }
 
 // Copy skills directory
@@ -185,7 +185,7 @@ const skillsSrc = path.join(root, 'skills', 'compilot');
 const skillsDst = path.join(distCli, 'skills', 'compilot');
 if (fs.existsSync(skillsSrc)) {
     copyDirRecursive(skillsSrc, skillsDst);
-    console.log('Copied: dist/' + version + '/cli/skills/compilot/');
+    console.log('Copied: dist/compilot-' + version + '/cli/skills/compilot/');
 }
 
-console.log(`\nCLI package complete: dist/${version}/cli/`);
+console.log(`\nCLI package complete: dist/compilot-${version}/cli/`);

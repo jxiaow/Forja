@@ -16,7 +16,7 @@ const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const version = pkg.version;
 
-const distVs = path.join(root, 'dist', version, 'vs');
+const distVs = path.join(root, 'dist', `compilot-${version}`, 'vs');
 const rootReadme = path.join(root, 'README.md');
 const vsReadme = path.join(root, 'docs', 'README-vscode.md');
 const backupReadme = path.join(root, 'README.md.bak');
@@ -37,7 +37,7 @@ try {
     }
 
     // Build VSIX into dist/<version>/vs/
-    execSync(`npx vsce package --allow-missing-repository -o dist/${version}/vs/`, { cwd: root, stdio: 'inherit' });
+    execSync(`npx vsce package --allow-missing-repository -o dist/compilot-${version}/vs/`, { cwd: root, stdio: 'inherit' });
 } finally {
     // Restore original README
     if (swapped && fs.existsSync(backupReadme)) {
@@ -49,7 +49,7 @@ try {
 // Copy VSCode README into dist/<version>/vs/ for reference
 if (fs.existsSync(vsReadme)) {
     fs.copyFileSync(vsReadme, path.join(distVs, 'README.md'));
-    console.log('Copied: dist/' + version + '/vs/README.md');
+    console.log('Copied: dist/compilot-' + version + '/vs/README.md');
 }
 
-console.log(`\nVSCode extension package complete: dist/${version}/vs/`);
+console.log(`\nVSCode extension package complete: dist/compilot-${version}/vs/`);
