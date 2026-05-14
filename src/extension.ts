@@ -81,7 +81,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     setState('currentProject', project);
 
-    // 有项目时确保 .qtpilot/ 存在并写入 cache.json
+    // 有项目时确保 .compilot/ 存在并写入 cache.json
     if (project) {
         const wsRoot = getWorkspaceRoot();
         if (wsRoot) {

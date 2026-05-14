@@ -86,6 +86,12 @@ if (fs.existsSync(entryFile)) {
     }
 }
 
+// Copy CLI README
+const cliReadme = path.join(root, 'cli', 'README.md');
+if (fs.existsSync(cliReadme)) {
+    fs.copyFileSync(cliReadme, path.join(dest, 'README.md'));
+}
+
 // Generate package.json
 const mainPkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const cliPkg = {

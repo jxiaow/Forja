@@ -171,7 +171,7 @@ src/
 │   │   ├── qtCore.ts               # CLI 核心逻辑 (createActionPlan)
 │   │   ├── commandRunner.ts        # 命令执行器 (runCliResult)
 │   │   ├── configResolver.ts       # BuildConfig 解析
-│   │   ├── localState.ts           # .qtpilot/ 目录管理 + cache 读写
+│   │   ├── localState.ts           # .compilot/ 目录管理 + cache 读写
 │   │   ├── projectScanner.ts       # .pro 文件扫描 + 解析
 │   │   └── runtimeTarget.ts        # 运行时目标解析
 │   ├── sync/

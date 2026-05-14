@@ -90,7 +90,7 @@ export function getBuildConfig(): BuildConfig {
         }
     }
 
-    // Priority: settings > env detection > .qtpilot/cache.json > defaults
+    // Priority: settings > env detection > .compilot/cache.json > defaults
     const localCache = root ? readLocalCache(root) : null;
 
     const inputs = mergeConfigInputs(

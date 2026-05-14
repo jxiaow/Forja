@@ -1,5 +1,5 @@
 /**
- * 自管理配置存储 — 配置文件位于 .qtpilot/settings.json
+ * 自管理配置存储 — 配置文件位于 .compilot/settings.json
  *
  * 纯 IO 逻辑在 settingsIO.ts 中，本模块负责 vscode 集成（workspace 路径、文件监听）。
  */
@@ -37,8 +37,8 @@ function _load(): QtPilotSettings {
 function _save(): void {
     const ws = _getWorkspace();
     if (!ws) { return; }
-    // 仅在 .qtpilot/ 已存在时写入，避免自动创建污染项目
-    if (!fs.existsSync(path.join(ws, '.qtpilot'))) { return; }
+    // 仅在 .compilot/ 已存在时写入，避免自动创建污染项目
+    if (!fs.existsSync(path.join(ws, '.compilot'))) { return; }
     try {
         saveSettings(ws, _settings);
     } catch (e) {
@@ -51,10 +51,10 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
     _settings = _load();
     _loaded = true;
 
-    // 监听 .qtpilot/settings.json 文件变化（外部编辑时重新加载）
+    // 监听 .compilot/settings.json 文件变化（外部编辑时重新加载）
     const ws = _getWorkspace();
     if (ws) {
-        const pattern = new vscode.RelativePattern(ws, '.qtpilot/settings.json');
+        const pattern = new vscode.RelativePattern(ws, '.compilot/settings.json');
         _watcher = vscode.workspace.createFileSystemWatcher(pattern);
         _watcher.onDidChange(() => _reload());
         _watcher.onDidCreate(() => _reload());

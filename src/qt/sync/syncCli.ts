@@ -1,6 +1,6 @@
 /**
  * CLI-compatible sync module — no vscode dependency.
- * Reads config from ~/.qt-pilot/servers.json and .qtpilot/sync-config.json
+ * Reads config from ~/.compilot/servers.json and .compilot/sync-config.json
  */
 import * as path from 'path';
 import * as cp from 'child_process';
@@ -132,7 +132,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string)
     const targetName = serverName || project.selectedServer;
     const server = getServerById(targetName) || getServerByName(targetName);
     if (!server) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetName}" 未找到，请检查 ~/.qt-pilot/servers.json` }], server: targetName, remotePath: '' };
+        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetName}" 未找到，请检查 ~/.compilot/servers.json` }], server: targetName, remotePath: '' };
     }
 
     if (!server.remotePath) {

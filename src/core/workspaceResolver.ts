@@ -1,10 +1,10 @@
 /**
  * 解析 Qt 项目所在的 workspace folder。
  *
- * 多文件夹工作区中，.qtpilot/ 应该生成在包含 Qt 项目的文件夹下，而非固定 workspaceFolders[0]。
+ * 多文件夹工作区中，.compilot/ 应该生成在包含 Qt 项目的文件夹下，而非固定 workspaceFolders[0]。
  *
  * 解析优先级：
- * 1. 已有 .qtpilot/settings.json 的文件夹（说明之前已初始化过）
+ * 1. 已有 .compilot/settings.json 的文件夹（说明之前已初始化过）
  * 2. 包含 .pro 文件的第一个文件夹
  * 3. fallback 到 workspaceFolders[0]
  */
@@ -39,9 +39,9 @@ export function resolveProjectRoot(): string {
         return _resolved;
     }
 
-    // 多文件夹：优先找已有 .qtpilot/settings.json 的
+    // 多文件夹：优先找已有 .compilot/settings.json 的
     for (const folder of folders) {
-        const settingsPath = path.join(folder.uri.fsPath, '.qtpilot', 'settings.json');
+        const settingsPath = path.join(folder.uri.fsPath, '.compilot', 'settings.json');
         if (fs.existsSync(settingsPath)) {
             _resolved = folder.uri.fsPath;
             return _resolved;

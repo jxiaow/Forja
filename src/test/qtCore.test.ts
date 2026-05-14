@@ -7,7 +7,7 @@ import { createActionPlan } from '../qt/shared/qtCore';
 import { saveSettings, DEFAULT_SETTINGS } from '../core/settingsIO';
 
 function makeWorkspace(): string {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'qt-pilot-core-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-core-'));
     fs.writeFileSync(path.join(workspace, 'demo.pro'), 'TARGET = demo\nQT += core gui widgets\n', 'utf8');
     return workspace;
 }
@@ -113,8 +113,8 @@ test('createActionPlan qmake warns when Qt and VS environment are unresolved', a
     assert.equal(result.ok, true);
     assert.equal(result.project, path.join(workspace, 'demo.pro'));
     assert.match(result.commands.join('\n'), /qmake/);
-    assert.ok(result.diagnostics.some(d => /Qt 路径未解析/.test(d.message)));
-    assert.ok(result.diagnostics.some(d => /VS DevShell 路径未解析/.test(d.message)));
+    assert.ok(result.diagnostics.some(d => /Qt 路径未解/.test(d.message)));
+    assert.ok(result.diagnostics.some(d => /VS DevShell 路径未解/.test(d.message)));
     assert.ok(result.nextActions.some(action => /--qt-path/.test(action)));
     assert.ok(result.nextActions.some(action => /--vs-dev-shell/.test(action)));
 });
@@ -162,7 +162,7 @@ test('createActionPlan init dry-run previews what would be created', async () =>
     assert.equal(result.ok, true);
     assert.equal(result.action, 'init');
     assert.ok(result.diagnostics.length > 0);
-    assert.ok(result.diagnostics.some(d => /\.qtpilot/.test(d.message)));
+    assert.ok(result.diagnostics.some(d => /\.compilot/.test(d.message)));
     assert.ok(result.diagnostics.some(d => /\.gitignore/.test(d.message)));
     assert.ok(result.diagnostics.some(d => /cache\.json/.test(d.message)));
     assert.ok(result.nextActions.some(a => /init --execute/.test(a)));

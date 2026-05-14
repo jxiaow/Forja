@@ -12,7 +12,7 @@ export interface LocalCache {
 }
 
 export function localRoot(workspace: string): string {
-    return path.join(workspace, '.qtpilot');
+    return path.join(workspace, '.compilot');
 }
 
 export function cachePath(workspace: string): string {
@@ -23,7 +23,7 @@ export function logsDir(workspace: string): string {
     const tmpBase = process.env.TEMP || process.env.TMP || require('os').tmpdir();
     // Use a hash-like folder name based on workspace path to avoid collisions
     const folderName = workspace.replace(/[\\/:*?"<>|]/g, '_');
-    return path.join(tmpBase, 'qt-pilot-logs', folderName);
+    return path.join(tmpBase, 'compilot-logs', folderName);
 }
 
 export function ensureLocalStateDir(workspace: string): void {
@@ -39,7 +39,7 @@ export function writeLocalCache(workspace: string, cache: LocalCache): void {
     writeJson(cachePath(workspace), cache);
 }
 
-export function ensureQtpilotGitignored(workspace: string): void {
+export function ensureCompilotGitignored(workspace: string): void {
     const gitignorePath = path.join(workspace, '.gitignore');
     let lines: string[] = [];
 
@@ -48,9 +48,9 @@ export function ensureQtpilotGitignored(workspace: string): void {
     } catch {}
 
     const otherLines = lines.filter(line =>
-        line.trim() !== '.qtpilot/' && line.length > 0
+        line.trim() !== '.compilot/' && line.trim() !== '.qtpilot/' && line.length > 0
     );
-    otherLines.push('.qtpilot/');
+    otherLines.push('.compilot/');
     fs.mkdirSync(path.dirname(gitignorePath), { recursive: true });
     fs.writeFileSync(gitignorePath, `${otherLines.join('\n')}\n`, 'utf8');
 }

@@ -12,7 +12,7 @@ export function registerSyncWatcher(context: vscode.ExtensionContext): void {
     const wsRoot = getWorkspaceRoot();
     if (wsRoot) {
         // 监听 sync-config.json 和 servers.json 变化来刷新状态栏
-        const syncPattern = new vscode.RelativePattern(wsRoot, '.qtpilot/sync-config.json');
+        const syncPattern = new vscode.RelativePattern(wsRoot, '.compilot/sync-config.json');
         const syncWatcher = vscode.workspace.createFileSystemWatcher(syncPattern);
         syncWatcher.onDidChange(() => _refreshStatusBar());
         syncWatcher.onDidCreate(() => _refreshStatusBar());
@@ -20,10 +20,10 @@ export function registerSyncWatcher(context: vscode.ExtensionContext): void {
         context.subscriptions.push(syncWatcher);
     }
 
-    // 监听全局 servers.json（位于 ~/.qt-pilot/）
+    // 监听全局 servers.json（位于 ~/.compilot/）
     const os = require('os');
     const path = require('path');
-    const globalServersDir = path.join(os.homedir(), '.qt-pilot');
+    const globalServersDir = path.join(os.homedir(), '.compilot');
     const globalPattern = new vscode.RelativePattern(vscode.Uri.file(globalServersDir), 'servers.json');
     const globalWatcher = vscode.workspace.createFileSystemWatcher(globalPattern);
     globalWatcher.onDidChange(() => _refreshStatusBar());

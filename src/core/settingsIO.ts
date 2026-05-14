@@ -39,7 +39,7 @@ export const DEFAULT_SETTINGS: Readonly<QtPilotSettings> = {
 };
 
 export function settingsFilePath(workspace: string): string {
-    return path.join(workspace, '.qtpilot', 'settings.json');
+    return path.join(workspace, '.compilot', 'settings.json');
 }
 
 /** 从磁盘加载配置，缺失字段用默认值填充 */
