@@ -13,7 +13,7 @@ export class StatusBar implements vscode.Disposable {
       vscode.StatusBarAlignment.Left,
       100
     );
-    this.statusBarItem.name = 'Compilot SDK: 项目';
+    this.statusBarItem.name = 'Compilot SDK: Project';
     this.statusBarItem.command = CMD_SHOW_ACTIONS;
 
     // Build 快捷按钮（紧挨主状态栏项右侧）
@@ -21,7 +21,7 @@ export class StatusBar implements vscode.Disposable {
       vscode.StatusBarAlignment.Left,
       99
     );
-    this.buildButton.name = 'Compilot SDK: 构建';
+    this.buildButton.name = 'Compilot SDK: Build';
     this.buildButton.command = CMD_BUILD;
     this.buildButton.text = '$(play)';
     this.buildButton.tooltip = 'Compilot SDK: Build';
