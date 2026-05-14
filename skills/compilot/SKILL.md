@@ -39,6 +39,9 @@ compilot qt status --json --brief
 # 初始化并保存本地配置
 compilot qt init --execute --json --brief
 
+# 生成 Makefile
+compilot qt qmake --execute --json --brief
+
 # 查看编译计划（默认 dry-run）
 compilot qt build --json --brief
 
