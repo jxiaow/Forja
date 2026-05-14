@@ -46,12 +46,15 @@ compilot sdk status --json
 | `--execute` | 执行命令（不加则为 dry-run，仅显示命令计划） |
 | `--json` | 输出结构化 JSON |
 | `--brief` | 精简 JSON（仅 ok、diagnostics、logFile 等关键字段） |
+| `--detach` | 后台执行，日志落文件，CLI 立即返回 |
 
 提示：
 
 - `--json --brief` 组合适合 AI 工具调用，输出精简且结构化
 - 不加 `--json` 时输出人类可读文本，适合终端直接使用
-- 执行类命令（build、run）加 `--json` 会等进程结束才一次性输出，看不到实时编译过程；如果只需要知道成功/失败，用 `--json --brief`
+- `--detach` 适合耗时较长的命令（build、run），CLI 立即返回，通过 `logs` 查看结果
+- `run --detach`：前台编译，编译成功后 detach 启动程序；编译失败直接返回错误
+- `build/clean --detach`：整个命令序列后台执行，输出落日志文件
 - `--project` 支持相对路径（相对于 workspace），workspace 下只有一个 `.pro` 时可省略
 
 ## JSON 输出结构
@@ -161,11 +164,12 @@ compilot qt run --execute --project "app/app.pro" --mode release
 | `--mode debug\|release` | 构建模式 |
 | `--arch x86\|x64` | 目标架构 |
 | `--target <name>` | QMake TARGET 覆盖 |
-| `--detach` | 后台启动，日志落文件，CLI 立即返回 |
+
+`--detach` 时：前台编译，编译成功后 detach 启动程序。编译失败直接返回错误。
 
 ### `compilot qt logs`
 
-查看后台启动的程序运行日志（`--detach` 模式启动后的输出）。
+查看后台执行的日志（`--detach` 模式的输出）。
 
 ```bash
 compilot qt logs --json
