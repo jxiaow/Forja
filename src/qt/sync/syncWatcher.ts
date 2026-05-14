@@ -52,7 +52,7 @@ function _refreshStatusBar(): void {
 
     if (!_statusItem) {
         _statusItem = vscode.window.createStatusBarItem('compilot.sync', vscode.StatusBarAlignment.Left, 110);
-        _statusItem.name = 'Compilot Qt: Sync';
+        _statusItem.name = 'Compilot: Sync';
     }
 
     const resolved = getResolvedConfig(wsRoot);
