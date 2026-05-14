@@ -11,6 +11,7 @@ docs/**
 .superpowers/**
 .work/**
 .qtpilot/**
+.compilot/**
 **/tsconfig.json
 **/.eslintrc.json
 **/*.ts
