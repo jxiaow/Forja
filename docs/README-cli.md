@@ -268,6 +268,22 @@ compilot sdk clean --execute
 CLI 参数 > .compilot/settings.json > .compilot/cache.json > 环境变量 > 自动检测 > 默认值
 ```
 
+## AI Skill
+
+CLI 包附带 AI Skill 文件，可让 AI 编程助手（Kiro、Cursor 等）直接调用 compilot 命令。
+
+安装方式：
+
+```bash
+# Kiro — 项目级（仅当前项目生效）
+cp -r skills/compilot/ <project>/.kiro/skills/compilot/
+
+# Kiro — 全局（所有项目生效）
+cp -r skills/compilot/ ~/.kiro/skills/compilot/
+```
+
+Skill 文件位于 CLI 包的 `skills/compilot/` 目录下。
+
 ## 支持平台
 
 - Windows (MSVC + jom)
