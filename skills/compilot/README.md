@@ -11,8 +11,44 @@ compilot --version
 
 ## 安装
 
+将 `skills/compilot/` 目录复制到对应 AI 工具的 skill 目录即可。
+
+### Kiro
+
 ```bash
-cp -r skills/compilot/ <ai-tool-skills-dir>/compilot/
+# Windows
+xcopy /E /I skills\compilot "%USERPROFILE%\.kiro\skills\compilot"
+
+# macOS / Linux
+cp -r skills/compilot/ ~/.kiro/skills/compilot/
+```
+
+### Codex
+
+```bash
+# Windows
+xcopy /E /I skills\compilot "%USERPROFILE%\.codex\skills\compilot"
+
+# macOS / Linux
+cp -r skills/compilot/ ~/.codex/skills/compilot/
+```
+
+### Cursor
+
+```bash
+# Windows
+xcopy /E /I skills\compilot "%USERPROFILE%\.cursor\skills\compilot"
+
+# macOS / Linux
+cp -r skills/compilot/ ~/.cursor/skills/compilot/
+```
+
+### 其他工具
+
+将 `skills/compilot/` 整个目录复制到对应工具的全局 skills 目录：
+
+```bash
+cp -r skills/compilot/ ~/.<tool-name>/skills/compilot/
 ```
 
 ## 使用
@@ -24,6 +60,11 @@ cp -r skills/compilot/ <ai-tool-skills-dir>/compilot/
 - "清理重新编译"
 - "同步到远程服务器"
 - "看看构建环境状态"
+- "初始化构建环境"
+- "切到 release 模式编译"
+- "用 x64 架构重新编译"
+- "停掉正在运行的程序"
+- "看看编译日志"
 
 AI 会自动调用对应的 `compilot` 命令。首次使用时让 AI "初始化构建环境"即可。
 
@@ -39,6 +80,6 @@ AI 会自动调用对应的 `compilot` 命令。首次使用时让 AI "初始化
 
 ```
 skills/compilot/
-├── SKILL.md    # AI 读取的指令文件
+├── SKILL.md    # AI 读取的指令文件（核心）
 └── README.md   # 本文件（安装说明）
 ```

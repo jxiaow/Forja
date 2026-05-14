@@ -10,8 +10,9 @@
 
 import { runQtCli } from '../qt/cli/index';
 import { runSdkCli } from '../sdk/cli/index';
+import pkg from '../../package.json';
 
-const VERSION = '0.6.0';
+const VERSION = pkg.version;
 
 function printHelp(): void {
     const help = `
