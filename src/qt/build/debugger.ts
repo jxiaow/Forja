@@ -12,6 +12,17 @@ const logger = createLogger('Debug');
 let _activeDebugProgram: string | null = null;
 let _suppressTerminateNotice = false;
 
+function _needsQmakeForDebug(projectDir: string): boolean {
+    const mf = path.join(projectDir, 'Makefile');
+    try {
+        if (!fs.existsSync(mf)) { return true; }
+        const head = fs.readFileSync(mf, 'utf-8').slice(0, 2048);
+        return !head.includes('force_debug_info');
+    } catch {
+        return true;
+    }
+}
+
 function getEffectiveQtSourcePath(qtPath: string): string {
     const manualPath = getQtSourcePath().trim();
     if (manualPath && fs.existsSync(manualPath)) {
@@ -163,7 +174,7 @@ export async function startDebug(): Promise<void> {
     setState('isBuilding', true);
     setState('buildAction', 'debug');
     try {
-        if (cfg.mode === 'release') {
+        if (cfg.mode === 'release' && _needsQmakeForDebug(cfg.projectDir)) {
             const qmakeExecution = await qmakeForDebug();
             await waitForTask(qmakeExecution);
         }
@@ -199,7 +210,7 @@ export async function startDebug(): Promise<void> {
         stopAtEntry: false,
         cwd: cfg.projectDir,
         environment: [],
-        externalConsole: false,
+        console: 'integratedTerminal',
         logging: {
             exceptions: true,
             programOutput: true

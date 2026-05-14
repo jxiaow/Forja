@@ -20,8 +20,20 @@ function compactResult(result: CliResult, brief?: boolean): Record<string, unkno
         if (result.exitCode !== null) { out.exitCode = result.exitCode; }
         if (result.errors.length > 0) { out.errors = result.errors; }
         if (result.logFile) { out.logFile = result.logFile; }
+        if (result.project) {
+            out.project = path.relative(result.workspace, result.project) || result.project;
+        }
         if (result.candidates.length > 0) {
             out.candidates = result.candidates.map(c => path.relative(result.workspace, c) || c);
+        }
+        if (result.resolved) {
+            const r: Record<string, unknown> = {};
+            if (result.resolved.mode) { r.mode = result.resolved.mode; }
+            if (result.resolved.arch) { r.arch = result.resolved.arch; }
+            if (result.resolved.qtPath) { r.qtPath = result.resolved.qtPath; }
+            if (result.resolved.vsDevShell) { r.vsDevShell = result.resolved.vsDevShell; }
+            if (result.resolved.qmakeTarget) { r.qmakeTarget = result.resolved.qmakeTarget; }
+            if (Object.keys(r).length > 0) { out.resolved = r; }
         }
         return out;
     }
@@ -43,7 +55,7 @@ function compactResult(result: CliResult, brief?: boolean): Record<string, unkno
     if (result.stdout) { out.stdout = result.stdout; }
     if (result.stderr) { out.stderr = result.stderr; }
     if (result.logFile) { out.logFile = result.logFile; }
-    if (!result.ok && result.resolved) { out.resolved = result.resolved; }
+    if (result.resolved) { out.resolved = result.resolved; }
 
     return out;
 }

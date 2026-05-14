@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const maxScanDepth = 5;
-const defaultSkipDirs = ['node_modules', '.git', '.compilot', 'build', 'debug', 'release', 'out'];
+const defaultSkipDirs = ['node_modules', '.git', '.compilot', '.worktrees', 'build', 'debug', 'release', 'out'];
 
 /**
  * Scan for .pro files under a root directory.
