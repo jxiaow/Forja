@@ -33,10 +33,6 @@ npm install -g compilot-cli-x.x.x.tgz
 将 `skills/compilot/` 复制到 AI 工具的 skills 目录：
 
 ```bash
-# 项目级
-cp -r skills/compilot/ <project>/<ai-tool-skills-dir>/compilot/
-
-# 全局
 cp -r skills/compilot/ <ai-tool-skills-dir>/compilot/
 ```
 
