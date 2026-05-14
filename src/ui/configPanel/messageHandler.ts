@@ -145,6 +145,11 @@ export async function handleMessage(
             await updateConfig('qmakeReminderEnabled', !!msg.value);
             break;
         }
+        case 'saveRccProjectPath': {
+            logger.info(`保存 RCC 项目路径: "${msg.value}"`);
+            await updateConfig('rccProjectPath', String(msg.value || ''));
+            break;
+        }
         case 'generateIntelliSense': {
             logger.info(`生成 IntelliSense: C=${msg.cStandard}, C++=${msg.cppStandard}`);
             if (msg.cStandard) { await updateConfig('cStandard', msg.cStandard); }

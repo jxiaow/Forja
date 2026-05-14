@@ -3,7 +3,7 @@ import * as path from 'path';
 import { CliOptions, CliResolvedConfig, CliResult } from '../cli/types';
 import { detectEnv } from '../env/envDetector';
 import { createShellPlanBuilder } from '../platform/shellPlan';
-import { winConfig } from '../platform/win/builder';
+import { winConfig, getVsDevCmd } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
 import { resolveBuildConfig } from './configResolver';
 import { scanProFiles } from './projectScanner';
@@ -17,6 +17,7 @@ import {
 import { loadSettings, saveSettings, QtPilotSettings } from '../../core/settingsIO';
 import { buildRunCommand } from './commandRunner';
 import { resolveRuntimeTarget } from './runtimeTarget';
+import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from './rccResolver';
 
 function emptyResult(options: CliOptions, workspace: string): CliResult {
     return {
@@ -126,7 +127,7 @@ async function detectAndCache(workspace: string, options: CliOptions): Promise<L
         vs: null,
         qt: null,
         qtCandidates: [],
-        jom: false
+        jom: null as string | null
     }));
     const qtPath = env.qt?.path || options.qtPath || '';
     const cache: LocalCache = {
@@ -138,6 +139,7 @@ async function detectAndCache(workspace: string, options: CliOptions): Promise<L
                 qmake: path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake')
             } : null,
             vs: env.vs?.devShellPath ? { devShellPath: env.vs.devShellPath } : null,
+            jom: env.jom,
             projects: scanProFiles(workspace).map(rel => path.join(workspace, rel))
         }
     };
@@ -186,6 +188,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             ensureLocalStateDir(workspace);
             writeLocalCache(workspace, detected);
         }
+
+        // 解析 RCC 项目路径
+        const rccPath = resolveRccProjectPath(settings.rccProjectPath || '', workspace);
+
         return {
             ...result,
             ok: true,
@@ -194,8 +200,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             candidates,
             diagnostics,
             nextActions,
-            resolved: buildResolvedConfig(mode, arch, qtPath, vsDevShell, qmakeTarget)
-        };
+            resolved: buildResolvedConfig(mode, arch, qtPath, vsDevShell, qmakeTarget),
+            rccProjectPath: rccPath || ''
+        } as CliResult;
     }
 
     const projectResult = resolveProject(workspace, options, settings);
@@ -218,6 +225,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const qtPath = options.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
     const vsDevShell = options.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
     const qmakeTarget = options.target || settings.qmakeTarget || '';
+    const jomPath = cache?.detected.jom || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, qmakeTarget);
 
     if (options.action === 'init') {
@@ -291,7 +299,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         arch,
         qtPath,
         vsDevShell,
-        qmakeTarget
+        qmakeTarget,
+        jomPath
     });
     let commands: string[] = [];
 
@@ -301,6 +310,23 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         commands = shellBuilder.buildCommands(buildConfig).commands;
     } else if (options.action === 'run') {
         const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
+
+        // 检查 rcc 是否需要重编，需要则在 build 前插入 rcc 命令
+        let rccCmds: string[] = [];
+        const rccPath = resolveRccProjectPath(settings.rccProjectPath || '', workspace);
+        if (rccPath) {
+            const targets = scanRccTargets(rccPath);
+            if (targets.length > 0 && rccNeedsRebuild(targets)) {
+                let outputDir: string | null = null;
+                if (project) {
+                    const rt = resolveRuntimeTarget(path.dirname(project), mode, arch);
+                    if (rt) { outputDir = path.dirname(rt.exePath); }
+                }
+                rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
+                result.diagnostics.push({ level: 'info', message: 'RCC 资源有变更，已插入 rcc 编译命令' });
+            }
+        }
+
         // Append run command (launch executable) for both dry-run and execute
         if (project) {
             const runCmd = buildRunCommand(project, mode, arch);
@@ -309,7 +335,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
                 const exeName = runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro');
                 const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
-                commands = [killCmd, ...buildCmds, runCmd];
+                commands = [killCmd, ...rccCmds, ...buildCmds, runCmd];
             } else {
                 // Makefile not yet generated — can't resolve executable path
                 const environmentGuidance = buildEnvironmentGuidance(options.action, qtPath, vsDevShell);
@@ -338,6 +364,33 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         commands = shellBuilder.cleanCommands(buildConfig).commands;
     } else if (options.action === 'stop') {
         commands = shellBuilder.stopCommands(path.basename(project || 'app', '.pro'));
+    } else if (options.action === 'rcc') {
+        const rccPath = resolveRccProjectPath(settings.rccProjectPath || '', workspace);
+        if (!rccPath) {
+            result.diagnostics.push({ level: 'error', message: '未找到 XYRcc 目录，请在 settings.json 中配置 rccProjectPath' });
+            return result;
+        }
+        const targets = scanRccTargets(rccPath);
+        if (targets.length === 0) {
+            result.diagnostics.push({ level: 'warning', message: 'XYRcc 目录下未找到 .qrc 文件' });
+            return result;
+        }
+        // 解析可执行文件输出目录
+        let outputDir: string | null = null;
+        if (project) {
+            const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
+            if (runtimeTarget) { outputDir = path.dirname(runtimeTarget.exePath); }
+        }
+        // 环境初始化
+        const initCmds: string[] = [];
+        if (process.platform === 'win32' && vsDevShell) {
+            initCmds.push(`call "${getVsDevCmd(vsDevShell)}" -arch=${arch} -no_logo`);
+        }
+        const rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
+        commands = [...initCmds, ...rccCmds];
+        if (!outputDir) {
+            result.diagnostics.push({ level: 'warning', message: '无法确定输出目录，.rcc 仅生成不复制。请先 qmake + build' });
+        }
     }
 
     const environmentGuidance = buildEnvironmentGuidance(options.action, qtPath, vsDevShell);

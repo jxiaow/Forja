@@ -9,6 +9,7 @@ import { getState } from '../../core/stateManager';
 import { getSetting, setSetting } from '../../core/settingsStore';
 import { setProjectRoot } from '../../core/workspaceResolver';
 import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../shared/projectScanner';
+import { resolveRuntimeTarget, parseRuntimeLibPaths } from '../shared/runtimeTarget';
 
 export interface ProjectInfo {
     proPath: string;        // .pro 文件完整路径
@@ -31,106 +32,17 @@ export function scanProFiles(root: string): string[] {
     return sharedScanProFiles(root);
 }
 
-// ── Makefile 解析（qmake 生成的最终值，最可靠） ──
-
-// 读取文件内容，失败返回 null
-function _readFile(filePath: string): string | null {
-    try {
-        if (!fs.existsSync(filePath)) { return null; }
-        return fs.readFileSync(filePath, 'utf-8');
-    } catch {}
-    return null;
-}
-
-// 从已读取的内容中解析变量值（支持多空格对齐）
-function _parseMakefileVar(content: string, varName: string): string | null {
-    const match = content.match(new RegExp(`^${varName}[ \\t]+=[ \\t]*(.+)$`, 'm'));
-    if (!match) {
-        logger.warn(`Makefile var not found: "${varName}"`);
-        return null;
-    }
-    return match[1].replace(/#.*$/, '').trim();
-}
-
-// 从 Makefile 头部注释读取生成时的 mode
-function _parseMakefileMode(content: string): string | null {
-    const match = content.match(/^#\s*Command:.*CONFIG\+=(\w+)/m);
-    if (!match) { return null; }
-    if (match[1] === 'release') { return 'release'; }
-    if (match[1] === 'debug') { return 'debug'; }
-    return null;
-}
-
-// 从主 Makefile 头部注释校验 mode 和 arch 是否匹配
-function _validateMakefileConfig(content: string, mode: string, arch: string): boolean {
-    const match = content.match(/^#\s*Command:.*$/m);
-    if (!match) { return false; }
-    const cmd = match[0];
-    const hasMode = cmd.includes(`CONFIG+=${mode}`);
-    const hasArch = cmd.includes(`CONFIG+=${arch}`);
-    logger.info(`Validate Makefile config: cmd="${cmd.trim()}", hasMode=${hasMode}, hasArch=${hasArch}`);
-    return hasMode && hasArch;
-}
+// ── Makefile 解析（委托给 shared/runtimeTarget） ──
 
 export function getMakefileInfo(projectDir: string, mode?: string, arch?: string): MakefileInfo | null {
-    const mf = path.join(projectDir, 'Makefile');
-    logger.info(`Get MakefileInfo: platform=${process.platform}, projectDir="${projectDir}", mode="${mode}", arch="${arch}"`);
-
-    // 一次读取主 Makefile
-    const mfContent = _readFile(mf);
-    if (!mfContent) {
-        logger.warn(`Makefile not found: ${mf}`);
+    logger.info(`Get MakefileInfo: projectDir="${projectDir}", mode="${mode}", arch="${arch}"`);
+    const result = resolveRuntimeTarget(projectDir, mode || 'debug', arch || 'x86');
+    if (!result) {
+        logger.warn('resolveRuntimeTarget returned null');
         return null;
     }
-
-    if (process.platform === 'win32') {
-        // Windows: 校验 mode + arch，从 Makefile.Release/Debug 读 DESTDIR_TARGET
-        if (mode && arch) {
-            const valid = _validateMakefileConfig(mfContent, mode, arch);
-            if (!valid) {
-                logger.warn(`Makefile validation failed: mode=${mode}, arch=${arch}`);
-                return null;
-            }
-            logger.info(`Makefile validation passed: mode=${mode}, arch=${arch}`);
-        }
-        const subMfPath = mode
-            ? path.join(projectDir, `Makefile.${mode.charAt(0).toUpperCase() + mode.slice(1)}`)
-            : mf;
-        logger.info(`Use sub Makefile: ${subMfPath}`);
-        // 一次读取子 Makefile
-        const subContent = _readFile(subMfPath);
-        if (!subContent) {
-            logger.warn(`Sub Makefile not found: ${subMfPath}`);
-            return null;
-        }
-        const destDirTarget = _parseMakefileVar(subContent, 'DESTDIR_TARGET');
-        logger.info(`DESTDIR_TARGET="${destDirTarget}"`);
-        if (!destDirTarget) { return null; }
-        const exePath = path.join(projectDir, destDirTarget.replace(/\\/g, path.sep));
-        const target = path.basename(destDirTarget.replace(/\.exe$/i, ''));
-        const destDir = path.dirname(destDirTarget).replace(/\\/g, '/');
-        logger.info(`Resolved target="${target}", destDir="${destDir}", exePath="${exePath}", exists=${fs.existsSync(exePath)}`);
-        return { target, destDir, exePath };
-    } else {
-        // Linux: 只校验 mode，从主 Makefile 读 TARGET
-        if (mode) {
-            const mfMode = _parseMakefileMode(mfContent);
-            logger.info(`Makefile mode="${mfMode}", current mode="${mode}"`);
-            if (mfMode && mfMode !== mode) {
-                logger.warn(`Makefile mode mismatch: makefile=${mfMode}, current=${mode}`);
-                return null;
-            }
-            logger.info(`Makefile validation passed: mode=${mode}`);
-        }
-        const t = _parseMakefileVar(mfContent, 'TARGET');
-        logger.info(`TARGET="${t}"`);
-        if (!t) { return null; }
-        const target = path.basename(t);
-        const destDir = path.dirname(t) !== '.' ? path.dirname(t) : '';
-        const exePath = path.join(projectDir, t);
-        logger.info(`Resolved target="${target}", destDir="${destDir}", exePath="${exePath}", exists=${fs.existsSync(exePath)}`);
-        return { target, destDir, exePath };
-    }
+    logger.info(`Resolved target="${result.target}", destDir="${result.destDir}", exePath="${result.exePath}", exists=${fs.existsSync(result.exePath)}`);
+    return { target: result.target, destDir: result.destDir, exePath: result.exePath };
 }
 
 // ── .pro 文件解析（只取显示名 + IntelliSense 需要的信息） ──
@@ -155,21 +67,7 @@ export function parseProFile(proPath: string): ProjectInfo {
 
 /** 从 Makefile 中读取 LIBS 变量，提取 -L 库搜索路径 */
 export function parseLibPaths(projectDir: string): string[] {
-    const mf = path.join(projectDir, 'Makefile');
-    const content = _readFile(mf);
-    if (!content) { return []; }
-    const libs = _parseMakefileVar(content, 'LIBS');
-    if (!libs) { return []; }
-    const paths: string[] = [];
-    const matches = libs.matchAll(/-L(\S+)/g);
-    for (const m of matches) {
-        const p = m[1];
-        const abs = path.isAbsolute(p) ? path.normalize(p) : path.resolve(projectDir, p);
-        if (fs.existsSync(abs)) {
-            paths.push(abs);
-        }
-    }
-    return paths;
+    return parseRuntimeLibPaths(projectDir);
 }
 
 export async function selectProject(context: vscode.ExtensionContext, forceSelect = false): Promise<ProjectInfo | null> {

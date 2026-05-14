@@ -1,6 +1,6 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'status', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs'];
+const validActions: CliAction[] = ['init', 'status', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs', 'rcc'];
 
 const helpText = `Compilot Qt CLI — qmake 项目构建工具
 
@@ -16,6 +16,7 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   stop        停止运行中的程序
   logs        查看运行日志（--detach 模式启动后的程序输出）
   sync        同步变更文件到远程服务器（基于 git diff）
+  rcc         编译 .qrc 资源文件为 .rcc 二进制
 
 选项:
   --workspace <path>     工作区路径（默认当前目录）

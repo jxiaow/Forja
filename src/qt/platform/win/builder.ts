@@ -1,7 +1,8 @@
+import * as path from 'path';
 import { PlatformConfig } from '../platformConfig';
 import { BuildConfig } from '../shellPlan';
 
-function getVsDevCmd(vsDevShell: string): string {
+export function getVsDevCmd(vsDevShell: string): string {
     return vsDevShell.replace(/Launch-VsDevShell\.ps1$/i, 'VsDevCmd.bat');
 }
 
@@ -11,8 +12,23 @@ export const winConfig: PlatformConfig = {
     commandJoiner: ' && ',
 
     initCommands(cfg: BuildConfig): string[] {
-        if (!cfg.vsDevShell) { return []; }
-        return [`call "${getVsDevCmd(cfg.vsDevShell)}" -arch=${cfg.arch} -no_logo`];
+        const cmds: string[] = [];
+        if (cfg.vsDevShell) {
+            cmds.push(`call "${getVsDevCmd(cfg.vsDevShell)}" -arch=${cfg.arch} -no_logo`);
+        }
+        // 把 Qt bin 目录加到 PATH（确保 qmake 可用）
+        const qtBin = cfg.qtPath ? path.join(cfg.qtPath, 'bin') : '';
+        if (qtBin) {
+            cmds.push(`set "PATH=${qtBin};%PATH%"`);
+        }
+        // 如果 jomPath 已知且不在 Qt bin 目录下，把其所在目录也加到 PATH
+        if (cfg.jomPath) {
+            const jomDir = path.dirname(cfg.jomPath);
+            if (jomDir !== qtBin) {
+                cmds.push(`set "PATH=${jomDir};%PATH%"`);
+            }
+        }
+        return cmds;
     },
 
     cdCommand(dir: string): string {

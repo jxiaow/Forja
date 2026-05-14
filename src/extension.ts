@@ -99,6 +99,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                                 qmake: path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake')
                             } : null,
                             vs: env.vs?.devShellPath ? { devShellPath: env.vs.devShellPath } : null,
+                            jom: env.jom,
                             projects: scanProFiles(wsRoot).map(rel => path.join(wsRoot, rel))
                         }
                     };
@@ -210,7 +211,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             proc.unref();
         }],
         ['compilot.qt.syncTestConnection', () => executeTestConnection()],
-        ['compilot.qt.syncChangedFiles', () => executeSyncChangedFiles()]
+        ['compilot.qt.syncChangedFiles', () => executeSyncChangedFiles()],
+        ['compilot.qt.rcc', () => buildManager.rcc()],
+        ['compilot.qt.runCustomCommand', (name: string, command: string) => buildManager.runCustomCommand(name, command)]
     ];
 
     cmds.forEach(([cmd, handler]) => {

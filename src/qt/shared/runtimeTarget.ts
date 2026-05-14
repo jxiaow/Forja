@@ -3,6 +3,7 @@ import * as path from 'path';
 
 export interface RuntimeTargetInfo {
     target: string;
+    destDir: string;
     exePath: string;
 }
 
@@ -73,6 +74,7 @@ export function resolveRuntimeTarget(projectDir: string, mode: string, arch: str
 
         return {
             target: path.basename(destDirTarget.replace(/\.exe$/i, '')),
+            destDir: path.dirname(destDirTarget).replace(/\\/g, '/'),
             exePath: path.join(projectDir, destDirTarget.replace(/\\/g, path.sep))
         };
     }
@@ -89,6 +91,7 @@ export function resolveRuntimeTarget(projectDir: string, mode: string, arch: str
 
     return {
         target: path.basename(target),
+        destDir: path.dirname(target) !== '.' ? path.dirname(target) : '',
         exePath: path.join(projectDir, target)
     };
 }

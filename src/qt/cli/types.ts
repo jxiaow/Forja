@@ -1,4 +1,4 @@
-export type CliAction = 'init' | 'status' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'logs';
+export type CliAction = 'init' | 'status' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'logs' | 'rcc';
 export type CliExecutionMode = 'dryRun' | 'execute';
 export type CliBuildMode = 'debug' | 'release';
 export type CliArch = 'x86' | 'x64';
@@ -55,4 +55,6 @@ export interface CliResult {
     logFile: string | null;
     diagnostics: CliDiagnostic[];
     resolved: CliResolvedConfig | null;
+    /** RCC 项目路径（status 时返回） */
+    rccProjectPath?: string;
 }

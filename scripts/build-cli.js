@@ -1,15 +1,18 @@
 /**
  * Build script for the standalone compilot-cli npm package.
  *
- * Generates a complete npm package under dist/compilot-cli/,
- * ready for `cd dist/compilot-cli && npm publish`.
+ * Generates dist/cli/ containing:
+ *   - compilot-cli-x.x.x.tgz (npm package)
+ *   - README.md (CLI documentation)
+ *   - skills/compilot/SKILL.md + README.md (AI skill files)
  */
 const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const srcOut = path.join(root, 'out');
-const dest = path.join(root, 'dist', 'compilot-cli');
+const distCli = path.join(root, 'dist', 'cli');
+const tmpBuild = path.join(root, 'dist', '_cli-build');
 
 // Directories to copy (relative to out/)
 const dirs = [
@@ -50,20 +53,42 @@ function copyDir(src, dst) {
     }
 }
 
-// Clean previous build
-if (fs.existsSync(dest)) {
-    fs.rmSync(dest, { recursive: true });
+function copyDirRecursive(src, dst) {
+    if (!fs.existsSync(src)) { return; }
+    fs.mkdirSync(dst, { recursive: true });
+    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+        const srcPath = path.join(src, entry.name);
+        const dstPath = path.join(dst, entry.name);
+        if (entry.isDirectory()) {
+            copyDirRecursive(srcPath, dstPath);
+        } else if (entry.isFile()) {
+            fs.copyFileSync(srcPath, dstPath);
+        }
+    }
 }
+
+// Clean previous builds
+if (fs.existsSync(distCli)) {
+    fs.rmSync(distCli, { recursive: true });
+}
+if (fs.existsSync(tmpBuild)) {
+    fs.rmSync(tmpBuild, { recursive: true });
+}
+
+// Create output directory
+fs.mkdirSync(distCli, { recursive: true });
+
+// --- Build npm package in temp directory ---
 
 // Copy directories
 for (const dir of dirs) {
-    copyDir(path.join(srcOut, dir), path.join(dest, dir));
+    copyDir(path.join(srcOut, dir), path.join(tmpBuild, dir));
 }
 
 // Copy individual core files
 for (const file of coreFiles) {
     const srcFile = path.join(srcOut, file);
-    const dstFile = path.join(dest, file);
+    const dstFile = path.join(tmpBuild, file);
     if (fs.existsSync(srcFile)) {
         fs.mkdirSync(path.dirname(dstFile), { recursive: true });
         fs.copyFileSync(srcFile, dstFile);
@@ -73,7 +98,7 @@ for (const file of coreFiles) {
 // Copy individual sync files (non-vscode only)
 for (const file of syncFiles) {
     const srcFile = path.join(srcOut, file);
-    const dstFile = path.join(dest, file);
+    const dstFile = path.join(tmpBuild, file);
     if (fs.existsSync(srcFile)) {
         fs.mkdirSync(path.dirname(dstFile), { recursive: true });
         fs.copyFileSync(srcFile, dstFile);
@@ -83,7 +108,7 @@ for (const file of syncFiles) {
 // Copy individual sdk files (non-vscode only)
 for (const file of sdkFiles) {
     const srcFile = path.join(srcOut, file);
-    const dstFile = path.join(dest, file);
+    const dstFile = path.join(tmpBuild, file);
     if (fs.existsSync(srcFile)) {
         fs.mkdirSync(path.dirname(dstFile), { recursive: true });
         fs.copyFileSync(srcFile, dstFile);
@@ -91,7 +116,7 @@ for (const file of sdkFiles) {
 }
 
 // Ensure shebang on CLI entry point
-const entryFile = path.join(dest, 'cli', 'index.js');
+const entryFile = path.join(tmpBuild, 'cli', 'index.js');
 if (fs.existsSync(entryFile)) {
     const content = fs.readFileSync(entryFile, 'utf8');
     if (!content.startsWith('#!')) {
@@ -99,13 +124,13 @@ if (fs.existsSync(entryFile)) {
     }
 }
 
-// Copy CLI README
-const cliReadme = path.join(root, 'cli', 'README.md');
+// Copy CLI README into npm package
+const cliReadme = path.join(root, 'docs', 'README-cli.md');
 if (fs.existsSync(cliReadme)) {
-    fs.copyFileSync(cliReadme, path.join(dest, 'README.md'));
+    fs.copyFileSync(cliReadme, path.join(tmpBuild, 'README.md'));
 }
 
-// Generate package.json
+// Generate package.json for npm package
 const mainPkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const cliPkg = {
     name: 'compilot-cli',
@@ -126,24 +151,39 @@ const cliPkg = {
     },
     keywords: ['qt', 'qmake', 'sdk', 'cpp', 'build', 'compilot']
 };
-fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify(cliPkg, null, 2) + '\n');
+fs.writeFileSync(path.join(tmpBuild, 'package.json'), JSON.stringify(cliPkg, null, 2) + '\n');
 
-console.log(`compilot-cli build complete: ${dest}`);
-console.log('To publish: cd dist/compilot-cli && npm publish');
-
-// Pack as tar.gz and clean up the directory
+// Pack as tar.gz
 const { execSync } = require('child_process');
-execSync('npm pack', { cwd: dest, stdio: 'inherit' });
+execSync('npm pack', { cwd: tmpBuild, stdio: 'inherit' });
 
-// Move .tgz to dist/ root
-const tgzFiles = fs.readdirSync(dest).filter(f => f.endsWith('.tgz'));
+// Move .tgz to dist/cli/
+const tgzFiles = fs.readdirSync(tmpBuild).filter(f => f.endsWith('.tgz'));
 for (const tgz of tgzFiles) {
-    const src = path.join(dest, tgz);
-    const dst = path.join(root, 'dist', tgz);
+    const src = path.join(tmpBuild, tgz);
+    const dst = path.join(distCli, tgz);
     fs.renameSync(src, dst);
-    console.log(`Packed: dist/${tgz}`);
+    console.log(`Packed: dist/cli/${tgz}`);
 }
 
-// Remove the temporary directory
-fs.rmSync(dest, { recursive: true });
-console.log('Cleaned up dist/compilot-cli/');
+// Remove temp build directory
+fs.rmSync(tmpBuild, { recursive: true });
+
+// --- Copy additional files into dist/cli/ ---
+
+// Copy CLI README
+const cliReadmeFinal = path.join(root, 'docs', 'README-cli.md');
+if (fs.existsSync(cliReadmeFinal)) {
+    fs.copyFileSync(cliReadmeFinal, path.join(distCli, 'README.md'));
+    console.log('Copied: dist/cli/README.md');
+}
+
+// Copy skills directory
+const skillsSrc = path.join(root, 'skills', 'compilot');
+const skillsDst = path.join(distCli, 'skills', 'compilot');
+if (fs.existsSync(skillsSrc)) {
+    copyDirRecursive(skillsSrc, skillsDst);
+    console.log('Copied: dist/cli/skills/compilot/');
+}
+
+console.log(`\nCLI package complete: dist/cli/`);

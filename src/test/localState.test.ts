@@ -30,6 +30,7 @@ test('writeLocalCache records detected data under .compilot', () => {
         detected: {
             qt: { path: 'D:/Qt', qmake: 'D:/Qt/bin/qmake.exe' },
             vs: { devShellPath: 'C:/VS/Launch-VsDevShell.ps1' },
+            jom: null,
             projects: [path.join(workspace, 'demo.pro')]
         }
     });

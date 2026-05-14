@@ -23,6 +23,7 @@ function createTemplateData(): TemplateData {
         manualProPath: '',
         fileSyncPromptEnabled: true,
         qmakeReminderEnabled: true,
+        rccProjectPath: '',
         version: 'test',
         syncEnabled: false,
         syncSelectedServer: '',

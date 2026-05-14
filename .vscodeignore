@@ -18,7 +18,8 @@ docs/**
 node_modules/**
 *.vsix
 AGENTS.md
-cli/**
 out/test/**
 out/**/*.map
 skills/**
+harness/**
+*.bak

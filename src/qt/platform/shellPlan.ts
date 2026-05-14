@@ -8,6 +8,7 @@ export interface BuildConfig {
     arch: string;
     mode: string;
     qmakeTarget: string;   // 可选 TARGET 覆盖，空字符串表示不覆盖
+    jomPath: string;       // jom.exe 完整路径，空字符串表示依赖 PATH
 }
 
 export interface ShellCommandLine {

@@ -1,4 +1,4 @@
-# Compilot CLI
+# Compilot — CLI
 
 命令行工具，用于 C++ 项目的构建、运行和环境管理。
 
@@ -184,6 +184,20 @@ compilot qt sync --execute --server "开发服务器"
 | `--workspace <path>` | 工作区路径 |
 | `--server <name>` | 指定服务器名称（对应 servers.json 中的 name） |
 | `--execute` | 执行同步 |
+| `--json` | 输出 JSON |
+
+### `compilot qt rcc`
+
+编译 `.qrc` 资源文件为 `.rcc` 二进制。
+
+```bash
+compilot qt rcc --execute
+```
+
+| 选项 | 说明 |
+|------|------|
+| `--workspace <path>` | 工作区路径 |
+| `--execute` | 执行编译 |
 | `--json` | 输出 JSON |
 
 ## SDK 命令

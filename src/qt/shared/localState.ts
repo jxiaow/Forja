@@ -7,6 +7,7 @@ export interface LocalCache {
     detected: {
         qt: { path: string; qmake: string } | null;
         vs: { devShellPath: string } | null;
+        jom: string | null;
         projects: string[];
     };
 }

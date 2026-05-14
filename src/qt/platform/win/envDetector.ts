@@ -93,9 +93,12 @@ async function detectQt(manualPath?: string): Promise<{ qt: QtInfo | null; candi
 
 // ── Jom 检测 ──
 
-async function detectJom(qt: QtInfo | null): Promise<boolean> {
+async function detectJom(qt: QtInfo | null): Promise<string | null> {
     // 1. Qt 编译器目录下 bin/jom.exe
-    if (qt && fs.existsSync(path.join(qt.path, 'bin', 'jom.exe'))) { return true; }
+    if (qt) {
+        const p = path.join(qt.path, 'bin', 'jom.exe');
+        if (fs.existsSync(p)) { log(`[Win] 找到 jom: "${p}"`); return p; }
+    }
 
     // 2. Qt 安装根目录下 Tools/QtCreator/bin/jom/jom.exe
     if (qt) {
@@ -107,29 +110,39 @@ async function detectJom(qt: QtInfo | null): Promise<boolean> {
             const jomPath = path.join(parent, 'Tools', 'QtCreator', 'bin', 'jom', 'jom.exe');
             if (fs.existsSync(jomPath)) {
                 log(`[Win] 找到 jom: "${jomPath}"`);
-                return true;
+                return jomPath;
             }
             dir = parent;
         }
     }
 
     // 3. 常见固定路径
-    const knownPaths = ['C:\\Qt', 'D:\\Qt', 'E:\\Qt'];
+    const knownPaths = ['C:\\Qt', 'C:\\QtCompile', 'D:\\Qt', 'E:\\Qt'];
     for (const root of knownPaths) {
         const jomPath = path.join(root, 'Tools', 'QtCreator', 'bin', 'jom', 'jom.exe');
         if (fs.existsSync(jomPath)) {
             log(`[Win] 找到 jom: "${jomPath}"`);
-            return true;
+            return jomPath;
+        }
+        // 也检查根目录下直接放 jom 的情况（如 C:\QtCompile\jom\jom.exe）
+        const jomDirect = path.join(root, 'jom', 'jom.exe');
+        if (fs.existsSync(jomDirect)) {
+            log(`[Win] 找到 jom: "${jomDirect}"`);
+            return jomDirect;
         }
     }
 
     // 4. 系统 PATH
     try {
-        const out = await execAsync('jom', ['/VERSION']);
-        return out.trim().length > 0;
-    } catch {
-        return false;
-    }
+        const out = await execAsync('where', ['jom.exe']);
+        const firstLine = out.trim().split('\n')[0].trim();
+        if (firstLine && fs.existsSync(firstLine)) {
+            log(`[Win] PATH 找到 jom: "${firstLine}"`);
+            return firstLine;
+        }
+    } catch {}
+
+    return null;
 }
 
 export async function detectEnvWin(manualQtPath?: string, manualVsPath?: string): Promise<EnvInfo> {

@@ -66,6 +66,14 @@ export function getQmakeReminderEnabled(): boolean {
     return getSetting('qmakeReminderEnabled');
 }
 
+export function getRccProjectPath(): string {
+    return getSetting('rccProjectPath');
+}
+
+export function getCustomCommands(): { name: string; command: string }[] {
+    return getSetting('customCommands');
+}
+
 export function updateConfig<K extends keyof QtPilotSettings>(key: K, value: QtPilotSettings[K]): void {
     setSetting(key, value);
 }
@@ -97,12 +105,14 @@ export function getBuildConfig(): BuildConfig {
         // Lowest priority: local cache (auto-detected values)
         {
             qtPath: localCache?.detected.qt?.path || '',
-            vsDevShell: localCache?.detected.vs?.devShellPath || ''
+            vsDevShell: localCache?.detected.vs?.devShellPath || '',
+            jomPath: localCache?.detected.jom || ''
         },
         // Environment detection from extension (same level as cache, but fresher)
         {
             qtPath: env?.qt?.path || '',
-            vsDevShell: env?.vs?.devShellPath || ''
+            vsDevShell: env?.vs?.devShellPath || '',
+            jomPath: env?.jom || ''
         },
         // Highest priority: explicit settings + current state
         {

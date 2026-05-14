@@ -3,13 +3,14 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 import { setState } from '../../core/stateManager';
-import { getBuildConfig } from '../../core/configService';
+import { getBuildConfig, getRccProjectPath, getCustomCommands } from '../../core/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
-import { winConfig } from '../platform/win/builder';
+import { winConfig, getVsDevCmd } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
 import { getMakefileInfo, parseLibPaths } from '../project/projectManager';
 import { createLogger } from '../../core/logger';
 import { resolveProjectRoot } from '../../core/workspaceResolver';
+import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from '../shared/rccResolver';
 
 const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
 const isWin = process.platform === 'win32';
@@ -101,11 +102,45 @@ export function clean(): Thenable<vscode.TaskExecution> {
     return runTask(`Clean ${cfg.mode}`, commands, matcher);
 }
 
+// 检查 rcc 是否需要重新编译（使用共享模块）
+function _rccNeedsRebuild(): boolean {
+    const wsRoot = resolveProjectRoot();
+    const rccPath = resolveRccProjectPath(getRccProjectPath(), wsRoot);
+    if (!rccPath) { return false; }
+    const targets = scanRccTargets(rccPath);
+    if (targets.length === 0) { return false; }
+    const needs = rccNeedsRebuild(targets);
+    if (needs) { logger.info('RCC 资源有变更，需要重编'); }
+    return needs;
+}
+
 export async function run(): Promise<void> {
     const cfg = getBuildConfig();
     setState('isBuilding', true);
     setState('buildAction', 'run');
     setState('isRunning', false);
+
+    // 检查 rcc 是否需要重新编译
+    if (_rccNeedsRebuild()) {
+        logger.info('RCC 资源有变更，先执行 rcc 编译');
+        try {
+            const rccExecution = await rcc();
+            // 等待 rcc 任务完成
+            await new Promise<void>((resolve, reject) => {
+                const d = vscode.tasks.onDidEndTaskProcess(e => {
+                    if (e.execution === rccExecution) {
+                        d.dispose();
+                        if (e.exitCode === 0) { resolve(); }
+                        else { reject(new Error('RCC 编译失败')); }
+                    }
+                });
+            });
+        } catch (e) {
+            setState('isBuilding', false);
+            setState('buildAction', null);
+            throw e;
+        }
+    }
 
     const { commands, matcher } = builder.buildCommands(cfg);
     // Build task: 不清屏，失败时保留编译错误
@@ -197,6 +232,51 @@ export async function run(): Promise<void> {
             if (e.execution === execution) { finish(undefined); }
         });
     });
+}
+
+export function rcc(): Thenable<vscode.TaskExecution> {
+    const cfg = getBuildConfig();
+    const wsRoot = resolveProjectRoot();
+
+    const rccPath = resolveRccProjectPath(getRccProjectPath(), wsRoot);
+    if (!rccPath) {
+        vscode.window.showErrorMessage('未找到 XYRcc 目录，请在 settings.json 中配置 rccProjectPath');
+        return Promise.reject(new Error('XYRcc 目录未找到'));
+    }
+
+    const targets = scanRccTargets(rccPath);
+    if (targets.length === 0) {
+        vscode.window.showErrorMessage('XYRcc 目录下未找到 .qrc 文件');
+        return Promise.reject(new Error('未找到 .qrc 文件'));
+    }
+
+    // 解析当前项目的可执行文件输出目录
+    const mfInfo = _resolveMakefileInfo();
+    let outputDir: string | null = null;
+    if (mfInfo) {
+        outputDir = path.dirname(mfInfo.exePath);
+    }
+    if (!outputDir || !fs.existsSync(outputDir)) {
+        vscode.window.showWarningMessage('无法确定可执行文件输出目录，.rcc 将仅生成不复制。请先运行 QMake + Build');
+        outputDir = null;
+    }
+
+    logger.info(`RCC targets: ${targets.map(t => t.name).join(', ')}, outputDir: ${outputDir || 'none'}`);
+
+    // 环境初始化 + rcc 编译命令
+    const commands: string[] = [];
+    if (isWin && cfg.vsDevShell) {
+        commands.push(`call "${getVsDevCmd(cfg.vsDevShell)}" -arch=${cfg.arch} -no_logo`);
+    }
+    const rccCmds = buildRccCommands(targets, cfg.qtPath, outputDir, isWin ? 'win32' : 'linux');
+    commands.push(...rccCmds);
+
+    return runTask('RCC Compile', commands, isWin ? '$msCompile' : []);
+}
+
+export function runCustomCommand(name: string, command: string): Thenable<vscode.TaskExecution> {
+    logger.info(`Custom command "${name}": ${command}`);
+    return runTask(name, [command], []);
 }
 
 export function stop(): void {

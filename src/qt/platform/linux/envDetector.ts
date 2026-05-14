@@ -45,10 +45,18 @@ async function detectQt(manualPath?: string): Promise<{ qt: QtInfo | null; candi
     return { qt: candidates[0], candidates };
 }
 
-async function detectMake(qt: QtInfo | null): Promise<boolean> {
-    if (!qt) { return false; }
-    const out = await execAsync('make', ['--version']);
-    return out.toLowerCase().includes('make');
+async function detectMake(qt: QtInfo | null): Promise<string | null> {
+    if (!qt) { return null; }
+    try {
+        const out = await execAsync('which', ['make']);
+        const makePath = out.trim();
+        if (makePath && fs.existsSync(makePath)) { return makePath; }
+    } catch {}
+    try {
+        const out = await execAsync('make', ['--version']);
+        if (out.toLowerCase().includes('make')) { return 'make'; }
+    } catch {}
+    return null;
 }
 
 export async function detectEnvLinux(manualQtPath?: string): Promise<EnvInfo> {

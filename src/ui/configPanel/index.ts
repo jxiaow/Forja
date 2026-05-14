@@ -5,7 +5,7 @@ import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
          getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath,
-         getFileSyncPromptEnabled, getQmakeReminderEnabled, getWorkspaceRoot } from '../../core/configService';
+         getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../core/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { readServers, readProjectSyncConfig } from '../../qt/sync/sftpClient';
@@ -76,7 +76,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         this._view?.webview.postMessage({ command: 'envUpdated', isWin, env: {
             vs: env?.vs ? `VS ${env.vs.version} ${env.vs.edition}` : null,
             qt: env?.qt ? `Qt ${env.qt.version} (${env.qt.compiler})` : null,
-            jom: env?.jom ?? false
+            jom: !!env?.jom
         }});
         const manualShell = getVsDevShellPath();
         const autoShell = env?.vs?.devShellPath || '';
@@ -115,6 +115,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             manualProPath: getManualProPath(),
             fileSyncPromptEnabled: getFileSyncPromptEnabled(),
             qmakeReminderEnabled: getQmakeReminderEnabled(),
+            rccProjectPath: getRccProjectPath(),
             version: this._version,
             ...(() => {
                 const wsRoot = getWorkspaceRoot();

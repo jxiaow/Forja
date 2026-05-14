@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getState, setState, onStateChange, BuildMode, Arch } from '../core/stateManager';
-import { getQmakeTarget } from '../core/configService';
+import { getQmakeTarget, getCustomCommands } from '../core/configService';
 import { getEffectiveProjectName } from '../qt/project/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';
 
@@ -94,8 +94,14 @@ export async function showActions(): Promise<void> {
     const buildItems: Item[] = [
         { label: '$(gear) QMake',   description: '', action: 'qmake' },
         { label: '$(tools) Build',  description: '', action: 'build' },
+        { label: '$(package) RCC',  description: '', action: 'rcc' },
         { label: '$(trash) Clean',  description: '', action: 'clean' }
     ];
+
+    const customCmds = getCustomCommands();
+    const customItems: Item[] = customCmds.map((cmd, i) => ({
+        label: `$(terminal) ${cmd.name}`, description: '', action: `custom:${i}`
+    }));
 
     const projectItems: Item[] = [
         { label: '$(folder) 切换项目...', description: '', action: 'selectProject' }
@@ -103,15 +109,18 @@ export async function showActions(): Promise<void> {
 
     const sep = (label: string): Item => ({ label, kind: vscode.QuickPickItemKind.Separator, action: '' });
 
+    const pickItems: Item[] = [
+        sep('模式'),
+        ...modeItems,
+        sep('构建'),
+        ...buildItems,
+        ...(customItems.length > 0 ? [sep('自定义'), ...customItems] : []),
+        sep('项目'),
+        ...projectItems
+    ];
+
     const selected = await vscode.window.showQuickPick(
-        [
-            sep('模式'),
-            ...modeItems,
-            sep('构建'),
-            ...buildItems,
-            sep('项目'),
-            ...projectItems
-        ],
+        pickItems,
         { placeHolder: `${getEffectiveProjectName(state.currentProject, getQmakeTarget(), '未选择项目')} · ${_modeDisplayLabel()}` }
     ) as Item | undefined;
 
@@ -129,8 +138,16 @@ export async function showActions(): Promise<void> {
         vscode.commands.executeCommand('compilot.qt.qmake');
     } else if (selected.action === 'build') {
         vscode.commands.executeCommand('compilot.qt.build');
+    } else if (selected.action === 'rcc') {
+        vscode.commands.executeCommand('compilot.qt.rcc');
     } else if (selected.action === 'clean') {
         vscode.commands.executeCommand('compilot.qt.clean');
+    } else if (selected.action.startsWith('custom:')) {
+        const idx = parseInt(selected.action.split(':')[1], 10);
+        const cmd = customCmds[idx];
+        if (cmd) {
+            vscode.commands.executeCommand('compilot.qt.runCustomCommand', cmd.name, cmd.command);
+        }
     } else if (selected.action === 'selectProject') {
         vscode.commands.executeCommand('compilot.qt.selectProject');
     }

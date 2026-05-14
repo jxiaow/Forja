@@ -401,6 +401,13 @@ details[open] .arrow { transform: rotate(90deg); }
             <button class="btn btn-sm" onclick="browse('manualProPath', false)" onmousedown="preserveBrowseInputFocus(event)">浏览</button>
           </div>
         </div>
+        <div class="field">
+          <label>RCC 项目路径</label>
+          <div class="input-row">
+            <input id="rccProjectPath" value="{{rccProjectPath}}" placeholder="留空则自动扫描 XYRcc" onblur="saveRccProjectPath()" />
+            <button class="btn btn-sm" onclick="browse('rccProjectPath', true)" onmousedown="preserveBrowseInputFocus(event)">浏览</button>
+          </div>
+        </div>
         <div class="toggle-row">
           <div class="toggle-copy">
             <div class="toggle-title">文件同步提醒</div>
@@ -684,6 +691,10 @@ function saveManualProPath() {
   const val = document.getElementById('manualProPath').value.trim();
   if (val) { vscode.postMessage({ command: 'saveManualProPath', value: val }); }
 }
+function saveRccProjectPath() {
+  const val = document.getElementById('rccProjectPath').value.trim();
+  vscode.postMessage({ command: 'saveRccProjectPath', value: val });
+}
 function generateIntelliSense() { vscode.postMessage({ command: 'generateIntelliSense', cStandard: document.getElementById('cStandard').value, cppStandard: document.getElementById('cppStandard').value }); }
 
 // ── Sync handlers ──
@@ -803,6 +814,7 @@ window.addEventListener('message', e => {
     else if (d.targetId === 'designerPath') { saveDesignerPath(); }
     else if (d.targetId === 'qtSourcePath') { saveQtSourcePath(); }
     else if (d.targetId === 'manualProPath') { saveManualProPath(); }
+    else if (d.targetId === 'rccProjectPath') { saveRccProjectPath(); }
   } else if (d.command === 'envUpdated') {
     const setDot = (id, ok) => { const el = document.getElementById(id); if (el) { el.className = 'chip-dot ' + (ok ? 'dot-ok' : 'dot-warn'); } };
     setDot('dot-qt', !!d.env.qt);

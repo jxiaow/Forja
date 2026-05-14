@@ -12,7 +12,7 @@ export interface EnvInfo {
     vs: VSInfo | null;
     qt: QtInfo | null;
     qtCandidates: QtInfo[];
-    jom: boolean;
+    jom: string | null;
 }
 
 export interface VSInfo {

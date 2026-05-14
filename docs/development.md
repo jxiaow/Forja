@@ -133,7 +133,7 @@ CLI 的使用文档见 [`cli/README.md`](../cli/README.md)。
 ## 项目结构
 
 ```
-xy-qt-tools/
+compilot/
 ├── src/
 │   ├── extension.ts            # 扩展入口（activate/deactivate）
 │   ├── core/                   # 核心服务

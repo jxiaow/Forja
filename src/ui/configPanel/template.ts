@@ -22,6 +22,7 @@ export interface TemplateData {
     manualProPath: string;
     fileSyncPromptEnabled: boolean;
     qmakeReminderEnabled: boolean;
+    rccProjectPath: string;
     version: string;
     syncEnabled: boolean;
     syncSelectedServer: string;
@@ -68,7 +69,7 @@ export function getHtml(data: TemplateData): string {
     const effectiveQtPath = qtPath || autoQtPath;
     const qtSource = qtPath ? '手动配置' : (autoQtPath ? '自动检测' : '未配置');
 
-    const jomOk = env?.jom ?? false;
+    const jomOk = !!env?.jom;
     const makeLabel = isWin ? 'jom' : 'make';
 
     // 状态摘要
@@ -133,6 +134,7 @@ export function getHtml(data: TemplateData): string {
             .map((c: QtInfo) => `<option value="${_escapeHtml(c.path)}">Qt ${_escapeHtml(c.version)} (${_escapeHtml(c.compiler)})</option>`)
             .join(''),
         manualProPath: _escapeHtml(data.manualProPath),
+        rccProjectPath: _escapeHtml(data.rccProjectPath),
         chkFileSyncPrompt: data.fileSyncPromptEnabled ? 'checked' : '',
         chkQmakeReminder: data.qmakeReminderEnabled ? 'checked' : '',
         version: _escapeHtml(data.version),

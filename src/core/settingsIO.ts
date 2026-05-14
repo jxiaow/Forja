@@ -19,6 +19,8 @@ export interface QtPilotSettings {
     manualProPath: string;
     fileSyncPromptEnabled: boolean;
     qmakeReminderEnabled: boolean;
+    rccProjectPath: string;
+    customCommands: { name: string; command: string }[];
 }
 
 export const DEFAULT_SETTINGS: Readonly<QtPilotSettings> = {
@@ -35,7 +37,9 @@ export const DEFAULT_SETTINGS: Readonly<QtPilotSettings> = {
     cppStandard: 'c++11',
     manualProPath: '',
     fileSyncPromptEnabled: true,
-    qmakeReminderEnabled: true
+    qmakeReminderEnabled: true,
+    rccProjectPath: '',
+    customCommands: []
 };
 
 export function settingsFilePath(workspace: string): string {

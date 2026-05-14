@@ -3,7 +3,7 @@
   "displayName": "Compilot",
   "publisher": "compilot",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.6.10",
+  "version": "0.6.17",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
@@ -65,6 +65,14 @@
       {
         "command": "compilot.qt.syncChangedFiles",
         "title": "Compilot Qt: 同步变更文件到远程"
+      },
+      {
+        "command": "compilot.qt.rcc",
+        "title": "Compilot Qt: RCC 编译"
+      },
+      {
+        "command": "compilot.qt.runCustomCommand",
+        "title": "Compilot Qt: 执行自定义命令"
       },
       {
         "command": "compilot.sdk.build",
@@ -161,6 +169,12 @@
             "default": "x86",
             "description": "目标架构",
             "scope": "resource"
+          },
+          "compilot.qt.rccProjectPath": {
+            "type": "string",
+            "default": "",
+            "description": "RCC 项目路径（XYRcc 目录，包含 XYMeetingkit 子目录）",
+            "scope": "resource"
           }
         }
       },
@@ -217,7 +231,7 @@
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test --test-reporter=spec out/test",
     "build:cli": "npm run compile && node scripts/build-cli.js",
-    "package": "npm run compile && vsce package --allow-missing-repository -o dist/",
+    "package": "npm run compile && node scripts/package-vs.js",
     "package:cli": "npm run build:cli",
     "package:all": "node scripts/bump-version.js && npm run package && npm run package:cli",
     "vsix": "vsce package --allow-missing-repository"
