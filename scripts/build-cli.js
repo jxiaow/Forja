@@ -40,6 +40,9 @@ const syncFiles = [
 // Individual files needed from core/
 const coreFiles = ['core/logger.js', 'core/settingsIO.js'];
 
+// Version file at root of out/
+const rootFiles = ['version.js'];
+
 // Individual files needed from sdk/ (non-vscode ones)
 const sdkFiles = ['sdk/constants.js'];
 
@@ -97,6 +100,16 @@ for (const file of coreFiles) {
     }
 }
 
+// Copy root-level files (version.js etc.)
+for (const file of rootFiles) {
+    const srcFile = path.join(srcOut, file);
+    const dstFile = path.join(tmpBuild, file);
+    if (fs.existsSync(srcFile)) {
+        fs.mkdirSync(path.dirname(dstFile), { recursive: true });
+        fs.copyFileSync(srcFile, dstFile);
+    }
+}
+
 // Copy individual sync files (non-vscode only)
 for (const file of syncFiles) {
     const srcFile = path.join(srcOut, file);
@@ -146,7 +159,8 @@ const cliPkg = {
         'cli/**',
         'qt/**',
         'sdk/**',
-        'core/**'
+        'core/**',
+        'version.js'
     ],
     engines: {
         node: '>=18.0.0'
