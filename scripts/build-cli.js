@@ -1,7 +1,7 @@
 /**
  * Build script for the standalone compilot-cli npm package.
  *
- * Generates dist/cli/ containing:
+ * Generates dist/<version>/cli/ containing:
  *   - compilot-cli-x.x.x.tgz (npm package)
  *   - README.md (CLI documentation)
  *   - skills/compilot/SKILL.md + README.md (AI skill files)
@@ -11,7 +11,9 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const srcOut = path.join(root, 'out');
-const distCli = path.join(root, 'dist', 'cli');
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const version = pkg.version;
+const distCli = path.join(root, 'dist', version, 'cli');
 const tmpBuild = path.join(root, 'dist', '_cli-build');
 
 // Directories to copy (relative to out/)
@@ -157,13 +159,13 @@ fs.writeFileSync(path.join(tmpBuild, 'package.json'), JSON.stringify(cliPkg, nul
 const { execSync } = require('child_process');
 execSync('npm pack', { cwd: tmpBuild, stdio: 'inherit' });
 
-// Move .tgz to dist/cli/
+// Move .tgz to dist/<version>/cli/
 const tgzFiles = fs.readdirSync(tmpBuild).filter(f => f.endsWith('.tgz'));
 for (const tgz of tgzFiles) {
     const src = path.join(tmpBuild, tgz);
     const dst = path.join(distCli, tgz);
     fs.renameSync(src, dst);
-    console.log(`Packed: dist/cli/${tgz}`);
+    console.log(`Packed: dist/${version}/cli/${tgz}`);
 }
 
 // Remove temp build directory
@@ -175,7 +177,7 @@ fs.rmSync(tmpBuild, { recursive: true });
 const cliReadmeFinal = path.join(root, 'docs', 'README-cli.md');
 if (fs.existsSync(cliReadmeFinal)) {
     fs.copyFileSync(cliReadmeFinal, path.join(distCli, 'README.md'));
-    console.log('Copied: dist/cli/README.md');
+    console.log('Copied: dist/' + version + '/cli/README.md');
 }
 
 // Copy skills directory
@@ -183,7 +185,7 @@ const skillsSrc = path.join(root, 'skills', 'compilot');
 const skillsDst = path.join(distCli, 'skills', 'compilot');
 if (fs.existsSync(skillsSrc)) {
     copyDirRecursive(skillsSrc, skillsDst);
-    console.log('Copied: dist/cli/skills/compilot/');
+    console.log('Copied: dist/' + version + '/cli/skills/compilot/');
 }
 
-console.log(`\nCLI package complete: dist/cli/`);
+console.log(`\nCLI package complete: dist/${version}/cli/`);

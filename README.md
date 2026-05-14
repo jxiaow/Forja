@@ -49,10 +49,10 @@ npm run compile
 # 打包全部（bump version + VS 扩展 + CLI）
 npm run package:all
 
-# 仅打包 VS 扩展 → dist/vs/
+# 仅打包 VS 扩展 → dist/<version>/vs/
 npm run package
 
-# 仅打包 CLI → dist/cli/
+# 仅打包 CLI → dist/<version>/cli/
 npm run package:cli
 ```
 
@@ -60,16 +60,17 @@ npm run package:cli
 
 ```
 dist/
-├── vs/                          # VSCode 扩展
-│   ├── compilot-x.x.x.vsix
-│   └── README.md
-└── cli/                         # CLI + AI Skill
-    ├── compilot-cli-x.x.x.tgz
-    ├── README.md
-    └── skills/
-        └── compilot/
-            ├── SKILL.md
-            └── README.md
+└── <version>/
+    ├── vs/                          # VSCode 扩展
+    │   ├── compilot-x.x.x.vsix
+    │   └── README.md
+    └── cli/                         # CLI + AI Skill
+        ├── compilot-cli-x.x.x.tgz
+        ├── README.md
+        └── skills/
+            └── compilot/
+                ├── SKILL.md
+                └── README.md
 ```
 
 ## 支持平台

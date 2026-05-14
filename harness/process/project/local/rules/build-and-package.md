@@ -26,20 +26,21 @@
 
 ```
 dist/
-├── vs/                          # VSCode 扩展
-│   ├── compilot-x.x.x.vsix
-│   └── README.md
-└── cli/                         # CLI + AI Skill
-    ├── compilot-cli-x.x.x.tgz
-    ├── README.md
-    └── skills/
-        └── compilot/
+└── <version>/
+    ├── vs/                          # VSCode 扩展
+    │   ├── compilot-x.x.x.vsix
+    │   └── README.md
+    └── cli/                         # CLI + AI Skill
+        ├── compilot-cli-x.x.x.tgz
+        ├── README.md
+        └── skills/
+            └── compilot/
 ```
 
 ## Verification
 
 打包后的验证最小集：
 
-- 确认 `dist/vs/` 下生成了 `.vsix` 文件
-- 确认 `dist/cli/` 下生成了 `.tgz` 文件
+- 确认 `dist/<version>/vs/` 下生成了 `.vsix` 文件
+- 确认 `dist/<version>/cli/` 下生成了 `.tgz` 文件
 - 如果只打包了其中一个，只验证对应产物
