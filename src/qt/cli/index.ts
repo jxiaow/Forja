@@ -26,6 +26,7 @@ function compactResult(result: CliResult, brief?: boolean): Record<string, unkno
         if (result.candidates.length > 0) {
             out.candidates = result.candidates.map(c => path.relative(result.workspace, c) || c);
         }
+        if (result.rccProjectPath) { out.rccProjectPath = result.rccProjectPath; }
         if (result.resolved) {
             const r: Record<string, unknown> = {};
             if (result.resolved.mode) { r.mode = result.resolved.mode; }
@@ -56,6 +57,7 @@ function compactResult(result: CliResult, brief?: boolean): Record<string, unkno
     if (result.stderr) { out.stderr = result.stderr; }
     if (result.logFile) { out.logFile = result.logFile; }
     if (result.resolved) { out.resolved = result.resolved; }
+    if (result.rccProjectPath) { out.rccProjectPath = result.rccProjectPath; }
 
     return out;
 }
