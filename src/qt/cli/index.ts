@@ -20,6 +20,12 @@ function compactResult(result: CliResult, brief?: boolean): Record<string, unkno
         if (result.exitCode !== null) { out.exitCode = result.exitCode; }
         if (result.errors.length > 0) { out.errors = result.errors; }
         if (result.logFile) { out.logFile = result.logFile; }
+
+        // Successful detach launches only need ok/action/diagnostics/exitCode/logFile
+        const isDetachSuccess = result.ok && result.logFile && result.exitCode === 0
+            && ['run', 'build', 'clean'].includes(result.action);
+        if (isDetachSuccess) { return out; }
+
         if (result.project) {
             out.project = path.relative(result.workspace, result.project) || result.project;
         }
