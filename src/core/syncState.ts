@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { createLogger } from '../../core/logger';
+import { createLogger } from './logger';
 
 const logger = createLogger('SyncState');
 
@@ -53,7 +53,6 @@ export function needsSync(workspaceRoot: string, relativePath: string): boolean 
     const state = _readState(workspaceRoot);
     const record = state.files[relativePath];
     if (!record) {
-        // 从未同步过，需要同步
         return true;
     }
 
@@ -63,7 +62,6 @@ export function needsSync(workspaceRoot: string, relativePath: string): boolean 
         const currentMtime = stat.mtimeMs;
         return currentMtime > record.mtime;
     } catch {
-        // 文件不存在（可能已删除），不需要同步
         return false;
     }
 }

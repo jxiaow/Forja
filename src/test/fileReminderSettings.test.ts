@@ -13,7 +13,7 @@ function createTemplateData(): TemplateData {
         cStandard: 'c11',
         cppStandard: 'c++17',
         scanExcludeDirs: '',
-        qmakeTarget: '',
+        target: '',
         isWin: true,
         autoDevShell: '',
         autoQtPath: '',
@@ -28,7 +28,8 @@ function createTemplateData(): TemplateData {
         syncEnabled: false,
         syncSelectedServer: '',
         syncServers: [],
-        syncIgnore: '.git, node_modules, out'
+        syncIgnore: '.git, node_modules, out',
+        branchSyncEnabled: false
     };
 }
 

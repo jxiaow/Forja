@@ -5,8 +5,8 @@ export interface LocalCache {
     version: 1;
     updatedAt: string;
     detected: {
-        qt: { path: string; qmake: string } | null;
-        vs: { devShellPath: string } | null;
+        qt: { path: string; qmake: string; version?: string; compiler?: string } | null;
+        vs: { devShellPath: string; version?: string; edition?: string } | null;
         jom: string | null;
         projects: string[];
     };

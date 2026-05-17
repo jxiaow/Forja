@@ -13,7 +13,7 @@ function createTemplateData(): TemplateData {
         cStandard: 'c11',
         cppStandard: 'c++17',
         scanExcludeDirs: '',
-        qmakeTarget: '',
+        target: '',
         isWin: true,
         autoDevShell: '',
         autoQtPath: '',
@@ -28,7 +28,8 @@ function createTemplateData(): TemplateData {
         syncEnabled: false,
         syncSelectedServer: '',
         syncServers: [],
-        syncIgnore: '.git, node_modules, out'
+        syncIgnore: '.git, node_modules, out',
+        branchSyncEnabled: false
     };
 }
 
@@ -37,13 +38,13 @@ test('qmake target input saves after editing is committed', () => {
 
     assert.match(
         html,
-        /<input id="qmakeTarget"[^>]*onchange="saveQmakeTarget\(\)"/,
-        'qmakeTarget input should persist committed edits without saving on every keystroke'
+        /<input id="target"[^>]*onchange="saveTarget\(\)"/,
+        'target input should persist committed edits without saving on every keystroke'
     );
     assert.doesNotMatch(
         html,
-        /<input id="qmakeTarget"[^>]*oninput="saveQmakeTarget\(\)"/,
-        'qmakeTarget input should not write configuration for each typed character'
+        /<input id="target"[^>]*oninput="saveTarget\(\)"/,
+        'target input should not write configuration for each typed character'
     );
 });
 
@@ -62,8 +63,8 @@ test('qmake target input falls back to current project target when override is e
 
     assert.match(
         html,
-        /<input id="qmakeTarget"[^>]*value="DemoApp"/,
-        'qmakeTarget input should show the parsed .pro TARGET when there is no manual override'
+        /<input id="target"[^>]*value="DemoApp"/,
+        'target input should show the parsed .pro TARGET when there is no manual override'
     );
 });
 
@@ -84,18 +85,18 @@ test('qmake target save keeps fallback display from being persisted as a manual 
     assert.match(
         html,
         /const savedValue = value === defaultTarget \? '' : value/,
-        'saveQmakeTarget should clear the override when the input still matches the parsed .pro TARGET'
+        'saveTarget should clear the override when the input still matches the parsed .pro TARGET'
     );
 });
 
 test('qmake target save skips duplicate values', () => {
     const html = getHtml(createTemplateData());
 
-    assert.match(html, /let lastSavedQmakeTarget = null;/);
+    assert.match(html, /let lastSavedTarget = null;/);
     assert.match(
         html,
-        /if \(savedValue === lastSavedQmakeTarget\) \{ return; \}/,
-        'saveQmakeTarget should avoid duplicate saves on unchanged values'
+        /if \(savedValue === lastSavedTarget\) \{ return; \}/,
+        'saveTarget should avoid duplicate saves on unchanged values'
     );
 });
 
@@ -112,7 +113,7 @@ test('config panel does not reload html for its own setting writes', () => {
 test('config panel project name prefers qmake target override', () => {
     const html = getHtml({
         ...createTemplateData(),
-        qmakeTarget: 'OverrideApp',
+        target: 'OverrideApp',
         project: {
             proPath: 'C:\\workspace\\demo\\demo.pro',
             proFile: 'demo.pro',

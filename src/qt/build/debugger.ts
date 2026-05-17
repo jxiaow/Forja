@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getBuildConfig, getQtSourcePath } from '../../core/configService';
+import { getBuildConfig, getQtSourcePath } from '../services/configService';
 import { setState } from '../../core/stateManager';
 import { getMakefileInfo } from '../project/projectManager';
 import { build, qmakeForDebug, stopCurrentTarget } from './buildManager';

@@ -1,12 +1,17 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { parseRuntimeLibPaths, resolveRuntimeTarget } from '../qt/shared/runtimeTarget';
 
+const _tmpDirs: string[] = [];
+after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
+
 function makeWorkspace(): string {
-    return fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-runtime-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-runtime-'));
+    _tmpDirs.push(ws);
+    return ws;
 }
 
 test('resolveRuntimeTarget reads windows makefile output path', () => {

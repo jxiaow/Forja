@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getState, setState, onStateChange, BuildMode, Arch } from '../core/stateManager';
-import { getQmakeTarget, getCustomCommands } from '../core/configService';
+import { getTarget, getCustomCommands } from '../qt/services/configService';
 import { getEffectiveProjectName } from '../qt/project/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';
 
@@ -8,6 +8,8 @@ import { getModeDisplayLabel } from './statusBarLabels';
 let _projectModeItem: vscode.StatusBarItem;
 let _runItem: vscode.StatusBarItem;
 let _debugItem: vscode.StatusBarItem;
+
+export function getRunStatusBarItem(): vscode.StatusBarItem { return _runItem; }
 
 export function createStatusBar(context: vscode.ExtensionContext): void {
     _projectModeItem = vscode.window.createStatusBarItem('compilot.projectMode', vscode.StatusBarAlignment.Left, 113);
@@ -26,7 +28,7 @@ export function createStatusBar(context: vscode.ExtensionContext): void {
     _debugItem.tooltip = '构建并启动调试';
     context.subscriptions.push(_debugItem);
 
-    context.subscriptions.push(onStateChange(() => _updateDisplay()));
+    context.subscriptions.push(new vscode.Disposable(onStateChange(() => _updateDisplay())));
     _updateDisplay();
 }
 
@@ -41,7 +43,7 @@ function _modeDisplayLabel(): string {
 
 function _updateDisplay(): void {
     const state = getState();
-    const projectName = getEffectiveProjectName(state.currentProject, getQmakeTarget(), '未选择项目');
+    const projectName = getEffectiveProjectName(state.currentProject, getTarget(), '未选择项目');
     _projectModeItem.text = `${_modeIcon()} ${projectName} · ${_modeDisplayLabel()}`;
     _projectModeItem.tooltip = 'Compilot: 点击选择模式/架构、构建操作、切换项目';
     _projectModeItem.color = state.mode === 'debug'
@@ -98,6 +100,17 @@ export async function showActions(): Promise<void> {
         { label: '$(trash) Clean',  description: '', action: 'clean' }
     ];
 
+    // Build All 仅在配置了 buildOrder 时显示
+    const { readProjectSyncConfig } = await import('../core/serverStore');
+    const { getWorkspaceRoot } = await import('../qt/services/configService');
+    const wsRoot = getWorkspaceRoot();
+    if (wsRoot) {
+        const syncConfig = readProjectSyncConfig(wsRoot);
+        if (syncConfig.buildOrder && syncConfig.buildOrder.length > 1) {
+            buildItems.splice(2, 0, { label: '$(tools) Build All (按依赖顺序)', description: '', action: 'buildAll' });
+        }
+    }
+
     const customCmds = getCustomCommands();
     const customItems: Item[] = customCmds.map((cmd, i) => ({
         label: `$(terminal) ${cmd.name}`, description: '', action: `custom:${i}`
@@ -121,7 +134,7 @@ export async function showActions(): Promise<void> {
 
     const selected = await vscode.window.showQuickPick(
         pickItems,
-        { placeHolder: `${getEffectiveProjectName(state.currentProject, getQmakeTarget(), '未选择项目')} · ${_modeDisplayLabel()}` }
+        { placeHolder: `${getEffectiveProjectName(state.currentProject, getTarget(), '未选择项目')} · ${_modeDisplayLabel()}` }
     ) as Item | undefined;
 
     if (!selected?.action) { return; }
@@ -138,6 +151,8 @@ export async function showActions(): Promise<void> {
         vscode.commands.executeCommand('compilot.qt.qmake');
     } else if (selected.action === 'build') {
         vscode.commands.executeCommand('compilot.qt.build');
+    } else if (selected.action === 'buildAll') {
+        vscode.commands.executeCommand('compilot.remote.run');
     } else if (selected.action === 'rcc') {
         vscode.commands.executeCommand('compilot.qt.rcc');
     } else if (selected.action === 'clean') {

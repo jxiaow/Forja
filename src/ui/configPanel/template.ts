@@ -12,7 +12,7 @@ export interface TemplateData {
     cStandard: string;
     cppStandard: string;
     scanExcludeDirs: string;
-    qmakeTarget: string;
+    target: string;
     isWin: boolean;
     autoDevShell: string;
     autoQtPath: string;
@@ -28,6 +28,7 @@ export interface TemplateData {
     syncSelectedServer: string;
     syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string; remotePath: string }[];
     syncIgnore: string;
+    branchSyncEnabled: boolean;
 }
 
 let _templateCache: string | null = null;
@@ -59,11 +60,11 @@ function _escapeHtml(value: string): string {
 
 export function getHtml(data: TemplateData): string {
     const { env, project, vsDevShellPath, selectedProject, cStandard, cppStandard,
-            scanExcludeDirs, qmakeTarget, isWin, autoDevShell, autoQtPath, qtPath } = data;
+            scanExcludeDirs, target, isWin, autoDevShell, autoQtPath, qtPath } = data;
 
-    const projectName = getEffectiveProjectName(project, qmakeTarget, selectedProject || '未选择');
-    const defaultQmakeTarget = project?.target || '';
-    const effectiveQmakeTarget = qmakeTarget || defaultQmakeTarget;
+    const projectName = getEffectiveProjectName(project, target, selectedProject || '未选择');
+    const defaultTarget = project?.target || '';
+    const effectiveTarget = target || defaultTarget;
     const effectiveDevShell = vsDevShellPath || autoDevShell;
     const devShellSource = vsDevShellPath ? '手动配置' : (autoDevShell ? '自动检测' : '未配置');
     const effectiveQtPath = qtPath || autoQtPath;
@@ -115,9 +116,9 @@ export function getHtml(data: TemplateData): string {
         'selCpp20': _sel(cppStandard, 'c++20'),
         'selCpp23': _sel(cppStandard, 'c++23'),
         scanExcludeDirs: _escapeHtml(scanExcludeDirs),
-        effectiveQmakeTarget: _escapeHtml(effectiveQmakeTarget),
-        defaultQmakeTarget: _escapeHtml(defaultQmakeTarget),
-        savedQmakeTarget: _escapeHtml(qmakeTarget),
+        effectiveTarget: _escapeHtml(effectiveTarget),
+        defaultTarget: _escapeHtml(defaultTarget),
+        savedTarget: _escapeHtml(target),
         dotVsBlockClass: effectiveDevShell ? 'dot-ok' : 'dot-warn',
         vsBadgeClass: effectiveDevShell ? 'badge-ok' : 'badge-warn',
         devShellSource: _escapeHtml(devShellSource),
@@ -145,8 +146,9 @@ export function getHtml(data: TemplateData): string {
         syncServerOptions: data.syncServers
             .map(s => `<option value="${_escapeHtml(s.id)}" ${s.id === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
             .join(''),
-        syncServerData: JSON.stringify(data.syncServers).replace(/\\/g, '\\\\').replace(/'/g, "\\'"),
+        syncServerData: JSON.stringify(data.syncServers).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/<\//g, '<\\/'),
         syncIgnore: _escapeHtml(data.syncIgnore),
+        chkBranchSyncEnabled: data.branchSyncEnabled ? 'checked' : '',
     };
 
     let html = _loadTemplate();

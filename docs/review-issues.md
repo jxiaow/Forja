@@ -1,0 +1,112 @@
+# 代码 Review 问题清单
+
+> 生成时间: 2026-05-15
+
+## 架构违规
+
+| # | 严重度 | 问题 | 位置 | 状态 |
+|---|--------|------|------|------|
+| A1 | 🔴 高 | `core/configService.ts` 导入了 `qt/` 模块，破坏 core 作为共享基础层的定位 | src/core/configService.ts | 待修 |
+| A2 | 🟡 中 | `core/stateManager.ts` 直接依赖 vscode，不能在 CLI 中使用，不应放在 core/ | src/core/stateManager.ts | 待修 |
+| A3 | 🟡 中 | `core/syncState.ts` → `core/logger.ts` → 动态 `require('vscode')` 链路架构不纯（运行时安全但脆弱） | src/core/syncState.ts, src/core/logger.ts | 待修 |
+
+## 类型安全
+
+| # | 严重度 | 问题 | 位置 | 状态 |
+|---|--------|------|------|------|
+| T1 | 🟡 中 | `fromStage: options.from as any` — 应改为 `DeployStage \| null` | src/qt/cli/index.ts:139, src/sdk/cli/index.ts:212 | 待修 |
+| T2 | 🟢 低 | stateManager.ts 中 3 处 `value as BuildMode` 等类型断言，安全但绕过泛型约束 | src/core/stateManager.ts | 可选 |
+
+## CLI 一致性
+
+| # | 严重度 | 问题 | 位置 | 状态 |
+|---|--------|------|------|------|
+| C1 | 🟡 中 | SDK CLI 静默忽略未知参数，Qt CLI 会抛错 | src/sdk/cli/index.ts parseArgs | 待修 |
+| C2 | 🟡 中 | SDK CLI 不校验 `--mode`/`--arch` 值，无效值直接透传 | src/sdk/cli/index.ts parseArgs | 待修 |
+| C3 | 🟡 中 | SDK CLI help 文本缺少 `--remote`/`--fast`/`--from`/`--force` 文档 | src/sdk/cli/index.ts getHelpText | 待修 |
+| C4 | 🟢 低 | SDK CLI 中 `run`/`stop`/`restart` 的 deploy.json 检查是死代码（SDK 不支持这些 action） | src/sdk/cli/index.ts:193-205 | 待修 |
+
+## 错误处理
+
+| # | 严重度 | 问题 | 位置 | 状态 |
+|---|--------|------|------|------|
+| E1 | 🟡 中 | `serverStore.ts` 读取 JSON 失败时空 `catch {}`，配置损坏无任何反馈 | src/core/serverStore.ts readServers/readProjectSyncConfig | 待修 |
+| E2 | 🟡 中 | `syncCli.ts` 的 `ensureRemoteDir` 永远 resolve，mkdir 失败时后续 scp 报错信息不清晰 | src/core/syncCli.ts | 待修 |
+| E3 | 🟢 低 | `ssh.ts` 的 `createAskpassEnv` 写临时文件无 try/catch，tmpdir 不可写时直接抛异常 | src/core/ssh.ts | 待修 |
+| E4 | 🟢 低 | remote/core/index.ts build 阶段 JSON.parse 失败时丢失原始 stdout | src/remote/core/index.ts | 可选 |
+
+## 代码组织
+
+| # | 严重度 | 问题 | 位置 | 状态 |
+|---|--------|------|------|------|
+| O1 | 🟢 低 | `sftpClient.ts` 大量 re-export 是历史遗留，syncWatcher.ts 可直接从 core/ 导入 | src/qt/sync/sftpClient.ts | 可选 |
+| O2 | 🟢 低 | remote/core/index.ts 25KB，锁管理可提取到 lock.ts | src/remote/core/index.ts | 可选 |
+| O3 | 🟢 低 | `DeployResult` 等类型定义散落在各文件而非集中在 types.ts | src/remote/core/ | 可选 |
+| O4 | 🟢 低 | 远程部署无取消机制，vscode 的 CancellationToken 未传递到 orchestrator | src/remote/ | 可选 |
+
+## 修复优先级建议
+
+### P0 — 下次提交前修
+
+1. **T1** — `as any` 改为正确类型
+2. **C1 + C2 + C3** — SDK CLI 参数校验和文档补全
+3. **C4** — 删除死代码
+
+### P1 — 近期修
+
+4. **E1** — serverStore JSON 解析失败加 console.warn
+5. **E2** — ensureRemoteDir 失败时 reject 或返回错误信息
+6. **E3** — createAskpassEnv 加 try/catch
+
+### P2 — 长期改进
+
+7. **A1** — configService.ts 拆分或移到 qt/
+8. **A2** — stateManager.ts 拆分为纯状态（core）和 vscode 绑定（ui 层）
+9. **A3** — logger 提供 console fallback 或接口化
+10. **O1~O4** — 代码组织优化
+
+---
+
+## 安全性
+
+| # | 严重度 | 问题 | 位置 | 状态 |
+|---|--------|------|------|------|
+| S1 | 🔴 高 | XSS：`configPanel.html` 中 `remoteTestResult`、`_addPinnedItem`、`_addBuildOrderItem` 使用 `innerHTML` 插入未转义的 SSH 输出和用户输入 | src/ui/configPanel/configPanel.html | 待修 |
+| S2 | 🟡 中 | Shell 注入：`remoteTestConnection` 中 `remotePath` 直接拼入 SSH 命令，未转义 | src/ui/configPanel/messageHandler.ts | 待修 |
+| S3 | 🟡 中 | 密码暴露：`_pushServerList` 每次将完整 password 字段发送到 webview JS 上下文 | src/ui/configPanel/messageHandler.ts | 待修 |
+
+## 测试覆盖
+
+| # | 严重度 | 问题 | 位置 | 状态 |
+|---|--------|------|------|------|
+| V1 | 🟡 中 | `core/syncCli.ts`、`core/ssh.ts`、`core/serverStore.ts` 无专属测试 | src/core/ | 待补 |
+| V2 | 🟡 中 | SDK 模块零测试覆盖（sdkBuilder、projectScanner、showActions 等） | src/sdk/ | 待补 |
+| V3 | 🟡 中 | remote/core/index.ts（25KB 编排逻辑）无测试 | src/remote/core/index.ts | 待补 |
+| V4 | 🟢 低 | qt/build/、qt/sync/、cli/ 入口无测试 | src/qt/build/, src/qt/sync/, src/cli/ | 可选 |
+
+## 工程配置
+
+| # | 严重度 | 问题 | 位置 | 状态 |
+|---|--------|------|------|------|
+| P1 | 🟡 中 | 无 ESLint/Prettier 等静态分析工具 | 项目根目录 | 待加 |
+| P2 | 🟡 中 | 循环依赖：`core/stateManager` ↔ `qt/project/projectManager`（运行时 circular require） | src/core/stateManager.ts ↔ src/qt/project/projectManager.ts | 待修 |
+| P3 | 🟢 低 | `compilot.qt.showSyncTab` 和 `compilot.qt.loadManualProject` 注册了但未在 package.json 声明（内部命令） | src/extension.ts | 可选 |
+| P4 | 🟢 低 | `_updateDeployJson` 中 `fs.writeFileSync` 无 try/catch | src/ui/configPanel/messageHandler.ts | 待修 |
+
+## 修复优先级建议（补充）
+
+### P0 — 安全问题优先
+
+- **S1** — configPanel.html 中所有 innerHTML 插入点改用 textContent 或转义函数
+- **S2** — remotePath 拼入 SSH 命令前用 shellEscape 转义
+
+### P1 — 近期修（补充）
+
+- **S3** — _pushServerList 发送时 mask 密码字段（仅在编辑时按需获取）
+- **P2** — 循环依赖：将 `ProjectInfo` 和 `EnvInfo` 类型提取到独立的 types 文件，用 `import type` 打破运行时循环
+- **P4** — _updateDeployJson 加 try/catch
+
+### P2 — 长期改进（补充）
+
+- **P1** — 引入 ESLint（推荐 @typescript-eslint）
+- **V1~V3** — 补充核心模块测试

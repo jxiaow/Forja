@@ -1,11 +1,17 @@
 import type * as vscode from 'vscode';
 
 let _channel: vscode.OutputChannel | null = null;
+let _useConsole = false;
 
-export function initLogger(): vscode.OutputChannel {
+export function initLogger(): vscode.OutputChannel | null {
     if (!_channel) {
-        const vscodeApi = require('vscode') as typeof vscode;
-        _channel = vscodeApi.window.createOutputChannel('Compilot Qt');
+        try {
+            const vscodeApi = require('vscode') as typeof vscode;
+            _channel = vscodeApi.window.createOutputChannel('Compilot Qt');
+        } catch {
+            _useConsole = true;
+            return null;
+        }
     }
     return _channel;
 }
@@ -35,9 +41,15 @@ function _parseScope(message: string): { scope: string; text: string } {
 }
 
 function _write(level: LogLevel, message: string): void {
-    if (!_channel) { return; }
     const parsed = _parseScope(message);
-    _channel.appendLine(`[${_timestamp()}] [${level}] [${parsed.scope}] ${parsed.text}`);
+    const line = `[${_timestamp()}] [${level}] [${parsed.scope}] ${parsed.text}`;
+    if (_channel) {
+        _channel.appendLine(line);
+    } else if (_useConsole) {
+        if (level === 'ERROR') { console.error(line); }
+        else if (level === 'WARN') { console.warn(line); }
+        else { console.log(line); }
+    }
 }
 
 export function log(message: string): void {

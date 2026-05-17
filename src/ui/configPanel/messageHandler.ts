@@ -2,10 +2,10 @@ import * as vscode from 'vscode';
 import { detectEnv } from '../../qt/env/envDetector';
 import { generateCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
 import { getState, setState } from '../../core/stateManager';
-import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget, getWorkspaceRoot } from '../../core/configService';
+import { updateConfig, getQtPath, getVsDevShellPath, getTarget, getWorkspaceRoot } from '../../qt/services/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, ServerConfig } from '../../qt/sync/sftpClient';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, ServerConfig } from '../../core/serverStore';
 import { executeSyncChangedFiles, executeTestConnection } from '../../qt/sync/syncWatcher';
 
 const logger = createLogger('ConfigPanel');
@@ -123,7 +123,7 @@ export async function handleMessage(
         }
         case 'saveQmakeTarget': {
             logger.info(`保存 QMake TARGET: "${msg.value}"`);
-            await updateConfig('qmakeTarget', String(msg.value || ''));
+            await updateConfig('target', String(msg.value || ''));
             break;
         }
         case 'saveManualProPath': {
@@ -156,7 +156,7 @@ export async function handleMessage(
             if (msg.cppStandard) { await updateConfig('cppStandard', msg.cppStandard); }
             const project = getState().currentProject;
             if (project) {
-                logger.info(`项目: ${getEffectiveProjectName(project, getQmakeTarget(), project.proFile)}`);
+                logger.info(`项目: ${getEffectiveProjectName(project, getTarget(), project.proFile)}`);
                 generateCppProperties(project);
             } else {
                 logger.warn('无项目，无法生成 IntelliSense');
@@ -269,6 +269,26 @@ export async function handleMessage(
             await executeSyncChangedFiles();
             break;
         }
+        case 'saveBranchSyncEnabled': {
+            const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!wsRoot) { break; }
+            const { writeProjectSyncConfig, readProjectSyncConfig } = await import('../../core/serverStore');
+            const existing = readProjectSyncConfig(wsRoot);
+            writeProjectSyncConfig(wsRoot, {
+                branchSync: { enabled: !!msg.value, pinned: existing?.branchSync?.pinned || {} }
+            });
+            break;
+        }
+        case 'saveBranchSyncPinned': {
+            const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!wsRoot) { break; }
+            const { writeProjectSyncConfig } = await import('../../core/serverStore');
+            const pinned = msg.value as Record<string, string | null> || {};
+            writeProjectSyncConfig(wsRoot, {
+                branchSync: { enabled: true, pinned }
+            });
+            break;
+        }
     }
 }
 
@@ -284,7 +304,7 @@ function _pushServerList(webview: vscode.Webview, selectId?: string): void {
             username: s.username,
             authMode: s.authMode,
             privateKeyPath: s.privateKeyPath,
-            password: s.password,
+            password: s.password ? '••••••••' : '',
             remotePath: s.remotePath
         })),
         select: selectId || ''

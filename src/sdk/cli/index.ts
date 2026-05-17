@@ -17,11 +17,13 @@ interface SdkCliOptions {
     arch: 'x86' | 'x64';
     execute: boolean;
     json: boolean;
+    brief: boolean;
 }
 
 interface SdkCliResult {
     ok: boolean;
     action: string;
+    target: string | null;
     workspace: string;
     project: string | null;
     commands: string[];
@@ -32,45 +34,88 @@ interface SdkCliResult {
 }
 
 function parseArgs(argv: string[]): SdkCliOptions {
+    const VALID_ACTIONS = ['build', 'rebuild', 'clean', 'status'];
+    const KNOWN_FLAGS = new Set([
+        '--workspace', '--project', '--mode', '--arch', '--execute',
+        '--plan', '--dry-run', '--json', '--brief'
+    ]);
+
     const options: SdkCliOptions = {
         action: argv[0] || 'status',
         workspace: process.cwd(),
         project: null,
         mode: 'debug',
         arch: 'x86',
-        execute: false,
-        json: false
+        execute: true,
+        json: false,
+        brief: false
     };
 
     for (let i = 1; i < argv.length; i++) {
         const arg = argv[i];
         switch (arg) {
-            case '--workspace':
-                options.workspace = argv[++i] || process.cwd();
+            case '--workspace': {
+                const val = argv[i + 1];
+                if (!val || val.startsWith('--')) { throw new Error('--workspace 需要一个值'); }
+                options.workspace = argv[++i];
                 break;
-            case '--project':
-                options.project = argv[++i] || null;
+            }
+            case '--project': {
+                const val = argv[i + 1];
+                if (!val || val.startsWith('--')) { throw new Error('--project 需要一个值'); }
+                options.project = argv[++i];
                 break;
-            case '--mode':
-                options.mode = (argv[++i] as 'debug' | 'release') || 'debug';
+            }
+            case '--mode': {
+                const val = argv[i + 1];
+                if (!val || val.startsWith('--')) { throw new Error('--mode 需要一个值 (debug 或 release)'); }
+                options.mode = (argv[++i] as 'debug' | 'release');
                 break;
-            case '--arch':
-                options.arch = (argv[++i] as 'x86' | 'x64') || 'x86';
+            }
+            case '--arch': {
+                const val = argv[i + 1];
+                if (!val || val.startsWith('--')) { throw new Error('--arch 需要一个值 (x86 或 x64)'); }
+                options.arch = (argv[++i] as 'x86' | 'x64');
                 break;
+            }
             case '--execute':
-                options.execute = true;
+                break;
+            case '--plan':
+            case '--dry-run':
+                options.execute = false;
                 break;
             case '--json':
                 options.json = true;
                 break;
+            case '--brief':
+                options.brief = true;
+                break;
+            default:
+                if (arg.startsWith('--')) {
+                    throw new Error(`未知参数: ${arg}。使用 compilot sdk --help 查看可用选项`);
+                }
+                break;
         }
     }
 
+    if (!VALID_ACTIONS.includes(options.action)) {
+        throw new Error(`未知动作: ${options.action}。可用: ${VALID_ACTIONS.join(', ')}`);
+    }
+    if (!['debug', 'release'].includes(options.mode)) {
+        throw new Error(`无效的 --mode 值: ${options.mode}。可用: debug, release`);
+    }
+    if (!['x86', 'x64'].includes(options.arch)) {
+        throw new Error(`无效的 --arch 值: ${options.arch}。可用: x86, x64`);
+    }
+
     options.workspace = path.resolve(options.workspace);
+    if (!fs.existsSync(options.workspace)) {
+        throw new Error(`工作区目录不存在: ${options.workspace}`);
+    }
     return options;
 }
 
-function scanProjects(workspace: string, depth: number = DEFAULT_SCAN_DEPTH): string[] {
+export function scanProjects(workspace: string, depth: number = DEFAULT_SCAN_DEPTH): string[] {
     const results: string[] = [];
     const isWindows = os.platform() === 'win32';
     const pattern = isWindows ? /\.sln$/i : /^Makefile$/;
@@ -138,8 +183,14 @@ Compilot SDK CLI
   --project <path>     项目入口文件路径（.sln 或 Makefile）
   --mode <mode>        编译模式: debug | release（默认 debug）
   --arch <arch>        目标架构: x86 | x64（默认 x86）
-  --execute            执行命令（默认仅输出命令计划）
+  --plan               仅输出命令计划，不执行
+  --brief              精简输出
   --json               JSON 格式输出
+
+示例:
+  compilot sdk build --mode release --arch x64
+  compilot sdk build --plan --json
+  compilot sdk status --json
 `.trim();
 }
 
@@ -180,6 +231,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 ok: true,
                 action: 'status',
                 workspace: options.workspace,
+                target: projectPath ? path.basename(projectPath, path.extname(projectPath)) : null,
                 project: projectPath,
                 candidates: candidates.map(c => path.relative(options.workspace, c) || c),
                 mode: options.mode,
@@ -206,6 +258,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         const result: SdkCliResult = {
             ok: true,
             action: options.action,
+            target: projectPath ? path.basename(projectPath, path.extname(projectPath)) : null,
             workspace: options.workspace,
             project: projectPath,
             commands,
@@ -235,7 +288,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         } else if (!options.execute) {
             console.log(`SDK ${options.action} 命令:`);
             commands.forEach(c => console.log(`  ${c}`));
-            console.log(`\n使用 --execute 执行命令`);
+            console.log(`\n使用 compilot sdk ${options.action} 执行（默认执行），或加 --plan 仅查看计划`);
         }
 
         process.exitCode = result.ok ? 0 : 1;

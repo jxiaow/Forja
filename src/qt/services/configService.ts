@@ -1,11 +1,11 @@
 import * as path from 'path';
-import { BuildConfig } from '../qt/platform/builder';
-import { getState } from './stateManager';
-import { decodeSelectedProject } from '../qt/project/selectedProject';
-import { resolveBuildConfig, mergeConfigInputs } from '../qt/shared/configResolver';
-import { readLocalCache } from '../qt/shared/localState';
-import { getSetting, setSetting, QtPilotSettings } from './settingsStore';
-import { resolveProjectRoot } from './workspaceResolver';
+import { BuildConfig } from '../platform/builder';
+import { getState } from '../../core/stateManager';
+import { decodeSelectedProject } from '../project/selectedProject';
+import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
+import { readLocalCache } from '../shared/localState';
+import { getSetting, setSetting, QtPilotSettings } from '../../core/settingsStore';
+import { resolveProjectRoot } from '../../core/workspaceResolver';
 
 // ── 配置读取 ──
 
@@ -50,8 +50,8 @@ export function getScanExcludeDirs(): string[] {
     return getSetting('scanExcludeDirs');
 }
 
-export function getQmakeTarget(): string {
-    return getSetting('qmakeTarget');
+export function getTarget(): string {
+    return getSetting('target');
 }
 
 export function getManualProPath(): string {
@@ -122,7 +122,7 @@ export function getBuildConfig(): BuildConfig {
             arch: state.arch,
             qtPath: getQtPath(),
             vsDevShell: getVsDevShellPath(),
-            qmakeTarget: getQmakeTarget()
+            target: getTarget()
         }
     );
 

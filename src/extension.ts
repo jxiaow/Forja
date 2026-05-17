@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as cp from 'child_process';
 import * as buildManager from './qt/build/buildManager';
 import { getState, setState, loadPersistedState } from './core/stateManager';
-import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, getDesignerPath } from './core/configService';
+import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, getDesignerPath } from './qt/services/configService';
 import { createStatusBar, showActions } from './ui/statusBar';
 import { registerPriWatcher } from './qt/project/priWatcher';
 import { ConfigPanel } from './ui/configPanel/index';
@@ -24,7 +24,7 @@ const logger = createLogger('Extension');
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const channel = initLogger();
-    context.subscriptions.push(channel);
+    if (channel) { context.subscriptions.push(channel); }
     logger.info('Compilot 扩展激活');
 
     // 注册 workspace folder 变化监听（多文件夹工作区切换时自动重置缓存）

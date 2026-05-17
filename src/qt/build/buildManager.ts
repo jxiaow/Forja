@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 import { setState } from '../../core/stateManager';
-import { getBuildConfig, getRccProjectPath, getCustomCommands } from '../../core/configService';
+import { getBuildConfig, getRccProjectPath, getCustomCommands } from '../services/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
 import { winConfig, getVsDevCmd } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';

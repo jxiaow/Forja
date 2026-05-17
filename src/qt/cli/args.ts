@@ -10,9 +10,9 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   init        初始化本地配置（检测环境、保存 .compilot/）
   status      显示当前配置、环境和项目状态
   qmake       生成/查看 qmake 命令
-  build       生成/查看构建命令
-  clean       生成/查看清理命令
-  run         构建并运行（--execute 时先 build 再启动）
+  build       构建项目
+  clean       清理编译产物
+  run         构建并运行
   stop        停止运行中的程序
   logs        查看运行日志（--detach 模式启动后的程序输出）
   sync        同步变更文件到远程服务器（基于 git diff）
@@ -27,8 +27,9 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   --vs-dev-shell <path>  Launch-VsDevShell.ps1 路径
   --target <name>        QMake TARGET 覆盖
   --server <name>        同步时指定服务器名称
-  --dry-run              仅生成命令计划，不执行（默认）
-  --execute              执行命令（需显式传入）
+  --plan                 仅生成命令计划，不执行
+  --execute              （兼容旧版，等同于默认行为）
+  --dry-run              （兼容旧版，等同于 --plan）
   --detach               后台执行，日志落文件，CLI 立即返回
   --brief                精简输出（仅 ok、diagnostics、logFile 等关键字段）
   --save-local           将检测结果写入 .compilot/cache.json
@@ -36,10 +37,10 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   --help, -h             显示此帮助信息
 
 示例:
-  compilot qt init --execute --json    初始化并保存本地配置
-  compilot qt build --json             查看构建命令（dry-run）
-  compilot qt build --execute --json   执行构建
-  compilot qt sync --execute --json    同步变更文件到远程
+  compilot qt build --json             执行构建
+  compilot qt build --plan --json      查看构建命令（不执行）
+  compilot qt run --detach --json      后台构建并运行
+  compilot qt sync --json              同步变更文件到远程
   compilot qt status --json            查看当前状态
 `;
 
@@ -86,7 +87,7 @@ export function parseCliArgs(args: string[]): CliOptions {
 
     const options: CliOptions = {
         action: actionText,
-        executionMode: 'dryRun',
+        executionMode: 'execute',
         workspace: null,
         project: null,
         mode: null,
@@ -100,8 +101,8 @@ export function parseCliArgs(args: string[]): CliOptions {
         json: false
     };
 
+    let sawPlan = false;
     let sawDryRun = false;
-    let sawExecute = false;
 
     const startIndex = actionText === firstArg ? 1 : 0;
 
@@ -110,10 +111,14 @@ export function parseCliArgs(args: string[]): CliOptions {
 
         switch (arg) {
             case '--execute':
-                sawExecute = true;
-                options.executionMode = 'execute';
+                // 兼容旧版，静默接受（默认已是 execute）
+                break;
+            case '--plan':
+                sawPlan = true;
+                options.executionMode = 'dryRun';
                 break;
             case '--dry-run':
+                // 兼容旧版，等同于 --plan
                 sawDryRun = true;
                 options.executionMode = 'dryRun';
                 break;
@@ -163,10 +168,6 @@ export function parseCliArgs(args: string[]): CliOptions {
                 break;
             default:
                 throw new Error(`未知参数: ${arg}`);
-        }
-
-        if (sawDryRun && sawExecute) {
-            throw new Error('不能同时使用 --dry-run 和 --execute');
         }
     }
 

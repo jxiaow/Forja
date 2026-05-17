@@ -4,11 +4,11 @@ import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-         getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath,
-         getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../core/configService';
+         getScanExcludeDirs, getSelectedProject, getTarget, getManualProPath, getDesignerPath, getQtSourcePath,
+         getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../qt/services/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { readServers, readProjectSyncConfig } from '../../qt/sync/sftpClient';
+import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 
 const logger = createLogger('ConfigPanelView');
 
@@ -65,6 +65,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             handleMessage(msg, webviewView.webview,
                 () => this._pushEnvUpdate(),
                 () => this._updateHtml())
+                .catch(e => console.warn('[compilot] configPanel message error:', (e as Error).message))
         );
     }
 
@@ -96,7 +97,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         const state = getState();
         const env = state.envInfo;
         const project = state.currentProject;
-        logger.info(`项目: ${getEffectiveProjectName(project, getQmakeTarget(), '无')}`);
+        logger.info(`项目: ${getEffectiveProjectName(project, getTarget(), '无')}`);
         const data: TemplateData = {
             env,
             project,
@@ -105,7 +106,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             cStandard: getCStandard(),
             cppStandard: getCppStandard(),
             scanExcludeDirs: getScanExcludeDirs().join(', '),
-            qmakeTarget: getQmakeTarget(),
+            target: getTarget(),
             isWin: process.platform === 'win32',
             autoDevShell: env?.vs?.devShellPath || '',
             autoQtPath: env?.qt?.path || '',
@@ -121,11 +122,15 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                 const wsRoot = getWorkspaceRoot();
                 const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'] };
                 const servers = readServers();
+
+                const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
                 return {
                     syncEnabled: sync.enabled,
                     syncSelectedServer: sync.selectedServer,
                     syncServers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, authMode: s.authMode, privateKeyPath: s.privateKeyPath, password: s.password, remotePath: s.remotePath })),
-                    syncIgnore: sync.ignore.join(', ')
+                    syncIgnore: sync.ignore.join(', '),
+                    branchSyncEnabled: !!sync.branchSync?.enabled
                 };
             })()
         };

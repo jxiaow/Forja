@@ -7,7 +7,7 @@ export interface BuildConfig {
     proFile: string;
     arch: string;
     mode: string;
-    qmakeTarget: string;   // 可选 TARGET 覆盖，空字符串表示不覆盖
+    target: string;   // 可选 TARGET 覆盖，空字符串表示不覆盖
     jomPath: string;       // jom.exe 完整路径，空字符串表示依赖 PATH
 }
 
@@ -53,7 +53,7 @@ export function createShellPlanBuilder(config: PlatformConfig): ShellPlanBuilder
                 ? ['CONFIG+=debug', 'CONFIG+=console']
                 : ['CONFIG+=release', 'CONFIG+=console'];
             const extra = config.qmakeExtraArgs(cfg);
-            const targetArg = cfg.qmakeTarget ? ` "TARGET=${cfg.qmakeTarget}"` : '';
+            const targetArg = cfg.target ? ` "TARGET=${cfg.target}"` : '';
             const configArgs = [...modeConfigs, ...extraConfigs].join(' ');
             const qmakeCmd = `qmake ${cfg.proFile} -spec ${config.qmakeSpec} ${configArgs}${extra ? ' ' + extra : ''}${targetArg}`;
             return {

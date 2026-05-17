@@ -14,7 +14,7 @@ import {
     readLocalCache,
     writeLocalCache
 } from './localState';
-import { loadSettings, saveSettings, QtPilotSettings } from '../../core/settingsIO';
+import { loadSettings, saveSettings, settingsFilePath, QtPilotSettings } from '../../core/settingsIO';
 import { buildRunCommand } from './commandRunner';
 import { resolveRuntimeTarget } from './runtimeTarget';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from './rccResolver';
@@ -86,21 +86,21 @@ function buildResolvedConfig(
     arch: CliResolvedConfig['arch'],
     qtPath: string,
     vsDevShell: string,
-    qmakeTarget: string
+    target: string,
+    qtVersion?: string,
+    vsVersion?: string
 ): CliResolvedConfig {
-    return {
-        mode,
-        arch,
-        qtPath,
-        vsDevShell,
-        qmakeTarget
-    };
+    const config: CliResolvedConfig = { mode, arch, qtPath, vsDevShell, target: target };
+    if (qtVersion) { config.qtVersion = qtVersion; }
+    if (vsVersion) { config.vsVersion = vsVersion; }
+    return config;
 }
 
 function buildEnvironmentGuidance(
     action: CliOptions['action'],
     qtPath: string,
-    vsDevShell: string
+    vsDevShell: string,
+    options: CliOptions
 ): { diagnostics: CliResult['diagnostics']; nextActions: string[] } {
     const diagnostics: CliResult['diagnostics'] = [];
     const nextActions: string[] = [];
@@ -111,15 +111,36 @@ function buildEnvironmentGuidance(
 
     if (!qtPath) {
         diagnostics.push({ level: 'warning', message: 'Qt 路径未解析，当前计划可能无法在执行阶段找到 qmake 或 Qt 工具链' });
-        nextActions.push('使用 --qt-path <path> 指定 Qt 安装路径，或先运行 init --execute 保存本地配置');
+        if (options.qtPath !== null) {
+            nextActions.push('--qt-path 指定的路径未能解析到有效 Qt 安装，请检查路径');
+        } else {
+            nextActions.push('使用 --qt-path <path> 指定 Qt 安装路径，或先运行 init 保存本地配置');
+        }
+    } else if (!fs.existsSync(qtPath)) {
+        diagnostics.push({ level: 'warning', message: `Qt 路径不存在: ${qtPath}` });
+        nextActions.push('--qt-path 指定的路径不存在，请检查路径是否正确');
     }
 
     if (process.platform === 'win32' && !vsDevShell) {
         diagnostics.push({ level: 'warning', message: 'VS DevShell 路径未解析，当前计划可能无法在执行阶段初始化 MSVC 构建环境' });
-        nextActions.push('使用 --vs-dev-shell <path> 指定 Launch-VsDevShell.ps1，或先运行 init --execute 保存本地配置');
+        if (options.vsDevShell !== null) {
+            nextActions.push('--vs-dev-shell 指定的路径未能解析到有效 DevShell，请检查路径');
+        } else {
+            nextActions.push('使用 --vs-dev-shell <path> 指定 Launch-VsDevShell.ps1，或先运行 init 保存本地配置');
+        }
+    } else if (process.platform === 'win32' && vsDevShell && !fs.existsSync(vsDevShell)) {
+        diagnostics.push({ level: 'warning', message: `VS DevShell 路径不存在: ${vsDevShell}` });
+        nextActions.push('--vs-dev-shell 指定的路径不存在，请检查路径是否正确');
     }
 
     return { diagnostics, nextActions };
+}
+
+function buildQmakeHint(options: CliOptions, mode: string, arch: string): string {
+    const args: string[] = ['qmake'];
+    if (options.mode !== null) { args.push(`--mode ${mode}`); }
+    if (options.arch !== null) { args.push(`--arch ${arch}`); }
+    return `先执行 ${args.join(' ')} 生成 Makefile，再重新调用 run`;
 }
 
 async function detectAndCache(workspace: string, options: CliOptions): Promise<LocalCache> {
@@ -136,9 +157,15 @@ async function detectAndCache(workspace: string, options: CliOptions): Promise<L
         detected: {
             qt: qtPath ? {
                 path: qtPath,
-                qmake: path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake')
+                qmake: path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake'),
+                version: env.qt?.version || undefined,
+                compiler: env.qt?.compiler || undefined
             } : null,
-            vs: env.vs?.devShellPath ? { devShellPath: env.vs.devShellPath } : null,
+            vs: env.vs?.devShellPath ? {
+                devShellPath: env.vs.devShellPath,
+                version: env.vs.version || undefined,
+                edition: env.vs.edition || undefined
+            } : null,
             jom: env.jom,
             projects: scanProFiles(workspace).map(rel => path.join(workspace, rel))
         }
@@ -172,8 +199,15 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const arch = options.arch || settings.arch || 'x86';
         const qtPath = options.qtPath || settings.qtPath || detected.detected.qt?.path || '';
         const vsDevShell = options.vsDevShell || settings.vsDevShellPath || detected.detected.vs?.devShellPath || '';
-        const qmakeTarget = options.target || settings.qmakeTarget || '';
-        const diagnostics = [];
+        const target = options.target || settings.target || '';
+        const diagnostics: CliResult['diagnostics'] = [];
+        const statusHasSettings = fs.existsSync(settingsFilePath(workspace));
+        if ((!options.mode && (!statusHasSettings || !settings.mode)) || (!options.arch && (!statusHasSettings || !settings.arch))) {
+            diagnostics.push({ level: 'info', message: `使用默认构建配置 (${mode}/${arch})，如需修改请运行 compilot qt init --mode <mode> --arch <arch>`, hint: 'compilot qt init --json --brief' });
+        }
+        if (!options.target && !settings.target) {
+            diagnostics.push({ level: 'info', message: '未配置 target，将使用 .pro 文件中的 TARGET 值。如需覆盖请运行 compilot qt init --target <name>', hint: 'compilot qt init --target <name> --json --brief' });
+        }
         const nextActions: string[] = [];
 
         if (candidates.length > 1 && !project) {
@@ -200,19 +234,25 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             candidates,
             diagnostics,
             nextActions,
-            resolved: buildResolvedConfig(mode, arch, qtPath, vsDevShell, qmakeTarget),
+            resolved: buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, detected.detected.qt?.version, detected.detected.vs?.version),
             rccProjectPath: rccPath || ''
         } as CliResult;
     }
 
     const projectResult = resolveProject(workspace, options, settings);
     if (projectResult.error && options.action !== 'init') {
+        const errMode = options.mode || settings.mode || 'debug';
+        const errArch = options.arch || settings.arch || 'x86';
+        const errQtPath = options.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
+        const errVsDevShell = options.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
+        const errQmakeTarget = options.target || settings.target || '';
+        result.resolved = buildResolvedConfig(errMode, errArch, errQtPath, errVsDevShell, errQmakeTarget, cache?.detected.qt?.version, cache?.detected.vs?.version);
         result.candidates = listProjectCandidates(workspace);
         result.diagnostics.push({ level: 'error', message: projectResult.error });
         if (result.candidates.length > 1) {
             result.nextActions.push('从 candidates 中选择一个 .pro 文件，并使用 --project <path> 重试');
         } else if (result.candidates.length === 1) {
-            result.nextActions.push(`使用 --project "${result.candidates[0]}" 重试，或先运行 init --execute 保存默认项目`);
+            result.nextActions.push(`使用 --project "${result.candidates[0]}" 重试，或先运行 init 保存默认项目`);
         } else {
             result.nextActions.push('确认 workspace 正确，或使用 --project <path-to-pro> 指定项目');
         }
@@ -224,31 +264,93 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const arch = options.arch || settings.arch || 'x86';
     const qtPath = options.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
     const vsDevShell = options.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
-    const qmakeTarget = options.target || settings.qmakeTarget || '';
+    const target = options.target || settings.target || '';
     const jomPath = cache?.detected.jom || '';
-    const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, qmakeTarget);
+    const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, cache?.detected.qt?.version, cache?.detected.vs?.version);
+
+    // 检查 mode/arch/target 是否来自未配置的默认值
+    const hasSettingsFile = fs.existsSync(settingsFilePath(workspace));
+    const modeIsDefault = !options.mode && (!hasSettingsFile || !settings.mode);
+    const archIsDefault = !options.arch && (!hasSettingsFile || !settings.arch);
+    const targetIsDefault = !options.target && !settings.target;
+    const defaultsDiagnostics: CliResult['diagnostics'] = [];
+    if (modeIsDefault || archIsDefault) {
+        defaultsDiagnostics.push({
+            level: 'info',
+            message: `使用默认构建配置 (${mode}/${arch})，如需修改请运行 compilot qt init --mode <mode> --arch <arch>`,
+            hint: 'compilot qt init --json --brief'
+        });
+    }
+    if (targetIsDefault) {
+        defaultsDiagnostics.push({
+            level: 'info',
+            message: '未配置 target，将使用 .pro 文件中的 TARGET 值。如需覆盖请运行 compilot qt init --target <name>',
+            hint: 'compilot qt init --target <name> --json --brief'
+        });
+    }
 
     if (options.action === 'init') {
         if (options.executionMode === 'execute') {
             ensureLocalStateDir(workspace);
             ensureCompilotGitignored(workspace);
             const detected = await detectAndCache(workspace, options);
+            const env = await detectEnv(options.qtPath || undefined, options.vsDevShell || undefined).catch(() => ({
+                vs: null, qt: null, qtCandidates: [] as Array<{path: string; version: string; compiler: string}>, jom: null as string | null
+            }));
             writeLocalCache(workspace, detected);
+            let effectiveTarget = target;
             if (project) {
+                // 如果用户没指定 target，从 .pro 文件探测
+                if (!effectiveTarget) {
+                    const { parseProFile } = await import('./projectScanner');
+                    const proInfo = parseProFile(project);
+                    if (proInfo) { effectiveTarget = proInfo.target; }
+                }
                 const updatedSettings: QtPilotSettings = {
                     ...settings,
                     mode,
                     arch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
                     vsDevShellPath: vsDevShell || detected.detected.vs?.devShellPath || '',
-                    qmakeTarget
+                    target: effectiveTarget
                 };
                 saveSettings(workspace, updatedSettings);
             }
-            return { ...result, ok: true, project, diagnostics: [], resolved };
+            const effectiveQtPath = qtPath || detected.detected.qt?.path || '';
+            const effectiveVsDevShell = vsDevShell || detected.detected.vs?.devShellPath || '';
+            const initDiagnostics: CliResult['diagnostics'] = [
+                { level: 'info', message: `已保存配置: mode=${mode}, arch=${arch}, target=${effectiveTarget || '(未探测到)'}`, hint: '如需修改，请重新运行 compilot qt init --mode <mode> --arch <arch> --target <name>' }
+            ];
+            if (effectiveQtPath) {
+                const qtMsg = `Qt 路径: ${effectiveQtPath}${detected.detected.qt?.version ? ' (v' + detected.detected.qt.version + ')' : ''}`;
+                if (env.qtCandidates.length > 1) {
+                    const others = env.qtCandidates.filter(c => c.path !== effectiveQtPath).map(c => `${c.path} (v${c.version})`).join(', ');
+                    initDiagnostics.push({ level: 'info', message: qtMsg, hint: `检测到 ${env.qtCandidates.length} 个 Qt 安装，当前使用第一个。其他: ${others}。如需切换请运行 compilot qt init --qt-path <path>` });
+                } else {
+                    initDiagnostics.push({ level: 'info', message: qtMsg, hint: '如不正确，请运行 compilot qt init --qt-path <path>' });
+                }
+            } else {
+                initDiagnostics.push({ level: 'warning', message: '未检测到 Qt 路径，请手动指定 --qt-path', hint: 'compilot qt init --qt-path C:/Qt/5.15.2/msvc2019 --json --brief' });
+            }
+            if (process.platform === 'win32') {
+                if (effectiveVsDevShell) {
+                    initDiagnostics.push({ level: 'info', message: `VS DevShell: ${effectiveVsDevShell}${detected.detected.vs?.version ? ' (' + detected.detected.vs.version + ')' : ''}`, hint: '如不正确，请运行 compilot qt init --vs-dev-shell <path>' });
+                } else {
+                    initDiagnostics.push({ level: 'warning', message: '未检测到 Visual Studio，请手动指定 --vs-dev-shell', hint: 'compilot qt init --vs-dev-shell <Launch-VsDevShell.ps1 路径> --json --brief' });
+                }
+            }
+            // 构建工具检测
+            const buildTool = process.platform === 'win32' ? 'jom' : 'make';
+            if (detected.detected.jom) {
+                initDiagnostics.push({ level: 'info', message: `构建工具: ${buildTool} (${detected.detected.jom})` });
+            } else {
+                initDiagnostics.push({ level: 'warning', message: `未检测到 ${buildTool}，编译将无法执行` });
+            }
+            const initResolved = buildResolvedConfig(mode, arch, effectiveQtPath, effectiveVsDevShell, effectiveTarget, detected.detected.qt?.version, detected.detected.vs?.version);
+            return { ...result, ok: true, project, diagnostics: initDiagnostics, resolved: initResolved };
         }
 
-        // dry-run: preview what init --execute would do
+        // dry-run: preview what init would do
         const detected = await detectAndCache(workspace, options);
         const previewDiagnostics: CliResult['diagnostics'] = [];
         const previewNextActions: string[] = [];
@@ -278,7 +380,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             previewDiagnostics.push({ level: 'warning', message: 'VS DevShell 未检测到，可使用 --vs-dev-shell 指定' });
         }
 
-        previewNextActions.push('确认无误后运行 init --execute --json 写入本地配置');
+        previewNextActions.push('确认无误后运行 init --json 写入本地配置');
 
         return {
             ...result,
@@ -299,7 +401,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         arch,
         qtPath,
         vsDevShell,
-        qmakeTarget,
+        target,
         jomPath
     });
     let commands: string[] = [];
@@ -338,7 +440,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 commands = [killCmd, ...rccCmds, ...buildCmds, runCmd];
             } else {
                 // Makefile not yet generated — can't resolve executable path
-                const environmentGuidance = buildEnvironmentGuidance(options.action, qtPath, vsDevShell);
+                const environmentGuidance = buildEnvironmentGuidance(options.action, qtPath, vsDevShell, options);
                 const fallbackExeName = path.basename(project, '.pro');
                 const fallbackKillCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(fallbackExeName);
                 const fallbackCmds = [fallbackKillCmd, ...shellBuilder.buildCommands(buildConfig).commands];
@@ -349,12 +451,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                     commands: fallbackCmds,
                     shellCommand: fallbackCmds.join(' && '),
                     diagnostics: [
+                        ...defaultsDiagnostics,
                         ...environmentGuidance.diagnostics,
                         { level: 'warning', message: '无法解析可执行文件路径（Makefile 可能尚未生成），仅返回 build 命令' }
                     ],
                     nextActions: [
                         ...environmentGuidance.nextActions,
-                        '先执行 qmake 生成 Makefile，再重新调用 run'
+                        buildQmakeHint(options, mode, arch)
                     ],
                     resolved
                 };
@@ -393,7 +496,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         }
     }
 
-    const environmentGuidance = buildEnvironmentGuidance(options.action, qtPath, vsDevShell);
+    const environmentGuidance = buildEnvironmentGuidance(options.action, qtPath, vsDevShell, options);
 
     return {
         ...result,
@@ -401,7 +504,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         project,
         commands,
         shellCommand: commands.length > 0 ? commands.join(' && ') : '',
-        diagnostics: environmentGuidance.diagnostics,
+        diagnostics: [...defaultsDiagnostics, ...environmentGuidance.diagnostics],
         nextActions: environmentGuidance.nextActions,
         resolved
     };
