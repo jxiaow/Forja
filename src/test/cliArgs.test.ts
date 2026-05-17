@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCliArgs } from '../qt/cli/args';
 
-test('parseCliArgs defaults build to dryRun and current workspace marker', () => {
+test('parseCliArgs defaults build to execute mode', () => {
     const parsed = parseCliArgs(['build']);
 
     assert.equal(parsed.action, 'build');
-    assert.equal(parsed.executionMode, 'dryRun');
+    assert.equal(parsed.executionMode, 'execute');
     assert.equal(parsed.mode, null);
     assert.equal(parsed.arch, null);
     assert.equal(parsed.workspace, null);
@@ -46,11 +46,24 @@ test('parseCliArgs accepts execute json and typed options', () => {
     assert.equal(parsed.target, 'demo');
 });
 
-test('parseCliArgs rejects dry-run and execute together', () => {
-    assert.throws(
-        () => parseCliArgs(['build', '--dry-run', '--execute']),
-        /不能同时使用 --dry-run 和 --execute/
-    );
+test('parseCliArgs --plan switches to dryRun mode', () => {
+    const parsed = parseCliArgs(['build', '--plan', '--json']);
+
+    assert.equal(parsed.action, 'build');
+    assert.equal(parsed.executionMode, 'dryRun');
+    assert.equal(parsed.json, true);
+});
+
+test('parseCliArgs --dry-run is accepted as alias for --plan', () => {
+    const parsed = parseCliArgs(['build', '--dry-run']);
+
+    assert.equal(parsed.executionMode, 'dryRun');
+});
+
+test('parseCliArgs --execute is accepted as no-op (default is already execute)', () => {
+    const parsed = parseCliArgs(['build', '--execute']);
+
+    assert.equal(parsed.executionMode, 'execute');
 });
 
 test('parseCliArgs rejects unknown action', () => {
@@ -72,7 +85,7 @@ test('parseCliArgs accepts status action', () => {
 
     assert.equal(parsed.action, 'status');
     assert.equal(parsed.json, true);
-    assert.equal(parsed.executionMode, 'dryRun');
+    assert.equal(parsed.executionMode, 'execute');
 });
 
 test('parseCliArgs defaults to status when only flags are provided', () => {
@@ -80,7 +93,7 @@ test('parseCliArgs defaults to status when only flags are provided', () => {
 
     assert.equal(parsed.action, 'status');
     assert.equal(parsed.json, true);
-    assert.equal(parsed.executionMode, 'dryRun');
+    assert.equal(parsed.executionMode, 'execute');
 });
 
 test('parseCliArgs accepts clean action', () => {

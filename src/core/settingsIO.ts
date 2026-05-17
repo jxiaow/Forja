@@ -13,7 +13,7 @@ export interface QtPilotSettings {
     arch: 'x86' | 'x64';
     mode: 'debug' | 'release';
     scanExcludeDirs: string[];
-    qmakeTarget: string;
+    target: string;
     cStandard: string;
     cppStandard: string;
     manualProPath: string;
@@ -21,6 +21,7 @@ export interface QtPilotSettings {
     qmakeReminderEnabled: boolean;
     rccProjectPath: string;
     customCommands: { name: string; command: string }[];
+    executionLocation: 'local' | 'remote';
 }
 
 export const DEFAULT_SETTINGS: Readonly<QtPilotSettings> = {
@@ -32,14 +33,15 @@ export const DEFAULT_SETTINGS: Readonly<QtPilotSettings> = {
     arch: 'x86',
     mode: 'debug',
     scanExcludeDirs: [],
-    qmakeTarget: '',
+    target: '',
     cStandard: 'c11',
     cppStandard: 'c++11',
     manualProPath: '',
     fileSyncPromptEnabled: true,
     qmakeReminderEnabled: true,
     rccProjectPath: '',
-    customCommands: []
+    customCommands: [],
+    executionLocation: 'local'
 };
 
 export function settingsFilePath(workspace: string): string {
@@ -52,6 +54,8 @@ export function loadSettings(workspace: string): QtPilotSettings {
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            // 迁移: qmakeTarget → target
+            if (raw.qmakeTarget && !raw.target) { raw.target = raw.qmakeTarget; delete raw.qmakeTarget; }
             return { ...DEFAULT_SETTINGS, ...raw };
         }
     } catch {}
@@ -60,10 +64,14 @@ export function loadSettings(workspace: string): QtPilotSettings {
 
 /** 将配置写入磁盘 */
 export function saveSettings(workspace: string, settings: QtPilotSettings): void {
-    const filePath = settingsFilePath(workspace);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+    try {
+        const filePath = settingsFilePath(workspace);
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(filePath, JSON.stringify(settings, null, 4) + '\n', 'utf8');
+    } catch (e) {
+        console.warn(`[compilot] saveSettings 失败: ${e instanceof Error ? e.message : e}`);
     }
-    fs.writeFileSync(filePath, JSON.stringify(settings, null, 4) + '\n', 'utf8');
 }

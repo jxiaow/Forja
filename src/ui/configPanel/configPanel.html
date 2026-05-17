@@ -380,7 +380,7 @@ details[open] .arrow { transform: rotate(90deg); }
     </div>
     <div class="field">
       <label>QMake TARGET</label>
-      <input id="qmakeTarget" value="{{effectiveQmakeTarget}}" data-default-qmake-target="{{defaultQmakeTarget}}" data-saved-qmake-target="{{savedQmakeTarget}}" placeholder="留空使用 .pro 默认值" onchange="saveQmakeTarget()" />
+      <input id="target" value="{{effectiveTarget}}" data-default-qmake-target="{{defaultTarget}}" data-saved-qmake-target="{{savedTarget}}" placeholder="留空使用 .pro 默认值" onchange="saveTarget()" />
     </div>
     <div class="field">
       <label>排除目录</label>
@@ -611,6 +611,92 @@ details[open] .arrow { transform: rotate(90deg); }
       <div class="hint">回车添加，点击标签删除</div>
     </div>
   </div>
+
+  <!-- Branch Sync -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">分支同步</span>
+      <span class="card-badge badge-muted">团队</span>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-copy">
+        <div class="toggle-title">编译前同步分支</div>
+        <div class="hint">确保远程各仓库分支和本地一致</div>
+      </div>
+      <input id="branchSyncEnabled" type="checkbox" {{chkBranchSyncEnabled}} onchange="saveBranchSyncEnabled()" />
+    </div>
+    <div id="branchSyncPinnedSection" style="margin-top:10px;">
+      <label>固定分支</label>
+      <div id="pinnedList"></div>
+      <div class="input-row" style="margin-top:6px;">
+        <input id="pinnedRepo" placeholder="仓库名" style="flex:1;" />
+        <input id="pinnedBranch" placeholder="分支名" style="flex:1;" />
+        <button class="btn btn-sm" onclick="addPinned()">添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Build Order -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">编译顺序</span>
+      <span class="card-badge badge-muted">团队</span>
+    </div>
+    <div class="hint" style="margin-bottom:8px;">多项目时配置编译依赖顺序（可选）</div>
+    <div id="buildOrderList"></div>
+    <div class="input-row" style="margin-top:6px;">
+      <input id="buildOrderWorkspace" placeholder="./core-lib" style="flex:2;" />
+      <select id="buildOrderType" style="flex:1;">
+        <option value="qt">Qt</option>
+        <option value="sdk">SDK</option>
+      </select>
+      <button class="btn btn-sm" onclick="addBuildOrderEntry()">添加</button>
+    </div>
+    <div id="buildOrderError" class="hint" style="color:#F59E0B;display:none;"></div>
+  </div>
+  </div>
+
+</div>
+
+<!-- ═══════════ Section: 远程 ═══════════ -->
+<div class="section-header collapsed" onclick="toggleSection(this)">
+  <span class="section-arrow">▼</span>
+  <span class="section-title">远程</span>
+</div>
+<div id="tab-remote" class="section-body">
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">部署配置</span>
+      <span class="card-badge badge-muted">可选</span>
+    </div>
+    <div class="hint" style="margin-bottom:10px;">仅跨机器部署时需要配置。单机模式（编译机即运行机）无需此配置。</div>
+    <div class="field">
+      <label>部署机</label>
+      <select id="deployServerSelect" onchange="saveDeployServer()">
+        <option value="">— 不配置（单机模式）—</option>
+        {{deployServerOptions}}
+      </select>
+    </div>
+    <div class="field">
+      <label>启动命令</label>
+      <input id="launchCommand" value="{{launchCommand}}" placeholder="./myapp" onblur="saveLaunchCommand()" />
+    </div>
+    <div class="field">
+      <label>启动模式</label>
+      <select id="launchMode" onchange="saveLaunchMode()">
+        <option value="bg" {{selLaunchBg}}>后台 (nohup)</option>
+        <option value="fg" {{selLaunchFg}}>前台</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">连接测试</span>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="remoteTestConnection()">测试远程连接</button>
+    <div id="remoteTestResult" style="margin-top:8px;"></div>
   </div>
 
 </div>
@@ -620,6 +706,10 @@ details[open] .arrow { transform: rotate(90deg); }
 
 <script>
 const vscode = acquireVsCodeApi();
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 // ── Section toggle ──
 function toggleSection(header) {
@@ -673,17 +763,17 @@ function saveExcludeDirs() {
   const tags = Array.from(document.querySelectorAll('#scanExcludeDirsWrap .tag-item')).map(el => el.dataset.value);
   vscode.postMessage({ command: 'saveExcludeDirs', dirs: tags });
 }
-let lastSavedQmakeTarget = null;
-function saveQmakeTarget() {
-  const input = document.getElementById('qmakeTarget');
+let lastSavedTarget = null;
+function saveTarget() {
+  const input = document.getElementById('target');
   const value = input.value.trim();
-  const defaultTarget = input.dataset.defaultQmakeTarget || '';
+  const defaultTarget = input.dataset.defaultTarget || '';
   const savedValue = value === defaultTarget ? '' : value;
-  if (lastSavedQmakeTarget === null) { lastSavedQmakeTarget = input.dataset.savedQmakeTarget || ''; }
-  if (savedValue === lastSavedQmakeTarget) { return; }
-  lastSavedQmakeTarget = savedValue;
-  input.dataset.savedQmakeTarget = savedValue;
-  vscode.postMessage({ command: 'saveQmakeTarget', value: savedValue });
+  if (lastSavedTarget === null) { lastSavedTarget = input.dataset.savedTarget || ''; }
+  if (savedValue === lastSavedTarget) { return; }
+  lastSavedTarget = savedValue;
+  input.dataset.savedTarget = savedValue;
+  vscode.postMessage({ command: 'saveTarget', value: savedValue });
 }
 function saveFileSyncPromptEnabled() { vscode.postMessage({ command: 'saveFileSyncPromptEnabled', value: document.getElementById('fileSyncPromptEnabled').checked }); }
 function saveQmakeReminderEnabled() { vscode.postMessage({ command: 'saveQmakeReminderEnabled', value: document.getElementById('qmakeReminderEnabled').checked }); }
@@ -840,7 +930,7 @@ window.addEventListener('message', e => {
     vscode.postMessage({ command: '_noop' }); // keep context
     const reveal = document.createElement('div');
     reveal.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:10px 12px;background:var(--vscode-editor-background);border-bottom:1px solid var(--vscode-panel-border);z-index:100;font-size:13px;display:flex;align-items:center;gap:8px;';
-    reveal.innerHTML = '<span style="flex:1;word-break:break-all;font-family:monospace;">' + d.password.replace(/</g,'&lt;') + '</span><button class="btn btn-sm" onclick="this.parentElement.remove()">关闭</button>';
+    reveal.innerHTML = '<span style="flex:1;word-break:break-all;font-family:monospace;">' + escapeHtml(d.password) + '</span><button class="btn btn-sm" onclick="this.parentElement.remove()">关闭</button>';
     document.body.prepend(reveal);
   } else if (d.command === 'serversUpdated') {
     const select = document.getElementById('syncServerSelect');
@@ -990,6 +1080,130 @@ window.addEventListener('blur', () => {
     _showAddMode();
   }
 })();
+
+// ── Branch Sync ──
+function saveBranchSyncEnabled() {
+  vscode.postMessage({ command: 'saveBranchSyncEnabled', value: document.getElementById('branchSyncEnabled').checked });
+}
+function addPinned() {
+  const repo = document.getElementById('pinnedRepo').value.trim();
+  const branch = document.getElementById('pinnedBranch').value.trim();
+  if (!repo || !branch) return;
+  _addPinnedItem(repo, branch);
+  document.getElementById('pinnedRepo').value = '';
+  document.getElementById('pinnedBranch').value = '';
+  _savePinnedList();
+}
+function _addPinnedItem(repo, branch) {
+  const list = document.getElementById('pinnedList');
+  const item = document.createElement('div');
+  item.className = 'input-row';
+  item.style.marginBottom = '4px';
+  item.dataset.repo = repo;
+  item.dataset.branch = branch;
+  item.innerHTML = '<span style="flex:1;font-size:12px;">' + escapeHtml(repo) + ' → ' + escapeHtml(branch) + '</span><button class="btn btn-sm" onclick="this.parentElement.remove();_savePinnedList()">×</button>';
+  list.appendChild(item);
+}
+function _savePinnedList() {
+  const items = document.querySelectorAll('#pinnedList [data-repo]');
+  const pinned = {};
+  items.forEach(el => { pinned[el.dataset.repo] = el.dataset.branch; });
+  vscode.postMessage({ command: 'saveBranchSyncPinned', value: pinned });
+}
+
+// ── Build Order ──
+function addBuildOrderEntry() {
+  const ws = document.getElementById('buildOrderWorkspace').value.trim();
+  const type = document.getElementById('buildOrderType').value;
+  if (!ws) return;
+  // 路径校验
+  if (ws.includes('..')) {
+    document.getElementById('buildOrderError').textContent = '路径不允许包含 ".."';
+    document.getElementById('buildOrderError').style.display = '';
+    return;
+  }
+  document.getElementById('buildOrderError').style.display = 'none';
+  _addBuildOrderItem(ws, type);
+  document.getElementById('buildOrderWorkspace').value = '';
+  _saveBuildOrder();
+}
+function _addBuildOrderItem(ws, type) {
+  const list = document.getElementById('buildOrderList');
+  const idx = list.children.length + 1;
+  const item = document.createElement('div');
+  item.className = 'input-row';
+  item.style.marginBottom = '4px';
+  item.dataset.workspace = ws;
+  item.dataset.type = type;
+  item.innerHTML = '<span style="flex:1;font-size:12px;">' + idx + '. ' + escapeHtml(ws) + ' (' + escapeHtml(type.toUpperCase()) + ')</span>' +
+    '<button class="btn btn-sm" onclick="_moveBuildOrder(this,-1)">↑</button>' +
+    '<button class="btn btn-sm" onclick="_moveBuildOrder(this,1)">↓</button>' +
+    '<button class="btn btn-sm" onclick="this.parentElement.remove();_renumberBuildOrder();_saveBuildOrder()">×</button>';
+  list.appendChild(item);
+}
+function _moveBuildOrder(btn, dir) {
+  const item = btn.parentElement;
+  const list = item.parentElement;
+  const sibling = dir < 0 ? item.previousElementSibling : item.nextElementSibling;
+  if (!sibling) return;
+  if (dir < 0) { list.insertBefore(item, sibling); }
+  else { list.insertBefore(sibling, item); }
+  _renumberBuildOrder();
+  _saveBuildOrder();
+}
+function _renumberBuildOrder() {
+  const items = document.querySelectorAll('#buildOrderList [data-workspace]');
+  items.forEach((el, i) => {
+    const span = el.querySelector('span');
+    span.textContent = (i + 1) + '. ' + el.dataset.workspace + ' (' + el.dataset.type.toUpperCase() + ')';
+  });
+}
+function _saveBuildOrder() {
+  const items = document.querySelectorAll('#buildOrderList [data-workspace]');
+  const order = Array.from(items).map(el => ({ workspace: el.dataset.workspace, type: el.dataset.type }));
+  vscode.postMessage({ command: 'saveBuildOrder', value: order });
+}
+
+// ── Remote Deploy Config ──
+function saveDeployServer() {
+  vscode.postMessage({ command: 'saveDeployServer', value: document.getElementById('deployServerSelect').value });
+}
+function saveLaunchCommand() {
+  vscode.postMessage({ command: 'saveLaunchCommand', value: document.getElementById('launchCommand').value.trim() });
+}
+function saveLaunchMode() {
+  vscode.postMessage({ command: 'saveLaunchMode', value: document.getElementById('launchMode').value });
+}
+function remoteTestConnection() {
+  document.getElementById('remoteTestResult').innerHTML = '<span class="spin">↻</span> 测试中...';
+  vscode.postMessage({ command: 'remoteTestConnection' });
+}
+
+// Handle remote test result
+window.addEventListener('message', e => {
+  const d = e.data;
+  if (d.command === 'remoteTestResult') {
+    const el = document.getElementById('remoteTestResult');
+    if (d.checks) {
+      el.innerHTML = d.checks.map(c => {
+        const icon = c.ok ? '✓' : '✗';
+        const color = c.ok ? '#22C55E' : '#F59E0B';
+        const detail = c.detail ? ' — ' + escapeHtml(c.detail) : '';
+        return '<div style="font-size:12px;color:' + color + ';">' + icon + ' ' + escapeHtml(c.name) + detail + '</div>';
+      }).join('');
+    } else {
+      el.innerHTML = '<div style="font-size:12px;color:#F59E0B;">✗ ' + escapeHtml(d.error || '测试失败') + '</div>';
+    }
+  } else if (d.command === 'buildOrderSaved') {
+    const errEl = document.getElementById('buildOrderError');
+    if (!d.ok) {
+      errEl.textContent = d.error || '保存失败';
+      errEl.style.display = '';
+    } else {
+      errEl.style.display = 'none';
+    }
+  }
+});
 
 // 初始化
 initCustomSelects();

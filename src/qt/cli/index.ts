@@ -2,7 +2,7 @@ import { parseCliArgs, isHelpRequest, getHelpText } from './args';
 import { CliResult } from './types';
 import { createActionPlan } from '../shared/qtCore';
 import { runCliResult } from '../shared/commandRunner';
-import { executeSyncCli } from '../sync/syncCli';
+import { executeSyncCli } from '../../core/syncCli';
 import { readRunState, isProcessRunning, runLogPath } from '../shared/localState';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -13,6 +13,8 @@ import * as fs from 'fs';
  */
 function compactResult(result: CliResult, brief?: boolean): Record<string, unknown> {
     const out: Record<string, unknown> = { ok: result.ok, action: result.action };
+    const target = result.resolved?.target || null;
+    if (target) { out.target = target; }
 
     if (brief) {
         if (result.diagnostics.length > 0) { out.diagnostics = result.diagnostics; }
@@ -21,10 +23,13 @@ function compactResult(result: CliResult, brief?: boolean): Record<string, unkno
         if (result.errors.length > 0) { out.errors = result.errors; }
         if (result.logFile) { out.logFile = result.logFile; }
 
-        // Successful detach launches only need ok/action/diagnostics/exitCode/logFile
+        // Successful detach launches only need ok/action/diagnostics/exitCode/logFile + resolved
         const isDetachSuccess = result.ok && result.logFile && result.exitCode === 0
             && ['run', 'build', 'clean'].includes(result.action);
-        if (isDetachSuccess) { return out; }
+        if (isDetachSuccess) {
+            if (result.resolved) { out.resolved = { mode: result.resolved.mode, arch: result.resolved.arch }; }
+            return out;
+        }
 
         if (result.project) {
             out.project = path.relative(result.workspace, result.project) || result.project;
@@ -39,7 +44,7 @@ function compactResult(result: CliResult, brief?: boolean): Record<string, unkno
             if (result.resolved.arch) { r.arch = result.resolved.arch; }
             if (result.resolved.qtPath) { r.qtPath = result.resolved.qtPath; }
             if (result.resolved.vsDevShell) { r.vsDevShell = result.resolved.vsDevShell; }
-            if (result.resolved.qmakeTarget) { r.qmakeTarget = result.resolved.qmakeTarget; }
+            if (result.resolved.target) { r.target = result.resolved.target; }
             if (Object.keys(r).length > 0) { out.resolved = r; }
         }
         return out;
@@ -72,7 +77,7 @@ function textOutput(result: CliResult): string {
     const status = result.ok ? '成功' : '失败';
     const lines = [
         `Qt Pilot ${result.action} ${status}`,
-        `模式: ${result.mode}`,
+        `执行模式: ${result.mode}`,
         `工作区: ${result.workspace}`
     ];
     if (result.project) {
@@ -97,6 +102,12 @@ function textOutput(result: CliResult): string {
         lines.push('候选项目:');
         for (const candidate of result.candidates) {
             lines.push(`  ${candidate}`);
+        }
+    }
+    if (result.errors.length > 0) {
+        lines.push('错误:');
+        for (const err of result.errors) {
+            lines.push(`  ${err}`);
         }
     }
     for (const diagnostic of result.diagnostics) {
@@ -128,6 +139,7 @@ async function main(argv: string[]): Promise<void> {
         // logs 查看运行日志
         if (options.action === 'logs') {
             const workspace = path.resolve(options.workspace || process.cwd());
+
             const state = readRunState(workspace);
             const logFile = runLogPath(workspace);
 
@@ -168,9 +180,9 @@ async function main(argv: string[]): Promise<void> {
         if (options.action === 'sync') {
             const workspace = options.workspace || process.cwd();
             if (options.executionMode === 'dryRun') {
-                const output = { ok: true, action: 'sync', mode: 'dryRun', message: '使用 --execute 执行同步' };
+                const output = { ok: true, action: 'sync', mode: 'dryRun', message: '去掉 --plan 执行同步' };
                 if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
-                else { console.log('Sync (dry-run): 使用 --execute 执行同步'); }
+                else { console.log('Sync (plan): 去掉 --plan 执行同步'); }
                 return;
             }
             const result = await executeSyncCli(workspace, options.server || undefined);

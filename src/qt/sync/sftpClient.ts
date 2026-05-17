@@ -6,21 +6,13 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cp from 'child_process';
 import { createLogger } from '../../core/logger';
-import { filterNeedsSync, markSyncedBatch } from './syncState';
-import { ServerConfig } from './serverStore';
+import { filterNeedsSync, markSyncedBatch } from '../../core/syncState';
+import { ServerConfig } from '../../core/serverStore';
 import { ResolvedSyncConfig } from './resolver';
 import { scpUpload, ensureRemoteDir } from './transport';
 import { testConnection } from './transport';
 
 const logger = createLogger('SftpClient');
-
-// ── Re-exports（保持现有消费者不变） ──
-
-export { ServerConfig, ProjectSyncConfig } from './serverStore';
-export { readServers, readProjectSyncConfig, writeProjectSyncConfig, getServerByName, getServerById } from './serverStore';
-export { addServer, removeServer, updateServer, writeServers, updateProjectSyncField } from './serverStore';
-export { ResolvedSyncConfig, getResolvedConfig } from './resolver';
-export { testConnection, TestConnectionResult } from './transport';
 
 // ── 密码处理 ──
 

@@ -32,7 +32,9 @@ export interface CliResolvedConfig {
     arch: CliArch;
     qtPath: string;
     vsDevShell: string;
-    qmakeTarget: string;
+    target: string;
+    qtVersion?: string;
+    vsVersion?: string;
 }
 
 export interface CliResult {

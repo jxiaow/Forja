@@ -31,8 +31,9 @@ code --install-extension compilot-x.x.x.vsix
 
 | 按钮 | 说明 |
 |------|------|
-| `项目名 · Debug x86` | 点击打开操作菜单：切换模式/架构、执行构建、切换项目 |
-| `Run` | 构建并运行；构建中显示旋转图标；运行中变为 Stop |
+| `项目名 · Debug x86` | 点击打开操作菜单：切换模式/架构、执行构建、切换项目、切换执行位置 |
+| `项目名 · Debug x86 · 远程` | 远程模式时显示，Run 按钮触发远程部署流程 |
+| `Run` | 本地模式：构建并运行；远程模式：远程编译部署；构建中显示旋转图标 |
 | `Debug` | 构建并启动调试 |
 | `同步` | 远程同步启用时显示，点击上传变更文件 |
 
@@ -53,6 +54,9 @@ code --install-extension compilot-x.x.x.vsix
 | Compilot Qt: 用 Qt Designer 打开 | 打开 .ui 文件 |
 | Compilot Qt: 同步变更文件到远程 | SCP 上传变更 |
 | Compilot Qt: 测试远程连接 | 测试 SSH 连接 |
+| Compilot Remote: Run Deploy | 远程编译部署（完整流程） |
+| Compilot Remote: Restart | 远程重启程序（不重新编译） |
+| Compilot Remote: Show Logs | 显示远程部署日志 |
 | Compilot SDK: Build | 编译 SDK 项目 |
 | Compilot SDK: Rebuild | 重新编译 |
 | Compilot SDK: Clean | 清理 |
@@ -63,7 +67,45 @@ code --install-extension compilot-x.x.x.vsix
 
 - **概览**：项目名称、环境状态、C/C++ 标准、QMake TARGET、IntelliSense 生成
 - **环境**：VS DevShell 路径、Qt 路径、Designer 路径、Qt 源码路径
-- **同步**：服务器配置、远程路径、同步开关
+- **同步**：服务器配置、远程路径、同步开关、分支同步、构建顺序、部署配置
+
+## 远程编译部署
+
+适用于本地编辑、远程编译、远程运行的场景：
+
+1. 配置面板「同步」Tab 配置编译机服务器
+2. 状态栏操作菜单切换「执行位置」为「远程」
+3. 点击 Run 按钮触发完整远程部署流程
+4. 流程：branchSync → sync → baselineCheck → build → transfer → stop → launch
+
+操作菜单中的远程选项：
+
+| 选项 | 说明 |
+|------|------|
+| Restart（不重新编译） | 远程重启程序 |
+| 远程日志 | 打开远程部署输出面板 |
+| Stop Logs | 停止日志流 |
+| 完整模式（跳过快速模式） | 下次执行不使用快速模式 |
+
+### 部署配置文件
+
+```
+.compilot/
+├── sync-config.json   # 编译机选择、分支同步、构建顺序
+└── deploy.json        # 部署服务器、启动命令、停止命令
+```
+
+`deploy.json` 示例：
+```json
+{
+  "version": 1,
+  "server": "server-id",
+  "launch": {
+    "command": "./bin/MyApp",
+    "mode": "bg"
+  }
+}
+```
 
 ## 远程同步
 
@@ -74,7 +116,7 @@ code --install-extension compilot-x.x.x.vsix
 3. 点击状态栏「同步」按钮或命令面板执行同步
 4. 基于 git diff 识别变更，仅上传有变化的文件
 
-认证方式：SSH 密钥（默认）或密码（需 `sshpass`）。
+认证方式：SSH 密钥（默认）或密码（通过 SSH_ASKPASS 机制，无需 sshpass）。
 
 ## 配置项
 

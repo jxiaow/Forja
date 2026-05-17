@@ -13,7 +13,7 @@ export interface ConfigInputs {
     arch: CliArch;
     qtPath: string;
     vsDevShell: string;
-    qmakeTarget: string;
+    target: string;
     jomPath?: string;
 }
 
@@ -37,7 +37,7 @@ export function resolveBuildConfig(inputs: ConfigInputs): BuildConfig {
         proFile,
         arch: inputs.arch,
         mode: inputs.mode,
-        qmakeTarget: inputs.qmakeTarget,
+        target: inputs.target,
         jomPath: inputs.jomPath || ''
     };
 }
@@ -54,7 +54,7 @@ export function mergeConfigInputs(...sources: Partial<ConfigInputs>[]): ConfigIn
         arch: 'x86',
         qtPath: '',
         vsDevShell: '',
-        qmakeTarget: '',
+        target: '',
         jomPath: ''
     };
 
@@ -65,7 +65,7 @@ export function mergeConfigInputs(...sources: Partial<ConfigInputs>[]): ConfigIn
         if (source.arch) { result.arch = source.arch; }
         if (source.qtPath) { result.qtPath = source.qtPath; }
         if (source.vsDevShell) { result.vsDevShell = source.vsDevShell; }
-        if (source.qmakeTarget) { result.qmakeTarget = source.qmakeTarget; }
+        if (source.target) { result.target = source.target; }
         if (source.jomPath) { result.jomPath = source.jomPath; }
     }
 

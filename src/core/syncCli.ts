@@ -5,7 +5,8 @@
 import * as path from 'path';
 import * as cp from 'child_process';
 import { filterNeedsSync, markSyncedBatch } from './syncState';
-import { readServers, readProjectSyncConfig, getServerById, getServerByName, ServerConfig } from './serverStore';
+import { readProjectSyncConfig, getServerById, getServerByName, ServerConfig } from './serverStore';
+import { buildScpArgs, buildSshArgs, sshTarget, createAskpassEnv } from './ssh';
 
 export interface SyncResult {
     ok: boolean;
@@ -43,7 +44,7 @@ function getGitChangedFiles(workspaceRoot: string): Promise<string[]> {
 
 // ── 忽略判断 ──
 
-function isIgnored(relativePath: string, ignoreList: string[]): boolean {
+export function isIgnored(relativePath: string, ignoreList: string[]): boolean {
     const parts = relativePath.split(/[\\/]/);
     for (const pattern of ignoreList) {
         for (const part of parts) {
@@ -61,63 +62,57 @@ function isIgnored(relativePath: string, ignoreList: string[]): boolean {
 
 function scpUpload(server: ServerConfig, localFile: string, remoteFile: string): Promise<void> {
     return new Promise((resolve, reject) => {
-        const baseArgs: string[] = [];
-        if (server.authMode === 'key' && server.privateKeyPath) {
-            baseArgs.push('-i', server.privateKeyPath);
-        }
-        if (server.port !== 22) {
-            baseArgs.push('-P', String(server.port));
-        }
-        baseArgs.push('-o', 'StrictHostKeyChecking=no');
-        if (server.authMode === 'key') {
-            baseArgs.push('-o', 'BatchMode=yes');
-        }
+        const baseArgs = buildScpArgs(server);
+        const escapedRemote = remoteFile.replace(/'/g, "'\\''");
+        const dest = `${sshTarget(server)}:'${escapedRemote}'`;
+        const args = [...baseArgs, localFile, dest];
 
-        const dest = `${server.username}@${server.host}:${remoteFile}`;
+        const askpass = createAskpassEnv(
+            server.authMode === 'password' ? server.password : null, `sync-${process.pid}`
+        );
 
-        if (server.authMode === 'password' && server.password) {
-            const args = ['-p', server.password, 'scp', ...baseArgs, localFile, dest];
-            const proc = cp.spawn('sshpass', args, { windowsHide: true });
-            let stderr = '';
-            proc.stderr.on('data', (d) => { stderr += d.toString(); });
-            proc.on('close', (code) => { code === 0 ? resolve() : reject(new Error(stderr.trim() || `exit ${code}`)); });
-            proc.on('error', (e) => reject(new Error(`sshpass: ${e.message}`)));
-        } else {
-            const args = [...baseArgs, localFile, dest];
-            const proc = cp.spawn('scp', args, { windowsHide: true });
-            let stderr = '';
-            proc.stderr.on('data', (d) => { stderr += d.toString(); });
-            proc.on('close', (code) => { code === 0 ? resolve() : reject(new Error(stderr.trim() || `exit ${code}`)); });
-            proc.on('error', (e) => reject(new Error(`scp: ${e.message}`)));
-        }
+        const proc = cp.spawn('scp', args, {
+            windowsHide: true,
+            env: askpass?.env,
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+        let stderr = '';
+        proc.stderr.on('data', (d) => { stderr += d.toString(); });
+        proc.on('close', (code) => {
+            askpass?.cleanup();
+            code === 0 ? resolve() : reject(new Error(stderr.trim() || `exit ${code}`));
+        });
+        proc.on('error', (e) => {
+            askpass?.cleanup();
+            reject(new Error(`scp: ${e.message}`));
+        });
     });
 }
 
 function ensureRemoteDir(server: ServerConfig, remoteDir: string): Promise<void> {
-    return new Promise((resolve) => {
-        const sshArgs: string[] = [];
-        if (server.authMode === 'key' && server.privateKeyPath) {
-            sshArgs.push('-i', server.privateKeyPath);
-        }
-        sshArgs.push('-p', String(server.port));
-        sshArgs.push('-o', 'StrictHostKeyChecking=no');
-        if (server.authMode === 'key') {
-            sshArgs.push('-o', 'BatchMode=yes');
-        }
+    return new Promise((resolve, reject) => {
+        const sshArgs = buildSshArgs(server);
+        const escaped = remoteDir.replace(/'/g, "'\\''");
+        const cmd = `mkdir -p '${escaped}'`;
+        const args = [...sshArgs, sshTarget(server), cmd];
 
-        const cmd = `mkdir -p "${remoteDir}"`;
+        const askpass = createAskpassEnv(
+            server.authMode === 'password' ? server.password : null, `sync-${process.pid}`
+        );
 
-        if (server.authMode === 'password' && server.password) {
-            const args = ['-p', server.password, 'ssh', ...sshArgs, `${server.username}@${server.host}`, cmd];
-            const proc = cp.spawn('sshpass', args, { windowsHide: true });
-            proc.on('close', () => resolve());
-            proc.on('error', () => resolve());
-        } else {
-            const args = [...sshArgs, `${server.username}@${server.host}`, cmd];
-            const proc = cp.spawn('ssh', args, { windowsHide: true });
-            proc.on('close', () => resolve());
-            proc.on('error', () => resolve());
-        }
+        const proc = cp.spawn('ssh', args, {
+            windowsHide: true,
+            env: askpass?.env,
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+        let stderr = '';
+        proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+        proc.on('close', (code) => {
+            askpass?.cleanup();
+            if (code === 0) { resolve(); }
+            else { reject(new Error(`ensureRemoteDir 失败 (exit ${code}): ${stderr.trim() || 'mkdir -p failed'}`)); }
+        });
+        proc.on('error', (err) => { askpass?.cleanup(); reject(err); });
     });
 }
 

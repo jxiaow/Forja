@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -9,8 +9,13 @@ import {
     writeLocalCache
 } from '../qt/shared/localState';
 
+const _tmpDirs: string[] = [];
+after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
+
 function makeWorkspace(): string {
-    return fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-local-state-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-local-state-'));
+    _tmpDirs.push(ws);
+    return ws;
 }
 
 test('ensureCompilotGitignored appends .compilot/ once', () => {

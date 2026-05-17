@@ -10,7 +10,7 @@ const cfg: BuildConfig = {
     proFile: 'demo.pro',
     arch: 'x86',
     mode: 'debug',
-    qmakeTarget: '',
+    target: '',
     jomPath: ''
 };
 
