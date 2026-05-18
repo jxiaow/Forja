@@ -104,7 +104,7 @@ export function createAskpassEnv(password: string | null, suffix?: string): Askp
             [ASKPASS_ENV_VAR]: password
         };
 
-        const cleanup = () => { try { fs.unlinkSync(scriptPath); } catch {} };
+        const cleanup = () => { try { fs.unlinkSync(scriptPath); } catch { /* already removed */ } };
 
         return { env, cleanup };
     } catch (e) {

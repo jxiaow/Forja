@@ -2,11 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCliArgs } from '../qt/cli/args';
 
-test('parseCliArgs --brief sets brief flag', () => {
-    const opts = parseCliArgs(['build', '--brief', '--json']);
-    assert.equal(opts.brief, true);
-    assert.equal(opts.json, true);
-    assert.equal(opts.action, 'build');
+test('parseCliArgs --brief is removed (throws as unknown)', () => {
+    assert.throws(() => parseCliArgs(['build', '--brief', '--json']), /未知参数/);
 });
 
 test('parseCliArgs --detach sets detach flag', () => {

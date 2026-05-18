@@ -16,7 +16,6 @@ export interface CliOptions {
     target: string | null;
     server?: string | null;
     detach?: boolean;
-    brief?: boolean;
     saveLocal: boolean;
     json: boolean;
 }

@@ -10,7 +10,7 @@ import { ServerConfig } from '../../core/serverStore';
 
 // ── 公共 SSH/SCP 参数构建（从 core/ssh 导入并 re-export） ──
 
-import { buildSshArgs, buildScpArgs, sshTarget, SshArgsOptions, createAskpassEnv } from '../../core/ssh';
+import { buildSshArgs, buildScpArgs, sshTarget, createAskpassEnv } from '../../core/ssh';
 export { buildSshArgs, buildScpArgs, sshTarget, SshArgsOptions } from '../../core/ssh';
 
 // ── 公共操作 ──

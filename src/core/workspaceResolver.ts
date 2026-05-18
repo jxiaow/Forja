@@ -87,9 +87,9 @@ function _hasProFile(dir: string): boolean {
                             return true;
                         }
                     }
-                } catch {}
+                } catch { /* permission denied or broken link — skip */ }
             }
         }
-    } catch {}
+    } catch { /* dir unreadable — skip */ }
     return false;
 }

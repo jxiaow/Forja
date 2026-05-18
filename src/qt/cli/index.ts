@@ -9,66 +9,45 @@ import * as fs from 'fs';
 
 /**
  * Compact JSON output: omit empty/null/default fields to reduce token consumption.
- * brief mode: only ok, action, diagnostics, nextActions, logFile, exitCode.
+ * Only warning/error diagnostics are included; info-level is conveyed through resolved.
  */
-function compactResult(result: CliResult, brief?: boolean): Record<string, unknown> {
+function compactResult(result: CliResult): Record<string, unknown> {
     const out: Record<string, unknown> = { ok: result.ok, action: result.action };
-    const target = result.resolved?.target || null;
-    if (target) { out.target = target; }
 
-    if (brief) {
-        if (result.diagnostics.length > 0) { out.diagnostics = result.diagnostics; }
-        if (result.nextActions.length > 0) { out.nextActions = result.nextActions; }
-        if (result.exitCode !== null) { out.exitCode = result.exitCode; }
-        if (result.errors.length > 0) { out.errors = result.errors; }
-        if (result.logFile) { out.logFile = result.logFile; }
+    const diagnostics = result.diagnostics.filter(d => d.level !== 'info');
+    if (diagnostics.length > 0) { out.diagnostics = diagnostics; }
+    if (result.nextActions.length > 0) { out.nextActions = result.nextActions; }
+    if (result.exitCode !== null) { out.exitCode = result.exitCode; }
+    if (result.errors.length > 0) { out.errors = result.errors; }
+    if (result.logFile) { out.logFile = result.logFile; }
 
-        // Successful detach launches only need ok/action/diagnostics/exitCode/logFile + resolved
-        const isDetachSuccess = result.ok && result.logFile && result.exitCode === 0
-            && ['run', 'build', 'clean'].includes(result.action);
-        if (isDetachSuccess) {
-            if (result.resolved) { out.resolved = { mode: result.resolved.mode, arch: result.resolved.arch }; }
-            return out;
-        }
-
-        if (result.project) {
-            out.project = path.relative(result.workspace, result.project) || result.project;
-        }
-        if (result.candidates.length > 0) {
-            out.candidates = result.candidates.map(c => path.relative(result.workspace, c) || c);
-        }
-        if (result.rccProjectPath) { out.rccProjectPath = result.rccProjectPath; }
-        if (result.resolved) {
-            const r: Record<string, unknown> = {};
-            if (result.resolved.mode) { r.mode = result.resolved.mode; }
-            if (result.resolved.arch) { r.arch = result.resolved.arch; }
-            if (result.resolved.qtPath) { r.qtPath = result.resolved.qtPath; }
-            if (result.resolved.vsDevShell) { r.vsDevShell = result.resolved.vsDevShell; }
-            if (result.resolved.target) { r.target = result.resolved.target; }
-            if (Object.keys(r).length > 0) { out.resolved = r; }
-        }
+    // Successful detach launches: minimal output
+    const isDetachSuccess = result.ok && result.logFile && result.exitCode === 0
+        && ['run', 'build', 'clean'].includes(result.action);
+    if (isDetachSuccess) {
+        if (result.resolved) { out.resolved = { mode: result.resolved.mode, arch: result.resolved.arch }; }
         return out;
     }
 
-    if (result.mode !== 'dryRun') { out.mode = result.mode; }
     if (result.project) {
         out.project = path.relative(result.workspace, result.project) || result.project;
     }
     if (result.commands.length > 0) { out.commands = result.commands; }
     if (result.shellCommand) { out.shellCommand = result.shellCommand; }
-    if (result.candidates.length > 0) {
-        out.candidates = result.candidates.map(c => path.relative(result.workspace, c) || c);
-    }
-    if (result.diagnostics.length > 0) { out.diagnostics = result.diagnostics; }
-    if (result.nextActions.length > 0) { out.nextActions = result.nextActions; }
-    if (result.exitCode !== null) { out.exitCode = result.exitCode; }
     if (result.durationMs > 0) { out.durationMs = result.durationMs; }
-    if (result.errors.length > 0) { out.errors = result.errors; }
     if (result.stdout) { out.stdout = result.stdout; }
     if (result.stderr) { out.stderr = result.stderr; }
-    if (result.logFile) { out.logFile = result.logFile; }
-    if (result.resolved) { out.resolved = result.resolved; }
-    if (result.rccProjectPath) { out.rccProjectPath = result.rccProjectPath; }
+    if (result.resolved) {
+        const r: Record<string, unknown> = {};
+        if (result.resolved.mode) { r.mode = result.resolved.mode; }
+        if (result.resolved.arch) { r.arch = result.resolved.arch; }
+        if (result.resolved.qtPath) { r.qtPath = result.resolved.qtPath; }
+        if (result.resolved.vsDevShell) { r.vsDevShell = result.resolved.vsDevShell; }
+        if (result.resolved.target) { r.target = result.resolved.target; }
+        if (result.resolved.qtVersion) { r.qtVersion = result.resolved.qtVersion; }
+        if (result.resolved.vsVersion) { r.vsVersion = result.resolved.vsVersion; }
+        if (Object.keys(r).length > 0) { out.resolved = r; }
+    }
 
     return out;
 }
@@ -76,7 +55,7 @@ function compactResult(result: CliResult, brief?: boolean): Record<string, unkno
 function textOutput(result: CliResult): string {
     const status = result.ok ? '成功' : '失败';
     const lines = [
-        `Qt Pilot ${result.action} ${status}`,
+        `Compilot Qt ${result.action} ${status}`,
         `执行模式: ${result.mode}`,
         `工作区: ${result.workspace}`
     ];
@@ -111,10 +90,8 @@ function textOutput(result: CliResult): string {
         }
     }
     for (const diagnostic of result.diagnostics) {
+        if (diagnostic.level === 'info') { continue; }
         lines.push(`${diagnostic.level}: ${diagnostic.message}`);
-        if (diagnostic.hint) {
-            lines.push(`hint: ${diagnostic.hint}`);
-        }
     }
     if (result.nextActions.length > 0) {
         lines.push('下一步:');
@@ -203,7 +180,7 @@ async function main(argv: string[]): Promise<void> {
         const planned = await createActionPlan(options);
         const result = await runCliResult(planned, { streaming: !wantsJson, detach: options.detach });
         if (wantsJson) {
-            console.log(JSON.stringify(compactResult(result, options.brief), null, 2));
+            console.log(JSON.stringify(compactResult(result), null, 2));
         } else {
             console.log(textOutput(result));
         }

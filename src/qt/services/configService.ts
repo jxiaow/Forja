@@ -4,7 +4,7 @@ import { getState } from '../../core/stateManager';
 import { decodeSelectedProject } from '../project/selectedProject';
 import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
 import { readLocalCache } from '../shared/localState';
-import { getSetting, setSetting, QtPilotSettings } from '../../core/settingsStore';
+import { getSetting, setSetting, CompilotSettings } from '../../core/settingsStore';
 import { resolveProjectRoot } from '../../core/workspaceResolver';
 
 // ── 配置读取 ──
@@ -74,7 +74,7 @@ export function getCustomCommands(): { name: string; command: string }[] {
     return getSetting('customCommands');
 }
 
-export function updateConfig<K extends keyof QtPilotSettings>(key: K, value: QtPilotSettings[K]): void {
+export function updateConfig<K extends keyof CompilotSettings>(key: K, value: CompilotSettings[K]): void {
     setSetting(key, value);
 }
 

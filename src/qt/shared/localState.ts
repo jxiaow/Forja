@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 export interface LocalCache {
     version: 1;
@@ -21,7 +22,7 @@ export function cachePath(workspace: string): string {
 }
 
 export function logsDir(workspace: string): string {
-    const tmpBase = process.env.TEMP || process.env.TMP || require('os').tmpdir();
+    const tmpBase = process.env.TEMP || process.env.TMP || os.tmpdir();
     // Use a hash-like folder name based on workspace path to avoid collisions
     const folderName = workspace.replace(/[\\/:*?"<>|]/g, '_');
     return path.join(tmpBase, 'compilot-logs', folderName);
@@ -42,18 +43,24 @@ export function writeLocalCache(workspace: string, cache: LocalCache): void {
 
 export function ensureCompilotGitignored(workspace: string): void {
     const gitignorePath = path.join(workspace, '.gitignore');
-    let lines: string[] = [];
+    let content = '';
 
     try {
-        lines = fs.readFileSync(gitignorePath, 'utf8').split(/\r?\n/);
-    } catch {}
+        content = fs.readFileSync(gitignorePath, 'utf8');
+    } catch { /* file doesn't exist yet */ }
 
-    const otherLines = lines.filter(line =>
-        line.trim() !== '.compilot/' && line.trim() !== '.qtpilot/' && line.length > 0
-    );
-    otherLines.push('.compilot/');
+    const lines = content.split(/\r?\n/);
+
+    // 已有 .compilot/ 条目则无需修改
+    if (lines.some(line => line.trim() === '.compilot/')) { return; }
+
+    // 确保末尾有换行后追加
+    const needsNewline = lines.length > 0 && lines[lines.length - 1] !== '';
+    if (needsNewline) { lines.push(''); }
+    lines.push('.compilot/');
+
     fs.mkdirSync(path.dirname(gitignorePath), { recursive: true });
-    fs.writeFileSync(gitignorePath, `${otherLines.join('\n')}\n`, 'utf8');
+    fs.writeFileSync(gitignorePath, lines.join('\n') + '\n', 'utf8');
 }
 
 function readJson<T>(filePath: string): T | null {
@@ -95,7 +102,7 @@ export function writeRunState(workspace: string, state: RunState): void {
 }
 
 export function clearRunState(workspace: string): void {
-    try { fs.unlinkSync(runStatePath(workspace)); } catch {}
+    try { fs.unlinkSync(runStatePath(workspace)); } catch { /* already absent */ }
 }
 
 export function isProcessRunning(pid: number): boolean {

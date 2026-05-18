@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as os from 'os';
 import { getResolvedConfig, ResolvedSyncConfig } from './resolver';
 import { readServers, ServerConfig } from '../../core/serverStore';
 import { readProjectSyncConfig } from '../../core/serverStore';
@@ -25,8 +26,6 @@ export function registerSyncWatcher(context: vscode.ExtensionContext): void {
     }
 
     // 监听全局 servers.json（位于 ~/.compilot/）
-    const os = require('os');
-    const path = require('path');
     const globalServersDir = path.join(os.homedir(), '.compilot');
     const globalPattern = new vscode.RelativePattern(vscode.Uri.file(globalServersDir), 'servers.json');
     const globalWatcher = vscode.workspace.createFileSystemWatcher(globalPattern);
@@ -99,7 +98,7 @@ export async function executeSyncChangedFiles(): Promise<void> {
         try {
             let totalUploaded = 0;
             let totalSkipped = 0;
-            let totalFailed: { file: string; error: string }[] = [];
+            const totalFailed: { file: string; error: string }[] = [];
 
             for (const folder of folders) {
                 const folderPath = folder.uri.fsPath;

@@ -146,7 +146,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 if (fs.existsSync(p)) {
                     return p;
                 }
-            } catch {}
+            } catch { /* path check failed — try next */ }
         }
         return 'designer';
     };

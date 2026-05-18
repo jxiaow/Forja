@@ -31,7 +31,6 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   --execute              （兼容旧版，等同于默认行为）
   --dry-run              （兼容旧版，等同于 --plan）
   --detach               后台执行，日志落文件，CLI 立即返回
-  --brief                精简输出（仅 ok、diagnostics、logFile 等关键字段）
   --save-local           将检测结果写入 .compilot/cache.json
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
@@ -101,9 +100,6 @@ export function parseCliArgs(args: string[]): CliOptions {
         json: false
     };
 
-    let sawPlan = false;
-    let sawDryRun = false;
-
     const startIndex = actionText === firstArg ? 1 : 0;
 
     for (let i = startIndex; i < args.length; i++) {
@@ -114,12 +110,7 @@ export function parseCliArgs(args: string[]): CliOptions {
                 // 兼容旧版，静默接受（默认已是 execute）
                 break;
             case '--plan':
-                sawPlan = true;
-                options.executionMode = 'dryRun';
-                break;
             case '--dry-run':
-                // 兼容旧版，等同于 --plan
-                sawDryRun = true;
                 options.executionMode = 'dryRun';
                 break;
             case '--workspace':
@@ -159,9 +150,6 @@ export function parseCliArgs(args: string[]): CliOptions {
                 break;
             case '--detach':
                 options.detach = true;
-                break;
-            case '--brief':
-                options.brief = true;
                 break;
             case '--json':
                 options.json = true;

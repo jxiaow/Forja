@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-export interface QtPilotSettings {
+export interface CompilotSettings {
     qtPath: string;
     designerPath: string;
     qtSourcePath: string;
@@ -24,7 +24,7 @@ export interface QtPilotSettings {
     executionLocation: 'local' | 'remote';
 }
 
-export const DEFAULT_SETTINGS: Readonly<QtPilotSettings> = {
+export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
     qtPath: '',
     designerPath: '',
     qtSourcePath: '',
@@ -49,7 +49,7 @@ export function settingsFilePath(workspace: string): string {
 }
 
 /** 从磁盘加载配置，缺失字段用默认值填充 */
-export function loadSettings(workspace: string): QtPilotSettings {
+export function loadSettings(workspace: string): CompilotSettings {
     const filePath = settingsFilePath(workspace);
     try {
         if (fs.existsSync(filePath)) {
@@ -58,12 +58,12 @@ export function loadSettings(workspace: string): QtPilotSettings {
             if (raw.qmakeTarget && !raw.target) { raw.target = raw.qmakeTarget; delete raw.qmakeTarget; }
             return { ...DEFAULT_SETTINGS, ...raw };
         }
-    } catch {}
+    } catch { /* file not found or unreadable — use defaults */ }
     return { ...DEFAULT_SETTINGS };
 }
 
 /** 将配置写入磁盘 */
-export function saveSettings(workspace: string, settings: QtPilotSettings): void {
+export function saveSettings(workspace: string, settings: CompilotSettings): void {
     try {
         const filePath = settingsFilePath(workspace);
         const dir = path.dirname(filePath);

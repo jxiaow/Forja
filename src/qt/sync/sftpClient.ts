@@ -10,7 +10,6 @@ import { filterNeedsSync, markSyncedBatch } from '../../core/syncState';
 import { ServerConfig } from '../../core/serverStore';
 import { ResolvedSyncConfig } from './resolver';
 import { scpUpload, ensureRemoteDir } from './transport';
-import { testConnection } from './transport';
 
 const logger = createLogger('SftpClient');
 

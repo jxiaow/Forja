@@ -25,7 +25,7 @@ export function decodeSelectedProject(value: unknown): SavedProjectRef | null {
         if (typeof parsed.root === 'string' && typeof parsed.relative === 'string') {
             return { root: parsed.root, relative: parsed.relative };
         }
-    } catch {}
+    } catch { /* invalid JSON — not a serialized project ref */ }
 
     return null;
 }

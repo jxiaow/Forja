@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { SdkProjectInfo, BuildMode, Arch, StateChangeEvent } from '../types';
 import { CFG_SECTION } from '../constants';
 import { isLinux } from '../platform';
@@ -79,7 +80,6 @@ export class StateManager implements vscode.Disposable {
     const selectedProject = config.get<string>('selectedProject');
     if (selectedProject) {
       // 仅设置路径，后续由 scanner 验证
-      const path = require('path');
       const name = path.basename(selectedProject, path.extname(selectedProject));
       const type = selectedProject.endsWith('.sln') ? 'sln' : 'makefile';
       this._currentProject = { name, path: selectedProject, type } as SdkProjectInfo;

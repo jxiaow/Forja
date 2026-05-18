@@ -80,7 +80,7 @@ function scpUpload(server: ServerConfig, localFile: string, remoteFile: string):
         proc.stderr.on('data', (d) => { stderr += d.toString(); });
         proc.on('close', (code) => {
             askpass?.cleanup();
-            code === 0 ? resolve() : reject(new Error(stderr.trim() || `exit ${code}`));
+            if (code === 0) { resolve(); } else { reject(new Error(stderr.trim() || `exit ${code}`)); }
         });
         proc.on('error', (e) => {
             askpass?.cleanup();

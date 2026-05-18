@@ -389,7 +389,8 @@ test('single candidate project hint includes the path', async () => {
     const workspace = makeWorkspace();
     // Only one .pro file exists (from makeWorkspace)
 
-    const result = await createActionPlan({
+    // Verify non-existent project path is still accepted (resolveProject doesn't check existence for explicit paths)
+    await createActionPlan({
         action: 'build',
         executionMode: 'dryRun',
         workspace,

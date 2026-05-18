@@ -4,8 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
-    readServers, writeServers, addServer, removeServer,
-    updateServer, getServerById, getServerByName, ServerConfig
+    readServers, addServer, removeServer,
+    updateServer, getServerById, getServerByName
 } from '../core/serverStore';
 
 const SERVERS_PATH = path.join(os.homedir(), '.compilot', 'servers.json');

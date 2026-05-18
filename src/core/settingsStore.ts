@@ -7,18 +7,18 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from './logger';
-import { QtPilotSettings, DEFAULT_SETTINGS, loadSettings, saveSettings } from './settingsIO';
+import { CompilotSettings, DEFAULT_SETTINGS, loadSettings, saveSettings } from './settingsIO';
 import { resolveProjectRoot } from './workspaceResolver';
 
-export type { QtPilotSettings } from './settingsIO';
+export type { CompilotSettings } from './settingsIO';
 export { DEFAULT_SETTINGS } from './settingsIO';
 
 const logger = createLogger('SettingsStore');
 
-type SettingsKey = keyof QtPilotSettings;
-type SettingsListener = (key: SettingsKey, settings: QtPilotSettings) => void;
+type SettingsKey = keyof CompilotSettings;
+type SettingsListener = (key: SettingsKey, settings: CompilotSettings) => void;
 
-let _settings: QtPilotSettings = { ...DEFAULT_SETTINGS };
+let _settings: CompilotSettings = { ...DEFAULT_SETTINGS };
 let _loaded = false;
 let _watcher: vscode.FileSystemWatcher | null = null;
 const _listeners: SettingsListener[] = [];
@@ -28,7 +28,7 @@ function _getWorkspace(): string | null {
     return root || null;
 }
 
-function _load(): QtPilotSettings {
+function _load(): CompilotSettings {
     const ws = _getWorkspace();
     if (!ws) { return { ...DEFAULT_SETTINGS }; }
     return loadSettings(ws);
@@ -79,7 +79,7 @@ function _reload(): void {
 
 // ── 公共 API ──
 
-export function getSetting<K extends SettingsKey>(key: K): QtPilotSettings[K] {
+export function getSetting<K extends SettingsKey>(key: K): CompilotSettings[K] {
     if (!_loaded) {
         _settings = _load();
         _loaded = true;
@@ -87,7 +87,7 @@ export function getSetting<K extends SettingsKey>(key: K): QtPilotSettings[K] {
     return _settings[key];
 }
 
-export function setSetting<K extends SettingsKey>(key: K, value: QtPilotSettings[K]): void {
+export function setSetting<K extends SettingsKey>(key: K, value: CompilotSettings[K]): void {
     if (JSON.stringify(_settings[key]) === JSON.stringify(value)) { return; }
     _settings[key] = value;
     _save();
@@ -102,6 +102,6 @@ export function onSettingsChange(listener: SettingsListener): vscode.Disposable 
     });
 }
 
-export function getAllSettings(): Readonly<QtPilotSettings> {
+export function getAllSettings(): Readonly<CompilotSettings> {
     return _settings;
 }

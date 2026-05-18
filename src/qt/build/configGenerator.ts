@@ -25,7 +25,7 @@ function _scanSubDirsAbs(absDir: string, extraSkip: string[], depth: number = 0)
                 result.push(..._scanSubDirsAbs(path.join(absDir, e.name), extraSkip, depth + 1));
             }
         }
-    } catch {}
+    } catch { /* dir unreadable */ }
     return result;
 }
 
@@ -60,7 +60,7 @@ function detectSdkVersion(): string {
                 .reverse();
             if (versions.length > 0) { return versions[0]; }
         }
-    } catch {}
+    } catch { /* SDK detection failed */ }
     return '10.0.22000.0';
 }
 
@@ -73,7 +73,7 @@ function _parseMakefileVar(makefilePath: string, varName: string): string | null
         const match = content.match(new RegExp(`^${varName}\\s*=\\s*(.+)$`, 'm'));
         if (!match) { return null; }
         return match[1].replace(/#.*$/, '').trim();
-    } catch {}
+    } catch { /* Makefile unreadable */ }
     return null;
 }
 

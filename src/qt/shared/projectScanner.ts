@@ -24,7 +24,7 @@ export function scanProFiles(root: string, extraSkipDirs: string[] = []): string
                     proFiles.push(path.join(dir, entry.name));
                 }
             }
-        } catch {}
+        } catch { /* dir unreadable — skip */ }
     }
 
     scan(root, 0);

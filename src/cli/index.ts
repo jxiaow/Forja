@@ -28,10 +28,9 @@ Compilot v${VERSION} — C++ 项目构建工具
   --help, -h     显示帮助
   --version, -v  显示版本
   --json         JSON 格式输出
-  --brief        精简输出
 
 示例:
-  compilot qt build --json --brief
+  compilot qt build --json
   compilot sdk build --workspace ./my-sdk
   compilot qt status --json
   compilot qt build --plan --json      查看计划（不执行）

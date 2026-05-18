@@ -5,7 +5,7 @@ import { getState, setState } from '../../core/stateManager';
 import { updateConfig, getQtPath, getVsDevShellPath, getTarget, getWorkspaceRoot } from '../../qt/services/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, ServerConfig } from '../../core/serverStore';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers } from '../../core/serverStore';
 import { executeSyncChangedFiles, executeTestConnection } from '../../qt/sync/syncWatcher';
 
 const logger = createLogger('ConfigPanel');

@@ -51,11 +51,11 @@ async function detectMake(qt: QtInfo | null): Promise<string | null> {
         const out = await execAsync('which', ['make']);
         const makePath = out.trim();
         if (makePath && fs.existsSync(makePath)) { return makePath; }
-    } catch {}
+    } catch { /* which not available */ }
     try {
         const out = await execAsync('make', ['--version']);
         if (out.toLowerCase().includes('make')) { return 'make'; }
-    } catch {}
+    } catch { /* make not installed */ }
     return null;
 }
 

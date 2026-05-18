@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 import { setState } from '../../core/stateManager';
-import { getBuildConfig, getRccProjectPath, getCustomCommands } from '../services/configService';
+import { getBuildConfig, getRccProjectPath } from '../services/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
 import { winConfig, getVsDevCmd } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
@@ -30,7 +30,7 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
     logger.info(`Task ${name}: ${commands.join(' && ')}`);
     const task = new vscode.Task(
         { type: 'shell' },
-        _getTaskFolder(), name, 'Qt Pilot',
+        _getTaskFolder(), name, 'Compilot Qt',
         builder.makeExec(commands), matcher
     );
     task.presentationOptions = {
@@ -146,7 +146,7 @@ export async function run(): Promise<void> {
     // Build task: 不清屏，失败时保留编译错误
     const buildTask = new vscode.Task(
         { type: 'shell' },
-        _getTaskFolder(), `Build ${cfg.mode}`, 'Qt Pilot',
+        _getTaskFolder(), `Build ${cfg.mode}`, 'Compilot Qt',
         builder.makeExec(commands), matcher
     );
     buildTask.presentationOptions = {
@@ -161,6 +161,7 @@ export async function run(): Promise<void> {
 
     return new Promise<void>((resolve, reject) => {
         let settled = false;
+        let processEnded = false;
 
         const finish = (exitCode: number | undefined) => {
             if (settled) { return; }
@@ -200,7 +201,7 @@ export async function run(): Promise<void> {
             runCmds.push(`"${mfInfo.exePath}"`);
             const runTaskObj = new vscode.Task(
                 { type: 'shell' },
-                _getTaskFolder(), `Run ${cfg.mode}`, 'Qt Pilot',
+                _getTaskFolder(), `Run ${cfg.mode}`, 'Compilot Qt',
                 builder.makeExec(runCmds), []
             );
             // 编译成功，Run task 清屏再启动
@@ -225,11 +226,21 @@ export async function run(): Promise<void> {
             resolve();
         };
 
+        // onDidEndTaskProcess gives us the exit code — preferred signal
         const d1 = vscode.tasks.onDidEndTaskProcess(e => {
-            if (e.execution === execution) { finish(e.exitCode); }
+            if (e.execution === execution) {
+                processEnded = true;
+                finish(e.exitCode);
+            }
         });
+        // onDidEndTask is a fallback only when the process event never fires
+        // (e.g., terminal manually closed). Use a short delay to let process event arrive first.
         const d2 = vscode.tasks.onDidEndTask(e => {
-            if (e.execution === execution) { finish(undefined); }
+            if (e.execution === execution && !processEnded) {
+                setTimeout(() => {
+                    if (!settled && !processEnded) { finish(undefined); }
+                }, 100);
+            }
         });
     });
 }

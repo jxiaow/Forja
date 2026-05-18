@@ -143,31 +143,32 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         const cwd = result.project ? path.dirname(result.project) : result.workspace;
         const isWin = process.platform === 'win32';
 
+        // Clear stale run state before launching new process
+        clearRunState(result.workspace);
+
         let child: cp.ChildProcess;
+        let launchedPid: number = 0;
         if (isWin) {
-            // Use VBScript to launch without visible console window
-            const batFile = path.join(path.dirname(logFile), 'run.bat');
-            const vbsFile = path.join(path.dirname(logFile), 'run.vbs');
-            fs.writeFileSync(batFile, `@echo off\r\ncd /d "${cwd}"\r\n${runCommand} >"${logFile}" 2>&1\r\n`, 'utf8');
-            fs.writeFileSync(vbsFile, `CreateObject("Wscript.Shell").Run "cmd /c ""${batFile}""", 0, False\r\n`, 'utf8');
-            child = cp.spawn('wscript', [vbsFile], {
+            // Launch the exe directly in detached mode with output redirection via cmd
+            child = cp.spawn('cmd', ['/c', `${runCommand} >"${logFile}" 2>&1`], {
                 cwd,
                 detached: true,
                 windowsHide: true,
                 stdio: 'ignore'
             });
+            launchedPid = child.pid || 0;
         } else {
             child = cp.spawn('/bin/sh', ['-c', `cd "${cwd}" && ${runCommand} >"${logFile}" 2>&1 &`], {
                 cwd,
                 detached: true,
                 stdio: 'ignore'
             });
+            launchedPid = child.pid || 0;
         }
         child.unref();
 
-        const pid = child.pid || 0;
         writeRunState(result.workspace, {
-            pid,
+            pid: launchedPid,
             exePath: runCommand,
             logFile,
             startedAt: new Date().toISOString()
@@ -183,7 +184,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             stderr: '',
             logFile,
             commands: commandParts,
-            diagnostics: [{ level: 'info', message: `程序已后台启动 (PID: ${pid})，日志: ${logFile}` }]
+            diagnostics: [{ level: 'info', message: `程序已后台启动 (PID: ${launchedPid})，日志: ${logFile}` }]
         };
     }
 
@@ -198,27 +199,25 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         const isWin = process.platform === 'win32';
 
         let child: cp.ChildProcess;
+        let launchedPid: number = 0;
         if (isWin) {
-            const batFile = path.join(path.dirname(logFile), `${result.action}.bat`);
-            const vbsFile = path.join(path.dirname(logFile), `${result.action}.vbs`);
-            fs.writeFileSync(batFile, `@echo off\r\ncd /d "${cwd}"\r\n${commandLine} >"${logFile}" 2>&1\r\n`, 'utf8');
-            fs.writeFileSync(vbsFile, `CreateObject("Wscript.Shell").Run "cmd /c ""${batFile}""", 0, False\r\n`, 'utf8');
-            child = cp.spawn('wscript', [vbsFile], {
+            child = cp.spawn('cmd', ['/c', `${commandLine} >"${logFile}" 2>&1`], {
                 cwd,
                 detached: true,
                 windowsHide: true,
                 stdio: 'ignore'
             });
+            launchedPid = child.pid || 0;
         } else {
             child = cp.spawn('/bin/sh', ['-c', `cd "${cwd}" && ${commandLine} >"${logFile}" 2>&1 &`], {
                 cwd,
                 detached: true,
                 stdio: 'ignore'
             });
+            launchedPid = child.pid || 0;
         }
         child.unref();
 
-        const pid = child.pid || 0;
         const durationMs = Date.now() - started;
         return {
             ...result,
@@ -227,7 +226,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             durationMs,
             logFile,
             commands: commandParts,
-            diagnostics: [{ level: 'info', message: `${result.action} 已后台启动 (PID: ${pid})，日志: ${logFile}` }]
+            diagnostics: [{ level: 'info', message: `${result.action} 已后台启动 (PID: ${launchedPid})，日志: ${logFile}` }]
         };
     }
 

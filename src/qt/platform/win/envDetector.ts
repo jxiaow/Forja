@@ -140,7 +140,7 @@ async function detectJom(qt: QtInfo | null): Promise<string | null> {
             log(`[Win] PATH 找到 jom: "${firstLine}"`);
             return firstLine;
         }
-    } catch {}
+    } catch { /* jom not in PATH */ }
 
     return null;
 }

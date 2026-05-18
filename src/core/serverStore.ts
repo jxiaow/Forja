@@ -213,7 +213,7 @@ export function writeProjectSyncConfig(workspaceRoot: string, config: Partial<Pr
         if (fs.existsSync(filePath)) {
             existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
         }
-    } catch {}
+    } catch { /* corrupted JSON — start fresh */ }
 
     // 顶层字段覆盖
     if (config.enabled !== undefined) { existing.enabled = config.enabled; }

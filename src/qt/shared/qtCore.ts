@@ -14,7 +14,7 @@ import {
     readLocalCache,
     writeLocalCache
 } from './localState';
-import { loadSettings, saveSettings, settingsFilePath, QtPilotSettings } from '../../core/settingsIO';
+import { loadSettings, saveSettings, settingsFilePath, CompilotSettings } from '../../core/settingsIO';
 import { buildRunCommand } from './commandRunner';
 import { resolveRuntimeTarget } from './runtimeTarget';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from './rccResolver';
@@ -50,7 +50,7 @@ function insideWorkspace(workspace: string, filePath: string): boolean {
     return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-function resolveProject(workspace: string, options: CliOptions, settings: QtPilotSettings): { project: string | null; error: string | null } {
+function resolveProject(workspace: string, options: CliOptions, settings: CompilotSettings): { project: string | null; error: string | null } {
     const explicitProject = options.project ? path.resolve(options.project) : null;
     if (explicitProject) {
         if (!insideWorkspace(workspace, explicitProject)) {
@@ -243,8 +243,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     if (projectResult.error && options.action !== 'init') {
         const errMode = options.mode || settings.mode || 'debug';
         const errArch = options.arch || settings.arch || 'x86';
-        const errQtPath = options.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
-        const errVsDevShell = options.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
+        const errQtPath = options.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.COMPILOT_QT_PATH || '';
+        const errVsDevShell = options.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.COMPILOT_VS_DEV_SHELL || '';
         const errQmakeTarget = options.target || settings.target || '';
         result.resolved = buildResolvedConfig(errMode, errArch, errQtPath, errVsDevShell, errQmakeTarget, cache?.detected.qt?.version, cache?.detected.vs?.version);
         result.candidates = listProjectCandidates(workspace);
@@ -262,8 +262,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const project = projectResult.project;
     const mode = options.mode || settings.mode || 'debug';
     const arch = options.arch || settings.arch || 'x86';
-    const qtPath = options.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = options.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const qtPath = options.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.COMPILOT_QT_PATH || '';
+    const vsDevShell = options.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.COMPILOT_VS_DEV_SHELL || '';
     const target = options.target || settings.target || '';
     const jomPath = cache?.detected.jom || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, cache?.detected.qt?.version, cache?.detected.vs?.version);
@@ -306,7 +306,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                     const proInfo = parseProFile(project);
                     if (proInfo) { effectiveTarget = proInfo.target; }
                 }
-                const updatedSettings: QtPilotSettings = {
+                const updatedSettings: CompilotSettings = {
                     ...settings,
                     mode,
                     arch,

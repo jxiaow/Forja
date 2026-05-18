@@ -8,7 +8,7 @@ import {
     loadSettings,
     saveSettings,
     settingsFilePath,
-    QtPilotSettings
+    CompilotSettings
 } from '../core/settingsIO';
 
 const _tmpDirs: string[] = [];
@@ -85,7 +85,7 @@ test('loadSettings preserves all field types correctly', () => {
 
 test('saveSettings creates .compilot directory and writes settings.json', () => {
     const workspace = makeWorkspace();
-    const settings: QtPilotSettings = {
+    const settings: CompilotSettings = {
         ...DEFAULT_SETTINGS,
         qtPath: 'C:/Qt/6.5',
         vsDevShellPath: 'C:/VS/Launch-VsDevShell.ps1',
@@ -107,7 +107,7 @@ test('saveSettings creates .compilot directory and writes settings.json', () => 
 
 test('saveSettings persists and loadSettings round-trips correctly', () => {
     const workspace = makeWorkspace();
-    const settings: QtPilotSettings = {
+    const settings: CompilotSettings = {
         ...DEFAULT_SETTINGS,
         qtPath: 'D:/Qt',
         selectedProject: { root: 'C:/workspace', relative: 'app/demo.pro' },
@@ -141,7 +141,7 @@ test('saveSettings writes valid JSON with 4-space indentation', () => {
     saveSettings(workspace, { ...DEFAULT_SETTINGS, qtPath: 'D:/Qt' });
 
     const raw = fs.readFileSync(settingsFilePath(workspace), 'utf8');
-    assert.match(raw, /^{\n    "qtPath": "D:\/Qt"/);
+    assert.match(raw, /^{\n {4}"qtPath": "D:\/Qt"/);
     assert.match(raw, /\n$/); // trailing newline
 });
 

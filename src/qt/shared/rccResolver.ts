@@ -78,7 +78,7 @@ export function rccNeedsRebuild(targets: RccTarget[]): boolean {
                     return true;
                 }
             }
-        } catch {}
+        } catch { /* qrc parse error — skip this target */ }
     }
     return false;
 }

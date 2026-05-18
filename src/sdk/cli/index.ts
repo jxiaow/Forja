@@ -17,7 +17,6 @@ interface SdkCliOptions {
     arch: 'x86' | 'x64';
     execute: boolean;
     json: boolean;
-    brief: boolean;
 }
 
 interface SdkCliResult {
@@ -35,10 +34,6 @@ interface SdkCliResult {
 
 function parseArgs(argv: string[]): SdkCliOptions {
     const VALID_ACTIONS = ['build', 'rebuild', 'clean', 'status'];
-    const KNOWN_FLAGS = new Set([
-        '--workspace', '--project', '--mode', '--arch', '--execute',
-        '--plan', '--dry-run', '--json', '--brief'
-    ]);
 
     const options: SdkCliOptions = {
         action: argv[0] || 'status',
@@ -47,8 +42,7 @@ function parseArgs(argv: string[]): SdkCliOptions {
         mode: 'debug',
         arch: 'x86',
         execute: true,
-        json: false,
-        brief: false
+        json: false
     };
 
     for (let i = 1; i < argv.length; i++) {
@@ -86,9 +80,6 @@ function parseArgs(argv: string[]): SdkCliOptions {
                 break;
             case '--json':
                 options.json = true;
-                break;
-            case '--brief':
-                options.brief = true;
                 break;
             default:
                 if (arg.startsWith('--')) {
@@ -184,7 +175,6 @@ Compilot SDK CLI
   --mode <mode>        编译模式: debug | release（默认 debug）
   --arch <arch>        目标架构: x86 | x64（默认 x86）
   --plan               仅输出命令计划，不执行
-  --brief              精简输出
   --json               JSON 格式输出
 
 示例:
