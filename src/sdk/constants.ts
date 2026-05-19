@@ -4,15 +4,6 @@ export const CMD_REBUILD = 'compilot.sdk.rebuild';
 export const CMD_CLEAN = 'compilot.sdk.clean';
 export const CMD_SHOW_ACTIONS = 'compilot.sdk.showActions';
 
-/** 配置键名 */
-export const CFG_PINNED_PROJECT = 'compilot.sdk.pinnedProject';
-export const CFG_MODE = 'compilot.sdk.mode';
-export const CFG_ARCH = 'compilot.sdk.arch';
-export const CFG_VS_DEV_CMD_PATH = 'compilot.sdk.vsDevCmdPath';
-
-/** 配置 section */
-export const CFG_SECTION = 'compilot.sdk';
-
 /** Context key */
 export const CTX_ACTIVATED = 'compilot.sdk.activated';
 

@@ -1,5 +1,3 @@
-import * as vscode from 'vscode';
-
 /** SDK 项目信息 */
 export interface SdkProjectInfo {
   /** 显示名称（取自文件名） */
@@ -28,9 +26,3 @@ export interface StateChangeEvent {
 
 /** 平台类型 */
 export type Platform = 'windows' | 'linux';
-
-/** QuickPick 菜单项 */
-export interface ActionQuickPickItem extends vscode.QuickPickItem {
-  action?: string;
-  value?: string;
-}

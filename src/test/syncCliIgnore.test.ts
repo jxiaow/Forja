@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isIgnored } from '../core/syncCli';
+import { isIgnored } from '../qt/shared/syncCli';
 
 test('isIgnored returns false for empty ignore list', () => {
     assert.equal(isIgnored('src/main.cpp', []), false);

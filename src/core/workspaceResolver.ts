@@ -24,6 +24,27 @@ export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void
             _resolved = null;
         })
     );
+
+    // 监听 .compilot/settings.json 的创建事件，重置缓存
+    // （多文件夹工作区中，用户在某个 folder 下初始化后应切换到该 folder）
+    const folders = vscode.workspace.workspaceFolders;
+    if (folders && folders.length > 1) {
+        const pattern = new vscode.RelativePattern(
+            folders[0].uri,
+            '**/.compilot/settings.json'
+        );
+        const settingsWatcher = vscode.workspace.createFileSystemWatcher(pattern);
+        settingsWatcher.onDidCreate(() => { _resolved = null; });
+        context.subscriptions.push(settingsWatcher);
+
+        // 也监听其他 folder
+        for (let i = 1; i < folders.length; i++) {
+            const p = new vscode.RelativePattern(folders[i].uri, '.compilot/settings.json');
+            const w = vscode.workspace.createFileSystemWatcher(p);
+            w.onDidCreate(() => { _resolved = null; });
+            context.subscriptions.push(w);
+        }
+    }
 }
 
 /** 解析并缓存项目根目录 */

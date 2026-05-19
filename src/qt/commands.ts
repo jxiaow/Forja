@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as buildManager from './build/buildManager';
-import { setState } from '../core/stateManager';
+import { setState } from '../core/qtState';
 import { getWorkspaceRoot, getManualProPath, getDesignerPath, getQtPath } from './services/configService';
 import { selectProject, parseProFile } from './project/projectManager';
 import { startDebug } from './build/debugger';
@@ -64,9 +64,9 @@ export function registerQtCommands(context: vscode.ExtensionContext, panel: Conf
             }
         }],
         ['compilot.qt.showActions',   () => showActions()],
-        ['compilot.qt.qmake',         () => buildManager.qmake()],
-        ['compilot.qt.build',         () => buildManager.build()],
-        ['compilot.qt.clean',         () => buildManager.clean()],
+        ['compilot.qt.qmake',         () => Promise.resolve(buildManager.qmake()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
+        ['compilot.qt.build',         () => Promise.resolve(buildManager.build()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
+        ['compilot.qt.clean',         () => Promise.resolve(buildManager.clean()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
         ['compilot.qt.run',           () => buildManager.run().catch((e: Error) => vscode.window.showErrorMessage(e.message))],
         ['compilot.qt.stop',          () => buildManager.stop()],
         ['compilot.qt.debug',         () => startDebug()],

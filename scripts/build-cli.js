@@ -40,7 +40,6 @@ const coreFiles = [
     'core/loggerBase.js',
     'core/settingsIO.js',
     'core/types.js',
-    'core/syncCli.js',
     'core/syncState.js',
     'core/serverStore.js',
     'core/ssh.js',

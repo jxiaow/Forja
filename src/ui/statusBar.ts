@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getState, setState, onStateChange, BuildMode, Arch } from '../core/stateManager';
+import { getState, setState, onStateChange, BuildMode, Arch } from '../core/qtState';
 import { getTarget, getCustomCommands } from '../qt/services/configService';
 import { getEffectiveProjectName } from '../qt/project/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';

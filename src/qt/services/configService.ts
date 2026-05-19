@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { BuildConfig } from '../platform/builder';
-import { getState } from '../../core/stateManager';
+import { getState } from '../../core/qtState';
 import { decodePinnedProject } from '../project/pinnedProject';
 import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
 import { getSetting, setSetting, QtPilotSettings } from '../../core/settingsStore';

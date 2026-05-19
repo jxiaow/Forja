@@ -2,7 +2,7 @@ import { parseCliArgs, isHelpRequest, getHelpText } from './args';
 import { CliResult } from './types';
 import { createActionPlan } from '../shared/qtCore';
 import { runCliResult } from '../shared/commandRunner';
-import { executeSyncCli } from '../../core/syncCli';
+import { executeSyncCli } from '../shared/syncCli';
 import { readRunState, isProcessRunning, runLogPath } from '../shared/localState';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -77,12 +77,6 @@ function textOutput(result: CliResult): string {
         }
         if (result.resolved.vsDevShell) {
             lines.push(`VS Dev Shell: ${result.resolved.vsDevShell}`);
-        }
-    }
-    if (result.errors.length > 0) {
-        lines.push('错误:');
-        for (const err of result.errors) {
-            lines.push(`  ${err}`);
         }
     }
     if (result.errors.length > 0) {

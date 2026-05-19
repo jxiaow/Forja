@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
-import { setState, getState } from '../../core/stateManager';
+import { setState, getState } from '../../core/qtState';
 import { getBuildConfig, getRccProjectPath } from '../services/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
 import { winConfig, getVsDevCmd } from '../platform/win/builder';

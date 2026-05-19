@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { setState, loadPersistedState } from './core/stateManager';
+import { setState, loadPersistedState } from './core/qtState';
 import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath } from './qt/services/configService';
 import { createStatusBar } from './ui/statusBar';
 import { registerPriWatcher } from './qt/project/priWatcher';

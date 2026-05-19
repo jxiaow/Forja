@@ -4,10 +4,10 @@
  */
 import * as path from 'path';
 import * as cp from 'child_process';
-import { filterNeedsSync, markSyncedBatch } from './syncState';
-import { readProjectSyncConfig, getServerById, getServerByName, ServerConfig } from './serverStore';
-import { buildScpArgs, buildSshArgs, sshTarget, createAskpassEnv } from './ssh';
-import { resolveGitRoots } from './gitRepoResolver';
+import { filterNeedsSync, markSyncedBatch } from '../../core/syncState';
+import { readProjectSyncConfig, getServerById, getServerByName, ServerConfig } from '../../core/serverStore';
+import { buildScpArgs, buildSshArgs, sshTarget, createAskpassEnv } from '../../core/ssh';
+import { resolveGitRoots } from '../../core/gitRepoResolver';
 
 export interface SyncResult {
     ok: boolean;

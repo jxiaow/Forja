@@ -9,7 +9,7 @@ import { ProjectScanner } from './modules/projectScanner';
 import { StatusBar } from './modules/statusBar';
 import { SdkBuilder } from './modules/sdkBuilder';
 import { ShowActions } from './modules/showActions';
-import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN, CMD_SHOW_ACTIONS, CTX_ACTIVATED, TASK_SOURCE, CFG_SECTION } from './constants';
+import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN, CMD_SHOW_ACTIONS, CTX_ACTIVATED, TASK_SOURCE } from './constants';
 import { isWindows } from './platform';
 import { initLogger, log, logError } from './utils/logger';
 
@@ -117,51 +117,14 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     });
     context.subscriptions.push(taskEndListener);
 
-    // 10. 监听配置变更
-    const configListener = configService.onConfigChanged(async (e) => {
-        if (e.affectsConfiguration(`${CFG_SECTION}.pinnedProject`)) {
-            const config = vscode.workspace.getConfiguration(CFG_SECTION);
-            const newPath = config.get<string>('pinnedProject');
-            log(`配置变更: pinnedProject = ${newPath || '(空)'}`);
-            if (newPath) {
-                const project = projectScanner.projects.find(p => p.path === newPath);
-                if (project) {
-                    stateManager.currentProject = project;
-                } else {
-                    log(`配置的项目路径不在扫描结果中: ${newPath}`);
-                    stateManager.currentProject = null;
-                }
-            } else {
-                stateManager.currentProject = null;
-            }
-        }
-
-        if (e.affectsConfiguration(`${CFG_SECTION}.mode`)) {
-            const config = vscode.workspace.getConfiguration(CFG_SECTION);
-            const mode = config.get<string>('mode');
-            log(`配置变更: mode = ${mode}`);
-            if (mode === 'debug' || mode === 'release') {
-                stateManager.mode = mode;
-            }
-        }
-
-        if (e.affectsConfiguration(`${CFG_SECTION}.arch`)) {
-            const config = vscode.workspace.getConfiguration(CFG_SECTION);
-            const arch = config.get<string>('arch');
-            log(`配置变更: arch = ${arch}`);
-            if (arch === 'x86' || arch === 'x64') {
-                stateManager.arch = arch;
-            }
-        }
-
-        if (e.affectsConfiguration(`${CFG_SECTION}.vsDevCmdPath`)) {
-            if (isWindows) {
-                log('配置变更: vsDevCmdPath，重新检测 VS 环境...');
-                await configService.getVsDevCmdPath();
-            }
+    // 10. 监听 sdk-settings.json 文件变化（外部编辑或 CLI 写入时重新加载）
+    configService.onSettingsFileChanged(context, async () => {
+        log('sdk-settings.json 变更，重新加载...');
+        await stateManager.restoreFromConfig();
+        if (isWindows) {
+            await configService.getVsDevCmdPath();
         }
     });
-    context.subscriptions.push(configListener);
 
     // 11. 设置激活上下文
     await vscode.commands.executeCommand('setContext', CTX_ACTIVATED, true);

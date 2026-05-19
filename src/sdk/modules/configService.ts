@@ -2,9 +2,10 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
-import { CFG_SECTION, VS_DETECT_TIMEOUT_MS } from '../constants';
+import { VS_DETECT_TIMEOUT_MS } from '../constants';
 import { isWindows } from '../platform';
 import { log, logError } from '../utils/logger';
+import { loadSdkSettings } from '../cli/settings';
 
 export class ConfigService implements vscode.Disposable {
   private _vsDevCmdPath: string | null = null;
@@ -16,9 +17,10 @@ export class ConfigService implements vscode.Disposable {
       return null;
     }
 
-    // 优先读取用户配置
-    const config = vscode.workspace.getConfiguration(CFG_SECTION);
-    const userPath = config.get<string>('vsDevCmdPath');
+    // 从 .compilot/sdk-settings.json 读取
+    const folders = vscode.workspace.workspaceFolders;
+    const wsRoot = folders && folders.length > 0 ? folders[0].uri.fsPath : '';
+    const userPath = wsRoot ? loadSdkSettings(wsRoot).vsDevCmdPath : '';
 
     if (userPath) {
       log(`检查用户配置的 VS 路径: ${userPath}`);
@@ -29,7 +31,7 @@ export class ConfigService implements vscode.Disposable {
       } else {
         logError(`用户配置的 VS 路径无效: ${userPath}`);
         vscode.window.showWarningMessage(
-          `SDK Pilot: 配置的 VsDevCmd.bat 路径无效: ${userPath}，将尝试自动检测`
+          `Compilot SDK: 配置的 VsDevCmd.bat 路径无效: ${userPath}，将尝试自动检测`
         );
       }
     }
@@ -145,16 +147,16 @@ export class ConfigService implements vscode.Disposable {
     });
   }
 
-  /** 监听配置变更 */
-  onConfigChanged(callback: (e: vscode.ConfigurationChangeEvent) => void): vscode.Disposable {
-    const disposable = vscode.workspace.onDidChangeConfiguration(callback);
-    this._disposables.push(disposable);
-    return disposable;
-  }
-
-  /** 获取配置项 */
-  get<T>(key: string): T | undefined {
-    return vscode.workspace.getConfiguration(CFG_SECTION).get<T>(key);
+  /** 监听 sdk-settings.json 文件变化 */
+  onSettingsFileChanged(context: vscode.ExtensionContext, callback: () => void): void {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) { return; }
+    const pattern = new vscode.RelativePattern(folders[0].uri, '.compilot/sdk-settings.json');
+    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+    watcher.onDidChange(callback);
+    watcher.onDidCreate(callback);
+    context.subscriptions.push(watcher);
+    this._disposables.push(watcher);
   }
 
   dispose(): void {

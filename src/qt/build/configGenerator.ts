@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ProjectInfo } from '../project/projectManager';
-import { getState } from '../../core/stateManager';
+import { getState } from '../../core/qtState';
 import { getWorkspaceRoot, getCStandard, getCppStandard, getEffectiveQtPath, getScanExcludeDirs } from '../services/configService';
 import { log } from '../../core/logger';
 

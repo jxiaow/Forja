@@ -1,9 +1,15 @@
 import * as vscode from 'vscode';
 import { StateManager } from './stateManager';
 import { ProjectScanner } from './projectScanner';
-import { ActionQuickPickItem, BuildMode, Arch } from '../types';
+import { BuildMode, Arch } from '../types';
 import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN } from '../constants';
 import { isWindows } from '../platform';
+
+/** QuickPick 菜单项 */
+interface ActionQuickPickItem extends vscode.QuickPickItem {
+  action?: string;
+  value?: string;
+}
 
 export class ShowActions {
   constructor(

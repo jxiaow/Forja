@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getState, setState } from '../../core/stateManager';
+import { getState, setState } from '../../core/qtState';
 import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../qt/env/envDetector';

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getBuildConfig, getQtSourcePath } from '../services/configService';
-import { setState } from '../../core/stateManager';
+import { setState } from '../../core/qtState';
 import { getMakefileInfo } from '../project/projectManager';
 import { build, qmakeForDebug, stopCurrentTarget } from './buildManager';
 import { createLogger } from '../../core/logger';
