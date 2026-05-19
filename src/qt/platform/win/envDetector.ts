@@ -48,7 +48,9 @@ async function detectVS(manualPath?: string): Promise<VSInfo | null> {
 
 // Windows 编译器从路径推断
 function detectCompiler(qtPath: string): string {
+    if (qtPath.includes('msvc2022_64')) { return 'msvc2022_64'; }
     if (qtPath.includes('msvc2022')) { return 'msvc2022'; }
+    if (qtPath.includes('msvc2019_64')) { return 'msvc2019_64'; }
     if (qtPath.includes('msvc2019')) { return 'msvc2019'; }
     if (qtPath.includes('mingw')) { return 'mingw'; }
     return 'msvc2019';

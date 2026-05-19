@@ -1000,14 +1000,18 @@ window.addEventListener('message', e => {
     if (d.vsCandidates && d.vsCandidates.length > 0) {
       const vsSel = document.getElementById('vsVersion');
       if (vsSel) {
+        const prev = vsSel.value;
         vsSel.innerHTML = '<option value="">-- 选择版本 --</option>' + d.vsCandidates.map(function(c) { return '<option value="' + escapeHtml(c.value) + '">' + escapeHtml(c.label) + '</option>'; }).join('');
+        if (prev && Array.from(vsSel.options).some(function(o) { return o.value === prev; })) { vsSel.value = prev; }
         if (vsSel._customRefresh) { vsSel._customRefresh(); }
       }
     }
     if (d.qtCandidates && d.qtCandidates.length > 0) {
       const qtSel = document.getElementById('qtVersion');
       if (qtSel) {
+        const prev = qtSel.value;
         qtSel.innerHTML = '<option value="">-- 选择版本 --</option>' + d.qtCandidates.map(function(c) { return '<option value="' + escapeHtml(c.value) + '">' + escapeHtml(c.label) + '</option>'; }).join('');
+        if (prev && Array.from(qtSel.options).some(function(o) { return o.value === prev; })) { qtSel.value = prev; }
         if (qtSel._customRefresh) { qtSel._customRefresh(); }
       }
     }
