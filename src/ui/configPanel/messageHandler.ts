@@ -56,7 +56,7 @@ export async function handleMessage(
         case 'saveVsPath': {
             logger.info(`保存 VS 路径: "${msg.value}"`);
             await updateConfig('vsDevShellPath', String(msg.value || ''));
-            webview.postMessage({ command: 'envDetecting' });
+            webview.postMessage({ command: 'envDetecting', scope: 'vs' });
             const qtPath = getQtPath();
             const env = await detectEnv(qtPath, String(msg.value || ''));
             setState('envInfo', env);
@@ -66,7 +66,7 @@ export async function handleMessage(
         case 'saveQtPath': {
             logger.info(`保存 Qt 路径: "${msg.value}"`);
             await updateConfig('qtPath', String(msg.value || ''));
-            webview.postMessage({ command: 'envDetecting' });
+            webview.postMessage({ command: 'envDetecting', scope: 'qt' });
             const vsPath = getVsDevShellPath();
             const env = await detectEnv(String(msg.value || ''), vsPath);
             setState('envInfo', env);

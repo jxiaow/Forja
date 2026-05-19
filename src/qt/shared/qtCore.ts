@@ -49,7 +49,9 @@ function insideWorkspace(workspace: string, filePath: string): boolean {
 }
 
 function resolveProject(workspace: string, options: CliOptions, settings: QtPilotSettings): { project: string | null; error: string | null } {
-    const explicitProject = options.project ? path.resolve(options.project) : null;
+    const explicitProject = options.project
+        ? (path.isAbsolute(options.project) ? path.resolve(options.project) : path.resolve(workspace, options.project))
+        : null;
     if (explicitProject) {
         if (!insideWorkspace(workspace, explicitProject)) {
             return { project: null, error: '.pro 文件必须位于 workspace 内' };

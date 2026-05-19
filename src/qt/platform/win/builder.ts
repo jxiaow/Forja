@@ -14,20 +14,21 @@ export const winConfig: PlatformConfig = {
 
     initCommands(cfg: BuildConfig): string[] {
         const cmds: string[] = [];
-        if (cfg.vsDevShell) {
-            cmds.push(`call "${getVsDevCmd(cfg.vsDevShell)}" -arch=${cfg.arch} -no_logo`);
-        }
-        // 把 Qt bin 目录加到 PATH（确保 qmake 可用）
+        // set PATH 必须在 VsDevCmd.bat 之前：cmd 的 %PATH% 在命令行解析阶段展开，
+        // 如果放在 VsDevCmd 之后，%PATH% 展开的是旧值，会覆盖 VsDevCmd 设置的 MSVC 路径。
+        // VsDevCmd.bat 会在当前 PATH 基础上追加 MSVC 工具路径，所以先设置 Qt/jom 路径是安全的。
         const qtBin = cfg.qtPath ? path.join(cfg.qtPath, 'bin') : '';
         if (qtBin) {
             cmds.push(`set "PATH=${qtBin};%PATH%"`);
         }
-        // 如果 jomPath 已知且不在 Qt bin 目录下，把其所在目录也加到 PATH
         if (cfg.jomPath) {
             const jomDir = path.dirname(cfg.jomPath);
             if (jomDir !== qtBin) {
                 cmds.push(`set "PATH=${jomDir};%PATH%"`);
             }
+        }
+        if (cfg.vsDevShell) {
+            cmds.push(`call "${getVsDevCmd(cfg.vsDevShell)}" -arch=${cfg.arch} -no_logo`);
         }
         return cmds;
     },

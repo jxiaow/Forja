@@ -36,15 +36,35 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
 用户要求构建/运行 →
   1. compilot qt status --json（或 sdk status）
   2. 检查 ready 字段：
-     - ready: true → 直接执行 build/run
+     - ready: true → 检查 resolved 配置：
+       - 如果是首次构建或用户未明确指定过配置，向用户展示 resolved
+         中的全部关键配置（mode、arch、qtPath、vsDevShell、project），
+         确认后再执行
+       - 用户已确认过或之前成功构建过 → 直接执行 build/run
      - ready: false → 看 missing 和 diagnostics：
-       - missing 含 "project" → 用 projects --json 看列表，加 --project
-       - missing 含 "qtPath" → 用 init --json 自动检测并保存
+       - missing 含 "project" → 用 projects --json 看列表，向用户展示
+         候选并让用户选择，然后 init --project <选择的路径>
+       - missing 含 "qtPath" → 用 env --json 看可选项，向用户展示
+         候选并让用户选择，然后 init --qt-path <选择的路径>
+       - missing 含 "vsDevShellPath" → 同上，init --vs-dev-shell <路径>
        - missing 含 "makefile" → 先 qmake 生成 Makefile
   3. 执行命令，检查 ok 字段：
      - ok: true → 完成
      - ok: false → 看 errors 和 diagnostics 定位问题
 ```
+
+**关键：当存在多个候选（多个 Qt 版本、多个 .pro 文件、多个 VS 版本）时，
+必须展示选项让用户选择，禁止自动选择后静默执行。**
+
+**首次确认清单（resolved 中的所有项）：**
+- mode（debug/release）
+- arch（x86/x64）
+- qtPath（Qt 安装路径）
+- vsDevShell（VS 环境脚本路径）
+- project（.pro 文件路径）
+
+用户明确说了"编译"但没指定 mode/arch 时，也要展示当前配置让用户确认，
+不要假设默认值就是用户想要的。
 
 ## Qt 命令
 
@@ -137,6 +157,8 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
 
 - **不要拆解命令**：`compilot qt run` 会先杀旧进程、编译、再启动，不要自己拆步骤
 - **不要猜路径**：不要自己拼 qmake/jom/msbuild 命令，统一用 compilot
+- **多候选必须让用户选**：env/projects 返回多个候选时，列出选项让用户决定，不要自动取第一个
+- **首次配置必须确认**：status 中 resolved 的 qtPath、vsDevShell、project 如果是自动检测的，先展示给用户确认再执行
 - **只有 run 加 --detach**：程序启动后不会自行退出，不加会阻塞
 - **detach 后看 logs**：`run --detach` 返回 `ok: true` 只表示程序已启动；用 `logs --json` 确认运行状态
 - **非 detach 直接看结果**：`ok` 字段直接反映成功/失败

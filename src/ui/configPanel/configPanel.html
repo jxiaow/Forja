@@ -1016,8 +1016,15 @@ window.addEventListener('message', e => {
       }
     }
   } else if (d.command === 'envDetecting') {
-    ['dot-vs','dot-qt','dot-jom'].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'chip-dot dot-detecting'; } });
-    setText('text-vs-chip', '检测中...'); setText('text-qt-chip', '检测中...'); setText('text-jom-chip', '检测中...');
+    if (!d.scope || d.scope === 'vs') {
+      const el = document.getElementById('dot-vs'); if (el) { el.className = 'chip-dot dot-detecting'; }
+      setText('text-vs-chip', '检测中...');
+    }
+    if (!d.scope || d.scope === 'qt') {
+      const el2 = document.getElementById('dot-qt'); if (el2) { el2.className = 'chip-dot dot-detecting'; }
+      const el3 = document.getElementById('dot-jom'); if (el3) { el3.className = 'chip-dot dot-detecting'; }
+      setText('text-qt-chip', '检测中...'); setText('text-jom-chip', '检测中...');
+    }
     const btn = document.getElementById('refreshBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span>';
   } else if (d.command === 'devShellUpdated') {
     const badge = document.getElementById('vs-badge');

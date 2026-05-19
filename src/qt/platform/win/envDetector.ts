@@ -15,7 +15,7 @@ function parseVsPath(devShellPath: string): VSInfo {
         const verMatch = installPath.match(/\\(\d{2})\\/);
         if (verMatch) {
             const n = parseInt(verMatch[1]);
-            if (n >= 18) { version = '2025'; }
+            if (n >= 18) { version = '2026'; }
             else if (n >= 17) { version = '2022'; }
             else if (n === 16) { version = '2019'; }
             else if (n === 15) { version = '2017'; }
@@ -59,7 +59,8 @@ function detectCompiler(qtPath: string): string {
 /** 从注册表扫描 Qt 安装路径 */
 async function _scanQtFromRegistry(): Promise<string[]> {
     const results: string[] = [];
-    // Qt 安装器常见注册表位置
+    // 注册表扫描：Qt 安装器可能写入非标准路径
+    // HKCU\Software\QtProject 下含 QtCreator 配置，递归查询较慢但能发现非硬编码路径
     const regKeys = [
         'HKCU\\Software\\QtProject',
         'HKLM\\SOFTWARE\\WOW6432Node\\Digia\\Versions',
@@ -67,7 +68,7 @@ async function _scanQtFromRegistry(): Promise<string[]> {
     ];
     for (const key of regKeys) {
         try {
-            const out = await execAsync('reg', ['query', key, '/s']);
+            const out = await execAsync('reg', ['query', key, '/s'], 30000);
             // 提取看起来像 Qt 路径的值（包含 qmake 的目录）
             const lines = out.split('\n');
             for (const line of lines) {
@@ -225,10 +226,29 @@ async function scanVS(): Promise<VSInfo[]> {
 }
 
 export async function detectEnvWin(manualQtPath?: string, manualVsPath?: string): Promise<EnvInfo> {
+    // 指定了哪个就跳过哪个的全量扫描，只验证指定路径
+    const vsPromise = manualVsPath
+        ? Promise.resolve(fs.existsSync(manualVsPath) ? parseVsPath(manualVsPath) : null)
+        : detectVS();
+
+    const qtPromise = manualQtPath
+        ? (async () => {
+            if (!hasQmake(manualQtPath)) { return { qt: null, candidates: [] as QtInfo[] }; }
+            const qt = await parseQtInfo(manualQtPath, detectCompiler(manualQtPath));
+            return { qt, candidates: [qt] };
+        })()
+        : detectQt();
+
+    const vsCandidatesPromise = manualVsPath
+        ? Promise.resolve(
+            fs.existsSync(manualVsPath) ? [parseVsPath(manualVsPath)] : [] as VSInfo[]
+        )
+        : scanVS();
+
     const [vs, { qt, candidates }, vsCandidates] = await Promise.all([
-        detectVS(manualVsPath || undefined),
-        detectQt(manualQtPath),
-        scanVS()
+        vsPromise,
+        qtPromise,
+        vsCandidatesPromise
     ]);
     const jom = await detectJom(qt);
     return { vs, qt, qtCandidates: candidates, vsCandidates, jom };
