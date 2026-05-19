@@ -3,7 +3,7 @@
   "displayName": "Compilot",
   "publisher": "compilot",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.5",
+  "version": "0.7.8",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -233,7 +233,7 @@
   "devDependencies": {
     "@eslint/js": "9.39.4",
     "@types/node": "20.19.37",
-    "@types/vscode": "1.110.0",
+    "@types/vscode": "1.85.0",
     "@vscode/vsce": "2.32.0",
     "eslint": "9.39.4",
     "typescript": "5.9.3",

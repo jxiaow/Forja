@@ -44,7 +44,8 @@ const coreFiles = [
     'core/syncState.js',
     'core/serverStore.js',
     'core/ssh.js',
-    'core/gitChangedFiles.js'
+    'core/gitChangedFiles.js',
+    'core/gitRepoResolver.js'
 ];
 
 // Version file at root of out/

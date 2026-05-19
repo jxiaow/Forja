@@ -380,7 +380,7 @@ details[open] .arrow { transform: rotate(90deg); }
     </div>
     <div class="field">
       <label>QMake TARGET</label>
-      <input id="target" value="{{effectiveTarget}}" data-default-qmake-target="{{defaultTarget}}" data-saved-qmake-target="{{savedTarget}}" placeholder="留空使用 .pro 默认值" onchange="saveTarget()" />
+      <input id="target" value="{{effectiveTarget}}" data-default-target="{{defaultTarget}}" data-saved-target="{{savedTarget}}" placeholder="留空使用 .pro 默认值" onchange="saveTarget()" />
     </div>
     <div class="field">
       <label>排除目录</label>
@@ -668,7 +668,7 @@ function saveTarget() {
   if (savedValue === lastSavedTarget) { return; }
   lastSavedTarget = savedValue;
   input.dataset.savedTarget = savedValue;
-  vscode.postMessage({ command: 'saveTarget', value: savedValue });
+  vscode.postMessage({ command: 'saveQmakeTarget', value: savedValue });
 }
 function saveFileSyncPromptEnabled() { vscode.postMessage({ command: 'saveFileSyncPromptEnabled', value: document.getElementById('fileSyncPromptEnabled').checked }); }
 function saveQmakeReminderEnabled() { vscode.postMessage({ command: 'saveQmakeReminderEnabled', value: document.getElementById('qmakeReminderEnabled').checked }); }

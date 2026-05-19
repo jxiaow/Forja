@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getResolvedConfig, ResolvedSyncConfig } from './resolver';
-import { readServers, ServerConfig } from '../../core/serverStore';
-import { readProjectSyncConfig } from '../../core/serverStore';
+import { readServers, readProjectSyncConfig, ServerConfig } from '../../core/serverStore';
 import { syncChangedFiles, askPassword, clearPasswordCache } from './sftpClient';
 import { testConnection } from './transport';
 import { getWorkspaceRoot } from '../services/configService';

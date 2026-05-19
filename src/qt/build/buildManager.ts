@@ -237,7 +237,7 @@ export async function run(): Promise<void> {
             // 清理上一次的 disposable（如果还在）
             _runEndDisposable?.dispose();
             _runEndDisposable = vscode.tasks.onDidEndTask(e => {
-                if (e.execution.task.name === `Run ${cfg.mode}` && e.execution.task.source === 'Qt Pilot') {
+                if (e.execution.task.name === `Run ${cfg.mode}` && e.execution.task.source === 'Compilot Qt') {
                     _runEndDisposable?.dispose();
                     _runEndDisposable = undefined;
                     setState('isRunning', false);
