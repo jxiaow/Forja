@@ -644,20 +644,6 @@ details[open] .arrow { transform: rotate(90deg); }
         <div id="serverSummaryText" style="font-size:12px; color:var(--text-secondary); line-height:1.5;"></div>
         <button class="btn btn-sm" style="margin-top:6px;" onclick="toggleServerForm()">编辑服务器</button>
       </div>
-
-      <!-- 高级设置 -->
-      <details style="margin-top:12px;">
-        <summary><span class="arrow">▶</span> 高级设置</summary>
-        <div class="details-content">
-          <div class="field">
-            <label>忽略目录</label>
-            <div class="tag-input" id="syncIgnoreWrap">
-              <input id="syncIgnoreInput" placeholder="输入目录名，回车添加" onkeydown="onTagKey(event, 'syncIgnore')" />
-            </div>
-            <div class="hint">回车添加，点击标签删除</div>
-          </div>
-        </div>
-      </details>
     </div>
 
     <!-- 服务器表单（添加/编辑） -->
@@ -704,6 +690,20 @@ details[open] .arrow { transform: rotate(90deg); }
         <button class="btn" onclick="cancelServerForm()">取消</button>
       </div>
     </div>
+
+    <!-- 高级设置（卡片底部） -->
+    <details id="syncAdvancedSettings" style="margin-top:12px; display:none;">
+      <summary><span class="arrow">▶</span> 高级设置</summary>
+      <div class="details-content">
+        <div class="field">
+          <label>忽略目录</label>
+          <div class="tag-input" id="syncIgnoreWrap">
+            <input id="syncIgnoreInput" placeholder="输入目录名，回车添加" onkeydown="onTagKey(event, 'syncIgnore')" />
+          </div>
+          <div class="hint">回车添加，点击标签删除</div>
+        </div>
+      </div>
+    </details>
   </div>
 
 </div>
@@ -924,6 +924,7 @@ function updateSyncUI() {
   const configArea = document.getElementById('syncConfigArea');
   const statusArea = document.getElementById('syncStatusArea');
   const actionsArea = document.getElementById('syncActions');
+  const advancedArea = document.getElementById('syncAdvancedSettings');
   const select = document.getElementById('syncServerSelect');
   const hasServer = select && select.value && _serverCache[select.value];
   const remotePath = document.getElementById('syncRemotePath')?.value?.trim();
@@ -932,10 +933,12 @@ function updateSyncUI() {
     configArea.style.display = 'none';
     statusArea.style.display = 'none';
     actionsArea.style.display = 'none';
+    advancedArea.style.display = 'none';
     return;
   }
 
   configArea.style.display = '';
+  advancedArea.style.display = '';
 
   if (hasServer && remotePath) {
     const s = _serverCache[select.value];
@@ -993,6 +996,21 @@ window.addEventListener('message', e => {
     const makeLabel = d.isWin ? 'jom' : 'make';
     setText('text-jom-chip', d.env.jom ? makeLabel : makeLabel + ' ✗');
     const btn = document.getElementById('refreshBtn'); btn.disabled = false; btn.innerHTML = '刷新';
+    // 更新候选下拉列表
+    if (d.vsCandidates && d.vsCandidates.length > 0) {
+      const vsSel = document.getElementById('vsVersion');
+      if (vsSel) {
+        vsSel.innerHTML = '<option value="">-- 选择版本 --</option>' + d.vsCandidates.map(function(c) { return '<option value="' + escapeHtml(c.value) + '">' + escapeHtml(c.label) + '</option>'; }).join('');
+        if (vsSel._customRefresh) { vsSel._customRefresh(); }
+      }
+    }
+    if (d.qtCandidates && d.qtCandidates.length > 0) {
+      const qtSel = document.getElementById('qtVersion');
+      if (qtSel) {
+        qtSel.innerHTML = '<option value="">-- 选择版本 --</option>' + d.qtCandidates.map(function(c) { return '<option value="' + escapeHtml(c.value) + '">' + escapeHtml(c.label) + '</option>'; }).join('');
+        if (qtSel._customRefresh) { qtSel._customRefresh(); }
+      }
+    }
   } else if (d.command === 'envDetecting') {
     ['dot-vs','dot-qt','dot-jom'].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'chip-dot dot-detecting'; } });
     setText('text-vs-chip', '检测中...'); setText('text-qt-chip', '检测中...'); setText('text-jom-chip', '检测中...');

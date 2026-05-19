@@ -90,7 +90,10 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             vs: env?.vs ? `VS ${env.vs.version} ${env.vs.edition}` : null,
             qt: env?.qt ? `Qt ${env.qt.version} (${env.qt.compiler})` : null,
             jom: !!env?.jom
-        }});
+        },
+        vsCandidates: (env?.vsCandidates ?? []).map(c => ({ label: `VS ${c.version} ${c.edition}`, value: c.devShellPath })),
+        qtCandidates: (env?.qtCandidates ?? []).map(c => ({ label: `Qt ${c.version} (${c.compiler})`, value: c.path }))
+        });
         const manualShell = getVsDevShellPath();
         const autoShell = env?.vs?.devShellPath || '';
         const effectiveShell = manualShell || autoShell;
