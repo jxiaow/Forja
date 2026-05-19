@@ -11,8 +11,8 @@ export interface QtPilotSettings {
     vsDevShellPath: string;
     jomPath: string;
     pinnedProject: { root: string; relative: string } | null;
-    arch: 'x86' | 'x64';
-    mode: 'debug' | 'release';
+    arch: 'x86' | 'x64' | '';
+    mode: 'debug' | 'release' | '';
     scanExcludeDirs: string[];
     target: string;
     cStandard: string;
@@ -31,8 +31,8 @@ export const DEFAULT_SETTINGS: Readonly<QtPilotSettings> = {
     vsDevShellPath: '',
     jomPath: '',
     pinnedProject: null,
-    arch: 'x86',
-    mode: 'debug',
+    arch: '',
+    mode: '',
     scanExcludeDirs: [],
     target: '',
     cStandard: 'c11',
@@ -93,8 +93,8 @@ function sanitizeSettings(raw: Record<string, unknown>): QtPilotSettings {
         vsDevShellPath: isString(raw.vsDevShellPath) ? raw.vsDevShellPath : d.vsDevShellPath,
         jomPath: isString(raw.jomPath) ? raw.jomPath : d.jomPath,
         pinnedProject,
-        arch: (raw.arch === 'x86' || raw.arch === 'x64') ? raw.arch : d.arch,
-        mode: (raw.mode === 'debug' || raw.mode === 'release') ? raw.mode : d.mode,
+        arch: (raw.arch === 'x86' || raw.arch === 'x64' || raw.arch === '') ? raw.arch : d.arch,
+        mode: (raw.mode === 'debug' || raw.mode === 'release' || raw.mode === '') ? raw.mode : d.mode,
         scanExcludeDirs: isStringArray(raw.scanExcludeDirs) ? raw.scanExcludeDirs : d.scanExcludeDirs,
         target: isString(raw.target) ? raw.target : d.target,
         cStandard: isString(raw.cStandard) ? raw.cStandard : d.cStandard,

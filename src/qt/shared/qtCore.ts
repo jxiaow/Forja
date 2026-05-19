@@ -389,11 +389,12 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                     if (proInfo) { effectiveTarget = proInfo.target; }
                 }
                 // #2: 写入 pinnedProject
+                // mode/arch 只在用户显式传参时写入，否则保持 settings 原值（可能为空）
                 const relativeProject = path.relative(workspace, project).replace(/\\/g, '/');
                 const updatedSettings: QtPilotSettings = {
                     ...settings,
-                    mode,
-                    arch,
+                    mode: options.mode || settings.mode,
+                    arch: options.arch || settings.arch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
                     vsDevShellPath: vsDevShell || detected.detected.vs?.devShellPath || '',
                     jomPath: detected.detected.jom || '',
@@ -402,11 +403,12 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 };
                 saveSettings(workspace, updatedSettings);
             } else {
-                // #3: 多 .pro 文件或无 .pro 时，仍保存 mode/arch/qtPath 等，显式清除 pinnedProject
+                // #3: 多 .pro 文件或无 .pro 时，仍保存 qtPath 等，显式清除 pinnedProject
+                // mode/arch 只在用户显式传参时写入，否则保持 settings 原值（可能为空）
                 const updatedSettings: QtPilotSettings = {
                     ...settings,
-                    mode,
-                    arch,
+                    mode: options.mode || settings.mode,
+                    arch: options.arch || settings.arch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
                     vsDevShellPath: vsDevShell || detected.detected.vs?.devShellPath || '',
                     jomPath: detected.detected.jom || '',

@@ -32,8 +32,8 @@ const _listeners: StateListener[] = [];
 
 /** 从 settingsStore 加载持久化状态（在 initSettingsStore 之后调用） */
 export function loadPersistedState(): void {
-    _state.mode = getSetting('mode');
-    _state.arch = getSetting('arch');
+    _state.mode = getSetting('mode') || 'debug';
+    _state.arch = getSetting('arch') || 'x86';
 }
 
 export function getState(): Readonly<AppState> {

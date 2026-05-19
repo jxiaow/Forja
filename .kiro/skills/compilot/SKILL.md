@@ -36,11 +36,11 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
 用户要求构建/运行 →
   1. compilot qt status --json（或 sdk status）
   2. 检查 ready 字段：
-     - ready: true → 检查 resolved 配置：
-       - 如果是首次构建或用户未明确指定过配置，向用户展示 resolved
-         中的全部关键配置（mode、arch、qtPath、vsDevShell、project），
-         确认后再执行
-       - 用户已确认过或之前成功构建过 → 直接执行 build/run
+     - ready: true → 检查 resolved 中 mode/arch/qtPath/vsDevShell/project：
+       - 对应 settings 字段有值（用户设置过）→ 直接执行
+       - 对应 settings 字段为空（用户没设置过）→ 调 env --json 看 available：
+         - 只有一个候选 → 自动使用，不问
+         - 有多个候选 → 展示候选让用户选择，用 init 写入后再执行
      - ready: false → 看 missing 和 diagnostics：
        - missing 含 "project" → 用 projects --json 看列表，向用户展示
          候选并让用户选择，然后 init --project <选择的路径>
@@ -53,18 +53,16 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
      - ok: false → 看 errors 和 diagnostics 定位问题
 ```
 
-**关键：当存在多个候选（多个 Qt 版本、多个 .pro 文件、多个 VS 版本）时，
-必须展示选项让用户选择，禁止自动选择后静默执行。**
+**如何判断"用户没设置过"：**
+- status 输出的 resolved 中，mode/arch 显示的是实际生效值（含兜底）
+- 但如果 settings 文件里对应字段为空字符串，说明用户从未通过
+  `init --mode`/`--arch` 或 UI 主动设置过
+- agent 可通过 status 的 resolved 与 env 的 available 对比判断：
+  resolved 里有值但 env.available 里有多个选项 → 需要确认
 
-**首次确认清单（resolved 中的所有项）：**
-- mode（debug/release）
-- arch（x86/x64）
-- qtPath（Qt 安装路径）
-- vsDevShell（VS 环境脚本路径）
-- project（.pro 文件路径）
-
-用户明确说了"编译"但没指定 mode/arch 时，也要展示当前配置让用户确认，
-不要假设默认值就是用户想要的。
+**关键：当存在多个候选（多个 Qt 版本、多个 .pro 文件、多个 VS 版本、
+debug/release、x86/x64）且用户未设置过时，必须展示选项让用户选择，
+禁止自动选择后静默执行。**
 
 ## Qt 命令
 
