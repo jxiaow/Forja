@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { detectEnv } from '../../qt/env/envDetector';
 import { generateCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
 import { getState, setState } from '../../core/stateManager';
-import { updateConfig, getQtPath, getVsDevShellPath, getTarget, getWorkspaceRoot } from '../../qt/services/configService';
+import { updateConfig, getTarget, getWorkspaceRoot } from '../../qt/services/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers } from '../../core/serverStore';
@@ -43,7 +43,7 @@ export async function handleMessage(
 
     switch (msg.command) {
         case 'refreshEnv': {
-            const env = await detectEnv(getQtPath(), getVsDevShellPath());
+            const env = await detectEnv();
             setState('envInfo', env);
             pushEnvUpdate();
             break;
@@ -57,8 +57,7 @@ export async function handleMessage(
             logger.info(`保存 VS 路径: "${msg.value}"`);
             await updateConfig('vsDevShellPath', String(msg.value || ''));
             webview.postMessage({ command: 'envDetecting', scope: 'vs' });
-            const qtPath = getQtPath();
-            const env = await detectEnv(qtPath, String(msg.value || ''));
+            const env = await detectEnv();
             setState('envInfo', env);
             pushEnvUpdate();
             break;
@@ -67,9 +66,8 @@ export async function handleMessage(
             logger.info(`保存 Qt 路径: "${msg.value}"`);
             await updateConfig('qtPath', String(msg.value || ''));
             webview.postMessage({ command: 'envDetecting', scope: 'qt' });
-            const vsPath = getVsDevShellPath();
-            const env = await detectEnv(String(msg.value || ''), vsPath);
-            setState('envInfo', env);
+            const env2 = await detectEnv();
+            setState('envInfo', env2);
             pushEnvUpdate();
             break;
         }

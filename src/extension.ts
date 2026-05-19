@@ -63,8 +63,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // 环境检测（一次）
-    detectEnv(getQtPath(), getVsDevShellPath()).then((env) => {
+    // 环境检测（一次，全量扫描获取完整候选列表）
+    detectEnv().then((env) => {
         setState('envInfo', env);
         logger.info('启动环境检测完成');
     }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));

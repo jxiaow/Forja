@@ -45,21 +45,15 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             }
         });
 
-        // 复用已有的 envInfo，避免重复检测
-        const existingEnv = getState().envInfo;
-        if (existingEnv) {
+        // 始终全量扫描获取完整候选列表（不复用可能是快速路径产生的缓存）
+        logger.info('初始环境检测（全量扫描）');
+        detectEnv().then(env => {
+            logger.info('初始环境检测完成');
+            setState('envInfo', env);
             this._pushEnvUpdate();
-        } else {
-            // 不传 manualPath，确保全量扫描返回完整候选列表
-            logger.info('初始环境检测（全量扫描）');
-            detectEnv().then(env => {
-                logger.info('初始环境检测完成');
-                setState('envInfo', env);
-                this._pushEnvUpdate();
-            }).catch((err) => {
-                logger.error(`初始环境检测失败: ${err}`);
-            });
-        }
+        }).catch((err) => {
+            logger.error(`初始环境检测失败: ${err}`);
+        });
 
         webviewView.webview.onDidReceiveMessage(msg =>
             handleMessage(msg, webviewView.webview,
