@@ -106,7 +106,7 @@ export function getHtml(data: TemplateData): string {
         textQtChip: _escapeHtml(textQtChip),
         textJomChip: _escapeHtml(textJomChip),
         refreshDisabled: !env ? 'disabled' : '',
-        refreshLabel: !env ? '<span class="spin">↻</span>' : '刷新',
+        refreshLabel: !env ? '<span class="spin">↻</span> 检测中...' : '刷新环境检测',
         projectName: _escapeHtml(projectName),
         selC89: _sel(cStandard, 'c89'),
         selC99: _sel(cStandard, 'c99'),
@@ -133,6 +133,9 @@ export function getHtml(data: TemplateData): string {
         qtPathValue: _escapeHtml(qtPath),
         designerPathValue: _escapeHtml(data.designerPath),
         qtSourcePathValue: _escapeHtml(data.qtSourcePath),
+        jomBadgeClass: jomOk ? 'badge-ok' : 'badge-warn',
+        jomSource: jomOk ? '自动检测' : '未找到',
+        effectiveJomPath: _escapeHtml(env?.jom || '未检测到'),
         qtCandidateOptions: (env?.qtCandidates ?? [])
             .map((c: QtInfo) => `<option value="${_escapeHtml(c.path)}">Qt ${_escapeHtml(c.version)} (${_escapeHtml(c.compiler)})</option>`)
             .join(''),

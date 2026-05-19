@@ -40,8 +40,8 @@ test('loadSettings merges partial file with defaults', () => {
     const settings = loadSettings(workspace);
     assert.equal(settings.qtPath, 'D:/Qt/5.15');
     assert.equal(settings.mode, 'release');
-    // 未指定的字段使用默认�?
-    assert.equal(settings.arch, 'x86');
+    // 未指定的字段使用默认值（arch 默认 '' 表示运行时解析）
+    assert.equal(settings.arch, '');
     assert.equal(settings.cStandard, 'c11');
     assert.equal(settings.fileSyncPromptEnabled, true);
     assert.equal(settings.pinnedProject, null);

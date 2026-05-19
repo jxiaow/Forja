@@ -248,6 +248,7 @@ details[open] .arrow { transform: rotate(90deg); }
   width: 100%;
 }
 .custom-select-trigger {
+  position: relative;
   width: 100%;
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
@@ -269,11 +270,14 @@ details[open] .arrow { transform: rotate(90deg); }
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  border: 4px solid transparent;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
   border-top: 5px solid var(--vscode-descriptionForeground);
 }
 .custom-select.open .custom-select-trigger::after {
-  border-top: none;
+  border-top: 0;
   border-bottom: 5px solid var(--vscode-descriptionForeground);
 }
 .custom-select-options {
@@ -397,10 +401,10 @@ details[open] .arrow { transform: rotate(90deg); }
 <body>
 
 
-<!-- ═══════════ Section: 概览 ═══════════ -->
+<!-- ═══════════ Section: 项目 ═══════════ -->
 <div class="section-header" onclick="toggleSection(this)">
   <span class="section-arrow">▼</span>
-  <span class="section-title">概览</span>
+  <span class="section-title">项目</span>
 </div>
 <div class="section-body">
 
@@ -410,26 +414,8 @@ details[open] .arrow { transform: rotate(90deg); }
     <button class="btn btn-sm" onclick="selectProject()">切换</button>
   </div>
 
-  <!-- Environment Status -->
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">环境状态</span>
-      <button id="refreshBtn" class="btn btn-sm" onclick="refreshEnv()" {{refreshDisabled}}>{{refreshLabel}}</button>
-    </div>
-    <div class="status-chips">
-      <!--IF_WIN-->
-      <span class="chip"><span id="dot-vs" class="chip-dot {{dotVsClass}}"></span><span id="text-vs-chip">{{textVsChip}}</span></span>
-      <!--END_WIN-->
-      <span class="chip"><span id="dot-qt" class="chip-dot {{dotQtClass}}"></span><span id="text-qt-chip">{{textQtChip}}</span></span>
-      <span class="chip"><span id="dot-jom" class="chip-dot {{dotJomClass}}"></span><span id="text-jom-chip">{{textJomChip}}</span></span>
-    </div>
-  </div>
-
   <!-- Quick Settings -->
   <div class="card">
-    <div class="card-header">
-      <span class="card-title">项目设置</span>
-    </div>
     <div class="field-row">
       <div class="field">
         <label>C 标准</label>
@@ -462,7 +448,7 @@ details[open] .arrow { transform: rotate(90deg); }
       </div>
       <div class="hint">回车添加，点击标签删除；仅影响 IntelliSense 扫描；已内置排除 build*, debug, release</div>
     </div>
-    <button class="btn btn-primary btn-full" style="margin-top:10px;" onclick="generateIntelliSense()">生成 IntelliSense 配置</button>
+    <button class="btn btn-full" style="margin-top:10px;" onclick="generateIntelliSense()">生成 IntelliSense 配置</button>
 
     <details>
       <summary><span class="arrow">▶</span> 更多设置</summary>
@@ -502,7 +488,7 @@ details[open] .arrow { transform: rotate(90deg); }
 </div>
 
 <!-- ═══════════ Section: 环境 ═══════════ -->
-<div class="section-header collapsed" onclick="toggleSection(this)">
+<div class="section-header" onclick="toggleSection(this)">
   <span class="section-arrow">▼</span>
   <span class="section-title">环境</span>
 </div>
@@ -580,9 +566,20 @@ details[open] .arrow { transform: rotate(90deg); }
     </details>
   </div>
 
+  <!-- jom -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">jom</span>
+      <span id="jom-badge" class="card-badge {{jomBadgeClass}}">{{jomSource}}</span>
+    </div>
+    <div id="jom-path" class="path-display">{{effectiveJomPath}}</div>
+  </div>
+
+  <button id="refreshBtn" class="btn btn-full" onclick="refreshEnv()" {{refreshDisabled}}>{{refreshLabel}}</button>
+
 </div>
 
-<!-- ═══════════ Section: 远程 ═══════════ -->
+<!-- ═══════════ Section: 远程同步 ═══════════ -->
 <div class="section-header collapsed" onclick="toggleSection(this)">
   <span class="section-arrow">▼</span>
   <span class="section-title">远程同步</span>
@@ -738,7 +735,7 @@ function switchTab(name) {
 function selectProject() { vscode.postMessage({ command: 'selectProject' }); }
 function refreshEnv() {
   const btn = document.getElementById('refreshBtn');
-  btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span>';
+  btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span> 检测中...';
   vscode.postMessage({ command: 'refreshEnv' });
 }
 function onVersionChange() {
@@ -988,14 +985,22 @@ window.addEventListener('message', e => {
     else if (d.targetId === 'manualProPath') { saveManualProPath(); }
     else if (d.targetId === 'rccProjectPath') { saveRccProjectPath(); }
   } else if (d.command === 'envUpdated') {
-    const setDot = (id, ok) => { const el = document.getElementById(id); if (el) { el.className = 'chip-dot ' + (ok ? 'dot-ok' : 'dot-warn'); } };
-    setDot('dot-qt', !!d.env.qt);
-    setDot('dot-jom', d.env.jom);
-    if (d.isWin) { setDot('dot-vs', !!d.env.vs); setText('text-vs-chip', d.env.vs ? d.env.vs.split('(')[0].trim() : 'VS 未检测'); }
-    setText('text-qt-chip', d.env.qt ? d.env.qt.split('(')[0].trim() : 'Qt 未检测');
-    const makeLabel = d.isWin ? 'jom' : 'make';
-    setText('text-jom-chip', d.env.jom ? makeLabel : makeLabel + ' ✗');
-    const btn = document.getElementById('refreshBtn'); btn.disabled = false; btn.innerHTML = '刷新';
+    // 更新环境区卡片的 badge 和路径
+    if (d.isWin) {
+      const vsBadge = document.getElementById('vs-badge');
+      if (vsBadge) { vsBadge.className = 'card-badge ' + (d.env.vs ? 'badge-ok' : 'badge-warn'); vsBadge.textContent = d.env.vs ? '自动检测' : '未配置'; }
+      const vsPath = document.getElementById('vs-path');
+      if (vsPath) { vsPath.textContent = d.env.vs || '未检测到'; }
+    }
+    const qtBadge = document.getElementById('qt-badge');
+    if (qtBadge) { qtBadge.className = 'card-badge ' + (d.env.qt ? 'badge-ok' : 'badge-warn'); }
+    const qtPath = document.getElementById('qt-path');
+    if (qtPath && d.env.qt) { qtPath.textContent = d.env.qt; }
+    const jomBadge = document.getElementById('jom-badge');
+    if (jomBadge) { jomBadge.className = 'card-badge ' + (d.env.jom ? 'badge-ok' : 'badge-warn'); jomBadge.textContent = d.env.jom ? '自动检测' : '未找到'; }
+    const jomPath = document.getElementById('jom-path');
+    if (jomPath) { jomPath.textContent = d.env.jom || '未检测到'; }
+    const btn = document.getElementById('refreshBtn'); btn.disabled = false; btn.innerHTML = '刷新环境检测';
     // 更新候选下拉列表
     if (d.vsCandidates && d.vsCandidates.length > 0) {
       const vsSel = document.getElementById('vsVersion');
@@ -1016,16 +1021,7 @@ window.addEventListener('message', e => {
       }
     }
   } else if (d.command === 'envDetecting') {
-    if (!d.scope || d.scope === 'vs') {
-      const el = document.getElementById('dot-vs'); if (el) { el.className = 'chip-dot dot-detecting'; }
-      setText('text-vs-chip', '检测中...');
-    }
-    if (!d.scope || d.scope === 'qt') {
-      const el2 = document.getElementById('dot-qt'); if (el2) { el2.className = 'chip-dot dot-detecting'; }
-      const el3 = document.getElementById('dot-jom'); if (el3) { el3.className = 'chip-dot dot-detecting'; }
-      setText('text-qt-chip', '检测中...'); setText('text-jom-chip', '检测中...');
-    }
-    const btn = document.getElementById('refreshBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span>';
+    const btn = document.getElementById('refreshBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span> 检测中...';
   } else if (d.command === 'devShellUpdated') {
     const badge = document.getElementById('vs-badge');
     if (badge) { badge.className = 'card-badge ' + (d.ok ? 'badge-ok' : 'badge-warn'); badge.textContent = d.source; }

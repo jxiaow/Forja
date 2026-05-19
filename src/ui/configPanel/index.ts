@@ -82,7 +82,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         this._view?.webview.postMessage({ command: 'envUpdated', isWin, env: {
             vs: env?.vs ? `VS ${env.vs.version} ${env.vs.edition}` : null,
             qt: env?.qt ? `Qt ${env.qt.version} (${env.qt.compiler})` : null,
-            jom: !!env?.jom
+            jom: env?.jom || null
         },
         vsCandidates: (env?.vsCandidates ?? []).map(c => ({ label: `VS ${c.version} ${c.edition}`, value: c.devShellPath })),
         qtCandidates: (env?.qtCandidates ?? []).map(c => ({ label: `Qt ${c.version} (${c.compiler})`, value: c.path }))

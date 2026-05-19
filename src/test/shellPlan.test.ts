@@ -20,8 +20,8 @@ test('shell plan builder creates qmake command without vscode dependency', () =>
 
     assert.equal(plan.matcher, '$msCompile');
     assert.deepEqual(plan.commands, [
-        'call "C:/VS/Common7/Tools/VsDevCmd.bat" -arch=x86 -no_logo',
         'set "PATH=D:\\Qt\\5.15.2\\msvc2019\\bin;%PATH%"',
+        'call "C:/VS/Common7/Tools/VsDevCmd.bat" -arch=x86 -no_logo',
         'cd /d "D:/demo"',
         '"D:/Qt/5.15.2/msvc2019/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86'
     ]);
