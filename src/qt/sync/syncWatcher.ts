@@ -7,10 +7,23 @@ import { syncChangedFiles, askPassword, clearPasswordCache } from './sftpClient'
 import { testConnection } from './transport';
 import { getWorkspaceRoot } from '../services/configService';
 import { createLogger } from '../../core/logger';
+import { resolveGitRoots } from '../../core/gitRepoResolver';
 
 const logger = createLogger('SyncManager');
 
 let _statusItem: vscode.StatusBarItem | null = null;
+const _hostKeyWarningShown = new Set<string>();
+
+/** 首次连接时提示用户 StrictHostKeyChecking 状态 */
+function _warnHostKeyCheckingIfNeeded(server: ServerConfig): void {
+    if (server.strictHostKeyChecking) { return; }
+    if (_hostKeyWarningShown.has(server.id)) { return; }
+    _hostKeyWarningShown.add(server.id);
+    vscode.window.showInformationMessage(
+        `服务器 "${server.name}" 未启用主机密钥检查（StrictHostKeyChecking=no）。如连接公网服务器，建议在服务器配置中启用。`,
+        '知道了'
+    );
+}
 
 export function registerSyncWatcher(context: vscode.ExtensionContext): void {
     const wsRoot = getWorkspaceRoot();
@@ -25,8 +38,7 @@ export function registerSyncWatcher(context: vscode.ExtensionContext): void {
     }
 
     // 监听全局 servers.json（位于 ~/.compilot/）
-    const os = require('os');
-    const path = require('path');
+    const os = require('os') as typeof import('os');
     const globalServersDir = path.join(os.homedir(), '.compilot');
     const globalPattern = new vscode.RelativePattern(vscode.Uri.file(globalServersDir), 'servers.json');
     const globalWatcher = vscode.workspace.createFileSystemWatcher(globalPattern);
@@ -91,29 +103,56 @@ export async function executeSyncChangedFiles(): Promise<void> {
         return;
     }
 
+    // 收集所有 git 仓库
+    const allGitRoots: { dir: string; name: string }[] = [];
+    for (const folder of folders) {
+        const gitRoots = resolveGitRoots(folder.uri.fsPath);
+        allGitRoots.push(...gitRoots);
+    }
+
+    if (allGitRoots.length === 0) {
+        vscode.window.showWarningMessage('未找到 git 仓库');
+        return;
+    }
+
+    // 多个仓库时让用户选择
+    let selectedRoots = allGitRoots;
+    if (allGitRoots.length > 1) {
+        const ALL_LABEL = '$(sync) 全部同步';
+        const items = [
+            { label: ALL_LABEL, description: `${allGitRoots.length} 个仓库`, _all: true },
+            ...allGitRoots.map(r => ({ label: r.name, description: r.dir, _all: false }))
+        ];
+        const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: '选择要同步的仓库',
+            canPickMany: false
+        });
+        if (!picked) { return; }
+        if (!picked._all) {
+            selectedRoots = allGitRoots.filter(r => r.name === picked.label && r.dir === picked.description);
+        }
+    }
+
     await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: `正在同步到 ${resolved.server.name}...`,
         cancellable: false
     }, async () => {
+        _warnHostKeyCheckingIfNeeded(resolved.server);
         try {
             let totalUploaded = 0;
             let totalSkipped = 0;
             const totalFailed: { file: string; error: string }[] = [];
 
-            for (const folder of folders) {
-                const folderPath = folder.uri.fsPath;
-                const folderName = path.basename(folderPath);
-                // 每个文件夹映射到 远程根路径/文件夹名
-                // remotePath 在 scp/ssh 命令中已有引号包裹，此处保持原名
-                const folderResolved: ResolvedSyncConfig = {
+            for (const { dir: gitDir, name: gitName } of selectedRoots) {
+                const repoResolved: ResolvedSyncConfig = {
                     ...resolved,
-                    remotePath: resolved.remotePath.replace(/\/$/, '') + '/' + folderName
+                    remotePath: resolved.remotePath.replace(/\/$/, '') + '/' + gitName
                 };
-                const result = await syncChangedFiles(folderResolved, folderPath);
+                const result = await syncChangedFiles(repoResolved, gitDir);
                 totalUploaded += result.uploaded.length;
                 totalSkipped += result.skipped.length;
-                totalFailed.push(...result.failed.map(f => ({ file: `${folderName}/${f.file}`, error: f.error })));
+                totalFailed.push(...result.failed.map(f => ({ file: `${gitName}/${f.file}`, error: f.error })));
             }
 
             if (totalUploaded === 0 && totalFailed.length === 0 && totalSkipped === 0) {
@@ -171,6 +210,7 @@ export async function executeTestConnection(): Promise<void> {
         title: `正在测试连接 ${server.name}...`,
         cancellable: false
     }, async () => {
+        _warnHostKeyCheckingIfNeeded(server!);
         const result = await testConnection(server!, password);
         if (result.ok) {
             logger.info(`连接成功: ${server!.name} (${server!.username}@${server!.host})`);

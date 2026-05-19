@@ -533,10 +533,8 @@ details[open] .arrow { transform: rotate(90deg); }
     </div>
     <!-- 服务器摘要 -->
     <div id="serverSummary" style="display:none; margin-top:8px; padding:8px; background:var(--bg-card-inner, rgba(255,255,255,0.03)); border-radius:4px;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span id="serverSummaryText" style="font-size:12px; color:var(--text-secondary);"></span>
-        <button class="btn btn-sm" onclick="toggleServerForm()">编辑</button>
-      </div>
+      <div id="serverSummaryText" style="font-size:12px; color:var(--text-secondary); line-height:1.5;"></div>
+      <button class="btn btn-sm" style="margin-top:8px;" onclick="toggleServerForm()">编辑服务器</button>
     </div>
     <!-- 服务器表单 -->
     <div id="serverFormSection" style="margin-top:10px; display:none;">
@@ -733,7 +731,7 @@ function _showServerSummary(id) {
   if (!s) { return; }
   const summary = document.getElementById('serverSummary');
   const text = document.getElementById('serverSummaryText');
-  text.textContent = s.username + '@' + s.host + ':' + s.port + ' → ' + (s.remotePath || '/');
+  text.innerHTML = escapeHtml(s.username + '@' + s.host + ':' + s.port) + '<br>' + '→ ' + escapeHtml(s.remotePath || '/');
   summary.style.display = '';
   document.getElementById('btnTestConn').style.display = '';
 }

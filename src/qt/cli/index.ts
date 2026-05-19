@@ -163,7 +163,7 @@ async function main(argv: string[]): Promise<void> {
                 else { console.log('Sync (plan): 去掉 --plan 执行同步'); }
                 return;
             }
-            const result = await executeSyncCli(workspace, options.server || undefined);
+            const result = await executeSyncCli(workspace, options.server || undefined, options.repo || undefined);
             if (wantsJson) {
                 console.log(JSON.stringify(result, null, 2));
             } else {

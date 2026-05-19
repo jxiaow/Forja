@@ -25,7 +25,9 @@ function _scanSubDirsAbs(absDir: string, extraSkip: string[], depth: number = 0)
                 result.push(..._scanSubDirsAbs(path.join(absDir, e.name), extraSkip, depth + 1));
             }
         }
-    } catch { /* directory scan failure */ }
+    } catch (e) {
+        log(`[configGenerator] 目录扫描失败 (${absDir}): ${e instanceof Error ? e.message : e}`);
+    }
     return result;
 }
 
@@ -60,7 +62,9 @@ function detectSdkVersion(): string {
                 .reverse();
             if (versions.length > 0) { return versions[0]; }
         }
-    } catch { /* SDK version scan failure */ }
+    } catch (e) {
+        log(`[configGenerator] SDK 版本扫描失败: ${e instanceof Error ? e.message : e}，使用默认值`);
+    }
     return '10.0.22000.0';
 }
 
@@ -73,7 +77,9 @@ function _parseMakefileVar(makefilePath: string, varName: string): string | null
         const match = content.match(new RegExp(`^${varName}\\s*=\\s*(.+)$`, 'm'));
         if (!match) { return null; }
         return match[1].replace(/#.*$/, '').trim();
-    } catch { /* Makefile read failure */ }
+    } catch (e) {
+        log(`[configGenerator] Makefile 读取失败 (${makefilePath}): ${e instanceof Error ? e.message : e}`);
+    }
     return null;
 }
 

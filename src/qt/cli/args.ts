@@ -29,6 +29,7 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   --vs-dev-shell <path>  Launch-VsDevShell.ps1 路径
   --target <name>        QMake TARGET 覆盖
   --server <name>        同步时指定服务器名称
+  --repo <name>          同步时指定子仓库名称（多仓库工作区）
   --plan                 仅生成命令计划，不执行
   --dry-run              （兼容旧版，等同于 --plan）
   --detach               后台执行，日志落文件，CLI 立即返回
@@ -96,6 +97,7 @@ export function parseCliArgs(args: string[]): CliOptions {
         vsDevShell: null,
         target: null,
         server: null,
+        repo: null,
         detach: false,
         saveLocal: false,
         json: false
@@ -142,6 +144,10 @@ export function parseCliArgs(args: string[]): CliOptions {
                 break;
             case '--server':
                 options.server = readValue(args, i, arg);
+                i++;
+                break;
+            case '--repo':
+                options.repo = readValue(args, i, arg);
                 i++;
                 break;
             case '--save-local':

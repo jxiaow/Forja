@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import * as path from 'path';
 import { SdkProjectInfo } from '../types';
-import { EXCLUDE_DIRS, DEFAULT_SCAN_DEPTH, CFG_SECTION, SCAN_TIMEOUT_MS } from '../constants';
+import { EXCLUDE_DIRS, EXCLUDE_PATH_SEGMENTS, DEFAULT_SCAN_DEPTH, SCAN_TIMEOUT_MS } from '../constants';
 import { isWindows } from '../platform';
 import { log, logError } from '../utils/logger';
+import { loadSdkSettings } from '../cli/settings';
 
 export class ProjectScanner {
   private _projects: SdkProjectInfo[] = [];
@@ -21,21 +23,24 @@ export class ProjectScanner {
       return [];
     }
 
-    const config = vscode.workspace.getConfiguration(CFG_SECTION);
-    const maxDepth = config.get<number>('scanDepth') || DEFAULT_SCAN_DEPTH;
+    const wsRoot = workspaceFolders[0].uri.fsPath;
+    const settings = loadSdkSettings(wsRoot);
+    const maxDepth = settings.scanDepth || DEFAULT_SCAN_DEPTH;
+    const filePattern = isWindows ? /\.sln$/i : /^(Makefile|makefile|GNUmakefile)$/;
 
-    // 构建 glob 模式（限制深度）
-    const pattern = isWindows ? '**/*.sln' : '**/Makefile';
+    log(`开始 fs 遍历扫描, 最大深度: ${maxDepth}, 排除目录: ${EXCLUDE_DIRS.join(',')}, 排除路径: ${EXCLUDE_PATH_SEGMENTS.join(',')}`);
 
-    // 构建排除模式
-    const excludePattern = `{${EXCLUDE_DIRS.map(d => `**/${d}/**`).join(',')}}`;
-
-    log(`扫描模式: ${pattern}, 排除: ${excludePattern}, 最大深度: ${maxDepth}`);
+    const allResults: vscode.Uri[] = [];
 
     try {
-      const files = await this.findFilesWithTimeout(pattern, excludePattern, maxDepth);
-      log(`findFiles 返回 ${files.length} 个文件`);
-      this._projects = files.map(uri => this.uriToProjectInfo(uri));
+      await this.scanWithTimeout(() => {
+        for (const folder of workspaceFolders) {
+          const wsRoot = folder.uri.fsPath;
+          this.walk(wsRoot, wsRoot, 0, maxDepth, filePattern, allResults);
+        }
+      });
+      log(`fs 遍历返回 ${allResults.length} 个文件`);
+      this._projects = allResults.map(uri => this.uriToProjectInfo(uri));
     } catch (err) {
       logError('项目扫描失败', err);
       this._projects = [];
@@ -44,35 +49,53 @@ export class ProjectScanner {
     return this._projects;
   }
 
-  /** 带超时的文件搜索 */
-  private findFilesWithTimeout(
-    pattern: string,
-    excludePattern: string,
-    _maxDepth: number
-  ): Promise<vscode.Uri[]> {
+  /** 递归遍历目录 */
+  private walk(
+    dir: string,
+    wsRoot: string,
+    currentDepth: number,
+    maxDepth: number,
+    filePattern: RegExp,
+    results: vscode.Uri[]
+  ): void {
+    if (currentDepth > maxDepth) { return; }
+
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (EXCLUDE_DIRS.includes(entry.name)) { continue; }
+        const subDir = path.join(dir, entry.name);
+        // 检查路径片段排除
+        const relativePath = path.relative(wsRoot, subDir).replace(/\\/g, '/');
+        if (EXCLUDE_PATH_SEGMENTS.some(seg => relativePath.includes(seg))) { continue; }
+        this.walk(subDir, wsRoot, currentDepth + 1, maxDepth, filePattern, results);
+      } else if (entry.isFile() && filePattern.test(entry.name)) {
+        results.push(vscode.Uri.file(path.join(dir, entry.name)));
+      }
+    }
+  }
+
+  /** 带超时的扫描执行 */
+  private scanWithTimeout(scanFn: () => void): Promise<void> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error('Scan timed out'));
       }, SCAN_TIMEOUT_MS);
 
-      vscode.workspace.findFiles(pattern, excludePattern, 100).then(
-        (files) => {
-          clearTimeout(timer);
-          // 过滤深度
-          const filtered = files.filter(uri => {
-            const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-            if (!workspaceFolder) { return false; }
-            const relativePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
-            const depth = relativePath.split(path.sep).length;
-            return depth <= _maxDepth;
-          });
-          resolve(filtered);
-        },
-        (err) => {
-          clearTimeout(timer);
-          reject(err);
-        }
-      );
+      try {
+        scanFn();
+        clearTimeout(timer);
+        resolve();
+      } catch (err) {
+        clearTimeout(timer);
+        reject(err);
+      }
     });
   }
 

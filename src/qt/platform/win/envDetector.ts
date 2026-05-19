@@ -53,6 +53,47 @@ function detectCompiler(qtPath: string): string {
     return 'msvc2019';
 }
 
+/** 从注册表扫描 Qt 安装路径 */
+async function _scanQtFromRegistry(): Promise<string[]> {
+    const results: string[] = [];
+    // Qt 安装器常见注册表位置
+    const regKeys = [
+        'HKCU\\Software\\QtProject',
+        'HKLM\\SOFTWARE\\WOW6432Node\\Digia\\Versions',
+        'HKLM\\SOFTWARE\\Digia\\Versions'
+    ];
+    for (const key of regKeys) {
+        try {
+            const out = await execAsync('reg', ['query', key, '/s']);
+            // 提取看起来像 Qt 路径的值（包含 qmake 的目录）
+            const lines = out.split('\n');
+            for (const line of lines) {
+                const match = line.match(/REG_SZ\s+(.+)/i);
+                if (!match) { continue; }
+                const value = match[1].trim();
+                // 检查是否是有效的 Qt 编译器目录（含 bin/qmake.exe）
+                if (hasQmake(value)) {
+                    if (!results.includes(value)) {
+                        log(`[Win] 注册表找到 Qt: "${value}"`);
+                        results.push(value);
+                    }
+                }
+                // 也检查是否是 Qt 根目录（需要向下找版本子目录）
+                if (fs.existsSync(value) && !hasQmake(value)) {
+                    const subPaths = await scanQt([value], 'Win');
+                    for (const sp of subPaths) {
+                        if (!results.includes(sp)) {
+                            log(`[Win] 注册表子目录找到 Qt: "${sp}"`);
+                            results.push(sp);
+                        }
+                    }
+                }
+            }
+        } catch { /* registry key not found or access denied */ }
+    }
+    return results;
+}
+
 async function detectQt(manualPath?: string): Promise<{ qt: QtInfo | null; candidates: QtInfo[] }> {
     const candidates: QtInfo[] = [];
 
@@ -61,6 +102,14 @@ async function detectQt(manualPath?: string): Promise<{ qt: QtInfo | null; candi
     const foundPaths = await scanQt(parentDirs, 'Win');
     for (const p of foundPaths) {
         candidates.push(await parseQtInfo(p, detectCompiler(p)));
+    }
+
+    // 1.5 注册表扫描（Qt 安装器可能写入非标准路径）
+    const regPaths = await _scanQtFromRegistry();
+    for (const rp of regPaths) {
+        if (!candidates.some(c => c.path === rp)) {
+            candidates.push(await parseQtInfo(rp, detectCompiler(rp)));
+        }
     }
 
     // 2. 系统 PATH（where qmake）

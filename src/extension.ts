@@ -50,8 +50,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 全局任务结束监听：兜底重置 isBuilding / isRunning（防止关闭终端后状态卡住）
     context.subscriptions.push(
         vscode.tasks.onDidEndTask(e => {
-            const name = e.execution.task.name;
-            if (name.startsWith('Build ') || name.startsWith('QMake ') || name.startsWith('Clean ')) {
+            const task = e.execution.task;
+            if (task.source !== 'Compilot Qt') { return; }
+            const name = task.name;
+            if (name.startsWith('Build ') || name.startsWith('QMake ') || name.startsWith('Clean ') || name === 'RCC Compile') {
                 setState('isBuilding', false);
                 setState('buildAction', null);
             }

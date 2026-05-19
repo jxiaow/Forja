@@ -15,6 +15,7 @@ export interface CliOptions {
     vsDevShell: string | null;
     target: string | null;
     server?: string | null;
+    repo?: string | null;
     detach?: boolean;
     saveLocal: boolean;
     json: boolean;

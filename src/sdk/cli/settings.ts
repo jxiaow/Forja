@@ -10,6 +10,7 @@ export interface SdkSettings {
     arch: 'x86' | 'x64';
     vsDevCmdPath: string;
     pinnedProject: string | null;
+    scanDepth?: number;
 }
 
 const DEFAULT_SDK_SETTINGS: SdkSettings = {
@@ -32,7 +33,8 @@ export function loadSdkSettings(workspace: string): SdkSettings {
                 mode: (raw.mode === 'debug' || raw.mode === 'release') ? raw.mode : DEFAULT_SDK_SETTINGS.mode,
                 arch: (raw.arch === 'x86' || raw.arch === 'x64') ? raw.arch : DEFAULT_SDK_SETTINGS.arch,
                 vsDevCmdPath: typeof raw.vsDevCmdPath === 'string' ? raw.vsDevCmdPath : '',
-                pinnedProject: typeof raw.pinnedProject === 'string' ? raw.pinnedProject : null
+                pinnedProject: typeof raw.pinnedProject === 'string' ? raw.pinnedProject : null,
+                scanDepth: typeof raw.scanDepth === 'number' && raw.scanDepth >= 1 ? raw.scanDepth : undefined
             };
         }
     } catch { /* file missing or malformed */ }

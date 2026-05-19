@@ -122,6 +122,8 @@ export function writeServers(servers: ServerConfig[]): void {
         strictHostKeyChecking: s.strictHostKeyChecking || undefined
     }));
     atomicWriteJson(_serversFilePath(), stored);
+    // 收紧文件权限（仅当前用户可读写）— Windows 上 chmod 无效但不报错
+    try { fs.chmodSync(_serversFilePath(), 0o600); } catch { /* non-critical */ }
 }
 
 export function addServer(server: Omit<ServerConfig, 'id'>): ServerConfig {

@@ -9,7 +9,6 @@ export const CFG_PINNED_PROJECT = 'compilot.sdk.pinnedProject';
 export const CFG_MODE = 'compilot.sdk.mode';
 export const CFG_ARCH = 'compilot.sdk.arch';
 export const CFG_VS_DEV_CMD_PATH = 'compilot.sdk.vsDevCmdPath';
-export const CFG_SCAN_DEPTH = 'compilot.sdk.scanDepth';
 
 /** 配置 section */
 export const CFG_SECTION = 'compilot.sdk';
@@ -26,12 +25,16 @@ export const EXCLUDE_DIRS = [
     'out',
     'dist',
     '.git',
-    'build/output',
     '.work'
 ];
 
+/** 排除路径片段（用于匹配相对路径中的子路径） */
+export const EXCLUDE_PATH_SEGMENTS = [
+    'build/output'
+];
+
 /** 默认扫描深度 */
-export const DEFAULT_SCAN_DEPTH = 6;
+export const DEFAULT_SCAN_DEPTH = 8;
 
 /** 扫描超时（毫秒） */
 export const SCAN_TIMEOUT_MS = 30000;

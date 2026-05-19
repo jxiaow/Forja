@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as cp from 'child_process';
-import { EXCLUDE_DIRS, DEFAULT_SCAN_DEPTH } from '../constants';
+import { EXCLUDE_DIRS, EXCLUDE_PATH_SEGMENTS, DEFAULT_SCAN_DEPTH } from '../constants';
 import { getSdkDefaultArch, getSdkAvailableArch } from './requirements';
 import { loadSdkSettings, saveSdkSettings, SdkSettings, sdkSettingsFilePath } from './settings';
 import { detectVsInstallations, detectMake } from './envDetector';
@@ -120,9 +120,11 @@ export function scanProjects(workspace: string, depth: number = DEFAULT_SCAN_DEP
         }
         for (const entry of entries) {
             if (entry.isDirectory()) {
-                if (!EXCLUDE_DIRS.includes(entry.name)) {
-                    walk(path.join(dir, entry.name), currentDepth + 1);
-                }
+                if (EXCLUDE_DIRS.includes(entry.name)) { continue; }
+                const subDir = path.join(dir, entry.name);
+                const relativePath = path.relative(workspace, subDir).replace(/\\/g, '/');
+                if (EXCLUDE_PATH_SEGMENTS.some(seg => relativePath.includes(seg))) { continue; }
+                walk(subDir, currentDepth + 1);
             } else if (entry.isFile() && pattern.test(entry.name)) {
                 results.push(path.join(dir, entry.name));
             }
@@ -245,7 +247,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 compilot sdk env --json 查看可选项` });
             }
             if (!project) {
-                const candidates = scanProjects(options.workspace);
+                const candidates = scanProjects(options.workspace, settings.scanDepth || DEFAULT_SCAN_DEPTH);
                 if (candidates.length > 1) {
                     diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，未自动选择，可用 compilot sdk projects --json 查看全部` });
                 } else if (candidates.length === 0) {
@@ -316,7 +318,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
 
         // ── projects ──
         if (options.action === 'projects') {
-            const candidates = scanProjects(options.workspace);
+            const candidates = scanProjects(options.workspace, settings.scanDepth || DEFAULT_SCAN_DEPTH);
             const currentProject = settings.pinnedProject;
             const available = candidates.map(c => ({
                 path: path.relative(options.workspace, c) || c,
@@ -344,7 +346,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         }
 
         // ── 解析项目 ──
-        const candidates = scanProjects(options.workspace);
+        const candidates = scanProjects(options.workspace, settings.scanDepth || DEFAULT_SCAN_DEPTH);
         let projectPath = options.project ? path.resolve(options.project) : null;
         if (!projectPath && settings.pinnedProject) {
             const pinned = path.join(options.workspace, settings.pinnedProject);

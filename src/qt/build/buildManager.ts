@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
-import { setState } from '../../core/stateManager';
+import { setState, getState } from '../../core/stateManager';
 import { getBuildConfig, getRccProjectPath } from '../services/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
 import { winConfig, getVsDevCmd } from '../platform/win/builder';
@@ -15,6 +15,17 @@ import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommand
 const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
 const isWin = process.platform === 'win32';
 const logger = createLogger('Build');
+
+/** Guard: 环境检测未完成时阻止构建操作 */
+function _ensureEnvReady(): boolean {
+    const env = getState().envInfo;
+    if (!env) {
+        vscode.window.showWarningMessage('环境检测尚未完成，请稍后再试');
+        logger.warn('操作被阻止：envInfo 为 null（环境检测未完成）');
+        return false;
+    }
+    return true;
+}
 
 /** Module-level disposable for Run task end listener (cleaned up on next run or extension deactivate) */
 let _runEndDisposable: vscode.Disposable | undefined;
@@ -76,12 +87,14 @@ function _resolveMakefileInfo(): ReturnType<typeof getMakefileInfo> {
 }
 
 export function qmake(): Thenable<vscode.TaskExecution> {
+    if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     const { commands, matcher } = builder.qmakeCommands(cfg);
     return runTask(`QMake ${cfg.mode}`, commands, matcher);
 }
 
 export function qmakeForDebug(): Thenable<vscode.TaskExecution> {
+    if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     const extraConfigs = cfg.mode === 'release'
         ? ['CONFIG+=force_debug_info']
@@ -94,12 +107,14 @@ export function qmakeForDebug(): Thenable<vscode.TaskExecution> {
 }
 
 export function build(): Thenable<vscode.TaskExecution> {
+    if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     const { commands, matcher } = builder.buildCommands(cfg);
     return runTask(`Build ${cfg.mode}`, commands, matcher);
 }
 
 export function clean(): Thenable<vscode.TaskExecution> {
+    if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     const { commands, matcher } = builder.cleanCommands(cfg);
     return runTask(`Clean ${cfg.mode}`, commands, matcher);
@@ -118,6 +133,7 @@ function _rccNeedsRebuild(): boolean {
 }
 
 export async function run(): Promise<void> {
+    if (!_ensureEnvReady()) { return; }
     const cfg = getBuildConfig();
     setState('isBuilding', true);
     setState('buildAction', 'run');
@@ -255,6 +271,7 @@ export async function run(): Promise<void> {
 }
 
 export function rcc(): Thenable<vscode.TaskExecution> {
+    if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     const wsRoot = resolveProjectRoot();
 

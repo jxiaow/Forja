@@ -23,7 +23,7 @@ export async function askPassword(server: ServerConfig): Promise<string | null> 
     // 缓存
     if (_passwordCache.has(key)) { return _passwordCache.get(key)!; }
 
-    // 从 serverStore 读取（已解密）
+    // 从 serverStore 读取
     if (server.password) {
         _passwordCache.set(key, server.password);
         return server.password;
@@ -54,6 +54,12 @@ export function getGitChangedFiles(workspaceRoot: string): Promise<string[]> {
             if (err) {
                 cp.exec('git status --porcelain -uall', { cwd: workspaceRoot }, (err2, stdout2) => {
                     if (err2) {
+                        // 非 git 仓库时返回空数组而非报错
+                        if (err2.message.includes('not a git repository')) {
+                            logger.warn(`目录不是 git 仓库，跳过: ${workspaceRoot}`);
+                            resolve([]);
+                            return;
+                        }
                         reject(new Error(`git 命令失败: ${err2.message}`));
                         return;
                     }
