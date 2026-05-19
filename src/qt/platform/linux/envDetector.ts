@@ -51,16 +51,16 @@ async function detectMake(qt: QtInfo | null): Promise<string | null> {
         const out = await execAsync('which', ['make']);
         const makePath = out.trim();
         if (makePath && fs.existsSync(makePath)) { return makePath; }
-    } catch { /* which not available */ }
+    } catch { /* which not found OK */ }
     try {
         const out = await execAsync('make', ['--version']);
         if (out.toLowerCase().includes('make')) { return 'make'; }
-    } catch { /* make not installed */ }
+    } catch { /* make not available */ }
     return null;
 }
 
 export async function detectEnvLinux(manualQtPath?: string): Promise<EnvInfo> {
     const { qt, candidates } = await detectQt(manualQtPath);
     const jom = await detectMake(qt);
-    return { vs: null, qt, qtCandidates: candidates, jom };
+    return { vs: null, qt, qtCandidates: candidates, vsCandidates: [], jom };
 }

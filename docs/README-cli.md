@@ -19,13 +19,13 @@ Skill 文件位于 CLI 包的 `skills/compilot/` 目录下，安装�?AI 助手
 ## 快速开�?
 
 ```bash
-# 1. 查看环境状�?
+# 1. 查看环境状态
 compilot qt status --json
 
 # 2. 初始化（检测环境、保存配置，只需一次）
 compilot qt init --json
 
-# 3. 之后直接�?
+# 3. 之后直接用
 compilot qt build --json
 compilot qt run --detach --json
 
@@ -43,10 +43,9 @@ compilot sdk status --json
 | 选项 | 说明 |
 |------|------|
 | `--workspace <path>` | 工作区路径，默认当前目录 |
-| `--plan` | 仅显示命令计划，不执�?|
-| `--json` | 输出结构�?JSON |
-| `` | 精简 JSON（仅 ok、diagnostics、logFile 等关键字段） |
-| `--detach` | 后台执行，日志落文件，CLI 立即返回 |
+| `--plan` | 仅显示命令计划，不执行 |
+| `--json` | 输出结构化 JSON |
+| `| `--detach` | 后台执行，日志落文件，CLI 立即返回 |
 
 提示�?
 
@@ -82,13 +81,12 @@ compilot sdk status --json
   },
   "rccProjectPath": "...", // RCC 项目路径（status 时）
   "errors": [...],         // 编译错误行（build/run 失败时）
-  "logFile": "...",        // 日志文件路径（detach 模式�?
+  "logFile": "...",        // 日志文件路径（detach 模式）
   "exitCode": 0            // 进程退出码
 }
 ```
 
-`` 模式只保�?`ok`、`action`、`project`、`candidates`、`diagnostics`、`nextActions`、`resolved`、`rccProjectPath`、`errors`、`logFile`、`exitCode` 中的非空字段�?
-
+`
 ## Qt 命令
 
 ### `compilot qt status`
@@ -141,7 +139,7 @@ compilot qt qmake
 ```bash
 compilot qt build
 compilot qt build --project "app/app.pro" --mode release
-compilot qt build --plan --json    # 仅查看命令计�?
+compilot qt build --plan --json    # 仅查看命令计划
 ```
 
 | 选项 | 说明 |
@@ -234,8 +232,7 @@ RCC 项目路径解析顺序�?
 
 ## SDK 命令
 
-SDK 命令用于 `.sln` �?`Makefile` 项目。支�?`--workspace`、`--plan`、`--json`、`` 通用选项�?
-
+SDK 命令用于 `.sln` 或 `Makefile` 项目。支持 `--workspace`、`--plan`、`--json`、`
 ### `compilot sdk status`
 
 查看 SDK 项目状态和候选项目列表�?
@@ -270,6 +267,70 @@ compilot sdk clean
 ```
 
 ## Remote 命令
+
+远程编译部署相关操作。
+
+### `compilot remote test`
+
+测试远程连接（SSH 连通性 + remotePath 存在 + compilot 版本）。
+
+```bash
+compilot remote test --json
+```
+
+### `compilot remote setup`
+
+交互式配置远程编译环境（选择服务器、测试连接、创建远程目录）。
+
+```bash
+compilot remote setup
+```
+
+## 远程模式（--remote）
+
+Qt 和 SDK 的 build/run 命令支持 `--remote` 标志，触发完整远程部署流程：
+
+```bash
+# Qt 远程编译部署
+compilot qt build --remote --json
+
+# SDK 远程编译部署
+compilot sdk build --remote --json
+
+# 快速模式（跳过 branchSync 和 baselineCheck）
+compilot qt build --remote --fast --json
+
+# 从指定阶段开始（跳过前面的阶段）
+compilot qt build --remote --from build --json
+
+# 强制执行（忽略基线不一致警告）
+compilot qt build --remote --force --json
+```
+
+| 选项 | 说明 |
+|------|------|
+| `--remote` | 启用远程模式 |
+| `--fast` | 快速模式，跳过 preCheck、branchSync 和 baselineCheck |
+| `--from <stage>` | 从指定阶段开始（preCheck/branchSync/sync/baselineCheck/build/transfer/stop/launch） |
+| `--force` | 忽略基线不一致等非致命错误 |
+
+远程模式执行流程：preCheck → branchSync → sync → baselineCheck → build → transfer → stop → launch
+
+### 远程配置
+
+远程模式需要以下配置：
+
+```
+.compilot/
+├── sync-config.json       # selectedServer + branchSync + buildOrder
+└── deploy.json            # 部署服务器 + 启动命令（可选）
+```
+
+- `sync-config.json` 中的 `selectedServer` 指定编译机
+- `deploy.json` 配置部署机和启动命令（编译机和部署机相同时可省略）
+- 服务器信息存储在 `~/.compilot/servers.json`
+
+## 本地状态
 
 远程编译部署相关操作�?
 
@@ -340,8 +401,8 @@ compilot qt build --remote --force --json
 ```
 .compilot/
 ├── settings.json     # 唯一配置源（mode、arch、路径、项目选择等）
-├── cache.json        # 环境检测缓存（自动生成�?
-├── sync-config.json  # 同步开�?+ 忽略列表 + branchSync + buildOrder
+├── cache.json        # 环境检测缓存（自动生成）
+├── sync-config.json  # 同步开关 + 忽略列表 + branchSync + buildOrder
 └── deploy.json       # 远程部署配置（部署服务器、启动命令）
 ```
 

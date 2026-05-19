@@ -68,16 +68,22 @@ test('createActionPlan reports multiple projects without explicit project', asyn
     assert.equal(result.ok, false);
     assert.equal(result.diagnostics[0].level, 'error');
     assert.match(result.diagnostics[0].message, /发现多个 .pro 文件/);
-    assert.equal(result.candidates.length, 2);
-    assert.match(result.nextActions[0], /--project/);
+    assert.ok(result.nextActions.some(a => /status --json/.test(a)));
 });
 
-test('createActionPlan status returns resolved config and candidates without executing', async () => {
+test('createActionPlan status returns checks and resolved config', async () => {
     const workspace = makeWorkspace();
+    // Save settings so status sees an initialized project
+    saveSettings(workspace, {
+        ...DEFAULT_SETTINGS,
+        pinnedProject: { root: workspace, relative: 'demo.pro' },
+        qtPath: 'D:/Qt',
+        jomPath: 'C:/jom/jom.exe'
+    });
 
     const result = await createActionPlan({
         action: 'status',
-        executionMode: 'dryRun',
+        executionMode: 'execute',
         workspace,
         project: null,
         mode: null,
@@ -90,11 +96,16 @@ test('createActionPlan status returns resolved config and candidates without exe
     });
 
     assert.equal(result.ok, true);
-    assert.equal(result.commands.length, 0);
-    assert.equal(result.project, path.join(workspace, 'demo.pro'));
-    assert.equal(result.candidates.length, 1);
     assert.equal(result.resolved?.mode, 'debug');
     assert.equal(result.resolved?.arch, 'x86');
+    // stdout contains custom status structure
+    const statusData = JSON.parse(result.stdout);
+    assert.equal(statusData.checks.settings, true);
+    assert.equal(statusData.checks.project, true);
+    assert.equal(statusData.checks.qtPath, true);
+    assert.equal(statusData.checks.jom, true);
+    assert.equal(typeof statusData.ready, 'boolean');
+    assert.ok(statusData.nextAction);
 });
 
 test('createActionPlan qmake warns when Qt and VS environment are unresolved', async () => {
@@ -117,10 +128,7 @@ test('createActionPlan qmake warns when Qt and VS environment are unresolved', a
     assert.equal(result.ok, true);
     assert.equal(result.project, path.join(workspace, 'demo.pro'));
     assert.match(result.commands.join('\n'), /qmake/);
-    assert.ok(result.diagnostics.some(d => /Qt 路径未解/.test(d.message)));
-    assert.ok(result.diagnostics.some(d => /VS DevShell 路径未解/.test(d.message)));
-    assert.ok(result.nextActions.some(action => /--qt-path/.test(action)));
-    assert.ok(result.nextActions.some(action => /--vs-dev-shell/.test(action)));
+    // 执行层不再自行诊断环境问题，交给 status
 });
 
 test('createActionPlan clean generates clean commands', async () => {
@@ -166,9 +174,7 @@ test('createActionPlan init dry-run previews what would be created', async () =>
     assert.equal(result.ok, true);
     assert.equal(result.action, 'init');
     assert.ok(result.diagnostics.length > 0);
-    assert.ok(result.diagnostics.some(d => /\.compilot/.test(d.message)));
-    assert.ok(result.diagnostics.some(d => /\.gitignore/.test(d.message)));
-    assert.ok(result.diagnostics.some(d => /cache\.json/.test(d.message)));
+    assert.ok(result.diagnostics.some(d => /\.compilot/.test(d.message) || /settings\.json/.test(d.message)));
     assert.ok(result.nextActions.some(a => /init --json/.test(a)));
 });
 
@@ -192,12 +198,10 @@ test('run without Makefile returns fallback build commands and qmake hint', asyn
     assert.equal(result.ok, true);
     assert.ok(result.commands.length > 0, 'should return fallback build commands');
     assert.ok(result.diagnostics.some(d => /Makefile/.test(d.message)));
-    assert.ok(result.nextActions.some(a => /qmake/.test(a)));
-    // Without explicit --mode/--arch, hint should be plain "qmake"
-    assert.ok(result.nextActions.some(a => a === '先执行 qmake 生成 Makefile，再重新调用 run'));
+    assert.ok(result.nextActions.some(a => /status --json/.test(a)));
 });
 
-test('run without Makefile includes --mode/--arch in qmake hint when CLI-passed', async () => {
+test('run without Makefile includes status hint when CLI-passed mode/arch', async () => {
     const workspace = makeWorkspace();
 
     const result = await createActionPlan({
@@ -215,10 +219,7 @@ test('run without Makefile includes --mode/--arch in qmake hint when CLI-passed'
     });
 
     assert.equal(result.ok, true);
-    const qmakeHint = result.nextActions.find(a => /qmake/.test(a));
-    assert.ok(qmakeHint);
-    assert.match(qmakeHint!, /--mode release/);
-    assert.match(qmakeHint!, /--arch x64/);
+    assert.ok(result.nextActions.some(a => /status --json/.test(a)));
 });
 
 test('CLI args override settings for mode/arch/qtPath', async () => {
@@ -252,7 +253,7 @@ test('CLI args override settings for mode/arch/qtPath', async () => {
     assert.equal(result.resolved?.vsDevShell, 'C:/VS-new/Launch-VsDevShell.ps1');
 });
 
-test('nextActions warns differently when --qt-path is CLI-passed but resolves empty', async () => {
+test('nextActions points to status when Qt path is empty', async () => {
     const workspace = makeWorkspace();
 
     const result = await createActionPlan({
@@ -269,10 +270,9 @@ test('nextActions warns differently when --qt-path is CLI-passed but resolves em
         json: true
     });
 
-    // qtPath is '' (CLI-passed empty string, but options.qtPath is '' which is not null)
-    // Actually '' is truthy for !== null check — this tests the "CLI passed" path
-    assert.ok(result.diagnostics.some(d => /Qt 路径未解/.test(d.message)));
-    assert.ok(result.nextActions.some(a => /指定的路径未能解析/.test(a)));
+    // 执行层不自行诊断环境问题，成功返回命令
+    assert.equal(result.ok, true);
+    assert.ok(result.commands.length > 0);
 });
 
 test('project error branch fills resolved with current config', async () => {
@@ -389,8 +389,7 @@ test('single candidate project hint includes the path', async () => {
     const workspace = makeWorkspace();
     // Only one .pro file exists (from makeWorkspace)
 
-    // Verify non-existent project path is still accepted (resolveProject doesn't check existence for explicit paths)
-    await createActionPlan({
+    const _result = await createActionPlan({
         action: 'build',
         executionMode: 'dryRun',
         workspace,
@@ -447,10 +446,10 @@ test('no .pro file gives helpful nextAction', async () => {
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未找到 .pro 文件/.test(d.message)));
-    assert.ok(result.nextActions.some(a => /--project/.test(a)));
+    assert.ok(result.nextActions.some(a => /status --json/.test(a)));
 });
 
-test('non-existent qtPath triggers path validation warning', async () => {
+test('non-existent qtPath still generates commands (validation delegated to status)', async () => {
     const workspace = makeWorkspace();
 
     const result = await createActionPlan({
@@ -468,6 +467,97 @@ test('non-existent qtPath triggers path validation warning', async () => {
     });
 
     assert.equal(result.ok, true);
-    assert.ok(result.diagnostics.some(d => /Qt 路径不存在/.test(d.message)));
-    assert.ok(result.nextActions.some(a => /路径不存在/.test(a)));
+    assert.ok(result.commands.length > 0);
+});
+
+test('env action returns current config and available options', async () => {
+    const workspace = makeWorkspace();
+    saveSettings(workspace, {
+        ...DEFAULT_SETTINGS,
+        mode: 'release',
+        arch: 'x64',
+        qtPath: 'D:/Qt/5.15.2/msvc2019'
+    });
+
+    const result = await createActionPlan({
+        action: 'env',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, 'env');
+    assert.ok(result.resolved);
+    assert.equal(result.resolved!.mode, 'release');
+    assert.equal(result.resolved!.arch, 'x64');
+    // stdout contains the available data as JSON
+    const envData = JSON.parse(result.stdout);
+    assert.ok(Array.isArray(envData.available.mode));
+    assert.ok(envData.available.mode.includes('debug'));
+    assert.ok(envData.available.mode.includes('release'));
+    assert.ok(Array.isArray(envData.available.qt));
+    assert.ok(envData.configHints.usage);
+});
+
+test('projects action returns available .pro files', async () => {
+    const workspace = makeWorkspace();
+    // makeWorkspace creates demo.pro; add another
+    fs.writeFileSync(path.join(workspace, 'lib.pro'), 'TARGET = mylib\nQT += core\n', 'utf8');
+
+    const result = await createActionPlan({
+        action: 'projects',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, 'projects');
+    const data = JSON.parse(result.stdout);
+    assert.equal(data.current, null);
+    assert.equal(data.available.length, 2);
+    assert.ok(data.available.some((p: { path: string }) => p.path === 'demo.pro'));
+    assert.ok(data.available.some((p: { path: string }) => p.path === 'lib.pro'));
+    assert.ok(data.configHints.usage);
+});
+
+test('projects action shows pinned project as current', async () => {
+    const workspace = makeWorkspace();
+    saveSettings(workspace, {
+        ...DEFAULT_SETTINGS,
+        pinnedProject: { root: workspace, relative: 'demo.pro' }
+    });
+
+    const result = await createActionPlan({
+        action: 'projects',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    const data = JSON.parse(result.stdout);
+    assert.equal(data.current, 'demo.pro');
 });

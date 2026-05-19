@@ -22,7 +22,7 @@ src/
 ├── ui/                   # Layer 4: 纯 UI 层（状态栏、WebView 面板）
 ├── qt/build/             # Layer 3: Qt 构建任务执行（依赖 vscode.tasks）
 ├── qt/project/           # Layer 3: 项目管理（依赖 vscode.workspace）
-├── qt/sync/              # Layer 3: 远程同步（依赖 vscode + ssh2）
+├── qt/sync/              # Layer 3: 远程同步（依赖 vscode + native SSH/SCP）
 ├── sdk/                  # Layer 3: SDK 模块（独立子系统，依赖 vscode）
 ├── remote/vscode/        # Layer 3: 远程部署 VSCode 适配层（依赖 vscode API）
 ├── qt/platform/builder.ts # Layer 2+: 平台构建器（依赖 vscode.ShellExecution）
@@ -42,8 +42,9 @@ src/
 |------|:-----------:|:------------------------:|
 | `serverStore.ts` | ✗ | ✓ |
 | `settingsIO.ts` | ✗ | ✓ |
-| `workspaceResolver.ts` | ✗ | ✓ |
-| `sshUtils.ts` | ✗ | ✓ |
+| `ssh.ts` | ✗ | ✓ |
+| `syncCli.ts` | ✗ | ✓ |
+| `workspaceResolver.ts` | ✓ | ✗ |
 | `configService.ts` | ✓ | ✗ |
 | `settingsStore.ts` | ✓ | ✗ |
 | `stateManager.ts` | ✓ | ✗ |
@@ -64,7 +65,7 @@ qt/platform/builder.ts       remote/vscode/ (进度、诊断、终端适配)
   ↓ 调用                      ↓ 调用
 qt/platform/shellPlan.ts     remote/core/ (流程编排、SSH、传输、基线校验)
   ↓ 调用                      ↓ 调用
-qt/shared/ (纯逻辑)          core/ (仅纯 Node 子集: serverStore, settingsIO, workspaceResolver)
+qt/shared/ (纯逻辑)          core/ (仅纯 Node 子集: serverStore, settingsIO, ssh)
 
 sdk/ (独立子系统，内部自成体系)
   ├── modules/stateManager.ts (独立状态)
@@ -104,7 +105,8 @@ cli/ → remote/core/（CLI 远程命令入口）
 - 新 CLI 子命令：`src/qt/cli/` 或 `src/sdk/cli/`
 - 不依赖 vscode 的工具函数：`src/qt/shared/` 或 `src/qt/env/utils.ts`
 - 远程部署核心逻辑（SSH、传输、编排）：`src/remote/core/`
-- 远程部署 VSCode 适配（进度、诊断面板）：`src/remote/vscode/`
+- 远程部署 VSCode 适配（进度、诊断面板、命令注册）：`src/remote/vscode/`
+- 远程部署辅助（依赖 qt/shared 但不属于 core 层）：`src/remote/shellFallbackFactory.ts`
 - CLI 远程命令入口：`src/cli/`（调用 `remote/core/`）
 - 新测试：`src/test/`
 

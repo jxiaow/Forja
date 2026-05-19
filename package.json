@@ -3,7 +3,7 @@
   "displayName": "Compilot",
   "publisher": "compilot",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.6.28",
+  "version": "0.7.1",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -182,10 +182,10 @@
       {
         "title": "Compilot SDK",
         "properties": {
-          "compilot.sdk.selectedProject": {
+          "compilot.sdk.pinnedProject": {
             "type": "string",
             "default": "",
-            "description": "当前选中的 SDK 项目入口文件绝对路径",
+            "description": "当前固定的 SDK 项目入口文件绝对路径",
             "scope": "resource"
           },
           "compilot.sdk.mode": {
@@ -216,7 +216,7 @@
           },
           "compilot.sdk.scanDepth": {
             "type": "number",
-            "default": 4,
+            "default": 6,
             "minimum": 1,
             "maximum": 10,
             "description": "项目扫描最大目录深度",

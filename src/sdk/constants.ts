@@ -5,7 +5,7 @@ export const CMD_CLEAN = 'compilot.sdk.clean';
 export const CMD_SHOW_ACTIONS = 'compilot.sdk.showActions';
 
 /** 配置键名 */
-export const CFG_SELECTED_PROJECT = 'compilot.sdk.selectedProject';
+export const CFG_PINNED_PROJECT = 'compilot.sdk.pinnedProject';
 export const CFG_MODE = 'compilot.sdk.mode';
 export const CFG_ARCH = 'compilot.sdk.arch';
 export const CFG_VS_DEV_CMD_PATH = 'compilot.sdk.vsDevCmdPath';
@@ -31,7 +31,7 @@ export const EXCLUDE_DIRS = [
 ];
 
 /** 默认扫描深度 */
-export const DEFAULT_SCAN_DEPTH = 4;
+export const DEFAULT_SCAN_DEPTH = 6;
 
 /** 扫描超时（毫秒） */
 export const SCAN_TIMEOUT_MS = 30000;

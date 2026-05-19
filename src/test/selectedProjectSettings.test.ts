@@ -1,30 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeSelectedProject, encodeSelectedProject } from '../qt/project/selectedProject';
+import { decodePinnedProject, encodePinnedProject } from '../qt/project/pinnedProject';
 
-test('selectedProject setting is managed in .compilot/settings.json (not in package.json contributes)', () => {
+test('pinnedProject setting is managed in .compilot/settings.json (not in package.json contributes)', () => {
     // Configuration is now self-managed in .compilot/settings.json
     // This test verifies the codec still works correctly with the expected format
-    const encoded = encodeSelectedProject('C:/workspace', 'app/demo.pro');
+    const encoded = encodePinnedProject('C:/workspace', 'app/demo.pro');
     assert.deepEqual(encoded, { root: 'C:/workspace', relative: 'app/demo.pro' });
 
-    const decoded = decodeSelectedProject(encoded);
+    const decoded = decodePinnedProject(encoded);
     assert.deepEqual(decoded, { root: 'C:/workspace', relative: 'app/demo.pro' });
 });
 
-test('selectedProject codec supports object config values and legacy string values', () => {
+test('pinnedProject codec supports object config values and legacy string values', () => {
     assert.deepEqual(
-        decodeSelectedProject({ root: 'C:/workspace', relative: 'app/demo.pro' }),
+        decodePinnedProject({ root: 'C:/workspace', relative: 'app/demo.pro' }),
         { root: 'C:/workspace', relative: 'app/demo.pro' }
     );
 
     assert.deepEqual(
-        decodeSelectedProject('{"root":"C:/workspace","relative":"app/demo.pro"}'),
+        decodePinnedProject('{"root":"C:/workspace","relative":"app/demo.pro"}'),
         { root: 'C:/workspace', relative: 'app/demo.pro' }
     );
 
     assert.equal(
-        JSON.stringify(encodeSelectedProject('C:/workspace', 'app/demo.pro')),
+        JSON.stringify(encodePinnedProject('C:/workspace', 'app/demo.pro')),
         JSON.stringify({ root: 'C:/workspace', relative: 'app/demo.pro' })
     );
 });

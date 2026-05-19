@@ -21,7 +21,7 @@ Compilot v${VERSION} — C++ 项目构建工具
   compilot <subcommand> [action] [options]
 
 子命令:
-  qt       Qt/qmake 项目操作 (build, qmake, run, clean, stop, sync, rcc, logs, status, init)
+  qt       Qt/qmake 项目操作 (init, env, projects, status, qmake, build, run, clean, stop, sync, rcc, logs)
   sdk      SDK/库项目操作 (build, rebuild, clean, status)
 
 全局选项:
@@ -34,7 +34,6 @@ Compilot v${VERSION} — C++ 项目构建工具
   compilot sdk build --workspace ./my-sdk
   compilot qt status --json
   compilot qt build --plan --json      查看计划（不执行）
-  compilot remote test                 测试远程连接
 `.trim();
     console.log(help);
 }

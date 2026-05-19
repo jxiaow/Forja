@@ -132,7 +132,7 @@ code --install-extension compilot-x.x.x.vsix
 | `arch` | 目标架构：x86 / x64 |
 | `qmakeTarget` | 覆盖 QMake TARGET |
 | `rccProjectPath` | RCC 项目路径（留空自动扫描） |
-| `selectedProject` | 当前选中的 .pro 文件 |
+| `pinnedProject` | 当前固定的 .pro 文件 |
 | `cStandard` / `cppStandard` | C/C++ 标准（IntelliSense 用） |
 | `fileSyncPromptEnabled` | 删除文件时是否提示从 .pri/.pro 移除 |
 | `qmakeReminderEnabled` | .pro/.pri 变更后是否提示重新 QMake |

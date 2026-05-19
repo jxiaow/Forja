@@ -13,10 +13,9 @@ test('parseCliArgs defaults build to execute mode', () => {
     assert.equal(parsed.json, false);
 });
 
-test('parseCliArgs accepts execute json and typed options', () => {
+test('parseCliArgs accepts json and typed options', () => {
     const parsed = parseCliArgs([
         'run',
-        '--execute',
         '--json',
         '--workspace',
         'D:/demo',
@@ -60,12 +59,6 @@ test('parseCliArgs --dry-run is accepted as alias for --plan', () => {
     assert.equal(parsed.executionMode, 'dryRun');
 });
 
-test('parseCliArgs --execute is accepted as no-op (default is already execute)', () => {
-    const parsed = parseCliArgs(['build', '--execute']);
-
-    assert.equal(parsed.executionMode, 'execute');
-});
-
 test('parseCliArgs rejects unknown action', () => {
     assert.throws(
         () => parseCliArgs(['deploy']),
@@ -97,7 +90,7 @@ test('parseCliArgs defaults to status when only flags are provided', () => {
 });
 
 test('parseCliArgs accepts clean action', () => {
-    const parsed = parseCliArgs(['clean', '--json', '--execute']);
+    const parsed = parseCliArgs(['clean', '--json']);
 
     assert.equal(parsed.action, 'clean');
     assert.equal(parsed.executionMode, 'execute');

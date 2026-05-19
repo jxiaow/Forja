@@ -450,12 +450,7 @@ details[open] .arrow { transform: rotate(90deg); }
           <label>快速选择</label>
           <select id="vsVersion" onchange="onVersionChange()">
             <option value="">-- 选择版本 --</option>
-            <option value="2022_community">VS 2022 Community</option>
-            <option value="2022_professional">VS 2022 Professional</option>
-            <option value="2022_enterprise">VS 2022 Enterprise</option>
-            <option value="2019_community">VS 2019 Community</option>
-            <option value="2019_professional">VS 2019 Professional</option>
-            <option value="2019_enterprise">VS 2019 Enterprise</option>
+            {{vsCandidateOptions}}
           </select>
         </div>
         <div class="field">
@@ -514,29 +509,17 @@ details[open] .arrow { transform: rotate(90deg); }
 
 </div>
 
-<!-- ═══════════ Section: 同步 ═══════════ -->
+<!-- ═══════════ Section: 远程 ═══════════ -->
 <div class="section-header collapsed" onclick="toggleSection(this)">
   <span class="section-arrow">▼</span>
-  <span class="section-title">同步</span>
+  <span class="section-title">远程</span>
 </div>
-<div id="tab-sync" class="section-body">
+<div id="tab-remote" class="section-body">
 
-  <!-- Enable toggle -->
-  <div class="card">
-    <div class="toggle-row">
-      <div class="toggle-copy">
-        <div class="toggle-title">启用远程同步</div>
-        <div class="hint">基于 git diff 同步变更文件到远程服务器</div>
-      </div>
-      <input id="syncEnabled" type="checkbox" {{chkSyncEnabled}} onchange="saveSyncEnabled()" />
-    </div>
-  </div>
-
-  <!-- Server selector (only shown when sync enabled) -->
-  <div id="sync-config" style="{{syncConfigDisplay}}">
+  <!-- 编译机 -->
   <div class="card">
     <div class="card-header">
-      <span class="card-title">服务器</span>
+      <span class="card-title">编译机</span>
       <span class="card-badge badge-muted">全局</span>
     </div>
     <div class="field">
@@ -548,6 +531,14 @@ details[open] .arrow { transform: rotate(90deg); }
         <button class="btn btn-sm" id="btnTestConn" onclick="testSyncConnection()" style="display:none">测试</button>
       </div>
     </div>
+    <!-- 服务器摘要 -->
+    <div id="serverSummary" style="display:none; margin-top:8px; padding:8px; background:var(--bg-card-inner, rgba(255,255,255,0.03)); border-radius:4px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span id="serverSummaryText" style="font-size:12px; color:var(--text-secondary);"></span>
+        <button class="btn btn-sm" onclick="toggleServerForm()">编辑</button>
+      </div>
+    </div>
+    <!-- 服务器表单 -->
     <div id="serverFormSection" style="margin-top:10px; display:none;">
       <div class="field">
         <label>名称</label>
@@ -597,12 +588,13 @@ details[open] .arrow { transform: rotate(90deg); }
     </div>
   </div>
 
-  <!-- Sync options -->
+  <!-- 代码同步 -->
   <div class="card">
     <div class="card-header">
-      <span class="card-title">同步选项</span>
+      <span class="card-title">代码同步</span>
       <span class="card-badge badge-muted">当前项目</span>
     </div>
+    <div class="hint" style="margin-bottom:8px;">基于 git diff 增量上传变更文件</div>
     <div class="field">
       <label>忽略目录</label>
       <div class="tag-input" id="syncIgnoreWrap">
@@ -612,92 +604,7 @@ details[open] .arrow { transform: rotate(90deg); }
     </div>
   </div>
 
-  <!-- Branch Sync -->
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">分支同步</span>
-      <span class="card-badge badge-muted">团队</span>
-    </div>
-    <div class="toggle-row">
-      <div class="toggle-copy">
-        <div class="toggle-title">编译前同步分支</div>
-        <div class="hint">确保远程各仓库分支和本地一致</div>
-      </div>
-      <input id="branchSyncEnabled" type="checkbox" {{chkBranchSyncEnabled}} onchange="saveBranchSyncEnabled()" />
-    </div>
-    <div id="branchSyncPinnedSection" style="margin-top:10px;">
-      <label>固定分支</label>
-      <div id="pinnedList"></div>
-      <div class="input-row" style="margin-top:6px;">
-        <input id="pinnedRepo" placeholder="仓库名" style="flex:1;" />
-        <input id="pinnedBranch" placeholder="分支名" style="flex:1;" />
-        <button class="btn btn-sm" onclick="addPinned()">添加</button>
-      </div>
-    </div>
-  </div>
 
-  <!-- Build Order -->
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">编译顺序</span>
-      <span class="card-badge badge-muted">团队</span>
-    </div>
-    <div class="hint" style="margin-bottom:8px;">多项目时配置编译依赖顺序（可选）</div>
-    <div id="buildOrderList"></div>
-    <div class="input-row" style="margin-top:6px;">
-      <input id="buildOrderWorkspace" placeholder="./core-lib" style="flex:2;" />
-      <select id="buildOrderType" style="flex:1;">
-        <option value="qt">Qt</option>
-        <option value="sdk">SDK</option>
-      </select>
-      <button class="btn btn-sm" onclick="addBuildOrderEntry()">添加</button>
-    </div>
-    <div id="buildOrderError" class="hint" style="color:#F59E0B;display:none;"></div>
-  </div>
-  </div>
-
-</div>
-
-<!-- ═══════════ Section: 远程 ═══════════ -->
-<div class="section-header collapsed" onclick="toggleSection(this)">
-  <span class="section-arrow">▼</span>
-  <span class="section-title">远程</span>
-</div>
-<div id="tab-remote" class="section-body">
-
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">部署配置</span>
-      <span class="card-badge badge-muted">可选</span>
-    </div>
-    <div class="hint" style="margin-bottom:10px;">仅跨机器部署时需要配置。单机模式（编译机即运行机）无需此配置。</div>
-    <div class="field">
-      <label>部署机</label>
-      <select id="deployServerSelect" onchange="saveDeployServer()">
-        <option value="">— 不配置（单机模式）—</option>
-        {{deployServerOptions}}
-      </select>
-    </div>
-    <div class="field">
-      <label>启动命令</label>
-      <input id="launchCommand" value="{{launchCommand}}" placeholder="./myapp" onblur="saveLaunchCommand()" />
-    </div>
-    <div class="field">
-      <label>启动模式</label>
-      <select id="launchMode" onchange="saveLaunchMode()">
-        <option value="bg" {{selLaunchBg}}>后台 (nohup)</option>
-        <option value="fg" {{selLaunchFg}}>前台</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">连接测试</span>
-    </div>
-    <button class="btn btn-primary btn-full" onclick="remoteTestConnection()">测试远程连接</button>
-    <div id="remoteTestResult" style="margin-top:8px;"></div>
-  </div>
 
 </div>
 
@@ -727,16 +634,6 @@ function switchTab(name) {
   }
 }
 
-// ── VS paths ──
-const vsPaths = {
-  '2022_community':    'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1',
-  '2022_professional': 'C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\Common7\\Tools\\Launch-VsDevShell.ps1',
-  '2022_enterprise':   'C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\Tools\\Launch-VsDevShell.ps1',
-  '2019_community':    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1',
-  '2019_professional': 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Professional\\Common7\\Tools\\Launch-VsDevShell.ps1',
-  '2019_enterprise':   'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Enterprise\\Common7\\Tools\\Launch-VsDevShell.ps1',
-};
-
 // ── Actions ──
 function selectProject() { vscode.postMessage({ command: 'selectProject' }); }
 function refreshEnv() {
@@ -745,8 +642,8 @@ function refreshEnv() {
   vscode.postMessage({ command: 'refreshEnv' });
 }
 function onVersionChange() {
-  const ver = document.getElementById('vsVersion').value;
-  if (ver && vsPaths[ver]) { document.getElementById('vsDevShellPath').value = vsPaths[ver]; saveVsPath(); }
+  const sel = document.getElementById('vsVersion');
+  if (sel.value) { document.getElementById('vsDevShellPath').value = sel.value; saveVsPath(); }
 }
 function onQtVersionChange() {
   const sel = document.getElementById('qtVersion');
@@ -788,11 +685,6 @@ function saveRccProjectPath() {
 function generateIntelliSense() { vscode.postMessage({ command: 'generateIntelliSense', cStandard: document.getElementById('cStandard').value, cppStandard: document.getElementById('cppStandard').value }); }
 
 // ── Sync handlers ──
-function saveSyncEnabled() {
-  const checked = document.getElementById('syncEnabled').checked;
-  vscode.postMessage({ command: 'saveSyncEnabled', value: checked });
-  document.getElementById('sync-config').style.display = checked ? '' : 'none';
-}
 function saveSyncSelectedServer() {
   const val = document.getElementById('syncServerSelect').value;
   if (val !== '__add__') {
@@ -814,16 +706,36 @@ function togglePasswordVisibility() {
   if (input.type === 'password') { input.type = 'text'; btn.textContent = '隐藏'; }
   else { input.type = 'password'; btn.textContent = '显示'; }
 }
+function toggleServerForm() {
+  const form = document.getElementById('serverFormSection');
+  if (form.style.display === 'none') {
+    const id = document.getElementById('syncServerSelect').value;
+    if (id && id !== '__add__') { _showEditMode(id); }
+  } else {
+    form.style.display = 'none';
+  }
+}
 // ── Server form interaction ──
 let _serverCache = {};
 function onServerSelectChange() {
   const val = document.getElementById('syncServerSelect').value;
   if (val === '__add__') {
+    document.getElementById('serverSummary').style.display = 'none';
     _showAddMode();
   } else {
-    _showEditMode(val);
+    _showServerSummary(val);
+    document.getElementById('serverFormSection').style.display = 'none';
     saveSyncSelectedServer();
   }
+}
+function _showServerSummary(id) {
+  const s = _serverCache[id];
+  if (!s) { return; }
+  const summary = document.getElementById('serverSummary');
+  const text = document.getElementById('serverSummaryText');
+  text.textContent = s.username + '@' + s.host + ':' + s.port + ' → ' + (s.remotePath || '/');
+  summary.style.display = '';
+  document.getElementById('btnTestConn').style.display = '';
 }
 function _showAddMode() {
   document.getElementById('serverFormSection').style.display = '';
@@ -944,10 +856,12 @@ window.addEventListener('message', e => {
       d.servers.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + esc(s.username) + '@' + esc(s.host) + ')</option>').join('');
     if (d.servers.some(s => s.id === prev)) {
       select.value = prev;
-      _showEditMode(prev);
+      _showServerSummary(prev);
+      document.getElementById('serverFormSection').style.display = 'none';
     } else {
       select.value = '__add__';
-      _showAddMode();
+      document.getElementById('serverSummary').style.display = 'none';
+      document.getElementById('serverFormSection').style.display = 'none';
     }
     if (select._customRefresh) { select._customRefresh(); }
   }
@@ -1074,136 +988,12 @@ window.addEventListener('blur', () => {
   const select = document.getElementById('syncServerSelect');
   const selected = select.value;
   if (selected && selected !== '__add__' && _serverCache[selected]) {
-    _showEditMode(selected);
-  } else {
-    select.value = '__add__';
-    _showAddMode();
+    _showServerSummary(selected);
   }
 })();
 
-// ── Branch Sync ──
-function saveBranchSyncEnabled() {
-  vscode.postMessage({ command: 'saveBranchSyncEnabled', value: document.getElementById('branchSyncEnabled').checked });
-}
-function addPinned() {
-  const repo = document.getElementById('pinnedRepo').value.trim();
-  const branch = document.getElementById('pinnedBranch').value.trim();
-  if (!repo || !branch) return;
-  _addPinnedItem(repo, branch);
-  document.getElementById('pinnedRepo').value = '';
-  document.getElementById('pinnedBranch').value = '';
-  _savePinnedList();
-}
-function _addPinnedItem(repo, branch) {
-  const list = document.getElementById('pinnedList');
-  const item = document.createElement('div');
-  item.className = 'input-row';
-  item.style.marginBottom = '4px';
-  item.dataset.repo = repo;
-  item.dataset.branch = branch;
-  item.innerHTML = '<span style="flex:1;font-size:12px;">' + escapeHtml(repo) + ' → ' + escapeHtml(branch) + '</span><button class="btn btn-sm" onclick="this.parentElement.remove();_savePinnedList()">×</button>';
-  list.appendChild(item);
-}
-function _savePinnedList() {
-  const items = document.querySelectorAll('#pinnedList [data-repo]');
-  const pinned = {};
-  items.forEach(el => { pinned[el.dataset.repo] = el.dataset.branch; });
-  vscode.postMessage({ command: 'saveBranchSyncPinned', value: pinned });
-}
 
-// ── Build Order ──
-function addBuildOrderEntry() {
-  const ws = document.getElementById('buildOrderWorkspace').value.trim();
-  const type = document.getElementById('buildOrderType').value;
-  if (!ws) return;
-  // 路径校验
-  if (ws.includes('..')) {
-    document.getElementById('buildOrderError').textContent = '路径不允许包含 ".."';
-    document.getElementById('buildOrderError').style.display = '';
-    return;
-  }
-  document.getElementById('buildOrderError').style.display = 'none';
-  _addBuildOrderItem(ws, type);
-  document.getElementById('buildOrderWorkspace').value = '';
-  _saveBuildOrder();
-}
-function _addBuildOrderItem(ws, type) {
-  const list = document.getElementById('buildOrderList');
-  const idx = list.children.length + 1;
-  const item = document.createElement('div');
-  item.className = 'input-row';
-  item.style.marginBottom = '4px';
-  item.dataset.workspace = ws;
-  item.dataset.type = type;
-  item.innerHTML = '<span style="flex:1;font-size:12px;">' + idx + '. ' + escapeHtml(ws) + ' (' + escapeHtml(type.toUpperCase()) + ')</span>' +
-    '<button class="btn btn-sm" onclick="_moveBuildOrder(this,-1)">↑</button>' +
-    '<button class="btn btn-sm" onclick="_moveBuildOrder(this,1)">↓</button>' +
-    '<button class="btn btn-sm" onclick="this.parentElement.remove();_renumberBuildOrder();_saveBuildOrder()">×</button>';
-  list.appendChild(item);
-}
-function _moveBuildOrder(btn, dir) {
-  const item = btn.parentElement;
-  const list = item.parentElement;
-  const sibling = dir < 0 ? item.previousElementSibling : item.nextElementSibling;
-  if (!sibling) return;
-  if (dir < 0) { list.insertBefore(item, sibling); }
-  else { list.insertBefore(sibling, item); }
-  _renumberBuildOrder();
-  _saveBuildOrder();
-}
-function _renumberBuildOrder() {
-  const items = document.querySelectorAll('#buildOrderList [data-workspace]');
-  items.forEach((el, i) => {
-    const span = el.querySelector('span');
-    span.textContent = (i + 1) + '. ' + el.dataset.workspace + ' (' + el.dataset.type.toUpperCase() + ')';
-  });
-}
-function _saveBuildOrder() {
-  const items = document.querySelectorAll('#buildOrderList [data-workspace]');
-  const order = Array.from(items).map(el => ({ workspace: el.dataset.workspace, type: el.dataset.type }));
-  vscode.postMessage({ command: 'saveBuildOrder', value: order });
-}
 
-// ── Remote Deploy Config ──
-function saveDeployServer() {
-  vscode.postMessage({ command: 'saveDeployServer', value: document.getElementById('deployServerSelect').value });
-}
-function saveLaunchCommand() {
-  vscode.postMessage({ command: 'saveLaunchCommand', value: document.getElementById('launchCommand').value.trim() });
-}
-function saveLaunchMode() {
-  vscode.postMessage({ command: 'saveLaunchMode', value: document.getElementById('launchMode').value });
-}
-function remoteTestConnection() {
-  document.getElementById('remoteTestResult').innerHTML = '<span class="spin">↻</span> 测试中...';
-  vscode.postMessage({ command: 'remoteTestConnection' });
-}
-
-// Handle remote test result
-window.addEventListener('message', e => {
-  const d = e.data;
-  if (d.command === 'remoteTestResult') {
-    const el = document.getElementById('remoteTestResult');
-    if (d.checks) {
-      el.innerHTML = d.checks.map(c => {
-        const icon = c.ok ? '✓' : '✗';
-        const color = c.ok ? '#22C55E' : '#F59E0B';
-        const detail = c.detail ? ' — ' + escapeHtml(c.detail) : '';
-        return '<div style="font-size:12px;color:' + color + ';">' + icon + ' ' + escapeHtml(c.name) + detail + '</div>';
-      }).join('');
-    } else {
-      el.innerHTML = '<div style="font-size:12px;color:#F59E0B;">✗ ' + escapeHtml(d.error || '测试失败') + '</div>';
-    }
-  } else if (d.command === 'buildOrderSaved') {
-    const errEl = document.getElementById('buildOrderError');
-    if (!d.ok) {
-      errEl.textContent = d.error || '保存失败';
-      errEl.style.display = '';
-    } else {
-      errEl.style.display = 'none';
-    }
-  }
-});
 
 // 初始化
 initCustomSelects();

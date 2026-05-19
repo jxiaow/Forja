@@ -80,7 +80,7 @@ function scpUpload(server: ServerConfig, localFile: string, remoteFile: string):
         proc.stderr.on('data', (d) => { stderr += d.toString(); });
         proc.on('close', (code) => {
             askpass?.cleanup();
-            if (code === 0) { resolve(); } else { reject(new Error(stderr.trim() || `exit ${code}`)); }
+            code === 0 ? resolve() : reject(new Error(stderr.trim() || `exit ${code}`)); // eslint-disable-line @typescript-eslint/no-unused-expressions
         });
         proc.on('error', (e) => {
             askpass?.cleanup();
@@ -161,8 +161,14 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string)
         const remoteDir = path.posix.dirname(remoteFile);
 
         if (!remoteDirs.has(remoteDir)) {
-            await ensureRemoteDir(server, remoteDir);
-            remoteDirs.add(remoteDir);
+            try {
+                await ensureRemoteDir(server, remoteDir);
+                remoteDirs.add(remoteDir);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                result.failed.push({ file: relativePath, error: `创建远程目录失败: ${msg}` });
+                continue;
+            }
         }
 
         try {

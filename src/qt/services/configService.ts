@@ -1,11 +1,11 @@
 import * as path from 'path';
 import { BuildConfig } from '../platform/builder';
 import { getState } from '../../core/stateManager';
-import { decodeSelectedProject } from '../project/selectedProject';
+import { decodePinnedProject } from '../project/pinnedProject';
 import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
-import { readLocalCache } from '../shared/localState';
-import { getSetting, setSetting, CompilotSettings } from '../../core/settingsStore';
+import { getSetting, setSetting, QtPilotSettings } from '../../core/settingsStore';
 import { resolveProjectRoot } from '../../core/workspaceResolver';
+import { readLocalCache } from '../shared/localState';
 
 // ── 配置读取 ──
 
@@ -29,9 +29,13 @@ export function getQtSourcePath(): string {
     return getSetting('qtSourcePath');
 }
 
-export function getSelectedProject(): string {
-    const saved = getSetting('selectedProject');
-    const parsed = decodeSelectedProject(saved);
+export function getJomPath(): string {
+    return getSetting('jomPath');
+}
+
+export function getPinnedProject(): string {
+    const saved = getSetting('pinnedProject');
+    const parsed = decodePinnedProject(saved);
     if (parsed) {
         return parsed.relative;
     }
@@ -74,7 +78,7 @@ export function getCustomCommands(): { name: string; command: string }[] {
     return getSetting('customCommands');
 }
 
-export function updateConfig<K extends keyof CompilotSettings>(key: K, value: CompilotSettings[K]): void {
+export function updateConfig<K extends keyof QtPilotSettings>(key: K, value: QtPilotSettings[K]): void {
     setSetting(key, value);
 }
 
@@ -98,17 +102,9 @@ export function getBuildConfig(): BuildConfig {
         }
     }
 
-    // Priority: settings > env detection > .compilot/cache.json > defaults
-    const localCache = root ? readLocalCache(root) : null;
-
+    // Priority: settings > env detection > defaults
     const inputs = mergeConfigInputs(
-        // Lowest priority: local cache (auto-detected values)
-        {
-            qtPath: localCache?.detected.qt?.path || '',
-            vsDevShell: localCache?.detected.vs?.devShellPath || '',
-            jomPath: localCache?.detected.jom || ''
-        },
-        // Environment detection from extension (same level as cache, but fresher)
+        // Lowest priority: env detection from extension (runtime-detected values)
         {
             qtPath: env?.qt?.path || '',
             vsDevShell: env?.vs?.devShellPath || '',
@@ -122,6 +118,7 @@ export function getBuildConfig(): BuildConfig {
             arch: state.arch,
             qtPath: getQtPath(),
             vsDevShell: getVsDevShellPath(),
+            jomPath: getJomPath(),
             target: getTarget()
         }
     );

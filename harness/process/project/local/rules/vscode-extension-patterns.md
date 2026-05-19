@@ -52,7 +52,7 @@ setSetting('mode', 'release');
 ```typescript
 // 读取配置
 const config = vscode.workspace.getConfiguration('compilot.sdk');
-const selectedProject = config.get<string>('selectedProject', '');
+const pinnedProject = config.get<string>('pinnedProject', '');
 
 // 监听配置变化
 vscode.workspace.onDidChangeConfiguration(e => {

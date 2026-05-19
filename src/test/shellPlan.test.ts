@@ -23,7 +23,7 @@ test('shell plan builder creates qmake command without vscode dependency', () =>
         'call "C:/VS/Common7/Tools/VsDevCmd.bat" -arch=x86 -no_logo',
         'set "PATH=D:\\Qt\\5.15.2\\msvc2019\\bin;%PATH%"',
         'cd /d "D:/demo"',
-        'qmake demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86'
+        '"D:/Qt/5.15.2/msvc2019/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86'
     ]);
 });
 

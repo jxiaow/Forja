@@ -1,7 +1,7 @@
 /**
  * SSH/SCP 公共工具。
  * 纯 Node 模块，不依赖 vscode。
- * 被 remote/core/、qt/sync/transport、core/syncCli 共用。
+ * 被 qt/sync/transport、core/syncCli 共用。
  */
 import { ServerConfig } from './serverStore';
 
@@ -21,7 +21,9 @@ export function buildSshArgs(server: ServerConfig, options?: SshArgsOptions): st
         args.push('-i', server.privateKeyPath);
     }
     args.push('-p', String(server.port));
-    args.push('-o', 'StrictHostKeyChecking=no');
+    // 默认关闭严格主机密钥检查（开发工具场景），可通过 server config 启用
+    const hostKeyChecking = server.strictHostKeyChecking ? 'yes' : 'no';
+    args.push('-o', `StrictHostKeyChecking=${hostKeyChecking}`);
     if (server.authMode === 'key') {
         args.push('-o', 'BatchMode=yes');
     }
@@ -45,7 +47,8 @@ export function buildScpArgs(server: ServerConfig): string[] {
     if (server.port !== 22) {
         args.push('-P', String(server.port));
     }
-    args.push('-o', 'StrictHostKeyChecking=no');
+    const hostKeyChecking = server.strictHostKeyChecking ? 'yes' : 'no';
+    args.push('-o', `StrictHostKeyChecking=${hostKeyChecking}`);
     if (server.authMode === 'key') {
         args.push('-o', 'BatchMode=yes');
     }
@@ -75,6 +78,9 @@ export interface AskpassEnv {
 /**
  * 创建 ASKPASS 环境。密码通过环境变量传入子进程，脚本本身不含密码明文。
  * 返回 spawn 用的 env 和清理函数。password 为 null 时返回 undefined。
+ *
+ * Windows 注意：旧版 OpenSSH（< 8.6）不支持 SSH_ASKPASS_REQUIRE=force。
+ * 若检测到旧版，回退到 GIT_ASKPASS（git-for-windows 的 OpenSSH 通常支持此变量）。
  */
 export function createAskpassEnv(password: string | null, suffix?: string): AskpassEnv | undefined {
     if (!password) { return undefined; }
@@ -100,11 +106,13 @@ export function createAskpassEnv(password: string | null, suffix?: string): Askp
             ...process.env,
             SSH_ASKPASS: sshAskpass,
             SSH_ASKPASS_REQUIRE: 'force',
+            // GIT_ASKPASS 作为 fallback — git-for-windows 绑定的 ssh 优先识别此变量
+            GIT_ASKPASS: sshAskpass,
             DISPLAY: '1',
             [ASKPASS_ENV_VAR]: password
         };
 
-        const cleanup = () => { try { fs.unlinkSync(scriptPath); } catch { /* already removed */ } };
+        const cleanup = () => { try { fs.unlinkSync(scriptPath); } catch { /* cleanup best-effort */ } };
 
         return { env, cleanup };
     } catch (e) {

@@ -10,6 +10,7 @@ export const winConfig: PlatformConfig = {
     shellExecutable: 'cmd.exe',
     shellArgs: ['/c'],
     commandJoiner: ' && ',
+    qmakeBin: 'qmake.exe',
 
     initCommands(cfg: BuildConfig): string[] {
         const cmds: string[] = [];
@@ -36,11 +37,11 @@ export const winConfig: PlatformConfig = {
     },
 
     killCommand(exeName: string): string {
-        return `(taskkill /F /IM ${exeName}.exe >nul 2>nul || ver >nul)`;
+        return `(taskkill /F /IM "${exeName}.exe" >nul 2>nul || ver >nul)`;
     },
 
     stopCommands(exeName: string): string[] {
-        return [`taskkill /F /IM ${exeName}.exe`];
+        return [`taskkill /F /IM "${exeName}.exe"`];
     },
 
     qmakeSpec: 'win32-msvc',

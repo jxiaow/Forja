@@ -1,14 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { EnvInfo, QtInfo } from '../../qt/env/envDetector';
+import { EnvInfo, QtInfo, VSInfo } from '../../qt/env/envDetector';
 import type { ProjectInfo } from '../../qt/project/projectManager';
 
 export interface TemplateData {
     env: EnvInfo | null;
     project: ProjectInfo | null;
     vsDevShellPath: string;
-    selectedProject: string;
+    pinnedProject: string;
     cStandard: string;
     cppStandard: string;
     scanExcludeDirs: string;
@@ -28,7 +28,6 @@ export interface TemplateData {
     syncSelectedServer: string;
     syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string; remotePath: string }[];
     syncIgnore: string;
-    branchSyncEnabled: boolean;
 }
 
 let _templateCache: string | null = null;
@@ -59,10 +58,10 @@ function _escapeHtml(value: string): string {
 }
 
 export function getHtml(data: TemplateData): string {
-    const { env, project, vsDevShellPath, selectedProject, cStandard, cppStandard,
+    const { env, project, vsDevShellPath, pinnedProject, cStandard, cppStandard,
             scanExcludeDirs, target, isWin, autoDevShell, autoQtPath, qtPath } = data;
 
-    const projectName = getEffectiveProjectName(project, target, selectedProject || '未选择');
+    const projectName = getEffectiveProjectName(project, target, pinnedProject || '未选择');
     const defaultTarget = project?.target || '';
     const effectiveTarget = target || defaultTarget;
     const effectiveDevShell = vsDevShellPath || autoDevShell;
@@ -134,21 +133,19 @@ export function getHtml(data: TemplateData): string {
         qtCandidateOptions: (env?.qtCandidates ?? [])
             .map((c: QtInfo) => `<option value="${_escapeHtml(c.path)}">Qt ${_escapeHtml(c.version)} (${_escapeHtml(c.compiler)})</option>`)
             .join(''),
+        vsCandidateOptions: (env?.vsCandidates ?? [])
+            .map((c: VSInfo) => `<option value="${_escapeHtml(c.devShellPath)}">VS ${_escapeHtml(c.version)} ${_escapeHtml(c.edition)}</option>`)
+            .join(''),
         manualProPath: _escapeHtml(data.manualProPath),
         rccProjectPath: _escapeHtml(data.rccProjectPath),
         chkFileSyncPrompt: data.fileSyncPromptEnabled ? 'checked' : '',
         chkQmakeReminder: data.qmakeReminderEnabled ? 'checked' : '',
         version: _escapeHtml(data.version),
-        dotSyncClass: data.syncEnabled && data.syncSelectedServer ? 'dot-ok' : (data.syncEnabled ? 'dot-warn' : 'dot-detecting'),
-        syncStatus: data.syncEnabled ? (data.syncSelectedServer ? '已启用' : '未配置') : '未启用',
-        chkSyncEnabled: data.syncEnabled ? 'checked' : '',
-        syncConfigDisplay: data.syncEnabled ? '' : 'display:none',
         syncServerOptions: data.syncServers
             .map(s => `<option value="${_escapeHtml(s.id)}" ${s.id === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
             .join(''),
         syncServerData: JSON.stringify(data.syncServers).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/<\//g, '<\\/'),
         syncIgnore: _escapeHtml(data.syncIgnore),
-        chkBranchSyncEnabled: data.branchSyncEnabled ? 'checked' : '',
     };
 
     let html = _loadTemplate();

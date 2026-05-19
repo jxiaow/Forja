@@ -37,7 +37,7 @@ test('SDK CLI rejects invalid --arch value', async () => {
     assert.ok(parsed.diagnostics[0].message.includes('--arch'));
 });
 
-test('SDK CLI rejects unknown action', async () => {
+test('SDK CLI rejects unknown run action', async () => {
     const output = await captureOutput(() => runSdkCli(['run', '--json']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);

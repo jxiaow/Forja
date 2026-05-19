@@ -4,6 +4,10 @@
  * 项目同步配置：.compilot/sync-config.json
  * 
  * 扩展和 CLI 共用，不依赖 vscode。
+ *
+ * ⚠ 安全警告：密码以明文存储在 servers.json 中。
+ * VSCode 扩展场景建议通过 SecretStorage API 存储密码（参见 qt/sync/sftpClient.ts askPassword）。
+ * CLI 场景可通过环境变量 COMPILOT_SSH_PASSWORD 注入，避免写入磁盘。
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -27,25 +31,14 @@ export interface ServerConfig {
     privateKeyPath: string;
     password: string;
     remotePath: string;
-}
-
-export interface BranchSyncConfig {
-    enabled: boolean;
-    /** 固定分支映射。值为分支名或 null（null = 删除该条目） */
-    pinned: Record<string, string | null>;
-}
-
-export interface BuildOrderEntry {
-    workspace: string;
-    type: 'qt' | 'sdk';
+    /** 是否启用严格主机密钥检查（默认 false，即 StrictHostKeyChecking=no） */
+    strictHostKeyChecking?: boolean;
 }
 
 export interface ProjectSyncConfig {
     enabled: boolean;
     selectedServer: string; // server id
     ignore: string[];
-    branchSync?: BranchSyncConfig;
-    buildOrder?: BuildOrderEntry[];
 }
 
 // ── 路径 ──
@@ -78,6 +71,7 @@ interface StoredServer {
     privateKeyPath: string;
     password?: string;
     remotePath?: string;
+    strictHostKeyChecking?: boolean;
 }
 
 export function readServers(): ServerConfig[] {
@@ -97,7 +91,8 @@ export function readServers(): ServerConfig[] {
                     authMode: (s.authMode === 'password' ? 'password' : 'key') as AuthMode,
                     privateKeyPath: s.privateKeyPath || '',
                     password: s.password || '',
-                    remotePath: s.remotePath || ''
+                    remotePath: s.remotePath || '',
+                    strictHostKeyChecking: !!s.strictHostKeyChecking
                 };
             });
             if (needsMigration) { writeServers(servers); }
@@ -123,7 +118,8 @@ export function writeServers(servers: ServerConfig[]): void {
         authMode: s.authMode,
         privateKeyPath: s.privateKeyPath,
         password: s.password || undefined,
-        remotePath: s.remotePath || undefined
+        remotePath: s.remotePath || undefined,
+        strictHostKeyChecking: s.strictHostKeyChecking || undefined
     }));
     atomicWriteJson(_serversFilePath(), stored);
 }
@@ -170,29 +166,11 @@ export function readProjectSyncConfig(workspaceRoot: string): ProjectSyncConfig 
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-            const config: ProjectSyncConfig = {
+            return {
                 enabled: !!raw.enabled,
                 selectedServer: raw.selectedServer || '',
                 ignore: Array.isArray(raw.ignore) ? raw.ignore : DEFAULT_IGNORE
             };
-            // 防御性读取可选字段
-            if (raw.branchSync && typeof raw.branchSync === 'object') {
-                config.branchSync = {
-                    enabled: !!raw.branchSync.enabled,
-                    pinned: (raw.branchSync.pinned && typeof raw.branchSync.pinned === 'object')
-                        ? raw.branchSync.pinned
-                        : {}
-                };
-            }
-            if (Array.isArray(raw.buildOrder)) {
-                config.buildOrder = raw.buildOrder.filter(
-                    (e: unknown): e is BuildOrderEntry =>
-                        !!e && typeof e === 'object' &&
-                        typeof (e as BuildOrderEntry).workspace === 'string' &&
-                        ((e as BuildOrderEntry).type === 'qt' || (e as BuildOrderEntry).type === 'sdk')
-                );
-            }
-            return config;
         }
     } catch (e) {
         console.warn(`[compilot] sync-config.json 解析失败: ${e instanceof Error ? e.message : e}`);
@@ -213,47 +191,19 @@ export function writeProjectSyncConfig(workspaceRoot: string, config: Partial<Pr
         if (fs.existsSync(filePath)) {
             existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
         }
-    } catch { /* corrupted JSON — start fresh */ }
+    } catch { /* file missing or unreadable, start fresh */ }
 
     // 顶层字段覆盖
     if (config.enabled !== undefined) { existing.enabled = config.enabled; }
     if (config.selectedServer !== undefined) { existing.selectedServer = config.selectedServer; }
     // 数组字段整体替换
     if (config.ignore !== undefined) { existing.ignore = config.ignore; }
-    if (config.buildOrder !== undefined) { existing.buildOrder = config.buildOrder; }
-
-    // branchSync deep merge
-    if (config.branchSync !== undefined) {
-        const prev = (existing.branchSync && typeof existing.branchSync === 'object')
-            ? existing.branchSync as Record<string, unknown>
-            : {};
-        const merged: Record<string, unknown> = { ...prev };
-        if (config.branchSync.enabled !== undefined) {
-            merged.enabled = config.branchSync.enabled;
-        }
-        if (config.branchSync.pinned !== undefined) {
-            const prevPinned = (prev.pinned && typeof prev.pinned === 'object')
-                ? { ...(prev.pinned as Record<string, string | null>) }
-                : {};
-            // 合并 pinned 条目；值为 null 时移除该 key
-            for (const [key, value] of Object.entries(config.branchSync.pinned)) {
-                if (value === null) {
-                    delete prevPinned[key];
-                } else {
-                    prevPinned[key] = value;
-                }
-            }
-            merged.pinned = prevPinned;
-        }
-        existing.branchSync = merged;
-    }
 
     atomicWriteJson(filePath, existing);
 }
 
 /**
  * 更新单个顶层字段（兼容 configPanel 现有调用方式）。
- * 对于 branchSync 字段，传入完整的 BranchSyncConfig 对象会触发 deep merge。
  */
 export function updateProjectSyncField<K extends keyof ProjectSyncConfig>(workspaceRoot: string, key: K, value: ProjectSyncConfig[K]): void {
     writeProjectSyncConfig(workspaceRoot, { [key]: value } as Partial<ProjectSyncConfig>);

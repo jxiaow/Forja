@@ -1,6 +1,6 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'status', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs', 'rcc'];
+const validActions: CliAction[] = ['init', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs', 'rcc'];
 
 const helpText = `Compilot Qt CLI — qmake 项目构建工具
 
@@ -8,6 +8,8 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
 
 命令:
   init        初始化本地配置（检测环境、保存 .compilot/）
+  env         查看工具链环境（检测到的 Qt/VS/jom 及可选项）
+  projects    查看 workspace 下的 .pro 文件列表
   status      显示当前配置、环境和项目状态
   qmake       生成/查看 qmake 命令
   build       构建项目
@@ -28,10 +30,9 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   --target <name>        QMake TARGET 覆盖
   --server <name>        同步时指定服务器名称
   --plan                 仅生成命令计划，不执行
-  --execute              （兼容旧版，等同于默认行为）
   --dry-run              （兼容旧版，等同于 --plan）
   --detach               后台执行，日志落文件，CLI 立即返回
-  --save-local           将检测结果写入 .compilot/cache.json
+  --save-local           将检测结果写入 .compilot/settings.json
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
 
@@ -106,11 +107,9 @@ export function parseCliArgs(args: string[]): CliOptions {
         const arg = args[i];
 
         switch (arg) {
-            case '--execute':
-                // 兼容旧版，静默接受（默认已是 execute）
-                break;
             case '--plan':
             case '--dry-run':
+                // 兼容旧版，等同于 --plan
                 options.executionMode = 'dryRun';
                 break;
             case '--workspace':

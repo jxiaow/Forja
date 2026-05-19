@@ -55,7 +55,8 @@ export function createShellPlanBuilder(config: PlatformConfig): ShellPlanBuilder
             const extra = config.qmakeExtraArgs(cfg);
             const targetArg = cfg.target ? ` "TARGET=${cfg.target}"` : '';
             const configArgs = [...modeConfigs, ...extraConfigs].join(' ');
-            const qmakeCmd = `qmake ${cfg.proFile} -spec ${config.qmakeSpec} ${configArgs}${extra ? ' ' + extra : ''}${targetArg}`;
+            const qmakeBin = cfg.qtPath ? `"${cfg.qtPath.replace(/\\/g, '/')}/bin/${config.qmakeBin}"` : 'qmake';
+            const qmakeCmd = `${qmakeBin} ${cfg.proFile} -spec ${config.qmakeSpec} ${configArgs}${extra ? ' ' + extra : ''}${targetArg}`;
             return {
                 commands: assembleCommands(cfg, [qmakeCmd]),
                 matcher: config.qmakeMatcher

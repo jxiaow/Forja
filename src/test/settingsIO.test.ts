@@ -8,7 +8,7 @@ import {
     loadSettings,
     saveSettings,
     settingsFilePath,
-    CompilotSettings
+    QtPilotSettings
 } from '../core/settingsIO';
 
 const _tmpDirs: string[] = [];
@@ -44,7 +44,7 @@ test('loadSettings merges partial file with defaults', () => {
     assert.equal(settings.arch, 'x86');
     assert.equal(settings.cStandard, 'c11');
     assert.equal(settings.fileSyncPromptEnabled, true);
-    assert.equal(settings.selectedProject, null);
+    assert.equal(settings.pinnedProject, null);
 });
 
 test('loadSettings returns defaults when settings.json is malformed', () => {
@@ -66,7 +66,7 @@ test('loadSettings preserves all field types correctly', () => {
         arch: 'x64',
         mode: 'release',
         scanExcludeDirs: ['vendor'],
-        selectedProject: { root: 'C:/ws', relative: 'app.pro' },
+        pinnedProject: { root: 'C:/ws', relative: 'app.pro' },
         fileSyncPromptEnabled: false,
         qmakeReminderEnabled: false
     }), 'utf8');
@@ -76,7 +76,7 @@ test('loadSettings preserves all field types correctly', () => {
     assert.equal(settings.arch, 'x64');
     assert.equal(settings.mode, 'release');
     assert.deepEqual(settings.scanExcludeDirs, ['vendor']);
-    assert.deepEqual(settings.selectedProject, { root: 'C:/ws', relative: 'app.pro' });
+    assert.deepEqual(settings.pinnedProject, { root: 'C:/ws', relative: 'app.pro' });
     assert.equal(settings.fileSyncPromptEnabled, false);
     assert.equal(settings.qmakeReminderEnabled, false);
 });
@@ -85,7 +85,7 @@ test('loadSettings preserves all field types correctly', () => {
 
 test('saveSettings creates .compilot directory and writes settings.json', () => {
     const workspace = makeWorkspace();
-    const settings: CompilotSettings = {
+    const settings: QtPilotSettings = {
         ...DEFAULT_SETTINGS,
         qtPath: 'C:/Qt/6.5',
         vsDevShellPath: 'C:/VS/Launch-VsDevShell.ps1',
@@ -107,10 +107,10 @@ test('saveSettings creates .compilot directory and writes settings.json', () => 
 
 test('saveSettings persists and loadSettings round-trips correctly', () => {
     const workspace = makeWorkspace();
-    const settings: CompilotSettings = {
+    const settings: QtPilotSettings = {
         ...DEFAULT_SETTINGS,
         qtPath: 'D:/Qt',
-        selectedProject: { root: 'C:/workspace', relative: 'app/demo.pro' },
+        pinnedProject: { root: 'C:/workspace', relative: 'app/demo.pro' },
         scanExcludeDirs: ['vendor', 'third_party'],
         fileSyncPromptEnabled: false,
         qmakeReminderEnabled: false
@@ -120,7 +120,7 @@ test('saveSettings persists and loadSettings round-trips correctly', () => {
     const loaded = loadSettings(workspace);
 
     assert.equal(loaded.qtPath, 'D:/Qt');
-    assert.deepEqual(loaded.selectedProject, { root: 'C:/workspace', relative: 'app/demo.pro' });
+    assert.deepEqual(loaded.pinnedProject, { root: 'C:/workspace', relative: 'app/demo.pro' });
     assert.deepEqual(loaded.scanExcludeDirs, ['vendor', 'third_party']);
     assert.equal(loaded.fileSyncPromptEnabled, false);
     assert.equal(loaded.qmakeReminderEnabled, false);

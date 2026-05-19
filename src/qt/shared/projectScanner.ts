@@ -24,7 +24,7 @@ export function scanProFiles(root: string, extraSkipDirs: string[] = []): string
                     proFiles.push(path.join(dir, entry.name));
                 }
             }
-        } catch { /* dir unreadable — skip */ }
+        } catch { /* readdir permission error tolerated */ }
     }
 
     scan(root, 0);
@@ -59,15 +59,19 @@ export function parseProFile(proPath: string): ProFileInfo | null {
     const targetMatch = content.match(/^\s*TARGET\s*=\s*(\S+)/m);
     if (targetMatch) { target = targetMatch[1].trim(); }
 
-    const qtMatch = content.match(/^\s*QT\s*\+?=\s*(.+)$/m);
-    const qtModules = qtMatch ? qtMatch[1].trim().split(/\s+/) : ['core', 'gui', 'widgets'];
+    // Collect all QT += / QT = lines (projects often have multiple)
+    const qtModules: string[] = [];
+    for (const m of content.matchAll(/^\s*QT\s*\+?=\s*(.+)$/gm)) {
+        qtModules.push(...m[1].trim().split(/\s+/));
+    }
+    if (qtModules.length === 0) { qtModules.push('core', 'gui', 'widgets'); }
 
     const definesMatch = content.match(/^\s*DEFINES\s*\+?=\s*(.+)$/m);
     const defines = definesMatch ? definesMatch[1].trim().split(/\s+/) : [];
 
     return {
         proPath,
-        projectDir: path.basename(projectDir),
+        projectDir,   // full path, not basename
         proFile,
         target,
         qtModules,

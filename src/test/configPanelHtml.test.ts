@@ -9,7 +9,7 @@ function createTemplateData(): TemplateData {
         env: null,
         project: null,
         vsDevShellPath: '',
-        selectedProject: '',
+        pinnedProject: '',
         cStandard: 'c11',
         cppStandard: 'c++17',
         scanExcludeDirs: '',
@@ -28,8 +28,7 @@ function createTemplateData(): TemplateData {
         syncEnabled: false,
         syncSelectedServer: '',
         syncServers: [],
-        syncIgnore: '.git, node_modules, out',
-        branchSyncEnabled: false
+        syncIgnore: '.git, node_modules, out'
     };
 }
 

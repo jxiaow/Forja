@@ -1,27 +1,32 @@
+/**
+ * 统一日志入口。
+ * VSCode 环境：输出到 OutputChannel。
+ * CLI / 非 VSCode 环境：委托给 loggerBase（纯 console）。
+ */
 import type * as vscode from 'vscode';
+import { createLoggerBase, log as baseLog, warn as baseWarn, error as baseError } from './loggerBase';
+import type { ScopedLogger } from './loggerBase';
+
+export type { ScopedLogger };
 
 let _channel: vscode.OutputChannel | null = null;
 let _useConsole = false;
+let _initialized = false;
 
 export function initLogger(): vscode.OutputChannel | null {
-    if (!_channel) {
-        try {
-            const vscodeApi = require('vscode') as typeof vscode;
-            _channel = vscodeApi.window.createOutputChannel('Compilot Qt');
-        } catch {
-            _useConsole = true;
-            return null;
-        }
+    if (_initialized) { return _channel; }
+    _initialized = true;
+    try {
+        const vscodeApi = require('vscode') as typeof vscode;
+        _channel = vscodeApi.window.createOutputChannel('Compilot');
+    } catch {
+        _useConsole = true;
+        return null;
     }
     return _channel;
 }
 
 type LogLevel = 'INFO' | 'WARN' | 'ERROR';
-type ScopedLogger = {
-    info: (message: string) => void;
-    warn: (message: string) => void;
-    error: (message: string) => void;
-};
 
 function _timestamp(): string {
     const now = new Date();
@@ -29,27 +34,25 @@ function _timestamp(): string {
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 }
 
+function _write(level: LogLevel, message: string): void {
+    if (_channel) {
+        const parsed = _parseScope(message);
+        const line = `[${_timestamp()}] [${level}] [${parsed.scope}] ${parsed.text}`;
+        _channel.appendLine(line);
+    } else {
+        // Delegate to base logger (console)
+        if (level === 'ERROR') { baseError(message); }
+        else if (level === 'WARN') { baseWarn(message); }
+        else { baseLog(message); }
+    }
+}
+
 function _parseScope(message: string): { scope: string; text: string } {
     const match = message.match(/^\[([^\]]+)\]\s*(.*)$/);
     if (!match) {
         return { scope: 'App', text: message };
     }
-    return {
-        scope: match[1],
-        text: match[2] || ''
-    };
-}
-
-function _write(level: LogLevel, message: string): void {
-    const parsed = _parseScope(message);
-    const line = `[${_timestamp()}] [${level}] [${parsed.scope}] ${parsed.text}`;
-    if (_channel) {
-        _channel.appendLine(line);
-    } else if (_useConsole) {
-        if (level === 'ERROR') { console.error(line); }
-        else if (level === 'WARN') { console.warn(line); }
-        else { console.log(line); }
-    }
+    return { scope: match[1], text: match[2] || '' };
 }
 
 export function log(message: string): void {
@@ -65,6 +68,19 @@ export function error(message: string): void {
 }
 
 export function createLogger(scope: string): ScopedLogger {
+    if (!_initialized) {
+        // Not yet initialized — check if we can access vscode
+        try {
+            require('vscode');
+        } catch {
+            _useConsole = true;
+            _initialized = true;
+        }
+    }
+    // If in console mode, use base logger directly (no vscode overhead)
+    if (_useConsole && !_channel) {
+        return createLoggerBase(scope);
+    }
     return {
         info: (message: string) => _write('INFO', `[${scope}] ${message}`),
         warn: (message: string) => _write('WARN', `[${scope}] ${message}`),

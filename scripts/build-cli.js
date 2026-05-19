@@ -38,7 +38,7 @@ const syncFiles = [
 ];
 
 // Individual files needed from core/
-const coreFiles = ['core/logger.js', 'core/settingsIO.js'];
+const coreFiles = ['core/logger.js', 'core/loggerBase.js', 'core/settingsIO.js', 'core/types.js'];
 
 // Version file at root of out/
 const rootFiles = ['version.js'];

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../../core/logger';
-import { decodeSelectedProject, encodeSelectedProject } from './selectedProject';
+import { decodePinnedProject, encodePinnedProject } from './pinnedProject';
 import { getEffectiveProjectName, getProjectSelectionLabel } from './projectDisplay';
 import { getTarget } from '../services/configService';
 import { getState } from '../../core/stateManager';
@@ -70,10 +70,10 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         return null;
     }
 
-    const savedProject = getSetting('selectedProject');
+    const savedProject = getSetting('pinnedProject');
 
     if (!forceSelect && savedProject) {
-        const savedRef = decodeSelectedProject(savedProject);
+        const savedRef = decodePinnedProject(savedProject);
         if (savedRef) {
             const fullPath = path.join(savedRef.root, savedRef.relative);
             if (fs.existsSync(fullPath)) {
@@ -117,7 +117,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const info = parseProFile(fullPath);
         info.projectDir = path.dirname(item.relative);
         setProjectRoot(item.root);
-        setSetting('selectedProject', encodeSelectedProject(item.root, item.relative));
+        setSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
         return info;
     }
 
@@ -133,7 +133,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
             const info = parseProFile(fullPath);
             info.projectDir = path.dirname(item.relative);
             setProjectRoot(item.root);
-            setSetting('selectedProject', encodeSelectedProject(item.root, item.relative));
+            setSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
             return info;
         }
     }

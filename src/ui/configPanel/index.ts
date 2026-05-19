@@ -4,7 +4,7 @@ import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-         getScanExcludeDirs, getSelectedProject, getTarget, getManualProPath, getDesignerPath, getQtSourcePath,
+         getScanExcludeDirs, getPinnedProject, getTarget, getManualProPath, getDesignerPath, getQtSourcePath,
          getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../qt/services/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
@@ -102,7 +102,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             env,
             project,
             vsDevShellPath: getVsDevShellPath(),
-            selectedProject: getSelectedProject(),
+            pinnedProject: getPinnedProject(),
             cStandard: getCStandard(),
             cppStandard: getCppStandard(),
             scanExcludeDirs: getScanExcludeDirs().join(', '),
@@ -123,14 +123,11 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                 const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'] };
                 const servers = readServers();
 
-                const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
                 return {
                     syncEnabled: sync.enabled,
                     syncSelectedServer: sync.selectedServer,
-                    syncServers: servers.map(s => ({ id: s.id, name: escHtml(s.name), host: escHtml(s.host), port: s.port, username: escHtml(s.username), authMode: s.authMode, privateKeyPath: escHtml(s.privateKeyPath), password: s.password, remotePath: escHtml(s.remotePath) })),
-                    syncIgnore: sync.ignore.join(', '),
-                    branchSyncEnabled: !!sync.branchSync?.enabled
+                    syncServers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, authMode: s.authMode, privateKeyPath: s.privateKeyPath, password: s.password, remotePath: s.remotePath })),
+                    syncIgnore: sync.ignore.join(', ')
                 };
             })()
         };

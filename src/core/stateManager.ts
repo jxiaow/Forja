@@ -1,11 +1,9 @@
-import type { ProjectInfo } from '../qt/project/types';
-import { EnvInfo } from '../qt/env/envDetector';
+import type { ProjectInfo, EnvInfo } from './types';
 import { getSetting, setSetting } from './settingsStore';
 
 export type BuildMode = 'debug' | 'release';
 export type Arch = 'x86' | 'x64';
 export type BuildAction = 'run' | 'debug' | 'build' | null;
-export type ExecutionLocation = 'local' | 'remote';
 
 export interface AppState {
     mode: BuildMode;
@@ -15,7 +13,6 @@ export interface AppState {
     isRunning: boolean;
     currentProject: ProjectInfo | null;
     envInfo: EnvInfo | null;
-    executionLocation: ExecutionLocation;
 }
 
 type StateKey = keyof AppState;
@@ -28,8 +25,7 @@ const _state: AppState = {
     buildAction: null,
     isRunning: false,
     currentProject: null,
-    envInfo: null,
-    executionLocation: 'local'
+    envInfo: null
 };
 
 const _listeners: StateListener[] = [];
@@ -38,7 +34,6 @@ const _listeners: StateListener[] = [];
 export function loadPersistedState(): void {
     _state.mode = getSetting('mode');
     _state.arch = getSetting('arch');
-    _state.executionLocation = getSetting('executionLocation');
 }
 
 export function getState(): Readonly<AppState> {
@@ -52,8 +47,6 @@ export function setState<K extends StateKey>(key: K, value: AppState[K]): void {
         setSetting('mode', value as BuildMode);
     } else if (key === 'arch') {
         setSetting('arch', value as Arch);
-    } else if (key === 'executionLocation') {
-        setSetting('executionLocation', value as ExecutionLocation);
     }
     _listeners.forEach(fn => fn(key, _state));
 }

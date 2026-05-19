@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCliArgs } from '../qt/cli/args';
 
-test('parseCliArgs --brief is removed (throws as unknown)', () => {
+test('parseCliArgs rejects --brief as unknown', () => {
     assert.throws(() => parseCliArgs(['build', '--brief', '--json']), /未知参数/);
 });
 

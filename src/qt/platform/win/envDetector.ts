@@ -145,8 +145,35 @@ async function detectJom(qt: QtInfo | null): Promise<string | null> {
     return null;
 }
 
+// ── VS 扫描所有已安装实例 ──
+
+async function scanVS(): Promise<VSInfo[]> {
+    const vswhere = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe';
+    if (!fs.existsSync(vswhere)) { return []; }
+    try {
+        const out = (await execAsync(vswhere, ['-all', '-property', 'installationPath'])).trim();
+        if (!out) { return []; }
+        const results: VSInfo[] = [];
+        for (const line of out.split('\n')) {
+            const installPath = line.trim();
+            if (!installPath) { continue; }
+            const devShellPath = `${installPath}\\Common7\\Tools\\Launch-VsDevShell.ps1`;
+            if (fs.existsSync(devShellPath)) {
+                results.push(parseVsPath(devShellPath));
+            }
+        }
+        return results;
+    } catch {
+        return [];
+    }
+}
+
 export async function detectEnvWin(manualQtPath?: string, manualVsPath?: string): Promise<EnvInfo> {
-    const [vs, { qt, candidates }] = await Promise.all([detectVS(manualVsPath || undefined), detectQt(manualQtPath)]);
+    const [vs, { qt, candidates }, vsCandidates] = await Promise.all([
+        detectVS(manualVsPath || undefined),
+        detectQt(manualQtPath),
+        scanVS()
+    ]);
     const jom = await detectJom(qt);
-    return { vs, qt, qtCandidates: candidates, jom };
+    return { vs, qt, qtCandidates: candidates, vsCandidates, jom };
 }

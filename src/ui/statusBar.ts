@@ -100,17 +100,6 @@ export async function showActions(): Promise<void> {
         { label: '$(trash) Clean',  description: '', action: 'clean' }
     ];
 
-    // Build All 仅在配置了 buildOrder 时显示
-    const { readProjectSyncConfig } = await import('../core/serverStore');
-    const { getWorkspaceRoot } = await import('../qt/services/configService');
-    const wsRoot = getWorkspaceRoot();
-    if (wsRoot) {
-        const syncConfig = readProjectSyncConfig(wsRoot);
-        if (syncConfig.buildOrder && syncConfig.buildOrder.length > 1) {
-            buildItems.splice(2, 0, { label: '$(tools) Build All (按依赖顺序)', description: '', action: 'buildAll' });
-        }
-    }
-
     const customCmds = getCustomCommands();
     const customItems: Item[] = customCmds.map((cmd, i) => ({
         label: `$(terminal) ${cmd.name}`, description: '', action: `custom:${i}`
@@ -151,8 +140,6 @@ export async function showActions(): Promise<void> {
         vscode.commands.executeCommand('compilot.qt.qmake');
     } else if (selected.action === 'build') {
         vscode.commands.executeCommand('compilot.qt.build');
-    } else if (selected.action === 'buildAll') {
-        vscode.commands.executeCommand('compilot.remote.run');
     } else if (selected.action === 'rcc') {
         vscode.commands.executeCommand('compilot.qt.rcc');
     } else if (selected.action === 'clean') {

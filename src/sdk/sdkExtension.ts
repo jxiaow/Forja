@@ -119,10 +119,10 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
 
     // 10. 监听配置变更
     const configListener = configService.onConfigChanged(async (e) => {
-        if (e.affectsConfiguration(`${CFG_SECTION}.selectedProject`)) {
+        if (e.affectsConfiguration(`${CFG_SECTION}.pinnedProject`)) {
             const config = vscode.workspace.getConfiguration(CFG_SECTION);
-            const newPath = config.get<string>('selectedProject');
-            log(`配置变更: selectedProject = ${newPath || '(空)'}`);
+            const newPath = config.get<string>('pinnedProject');
+            log(`配置变更: pinnedProject = ${newPath || '(空)'}`);
             if (newPath) {
                 const project = projectScanner.projects.find(p => p.path === newPath);
                 if (project) {

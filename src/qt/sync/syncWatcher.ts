@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as os from 'os';
 import { getResolvedConfig, ResolvedSyncConfig } from './resolver';
 import { readServers, ServerConfig } from '../../core/serverStore';
 import { readProjectSyncConfig } from '../../core/serverStore';
@@ -26,6 +25,8 @@ export function registerSyncWatcher(context: vscode.ExtensionContext): void {
     }
 
     // 监听全局 servers.json（位于 ~/.compilot/）
+    const os = require('os');
+    const path = require('path');
     const globalServersDir = path.join(os.homedir(), '.compilot');
     const globalPattern = new vscode.RelativePattern(vscode.Uri.file(globalServersDir), 'servers.json');
     const globalWatcher = vscode.workspace.createFileSystemWatcher(globalPattern);
@@ -104,6 +105,7 @@ export async function executeSyncChangedFiles(): Promise<void> {
                 const folderPath = folder.uri.fsPath;
                 const folderName = path.basename(folderPath);
                 // 每个文件夹映射到 远程根路径/文件夹名
+                // remotePath 在 scp/ssh 命令中已有引号包裹，此处保持原名
                 const folderResolved: ResolvedSyncConfig = {
                     ...resolved,
                     remotePath: resolved.remotePath.replace(/\/$/, '') + '/' + folderName

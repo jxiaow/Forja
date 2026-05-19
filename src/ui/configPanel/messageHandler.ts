@@ -173,7 +173,11 @@ export async function handleMessage(
         case 'saveSyncSelectedServer': {
             logger.info(`选择服务器: "${msg.value}"`);
             const ws2 = getWorkspaceRoot();
-            if (ws2) { updateProjectSyncField(ws2, 'selectedServer', String(msg.value || '')); }
+            if (ws2) {
+                updateProjectSyncField(ws2, 'selectedServer', String(msg.value || ''));
+                // 选中服务器时自动启用同步
+                if (msg.value) { updateProjectSyncField(ws2, 'enabled', true); }
+            }
             break;
         }
         case 'saveSyncIgnore': {
@@ -267,26 +271,6 @@ export async function handleMessage(
         case 'syncChangedFiles': {
             logger.info('面板触发同步变更文件');
             await executeSyncChangedFiles();
-            break;
-        }
-        case 'saveBranchSyncEnabled': {
-            const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-            if (!wsRoot) { break; }
-            const { writeProjectSyncConfig, readProjectSyncConfig } = await import('../../core/serverStore');
-            const existing = readProjectSyncConfig(wsRoot);
-            writeProjectSyncConfig(wsRoot, {
-                branchSync: { enabled: !!msg.value, pinned: existing?.branchSync?.pinned || {} }
-            });
-            break;
-        }
-        case 'saveBranchSyncPinned': {
-            const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-            if (!wsRoot) { break; }
-            const { writeProjectSyncConfig } = await import('../../core/serverStore');
-            const pinned = msg.value as Record<string, string | null> || {};
-            writeProjectSyncConfig(wsRoot, {
-                branchSync: { enabled: true, pinned }
-            });
             break;
         }
     }

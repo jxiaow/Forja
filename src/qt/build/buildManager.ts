@@ -16,6 +16,9 @@ const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? wi
 const isWin = process.platform === 'win32';
 const logger = createLogger('Build');
 
+/** Module-level disposable for Run task end listener (cleaned up on next run or extension deactivate) */
+let _runEndDisposable: vscode.Disposable | undefined;
+
 function _getTaskFolder(): vscode.WorkspaceFolder | vscode.TaskScope {
     const root = resolveProjectRoot();
     if (root) {
@@ -213,14 +216,20 @@ export async function run(): Promise<void> {
                 showReuseMessage: false,
                 clear: true
             };
-            vscode.tasks.executeTask(runTaskObj).then(runExecution => {
+
+            // 先注册 Run task 结束监听，再执行（避免竞态漏掉事件）
+            // 清理上一次的 disposable（如果还在）
+            _runEndDisposable?.dispose();
+            _runEndDisposable = vscode.tasks.onDidEndTask(e => {
+                if (e.execution.task.name === `Run ${cfg.mode}` && e.execution.task.source === 'Qt Pilot') {
+                    _runEndDisposable?.dispose();
+                    _runEndDisposable = undefined;
+                    setState('isRunning', false);
+                }
+            });
+
+            vscode.tasks.executeTask(runTaskObj).then(() => {
                 setState('isRunning', true);
-                const dRun = vscode.tasks.onDidEndTask(e => {
-                    if (e.execution === runExecution) {
-                        dRun.dispose();
-                        setState('isRunning', false);
-                    }
-                });
             });
 
             resolve();

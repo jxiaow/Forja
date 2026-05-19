@@ -5,6 +5,9 @@ export interface PlatformConfig {
     shellArgs: string[] | null;
     commandJoiner: string;
 
+    /** qmake 二进制文件名（如 'qmake.exe' 或 'qmake'） */
+    qmakeBin: string;
+
     initCommands(cfg: BuildConfig): string[];
     cdCommand(dir: string): string;
     killCommand(exeName: string): string;

@@ -142,7 +142,8 @@ compilot/
 │   │   ├── settingsIO.ts       # 配置文件 IO（纯 Node，不依赖 vscode）
 │   │   ├── settingsStore.ts    # 配置存储（vscode 集成 + 文件监听）
 │   │   ├── workspaceResolver.ts # 多文件夹工作区根目录解析
-│   │   └── logger.ts           # Output channel 日志
+│   │   ├── ssh.ts              # SSH/SCP 公共工具（纯 Node）
+│   │   └── logger.ts           # Output channel 日志（共享 "Compilot" channel）
 │   ├── qt/                     # Qt 模块
 │   │   ├── build/              # QMake/Build/Run 任务、调试、IntelliSense 生成
 │   │   ├── project/            # .pro 扫描解析、项目选择、文件监听
@@ -156,7 +157,11 @@ compilot/
 │   │   ├── modules/            # 配置、扫描、构建、状态管理
 │   │   ├── platform/           # 平台命令生成（windows/linux）
 │   │   ├── cli/                # SDK CLI 入口
-│   │   └── utils/              # 日志
+│   │   └── utils/              # 日志（委托给 core/logger）
+│   ├── remote/                 # 远程编译部署
+│   │   ├── core/               # 流程编排、SSH、传输、基线校验（纯 Node）
+│   │   ├── vscode/             # VSCode 适配（进度、诊断、Output、命令注册）
+│   │   └── shellFallbackFactory.ts # Shell fallback 命令生成（依赖 qt/shared）
 │   ├── ui/                     # UI 层
 │   │   ├── statusBar.ts        # 状态栏按钮
 │   │   ├── statusBarLabels.ts  # 状态栏标签文本
@@ -192,11 +197,16 @@ compilot/
 |------|------|
 | `syncWatcher.ts` | 扩展侧：状态栏按钮、配置监听、触发同步 |
 | `sftpClient.ts` | 编排层：re-export serverStore + resolver |
-| `serverStore.ts` | 服务器配置存储（全局 JSON） |
-| `resolver.ts` | 同步配置解析（合并服务器配置 + 项目配置） |
 | `transport.ts` | SSH/SCP 传输操作 |
 | `syncState.ts` | 同步状态记录，跟踪文件 mtime 避免重复上传 |
-| `syncCli.ts` | CLI 侧：独立同步逻辑（不依赖 vscode） |
+
+核心存储已迁移到 `src/core/`：
+
+| 文件 | 职责 |
+|------|------|
+| `core/serverStore.ts` | 服务器配置存储（全局 `~/.compilot/servers.json`） |
+| `core/syncCli.ts` | CLI 侧：独立同步逻辑（不依赖 vscode） |
+| `core/ssh.ts` | SSH/SCP 参数构建 + ASKPASS 认证 |
 
 ### 数据流
 

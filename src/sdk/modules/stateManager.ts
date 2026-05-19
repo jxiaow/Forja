@@ -77,12 +77,12 @@ export class StateManager implements vscode.Disposable {
       this._arch = arch;
     }
 
-    const selectedProject = config.get<string>('selectedProject');
-    if (selectedProject) {
+    const pinnedProject = config.get<string>('pinnedProject');
+    if (pinnedProject) {
       // 仅设置路径，后续由 scanner 验证
-      const name = path.basename(selectedProject, path.extname(selectedProject));
-      const type = selectedProject.endsWith('.sln') ? 'sln' : 'makefile';
-      this._currentProject = { name, path: selectedProject, type } as SdkProjectInfo;
+      const name = path.basename(pinnedProject, path.extname(pinnedProject));
+      const type = pinnedProject.endsWith('.sln') ? 'sln' : 'makefile';
+      this._currentProject = { name, path: pinnedProject, type } as SdkProjectInfo;
     }
   }
 
@@ -92,7 +92,7 @@ export class StateManager implements vscode.Disposable {
     await config.update('mode', this._mode, vscode.ConfigurationTarget.Workspace);
     await config.update('arch', this._arch, vscode.ConfigurationTarget.Workspace);
     await config.update(
-      'selectedProject',
+      'pinnedProject',
       this._currentProject?.path || '',
       vscode.ConfigurationTarget.Workspace
     );
