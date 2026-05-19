@@ -142,6 +142,7 @@ async function detectEnvironment(workspace: string, options: CliOptions): Promis
         projects: string[];
     };
     qtCandidates: Array<{path: string; version: string; compiler: string}>;
+    vsCandidates: Array<{version: string; edition: string; installPath: string; devShellPath: string}>;
 }> {
     const env = await detectEnv(options.qtPath || undefined, options.vsDevShell || undefined).catch(() => ({
         vs: null,
@@ -167,7 +168,8 @@ async function detectEnvironment(workspace: string, options: CliOptions): Promis
             jom: env.jom,
             projects: scanProFiles(workspace).map(rel => path.join(workspace, rel))
         },
-        qtCandidates: env.qtCandidates || []
+        qtCandidates: env.qtCandidates || [],
+        vsCandidates: env.vsCandidates || []
     };
 }
 
@@ -302,8 +304,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 mode: ['debug', 'release'],
                 arch: getAvailableArch(),
                 qt: detected.qtCandidates.map(c => ({ path: c.path, version: c.version, compiler: c.compiler })),
-                // envDetector 当前只返回最优的一个 VS，available 数组长度为 0 或 1
-                ...(process.platform === 'win32' ? { vsDevShell: detected.detected.vs ? [{ path: detected.detected.vs.devShellPath, version: detected.detected.vs.version || '', edition: detected.detected.vs.edition || '' }] : [] } : {})
+                ...(process.platform === 'win32' ? { vsDevShell: detected.vsCandidates.map(c => ({ path: c.devShellPath, version: c.version, edition: c.edition })) } : {})
             },
             configHints: {
                 usage: 'compilot qt init [options] --json',

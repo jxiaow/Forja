@@ -50,10 +50,9 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         if (existingEnv) {
             this._pushEnvUpdate();
         } else {
-            const qtPath = getQtPath();
-            const vsPath = getVsDevShellPath();
-            logger.info(`初始环境检测: qtPath="${qtPath}", vsPath="${vsPath}"`);
-            detectEnv(qtPath, vsPath).then(env => {
+            // 不传 manualPath，确保全量扫描返回完整候选列表
+            logger.info('初始环境检测（全量扫描）');
+            detectEnv().then(env => {
                 logger.info('初始环境检测完成');
                 setState('envInfo', env);
                 this._pushEnvUpdate();
