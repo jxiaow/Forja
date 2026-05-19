@@ -11,6 +11,13 @@ export type ScopedLogger = {
 
 type LogLevel = 'INFO' | 'WARN' | 'ERROR';
 
+let _silent = false;
+
+/** 静默模式：--json 时调用，抑制 INFO/WARN 输出 */
+export function setSilent(silent: boolean): void {
+    _silent = silent;
+}
+
 function _timestamp(): string {
     const now = new Date();
     const pad = (n: number): string => n.toString().padStart(2, '0');
@@ -18,10 +25,9 @@ function _timestamp(): string {
 }
 
 function _write(level: LogLevel, message: string): void {
+    if (_silent && level !== 'ERROR') { return; }
     const line = `[${_timestamp()}] [${level}] ${message}`;
-    if (level === 'ERROR') { console.error(line); }
-    else if (level === 'WARN') { console.warn(line); }
-    else { console.log(line); }
+    process.stderr.write(line + '\n');
 }
 
 export function log(message: string): void {

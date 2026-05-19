@@ -11,6 +11,7 @@
 import { runQtCli } from '../qt/cli/index';
 import { runSdkCli } from '../sdk/cli/index';
 import { VERSION } from '../version';
+import { setSilent } from '../core/loggerBase';
 
 
 function printHelp(): void {
@@ -39,6 +40,10 @@ Compilot v${VERSION} — C++ 项目构建工具
 }
 
 async function main(argv: string[]): Promise<void> {
+    if (argv.includes('--json')) {
+        setSilent(true);
+    }
+
     const subcommand = argv[0];
 
     if (!subcommand || subcommand === '--help' || subcommand === '-h') {
