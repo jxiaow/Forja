@@ -80,7 +80,7 @@ test('qmake target save keeps fallback display from being persisted as a manual 
         }
     });
 
-    assert.match(html, /data-default-qmake-target="DemoApp"/);
+    assert.match(html, /data-default-target="DemoApp"/);
     assert.match(
         html,
         /const savedValue = value === defaultTarget \? '' : value/,

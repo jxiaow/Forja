@@ -11,6 +11,7 @@ import { getMakefileInfo, parseLibPaths } from '../project/projectManager';
 import { createLogger } from '../../core/logger';
 import { resolveProjectRoot } from '../../core/workspaceResolver';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from '../shared/rccResolver';
+import { TASK_SOURCE_QT } from '../constants';
 
 const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
 const isWin = process.platform === 'win32';
@@ -44,7 +45,7 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
     logger.info(`Task ${name}: ${commands.join(' && ')}`);
     const task = new vscode.Task(
         { type: 'shell' },
-        _getTaskFolder(), name, 'Compilot Qt',
+        _getTaskFolder(), name, TASK_SOURCE_QT,
         builder.makeExec(commands), matcher
     );
     task.presentationOptions = {
@@ -165,7 +166,7 @@ export async function run(): Promise<void> {
     // Build task: 不清屏，失败时保留编译错误
     const buildTask = new vscode.Task(
         { type: 'shell' },
-        _getTaskFolder(), `Build ${cfg.mode}`, 'Compilot Qt',
+        _getTaskFolder(), `Build ${cfg.mode}`, TASK_SOURCE_QT,
         builder.makeExec(commands), matcher
     );
     buildTask.presentationOptions = {
@@ -220,7 +221,7 @@ export async function run(): Promise<void> {
             runCmds.push(`"${mfInfo.exePath}"`);
             const runTaskObj = new vscode.Task(
                 { type: 'shell' },
-                _getTaskFolder(), `Run ${cfg.mode}`, 'Compilot Qt',
+                _getTaskFolder(), `Run ${cfg.mode}`, TASK_SOURCE_QT,
                 builder.makeExec(runCmds), []
             );
             // 编译成功，Run task 清屏再启动
@@ -237,7 +238,7 @@ export async function run(): Promise<void> {
             // 清理上一次的 disposable（如果还在）
             _runEndDisposable?.dispose();
             _runEndDisposable = vscode.tasks.onDidEndTask(e => {
-                if (e.execution.task.name === `Run ${cfg.mode}` && e.execution.task.source === 'Compilot Qt') {
+                if (e.execution.task.name === `Run ${cfg.mode}` && e.execution.task.source === TASK_SOURCE_QT) {
                     _runEndDisposable?.dispose();
                     _runEndDisposable = undefined;
                     setState('isRunning', false);

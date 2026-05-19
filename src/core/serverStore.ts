@@ -123,7 +123,11 @@ export function writeServers(servers: ServerConfig[]): void {
     }));
     atomicWriteJson(_serversFilePath(), stored);
     // 收紧文件权限（仅当前用户可读写）— Windows 上 chmod 无效但不报错
-    try { fs.chmodSync(_serversFilePath(), 0o600); } catch { /* non-critical */ }
+    try { fs.chmodSync(_serversFilePath(), 0o600); } catch (e) {
+        if (process.platform !== 'win32') {
+            console.warn(`[compilot] chmod servers.json 失败: ${e instanceof Error ? e.message : e}`);
+        }
+    }
 }
 
 export function addServer(server: Omit<ServerConfig, 'id'>): ServerConfig {

@@ -88,10 +88,14 @@
 
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
-| P1 | 🟡 中 | 无 ESLint/Prettier 等静态分析工具 | 项目根目录 | 待加 |
-| P2 | 🟡 中 | 循环依赖：`core/stateManager` ↔ `qt/project/projectManager`（运行时 circular require） | src/core/stateManager.ts ↔ src/qt/project/projectManager.ts | 待修 |
+| P1 | 🟡 中 | ~~无 ESLint/Prettier 等静态分析工具~~ ESLint 已配置，`no-explicit-any` 已升为 error | eslint.config.mjs | ✅ 已修 |
+| P2 | 🟡 中 | ~~循环依赖：`core/stateManager` ↔ `qt/project/projectManager`~~ 已不存在（types 已提取到 core/types.ts） | — | ✅ 不再适用 |
 | P3 | 🟢 低 | `compilot.qt.showSyncTab` 和 `compilot.qt.loadManualProject` 注册了但未在 package.json 声明（内部命令） | src/extension.ts | 可选 |
-| P4 | 🟢 低 | `_updateDeployJson` 中 `fs.writeFileSync` 无 try/catch | src/ui/configPanel/messageHandler.ts | 待修 |
+| P4 | 🟢 低 | ~~`_updateDeployJson` 中 `fs.writeFileSync` 无 try/catch~~ 该函数已不存在 | — | ✅ 不再适用 |
+| P5 | 🟡 中 | ~~Task source 名 `'Compilot Qt'` 是散落的字符串字面量~~ 已提取为 `TASK_SOURCE_QT` 常量 | src/qt/constants.ts | ✅ 已修 |
+| P6 | 🟢 低 | ~~`configGenerator.ts` 中 logging 不一致~~ 已统一使用 `log()` | src/qt/build/configGenerator.ts | ✅ 已修 |
+| P7 | 🟢 低 | ~~`serverStore.ts` chmod 600 在非 Windows 平台的 catch 应加日志~~ 已加平台判断日志 | src/core/serverStore.ts | ✅ 已修 |
+| P8 | 🟢 低 | devDependencies 已锁定精确版本 | package.json | ✅ 已修 |
 
 ## 修复优先级建议（补充）
 
@@ -103,10 +107,36 @@
 ### P1 — 近期修（补充）
 
 - **S3** — _pushServerList 发送时 mask 密码字段（仅在编辑时按需获取）
-- **P2** — 循环依赖：将 `ProjectInfo` 和 `EnvInfo` 类型提取到独立的 types 文件，用 `import type` 打破运行时循环
-- **P4** — _updateDeployJson 加 try/catch
+- ~~**P2** — 循环依赖~~ 已不存在
+- ~~**P4** — _updateDeployJson 加 try/catch~~ 已不存在
+- ~~**P5** — 提取 `'Compilot Qt'` 为常量~~ ✅ 已修
 
 ### P2 — 长期改进（补充）
 
-- **P1** — 引入 ESLint（推荐 @typescript-eslint）
-- **V1~V3** — 补充核心模块测试
+- **V1~V3** — 补充核心模块测试（`core/ssh.ts`、SDK 模块需 mock 框架，标记为长期）
+- ~~**P6** — configGenerator.ts 统一使用 logger~~ ✅ 已修
+- ~~**P7** — serverStore chmod catch 加平台判断日志~~ ✅ 已修
+
+---
+
+## 2026-05-19 Review 新增修复记录
+
+| 问题 | 修复内容 | 状态 |
+|------|----------|------|
+| envInfo 为 null 时构建无 guard | buildManager.ts 增加 `_ensureEnvReady()` | ✅ 已修 |
+| 全局 task 监听用 name 前缀匹配 | extension.ts 改为 `task.source === 'Compilot Qt'` 精确匹配 | ✅ 已修 |
+| Run task 监听器 source 名错误 `'Qt Pilot'` | buildManager.ts 改为 `'Compilot Qt'` | ✅ 已修 |
+| configPanel TARGET 保存命令名不匹配 | HTML 改为发送 `'saveQmakeTarget'` | ✅ 已修 |
+| configPanel dataset 属性名不匹配 | HTML 改为 `data-default-target` / `data-saved-target` | ✅ 已修 |
+| SSH StrictHostKeyChecking 默认 no 无提示 | syncWatcher.ts 增加首次连接提示 | ✅ 已修 |
+| servers.json 文件权限未收紧 | serverStore.ts 写入后 chmod 600 | ✅ 已修 |
+| CLI 密码获取无环境变量/stdin 支持 | syncCli.ts 增加 COMPILOT_SSH_PASSWORD + stdin 提示 | ✅ 已修 |
+| Windows Qt 路径检测仅硬编码目录 | win/envDetector.ts 增加注册表扫描 | ✅ 已修 |
+| configGenerator 空 catch 无日志 | 3 处 catch 改为带日志输出 | ✅ 已修 |
+| ESLint no-explicit-any 是 warn | 升为 error | ✅ 已修 |
+| devDependencies 用 ^ 范围 | 锁定精确版本 | ✅ 已修 |
+| 编辑按钮紧贴路径信息 | 改为独立行 + 文案"编辑服务器" | ✅ 已修 |
+| 多仓库工作区 git 命令失败 | syncWatcher/syncCli 增加 resolveGitRoots 子仓库检测 | ✅ 已修 |
+| 同步时无法选择仓库 | 扩展侧增加 QuickPick 选择，CLI 增加 --repo 参数 | ✅ 已修 |
+| git 仓库检测逻辑重复 | 提取到 core/gitRepoResolver.ts 共享 | ✅ 已修 |
+| syncWatcher.ts 重复 import | 合并为单条 import | ✅ 已修 |

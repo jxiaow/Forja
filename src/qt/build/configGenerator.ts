@@ -270,6 +270,6 @@ export function updateCppPropertiesStandard(cStandard: string, cppStandard: stri
             fs.writeFileSync(propsPath, JSON.stringify(props, null, 4), 'utf-8');
         }
     } catch (e) {
-        console.error('[Compilot] 更新 c_cpp_properties.json 失败:', e);
+        log(`[configGenerator] 更新 c_cpp_properties.json 失败: ${e instanceof Error ? e.message : e}`);
     }
 }

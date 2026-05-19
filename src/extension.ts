@@ -18,6 +18,7 @@ import { initSettingsStore } from './core/settingsStore';
 import { registerWorkspaceWatcher } from './core/workspaceResolver';
 import { activateSdk } from './sdk/sdkExtension';
 import { registerQtCommands } from './qt/commands';
+import { TASK_SOURCE_QT } from './qt/constants';
 
 const logger = createLogger('Extension');
 
@@ -51,7 +52,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.tasks.onDidEndTask(e => {
             const task = e.execution.task;
-            if (task.source !== 'Compilot Qt') { return; }
+            if (task.source !== TASK_SOURCE_QT) { return; }
             const name = task.name;
             if (name.startsWith('Build ') || name.startsWith('QMake ') || name.startsWith('Clean ') || name === 'RCC Compile') {
                 setState('isBuilding', false);
