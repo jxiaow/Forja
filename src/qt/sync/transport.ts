@@ -19,7 +19,8 @@ export { buildSshArgs, buildScpArgs, sshTarget, SshArgsOptions } from '../../cor
 export function scpUpload(server: ServerConfig, localFile: string, remoteFile: string, password: string | null): Promise<void> {
     return new Promise((resolve, reject) => {
         const baseArgs = buildScpArgs(server);
-        const dest = `${sshTarget(server)}:${remoteFile}`;
+        const escapedRemote = remoteFile.replace(/'/g, "'\\''");
+        const dest = `${sshTarget(server)}:'${escapedRemote}'`;
         const args = [...baseArgs, localFile, dest];
 
         const askpass = createAskpassEnv(
@@ -50,7 +51,8 @@ export function scpUpload(server: ServerConfig, localFile: string, remoteFile: s
 export function ensureRemoteDir(server: ServerConfig, remoteDir: string, password: string | null): Promise<void> {
     return new Promise((resolve) => {
         const sshArgs = buildSshArgs(server);
-        const cmd = `mkdir -p "${remoteDir}"`;
+        const escaped = remoteDir.replace(/'/g, "'\\''");
+        const cmd = `mkdir -p '${escaped}'`;
         const args = [...sshArgs, sshTarget(server), cmd];
 
         const askpass = createAskpassEnv(

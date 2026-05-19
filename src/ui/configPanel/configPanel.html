@@ -842,7 +842,15 @@ window.addEventListener('message', e => {
     vscode.postMessage({ command: '_noop' }); // keep context
     const reveal = document.createElement('div');
     reveal.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:10px 12px;background:var(--vscode-editor-background);border-bottom:1px solid var(--vscode-panel-border);z-index:100;font-size:13px;display:flex;align-items:center;gap:8px;';
-    reveal.innerHTML = '<span style="flex:1;word-break:break-all;font-family:monospace;">' + escapeHtml(d.password) + '</span><button class="btn btn-sm" onclick="this.parentElement.remove()">关闭</button>';
+    const pwSpan = document.createElement('span');
+    pwSpan.style.cssText = 'flex:1;word-break:break-all;font-family:monospace;';
+    pwSpan.textContent = d.password;
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn btn-sm';
+    closeBtn.textContent = '关闭';
+    closeBtn.onclick = function() { reveal.remove(); };
+    reveal.appendChild(pwSpan);
+    reveal.appendChild(closeBtn);
     document.body.prepend(reveal);
   } else if (d.command === 'serversUpdated') {
     const select = document.getElementById('syncServerSelect');

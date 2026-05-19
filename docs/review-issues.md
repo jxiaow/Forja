@@ -71,9 +71,9 @@
 
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
-| S1 | 🔴 高 | XSS：`configPanel.html` 中 `remoteTestResult`、`_addPinnedItem`、`_addBuildOrderItem` 使用 `innerHTML` 插入未转义的 SSH 输出和用户输入 | src/ui/configPanel/configPanel.html | 待修 |
-| S2 | 🟡 中 | Shell 注入：`remoteTestConnection` 中 `remotePath` 直接拼入 SSH 命令，未转义 | src/ui/configPanel/messageHandler.ts | 待修 |
-| S3 | 🟡 中 | 密码暴露：`_pushServerList` 每次将完整 password 字段发送到 webview JS 上下文 | src/ui/configPanel/messageHandler.ts | 待修 |
+| S1 | 🔴 高 | XSS：`configPanel.html` 中 `showPassword` 使用 innerHTML — 已改为 DOM API（textContent + createElement） | src/ui/configPanel/configPanel.html | ✅ 已修 |
+| S2 | 🟡 中 | Shell 注入：`transport.ts` 中 `remoteDir`/`remoteFile` 直接拼入 SSH/SCP 命令 — 已改为单引号包裹 + 内部转义 | src/qt/sync/transport.ts | ✅ 已修 |
+| S3 | 🟡 中 | 密码暴露：`_pushServerList` 已使用 `'••••••••'` mask，无需额外修复 | src/ui/configPanel/messageHandler.ts | ✅ 已修 |
 
 ## 测试覆盖
 
