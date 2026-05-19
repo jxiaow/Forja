@@ -1,6 +1,6 @@
 /**
  * CLI-compatible sync module — no vscode dependency.
- * Reads config from ~/.compilot/servers.json and .compilot/sync-config.json
+ * Reads config from ~/.compilot/servers.json and .compilot/settings.json (sync section)
  */
 import * as path from 'path';
 import * as cp from 'child_process';

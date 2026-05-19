@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { SdkProjectInfo, BuildMode, Arch, StateChangeEvent } from '../types';
 import { isLinux } from '../platform';
-import { loadSdkSettings, saveSdkSettings, SdkSettings } from '../cli/settings';
+import { getSdkSetting, setSdkSetting } from '../../core/settingsStore';
 
 export class StateManager implements vscode.Disposable {
   private _currentProject: SdkProjectInfo | null = null;
@@ -63,25 +63,24 @@ export class StateManager implements vscode.Disposable {
     this._onStateChanged.fire({ field: 'isBuilding', oldValue: old, newValue: value });
   }
 
-  /** 从 .compilot/sdk-settings.json 恢复状态 */
+  /** 从统一配置 .compilot/settings.json 的 sdk 部分恢复状态 */
   async restoreFromConfig(): Promise<void> {
-    const folders = vscode.workspace.workspaceFolders;
-    const wsRoot = folders && folders.length > 0 ? folders[0].uri.fsPath : '';
-    if (!wsRoot) { return; }
-
-    const sdkSettings = loadSdkSettings(wsRoot);
-
-    if (sdkSettings.mode === 'debug' || sdkSettings.mode === 'release') {
-      this._mode = sdkSettings.mode;
+    const mode = getSdkSetting('mode');
+    if (mode === 'debug' || mode === 'release') {
+      this._mode = mode;
     }
 
-    if (!isLinux && (sdkSettings.arch === 'x86' || sdkSettings.arch === 'x64')) {
-      this._arch = sdkSettings.arch;
+    const arch = getSdkSetting('arch');
+    if (!isLinux && (arch === 'x86' || arch === 'x64')) {
+      this._arch = arch;
     }
 
-    if (sdkSettings.pinnedProject) {
-      let resolvedPath = sdkSettings.pinnedProject;
-      if (!path.isAbsolute(resolvedPath)) {
+    const pinnedProject = getSdkSetting('pinnedProject');
+    if (pinnedProject) {
+      const folders = vscode.workspace.workspaceFolders;
+      const wsRoot = folders && folders.length > 0 ? folders[0].uri.fsPath : '';
+      let resolvedPath = pinnedProject;
+      if (wsRoot && !path.isAbsolute(resolvedPath)) {
         resolvedPath = path.join(wsRoot, resolvedPath);
       }
       const name = path.basename(resolvedPath, path.extname(resolvedPath));
@@ -90,29 +89,23 @@ export class StateManager implements vscode.Disposable {
     }
   }
 
-  /** 将当前状态持久化到 .compilot/sdk-settings.json（唯一 source of truth） */
+  /** 将当前状态持久化到统一配置 .compilot/settings.json 的 sdk 部分 */
   async persistToConfig(): Promise<void> {
     const folders = vscode.workspace.workspaceFolders;
     const wsRoot = folders && folders.length > 0 ? folders[0].uri.fsPath : '';
-    if (!wsRoot) { return; }
 
     // 计算相对路径
     let projectValue: string | null = null;
-    if (this._currentProject?.path) {
+    if (this._currentProject?.path && wsRoot) {
       const relative = path.relative(wsRoot, this._currentProject.path);
       projectValue = relative.startsWith('..') || path.isAbsolute(relative)
         ? this._currentProject.path
         : relative.replace(/\\/g, '/');
     }
 
-    const existing = loadSdkSettings(wsRoot);
-    const updated: SdkSettings = {
-      ...existing,
-      mode: this._mode,
-      arch: this._arch,
-      pinnedProject: projectValue
-    };
-    saveSdkSettings(wsRoot, updated);
+    setSdkSetting('mode', this._mode);
+    setSdkSetting('arch', this._arch);
+    setSdkSetting('pinnedProject', projectValue);
   }
 
   dispose(): void {

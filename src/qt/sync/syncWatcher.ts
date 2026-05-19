@@ -27,8 +27,8 @@ function _warnHostKeyCheckingIfNeeded(server: ServerConfig): void {
 export function registerSyncWatcher(context: vscode.ExtensionContext): void {
     const wsRoot = getWorkspaceRoot();
     if (wsRoot) {
-        // 监听 sync-config.json 和 servers.json 变化来刷新状态栏
-        const syncPattern = new vscode.RelativePattern(wsRoot, '.compilot/sync-config.json');
+        // 监听 settings.json 变化来刷新状态栏（sync 配置已合并到 settings.json）
+        const syncPattern = new vscode.RelativePattern(wsRoot, '.compilot/settings.json');
         const syncWatcher = vscode.workspace.createFileSystemWatcher(syncPattern);
         syncWatcher.onDidChange(() => _refreshStatusBar());
         syncWatcher.onDidCreate(() => _refreshStatusBar());

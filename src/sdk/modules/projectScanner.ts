@@ -5,7 +5,7 @@ import { SdkProjectInfo } from '../types';
 import { EXCLUDE_DIRS, EXCLUDE_PATH_SEGMENTS, DEFAULT_SCAN_DEPTH, SCAN_TIMEOUT_MS } from '../constants';
 import { isWindows } from '../platform';
 import { log, logError } from '../utils/logger';
-import { loadSdkSettings } from '../cli/settings';
+import { getSdkSetting } from '../../core/settingsStore';
 
 export class ProjectScanner {
   private _projects: SdkProjectInfo[] = [];
@@ -24,8 +24,7 @@ export class ProjectScanner {
     }
 
     const wsRoot = workspaceFolders[0].uri.fsPath;
-    const settings = loadSdkSettings(wsRoot);
-    const maxDepth = settings.scanDepth || DEFAULT_SCAN_DEPTH;
+    const maxDepth = getSdkSetting('scanDepth') || DEFAULT_SCAN_DEPTH;
     const filePattern = isWindows ? /\.sln$/i : /^(Makefile|makefile|GNUmakefile)$/;
 
     log(`开始 fs 遍历扫描, 最大深度: ${maxDepth}, 排除目录: ${EXCLUDE_DIRS.join(',')}, 排除路径: ${EXCLUDE_PATH_SEGMENTS.join(',')}`);

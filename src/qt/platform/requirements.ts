@@ -2,14 +2,14 @@
  * 平台工具链需求检测。
  * 根据当前平台返回必需的工具链项目及其检测状态。
  */
-import type { QtPilotSettings } from '../../core/settingsIO';
+import type { QtSettings } from '../../core/settingsIO';
 
 export interface PlatformRequirement {
     key: string;
     label: string;
     cliFlag?: string;
     missingHint?: string;
-    check: (settings: QtPilotSettings) => boolean;
+    check: (settings: QtSettings) => boolean;
 }
 
 const isWin = process.platform === 'win32';
@@ -23,11 +23,11 @@ const windowsRequirements: PlatformRequirement[] = [
         check: (s) => !!s.qtPath
     },
     {
-        key: 'vsDevShellPath',
+        key: 'vsInstall',
         label: 'Visual Studio',
         cliFlag: '--vs-dev-shell <path>',
         missingHint: '使用 --vs-dev-shell 指定 Launch-VsDevShell.ps1 路径',
-        check: (s) => !!s.vsDevShellPath
+        check: (s) => !!s.vsInstall
     },
     {
         key: 'jom',
@@ -54,7 +54,7 @@ export function getPlatformRequirements(): PlatformRequirement[] {
 /**
  * 检查所有必需工具是否就绪。
  */
-export function checkToolsReady(settings: QtPilotSettings): { allReady: boolean; checks: Record<string, boolean> } {
+export function checkToolsReady(settings: QtSettings): { allReady: boolean; checks: Record<string, boolean> } {
     const reqs = getPlatformRequirements();
     const checks: Record<string, boolean> = {};
     let allReady = true;
@@ -69,7 +69,7 @@ export function checkToolsReady(settings: QtPilotSettings): { allReady: boolean;
 /**
  * 返回缺失的工具列表。
  */
-export function getMissingTools(settings: QtPilotSettings): PlatformRequirement[] {
+export function getMissingTools(settings: QtSettings): PlatformRequirement[] {
     return getPlatformRequirements().filter(r => !r.check(settings));
 }
 

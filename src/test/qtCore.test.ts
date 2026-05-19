@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createActionPlan } from '../qt/shared/qtCore';
-import { saveSettings, DEFAULT_SETTINGS } from '../core/settingsIO';
+import { saveSettings, DEFAULT_SETTINGS, DEFAULT_QT, DEFAULT_SDK, DEFAULT_SYNC } from '../core/settingsIO';
 
 const _tmpDirs: string[] = [];
 after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
@@ -20,11 +20,9 @@ test('createActionPlan uses settings.json when CLI args are omitted', async () =
     const workspace = makeWorkspace();
     const project = path.join(workspace, 'demo.pro');
     saveSettings(workspace, {
-        ...DEFAULT_SETTINGS,
-        mode: 'release',
-        arch: 'x64',
-        qtPath: 'D:/Qt',
-        vsDevShellPath: 'C:/VS/Launch-VsDevShell.ps1'
+        qt: { ...DEFAULT_QT, mode: 'release', arch: 'x64', qtPath: 'D:/Qt', vsInstall: 'C:/VS' },
+        sdk: { ...DEFAULT_SDK },
+        sync: { ...DEFAULT_SYNC }
     });
 
     const result = await createActionPlan({
@@ -75,10 +73,9 @@ test('createActionPlan status returns checks and resolved config', async () => {
     const workspace = makeWorkspace();
     // Save settings so status sees an initialized project
     saveSettings(workspace, {
-        ...DEFAULT_SETTINGS,
-        pinnedProject: { root: workspace, relative: 'demo.pro' },
-        qtPath: 'D:/Qt',
-        jomPath: 'C:/jom/jom.exe'
+        qt: { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, qtPath: 'D:/Qt', jomPath: 'C:/jom/jom.exe' },
+        sdk: { ...DEFAULT_SDK },
+        sync: { ...DEFAULT_SYNC }
     });
 
     const result = await createActionPlan({
@@ -225,11 +222,9 @@ test('run without Makefile includes status hint when CLI-passed mode/arch', asyn
 test('CLI args override settings for mode/arch/qtPath', async () => {
     const workspace = makeWorkspace();
     saveSettings(workspace, {
-        ...DEFAULT_SETTINGS,
-        mode: 'debug',
-        arch: 'x86',
-        qtPath: 'D:/Qt-old',
-        vsDevShellPath: 'C:/VS-old/Launch-VsDevShell.ps1'
+        qt: { ...DEFAULT_QT, mode: 'debug', arch: 'x86', qtPath: 'D:/Qt-old', vsInstall: 'C:/VS-old' },
+        sdk: { ...DEFAULT_SDK },
+        sync: { ...DEFAULT_SYNC }
     });
 
     const result = await createActionPlan({
@@ -438,10 +433,9 @@ test('non-existent qtPath still generates commands (validation delegated to stat
 test('env action returns current config and available options', async () => {
     const workspace = makeWorkspace();
     saveSettings(workspace, {
-        ...DEFAULT_SETTINGS,
-        mode: 'release',
-        arch: 'x64',
-        qtPath: 'D:/Qt/5.15.2/msvc2019'
+        qt: { ...DEFAULT_QT, mode: 'release', arch: 'x64', qtPath: 'D:/Qt/5.15.2/msvc2019' },
+        sdk: { ...DEFAULT_SDK },
+        sync: { ...DEFAULT_SYNC }
     });
 
     const result = await createActionPlan({
@@ -504,8 +498,9 @@ test('projects action returns available .pro files', async () => {
 test('projects action shows pinned project as current', async () => {
     const workspace = makeWorkspace();
     saveSettings(workspace, {
-        ...DEFAULT_SETTINGS,
-        pinnedProject: { root: workspace, relative: 'demo.pro' }
+        qt: { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' } },
+        sdk: { ...DEFAULT_SDK },
+        sync: { ...DEFAULT_SYNC }
     });
 
     const result = await createActionPlan({

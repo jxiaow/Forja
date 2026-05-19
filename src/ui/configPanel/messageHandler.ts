@@ -7,6 +7,7 @@ import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers } from '../../core/serverStore';
 import { executeTestConnection } from '../../qt/sync/syncWatcher';
+import { inferVsInstall } from '../../core/settingsIO';
 
 const logger = createLogger('ConfigPanel');
 
@@ -55,7 +56,7 @@ export async function handleMessage(
         }
         case 'saveVsPath': {
             logger.info(`保存 VS 路径: "${msg.value}"`);
-            await updateConfig('vsDevShellPath', String(msg.value || ''));
+            await updateConfig('vsInstall', inferVsInstall(String(msg.value || '')));
             webview.postMessage({ command: 'envDetecting', scope: 'vs' });
             const env = await detectEnv();
             setState('envInfo', env);

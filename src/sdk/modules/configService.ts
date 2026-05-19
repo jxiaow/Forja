@@ -5,7 +5,7 @@ import * as cp from 'child_process';
 import { VS_DETECT_TIMEOUT_MS } from '../constants';
 import { isWindows } from '../platform';
 import { log, logError } from '../utils/logger';
-import { loadSdkSettings } from '../cli/settings';
+import { getSdkSetting, resolveVsDevCmdPath } from '../../core/settingsStore';
 
 export class ConfigService implements vscode.Disposable {
   private _vsDevCmdPath: string | null = null;
@@ -17,10 +17,9 @@ export class ConfigService implements vscode.Disposable {
       return null;
     }
 
-    // 从 .compilot/sdk-settings.json 读取
-    const folders = vscode.workspace.workspaceFolders;
-    const wsRoot = folders && folders.length > 0 ? folders[0].uri.fsPath : '';
-    const userPath = wsRoot ? loadSdkSettings(wsRoot).vsDevCmdPath : '';
+    // 从统一配置读取 vsInstall 并推导 VsDevCmd.bat 路径
+    const vsInstall = getSdkSetting('vsInstall');
+    const userPath = resolveVsDevCmdPath(vsInstall);
 
     if (userPath) {
       log(`检查用户配置的 VS 路径: ${userPath}`);
@@ -147,11 +146,11 @@ export class ConfigService implements vscode.Disposable {
     });
   }
 
-  /** 监听 sdk-settings.json 文件变化 */
+  /** 监听统一配置文件变化 */
   onSettingsFileChanged(context: vscode.ExtensionContext, callback: () => void): void {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) { return; }
-    const pattern = new vscode.RelativePattern(folders[0].uri, '.compilot/sdk-settings.json');
+    const pattern = new vscode.RelativePattern(folders[0].uri, '.compilot/settings.json');
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
     watcher.onDidChange(callback);
     watcher.onDidCreate(callback);

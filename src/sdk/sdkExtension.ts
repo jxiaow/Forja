@@ -6,12 +6,12 @@ import * as vscode from 'vscode';
 import { StateManager } from './modules/stateManager';
 import { ConfigService } from './modules/configService';
 import { ProjectScanner } from './modules/projectScanner';
-import { StatusBar } from './modules/statusBar';
 import { SdkBuilder } from './modules/sdkBuilder';
 import { ShowActions } from './modules/showActions';
 import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN, CMD_SHOW_ACTIONS, CTX_ACTIVATED, TASK_SOURCE } from './constants';
 import { isWindows } from './platform';
 import { initLogger, log, logError } from './utils/logger';
+import { setSdkState, setActiveModule, onSdkUpdate } from '../ui/unifiedStatusBar';
 
 export async function activateSdk(context: vscode.ExtensionContext): Promise<void> {
     // 0. 初始化日志
@@ -72,10 +72,23 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         }
     }
 
-    // 6. 初始化 UI 组件
-    const statusBar = new StatusBar(stateManager);
-    statusBar.show();
-    log('状态栏已初始化');
+    // 6. 初始化 UI 组件（使用统一状态栏）
+    const updateSdkStatusBar = () => {
+        const project = stateManager.currentProject;
+        setSdkState({
+            projectName: project?.name || '',
+            mode: stateManager.mode,
+            arch: stateManager.arch,
+            isBuilding: stateManager.isBuilding
+        });
+    };
+    stateManager.onStateChanged(() => updateSdkStatusBar());
+    updateSdkStatusBar();
+    // 如果有 SDK 项目但没有 Qt 项目，默认激活 SDK 模块
+    if (stateManager.currentProject) {
+        setActiveModule('sdk');
+    }
+    log('状态栏已初始化（统一模式）');
 
     // 7. 初始化 Builder
     const sdkBuilder = new SdkBuilder(stateManager, configService);
@@ -117,9 +130,9 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     });
     context.subscriptions.push(taskEndListener);
 
-    // 10. 监听 sdk-settings.json 文件变化（外部编辑或 CLI 写入时重新加载）
+    // 10. 监听配置文件变化（外部编辑或 CLI 写入时重新加载）
     configService.onSettingsFileChanged(context, async () => {
-        log('sdk-settings.json 变更，重新加载...');
+        log('settings.json 变更，重新加载...');
         await stateManager.restoreFromConfig();
         if (isWindows) {
             await configService.getVsDevCmdPath();
@@ -130,7 +143,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     await vscode.commands.executeCommand('setContext', CTX_ACTIVATED, true);
 
     // 12. 注册 Disposables
-    context.subscriptions.push(statusBar, stateManager, configService);
+    context.subscriptions.push(stateManager, configService);
 
     log('Compilot SDK 模块激活完成!');
 }

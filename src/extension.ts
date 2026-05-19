@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { setState, loadPersistedState } from './core/qtState';
 import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath } from './qt/services/configService';
-import { createStatusBar } from './ui/statusBar';
+import { createUnifiedStatusBar, setActiveModule, setSdkState } from './ui/unifiedStatusBar';
 import { registerPriWatcher } from './qt/project/priWatcher';
 import { ConfigPanel } from './ui/configPanel/index';
 import { selectProject, parseProFile } from './qt/project/projectManager';
@@ -33,7 +33,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     initSettingsStore(context);
     loadPersistedState();
 
-    createStatusBar(context);
+    createUnifiedStatusBar(context);
 
     const panel = new ConfigPanel(context);
     context.subscriptions.push(

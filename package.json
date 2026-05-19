@@ -24,6 +24,10 @@
   "contributes": {
     "commands": [
       {
+        "command": "compilot.showActions",
+        "title": "Compilot: 显示操作菜单"
+      },
+      {
         "command": "compilot.qt.selectProject",
         "title": "Compilot Qt: 选择项目"
       },

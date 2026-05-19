@@ -3,7 +3,7 @@ import { BuildConfig } from '../platform/builder';
 import { getState } from '../../core/qtState';
 import { decodePinnedProject } from '../project/pinnedProject';
 import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
-import { getSetting, setSetting, QtPilotSettings } from '../../core/settingsStore';
+import { getQtSetting, setQtSetting, QtSettings, resolveVsDevShellPath } from '../../core/settingsStore';
 import { resolveProjectRoot } from '../../core/workspaceResolver';
 
 // ── 配置读取 ──
@@ -13,27 +13,27 @@ export function getWorkspaceRoot(): string {
 }
 
 export function getVsDevShellPath(): string {
-    return getSetting('vsDevShellPath');
+    return resolveVsDevShellPath(getQtSetting('vsInstall'));
 }
 
 export function getQtPath(): string {
-    return getSetting('qtPath');
+    return getQtSetting('qtPath');
 }
 
 export function getDesignerPath(): string {
-    return getSetting('designerPath');
+    return getQtSetting('designerPath');
 }
 
 export function getQtSourcePath(): string {
-    return getSetting('qtSourcePath');
+    return getQtSetting('qtSourcePath');
 }
 
 export function getJomPath(): string {
-    return getSetting('jomPath');
+    return getQtSetting('jomPath');
 }
 
 export function getPinnedProject(): string {
-    const saved = getSetting('pinnedProject');
+    const saved = getQtSetting('pinnedProject');
     const parsed = decodePinnedProject(saved);
     if (parsed) {
         return parsed.relative;
@@ -42,43 +42,43 @@ export function getPinnedProject(): string {
 }
 
 export function getCStandard(): string {
-    return getSetting('cStandard');
+    return getQtSetting('cStandard');
 }
 
 export function getCppStandard(): string {
-    return getSetting('cppStandard');
+    return getQtSetting('cppStandard');
 }
 
 export function getScanExcludeDirs(): string[] {
-    return getSetting('scanExcludeDirs');
+    return getQtSetting('scanExcludeDirs');
 }
 
 export function getTarget(): string {
-    return getSetting('target');
+    return getQtSetting('target');
 }
 
 export function getManualProPath(): string {
-    return getSetting('manualProPath');
+    return getQtSetting('manualProPath');
 }
 
 export function getFileSyncPromptEnabled(): boolean {
-    return getSetting('fileSyncPromptEnabled');
+    return getQtSetting('fileSyncPromptEnabled');
 }
 
 export function getQmakeReminderEnabled(): boolean {
-    return getSetting('qmakeReminderEnabled');
+    return getQtSetting('qmakeReminderEnabled');
 }
 
 export function getRccProjectPath(): string {
-    return getSetting('rccProjectPath');
+    return getQtSetting('rccProjectPath');
 }
 
 export function getCustomCommands(): { name: string; command: string }[] {
-    return getSetting('customCommands');
+    return getQtSetting('customCommands');
 }
 
-export function updateConfig<K extends keyof QtPilotSettings>(key: K, value: QtPilotSettings[K]): void {
-    setSetting(key, value);
+export function updateConfig<K extends keyof QtSettings>(key: K, value: QtSettings[K]): void {
+    setQtSetting(key, value);
 }
 
 // ── BuildConfig 组装 ──

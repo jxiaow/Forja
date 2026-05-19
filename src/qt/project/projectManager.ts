@@ -6,7 +6,7 @@ import { decodePinnedProject, encodePinnedProject } from './pinnedProject';
 import { getEffectiveProjectName, getProjectSelectionLabel } from './projectDisplay';
 import { getTarget } from '../services/configService';
 import { getState } from '../../core/qtState';
-import { getSetting, setSetting } from '../../core/settingsStore';
+import { getQtSetting, setQtSetting } from '../../core/settingsStore';
 import { setProjectRoot } from '../../core/workspaceResolver';
 import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../shared/projectScanner';
 import { resolveRuntimeTarget, parseRuntimeLibPaths } from '../shared/runtimeTarget';
@@ -70,7 +70,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         return null;
     }
 
-    const savedProject = getSetting('pinnedProject');
+    const savedProject = getQtSetting('pinnedProject');
 
     if (!forceSelect && savedProject) {
         const savedRef = decodePinnedProject(savedProject);
@@ -117,7 +117,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const info = parseProFile(fullPath);
         info.projectDir = path.dirname(item.relative);
         setProjectRoot(item.root);
-        setSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
+        setQtSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
         return info;
     }
 
@@ -133,7 +133,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
             const info = parseProFile(fullPath);
             info.projectDir = path.dirname(item.relative);
             setProjectRoot(item.root);
-            setSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
+            setQtSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
             return info;
         }
     }

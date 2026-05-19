@@ -10,7 +10,7 @@ import { setState } from '../core/qtState';
 import { getWorkspaceRoot, getManualProPath, getDesignerPath, getQtPath } from './services/configService';
 import { selectProject, parseProFile } from './project/projectManager';
 import { startDebug } from './build/debugger';
-import { showActions } from '../ui/statusBar';
+import { showUnifiedActions } from '../ui/unifiedStatusBar';
 import { executeSyncChangedFiles, executeTestConnection } from './sync/syncWatcher';
 import { ensureLocalStateDir } from './shared/localState';
 import { createLogger } from '../core/logger';
@@ -63,7 +63,7 @@ export function registerQtCommands(context: vscode.ExtensionContext, panel: Conf
                 vscode.window.showWarningMessage('.pro 文件不存在: ' + proPath);
             }
         }],
-        ['compilot.qt.showActions',   () => showActions()],
+        ['compilot.qt.showActions',   () => showUnifiedActions()],
         ['compilot.qt.qmake',         () => Promise.resolve(buildManager.qmake()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
         ['compilot.qt.build',         () => Promise.resolve(buildManager.build()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
         ['compilot.qt.clean',         () => Promise.resolve(buildManager.clean()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],

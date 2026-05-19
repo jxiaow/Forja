@@ -11,7 +11,7 @@ import {
     ensureLocalStateDir,
     ensureCompilotGitignored,
 } from './localState';
-import { loadSettings, saveSettings, settingsFilePath, QtPilotSettings } from '../../core/settingsIO';
+import { loadSettings, saveSettings, settingsFilePath, CompilotSettings, QtSettings, resolveVsDevShellPath, inferVsInstall } from '../../core/settingsIO';
 import { buildRunCommand } from './commandRunner';
 import { resolveRuntimeTarget, validateMakefile } from './runtimeTarget';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from './rccResolver';
@@ -48,7 +48,7 @@ function insideWorkspace(workspace: string, filePath: string): boolean {
     return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-function resolveProject(workspace: string, options: CliOptions, settings: QtPilotSettings): { project: string | null; error: string | null } {
+function resolveProject(workspace: string, options: CliOptions, settings: QtSettings): { project: string | null; error: string | null } {
     const explicitProject = options.project
         ? (path.isAbsolute(options.project) ? path.resolve(options.project) : path.resolve(workspace, options.project))
         : null;
@@ -99,7 +99,7 @@ interface InitDiagnosticsInput {
     qtCandidates: Array<{path: string; version: string; compiler: string}>;
     projects: string[];
     project: string | null;
-    effectiveSettings: QtPilotSettings;
+    effectiveSettings: QtSettings;
 }
 
 function buildInitDiagnostics(input: InitDiagnosticsInput): CliResult['diagnostics'] {
@@ -182,7 +182,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         return result;
     }
 
-    const settings = loadSettings(workspace);
+    const allSettings = loadSettings(workspace);
+    const settings = allSettings.qt;
 
     if (options.action === 'status') {
         const hasSettings = fs.existsSync(settingsFilePath(workspace));
@@ -194,7 +195,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const mode = settings.mode || 'debug';
         const arch = settings.arch || getDefaultArch();
         const qtPath = settings.qtPath || '';
-        const vsDevShell = settings.vsDevShellPath || '';
+        const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || '';
         const jomPath = settings.jomPath || '';
         const target = settings.target || '';
 
@@ -291,7 +292,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const mode = options.mode || settings.mode || 'debug';
         const arch = options.arch || settings.arch || getDefaultArch();
         const currentQtPath = options.qtPath || settings.qtPath || detected.detected.qt?.path || '';
-        const currentVsDevShell = options.vsDevShell || settings.vsDevShellPath || detected.detected.vs?.devShellPath || '';
+        const currentVsDevShell = options.vsDevShell || resolveVsDevShellPath(settings.vsInstall) || detected.detected.vs?.devShellPath || '';
         const jomPath = detected.detected.jom || settings.jomPath || '';
 
         // Encode env response in CliResult fields
@@ -357,7 +358,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const errMode = options.mode || settings.mode || 'debug';
         const errArch = options.arch || settings.arch || getDefaultArch();
         const errQtPath = options.qtPath || settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-        const errVsDevShell = options.vsDevShell || settings.vsDevShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
+        const errVsDevShell = options.vsDevShell || resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
         const errQmakeTarget = options.target || settings.target || '';
         result.resolved = buildResolvedConfig(errMode, errArch, errQtPath, errVsDevShell, errQmakeTarget, undefined, undefined, settings.jomPath || undefined);
         result.diagnostics.push({ level: 'error', message: projectResult.error });
@@ -369,7 +370,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const mode = options.mode || settings.mode || 'debug';
     const arch = options.arch || settings.arch || getDefaultArch();
     const qtPath = options.qtPath || settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = options.vsDevShell || settings.vsDevShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const vsDevShell = options.vsDevShell || resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
     const target = options.target || settings.target || '';
     const jomPath = settings.jomPath || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
@@ -392,38 +393,38 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 // #2: 写入 pinnedProject
                 // mode/arch 只在用户显式传参时写入，否则保持 settings 原值（可能为空）
                 const relativeProject = path.relative(workspace, project).replace(/\\/g, '/');
-                const updatedSettings: QtPilotSettings = {
+                const updatedQt: QtSettings = {
                     ...settings,
                     mode: options.mode || settings.mode,
                     arch: options.arch || settings.arch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
-                    vsDevShellPath: vsDevShell || detected.detected.vs?.devShellPath || '',
+                    vsInstall: settings.vsInstall || inferVsInstall(vsDevShell || detected.detected.vs?.devShellPath || ''),
                     jomPath: detected.detected.jom || '',
                     target: effectiveTarget,
                     pinnedProject: { root: workspace, relative: relativeProject }
                 };
-                saveSettings(workspace, updatedSettings);
+                saveSettings(workspace, { ...allSettings, qt: updatedQt });
             } else {
                 // #3: 多 .pro 文件或无 .pro 时，仍保存 qtPath 等，显式清除 pinnedProject
                 // mode/arch 只在用户显式传参时写入，否则保持 settings 原值（可能为空）
-                const updatedSettings: QtPilotSettings = {
+                const updatedQt: QtSettings = {
                     ...settings,
                     mode: options.mode || settings.mode,
                     arch: options.arch || settings.arch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
-                    vsDevShellPath: vsDevShell || detected.detected.vs?.devShellPath || '',
+                    vsInstall: settings.vsInstall || inferVsInstall(vsDevShell || detected.detected.vs?.devShellPath || ''),
                     jomPath: detected.detected.jom || '',
                     target: effectiveTarget,
                     pinnedProject: null
                 };
-                saveSettings(workspace, updatedSettings);
+                saveSettings(workspace, { ...allSettings, qt: updatedQt });
             }
             const effectiveQtPath = qtPath || detected.detected.qt?.path || '';
             const effectiveVsDevShell = vsDevShell || detected.detected.vs?.devShellPath || '';
-            const effectiveSettingsForCheck: QtPilotSettings = {
+            const effectiveSettingsForCheck: QtSettings = {
                 ...settings,
                 qtPath: effectiveQtPath,
-                vsDevShellPath: effectiveVsDevShell,
+                vsInstall: settings.vsInstall || inferVsInstall(effectiveVsDevShell),
                 jomPath: detected.detected.jom || ''
             };
             const initDiagnostics = buildInitDiagnostics({
@@ -449,10 +450,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const previewDiagnostics: CliResult['diagnostics'] = [
             { level: 'info', message: '将创建 .compilot/ 目录并写入 settings.json' }
         ];
-        const previewSettingsForCheck: QtPilotSettings = {
+        const previewSettingsForCheck: QtSettings = {
             ...settings,
             qtPath: previewQtPath,
-            vsDevShellPath: previewVsDevShell,
+            vsInstall: settings.vsInstall || inferVsInstall(previewVsDevShell),
             jomPath: detected.detected.jom || ''
         };
         previewDiagnostics.push(...buildInitDiagnostics({

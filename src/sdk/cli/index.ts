@@ -237,7 +237,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             const vsDevCmd = options.vsDevCmd || (vsInstallations.length > 0 ? vsInstallations[0].vsDevCmdPath : '');
             const project = options.project ? path.relative(options.workspace, path.resolve(options.project)) : settings.pinnedProject;
 
-            const newSettings: SdkSettings = { mode, arch, vsDevCmdPath: vsDevCmd, pinnedProject: project };
+            const newSettings = { mode, arch, vsDevCmdPath: vsDevCmd, pinnedProject: project };
             saveSdkSettings(options.workspace, newSettings);
 
             const diagnostics: SdkDiagnostic[] = [];

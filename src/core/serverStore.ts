@@ -1,7 +1,7 @@
 /**
  * 统一的服务器配置存储。
  * 全局服务器列表：~/.compilot/servers.json
- * 项目同步配置：.compilot/sync-config.json
+ * 项目同步配置：.compilot/settings.json 的 sync 部分
  * 
  * 扩展和 CLI 共用，不依赖 vscode。
  *
@@ -51,10 +51,6 @@ function _globalDir(): string {
 
 function _serversFilePath(): string {
     return path.join(_globalDir(), 'servers.json');
-}
-
-function _projectSyncConfigPath(workspaceRoot: string): string {
-    return path.join(workspaceRoot, '.compilot', 'sync-config.json');
 }
 
 function _generateId(): string {
@@ -165,51 +161,36 @@ export function getServerByName(name: string): ServerConfig | null {
     return servers.find(s => s.name === name) || null;
 }
 
-// ── 项目同步配置 ──
+// ── 项目同步配置（读写统一 .compilot/settings.json 的 sync 部分） ──
 
-const DEFAULT_IGNORE = ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'];
+import { loadSettings, saveSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
+
+const DEFAULT_IGNORE = DEFAULT_SYNC.ignore;
 
 export function readProjectSyncConfig(workspaceRoot: string): ProjectSyncConfig {
-    const filePath = _projectSyncConfigPath(workspaceRoot);
     try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-            return {
-                enabled: !!raw.enabled,
-                selectedServer: raw.selectedServer || '',
-                ignore: Array.isArray(raw.ignore) ? raw.ignore : DEFAULT_IGNORE,
-                remotePath: raw.remotePath || undefined
-            };
-        }
-    } catch (e) {
-        console.warn(`[compilot] sync-config.json 解析失败: ${e instanceof Error ? e.message : e}`);
+        const settings = loadSettings(workspaceRoot);
+        return {
+            enabled: settings.sync.enabled,
+            selectedServer: settings.sync.selectedServer,
+            ignore: settings.sync.ignore.length > 0 ? settings.sync.ignore : [...DEFAULT_IGNORE],
+            remotePath: settings.sync.remotePath || undefined
+        };
+    } catch {
+        return { enabled: false, selectedServer: '', ignore: [...DEFAULT_IGNORE] };
     }
-    return { enabled: false, selectedServer: '', ignore: DEFAULT_IGNORE };
 }
 
 export function writeProjectSyncConfig(workspaceRoot: string, config: Partial<ProjectSyncConfig>): void {
-    const filePath = _projectSyncConfigPath(workspaceRoot);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
+    const settings = loadSettings(workspaceRoot);
+    const updated: SyncSettings = { ...settings.sync };
 
-    // Read-merge-write：读取现有内容，合并后写回
-    let existing: Record<string, unknown> = {};
-    try {
-        if (fs.existsSync(filePath)) {
-            existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-        }
-    } catch { /* file missing or unreadable, start fresh */ }
+    if (config.enabled !== undefined) { updated.enabled = config.enabled; }
+    if (config.selectedServer !== undefined) { updated.selectedServer = config.selectedServer; }
+    if (config.remotePath !== undefined) { updated.remotePath = config.remotePath; }
+    if (config.ignore !== undefined) { updated.ignore = config.ignore; }
 
-    // 顶层字段覆盖
-    if (config.enabled !== undefined) { existing.enabled = config.enabled; }
-    if (config.selectedServer !== undefined) { existing.selectedServer = config.selectedServer; }
-    if (config.remotePath !== undefined) { existing.remotePath = config.remotePath; }
-    // 数组字段整体替换
-    if (config.ignore !== undefined) { existing.ignore = config.ignore; }
-
-    atomicWriteJson(filePath, existing);
+    saveSettings(workspaceRoot, { ...settings, sync: updated });
 }
 
 /**

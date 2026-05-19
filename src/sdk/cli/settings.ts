@@ -1,51 +1,37 @@
 /**
- * SDK CLI 本地配置读写。
- * 存储在 .compilot/sdk-settings.json。
+ * SDK CLI 配置读写 — 基于统一 .compilot/settings.json 的 sdk 部分。
+ * 不依赖 vscode，供 CLI 使用。
  */
-import * as fs from 'fs';
-import * as path from 'path';
+import { loadSettings, saveSettings, settingsFilePath, SdkSettings, resolveVsDevCmdPath, inferVsInstall } from '../../core/settingsIO';
 
-export interface SdkSettings {
-    mode: 'debug' | 'release';
-    arch: 'x86' | 'x64';
+export type { SdkSettings } from '../../core/settingsIO';
+
+export interface SdkCliSettings extends SdkSettings {
+    /** 推导出的 VsDevCmd.bat 路径（只读，不存储） */
     vsDevCmdPath: string;
-    pinnedProject: string | null;
-    scanDepth?: number;
 }
-
-const DEFAULT_SDK_SETTINGS: SdkSettings = {
-    mode: 'debug',
-    arch: 'x86',
-    vsDevCmdPath: '',
-    pinnedProject: null
-};
 
 export function sdkSettingsFilePath(workspace: string): string {
-    return path.join(workspace, '.compilot', 'sdk-settings.json');
+    return settingsFilePath(workspace);
 }
 
-export function loadSdkSettings(workspace: string): SdkSettings {
-    const filePath = sdkSettingsFilePath(workspace);
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-            return {
-                mode: (raw.mode === 'debug' || raw.mode === 'release') ? raw.mode : DEFAULT_SDK_SETTINGS.mode,
-                arch: (raw.arch === 'x86' || raw.arch === 'x64') ? raw.arch : DEFAULT_SDK_SETTINGS.arch,
-                vsDevCmdPath: typeof raw.vsDevCmdPath === 'string' ? raw.vsDevCmdPath : '',
-                pinnedProject: typeof raw.pinnedProject === 'string' ? raw.pinnedProject : null,
-                scanDepth: typeof raw.scanDepth === 'number' && raw.scanDepth >= 1 ? raw.scanDepth : undefined
-            };
-        }
-    } catch { /* file missing or malformed */ }
-    return { ...DEFAULT_SDK_SETTINGS };
+export function loadSdkSettings(workspace: string): SdkCliSettings {
+    const all = loadSettings(workspace);
+    const sdk = all.sdk;
+    return {
+        ...sdk,
+        vsDevCmdPath: resolveVsDevCmdPath(sdk.vsInstall)
+    };
 }
 
-export function saveSdkSettings(workspace: string, settings: SdkSettings): void {
-    const filePath = sdkSettingsFilePath(workspace);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(filePath, JSON.stringify(settings, null, 4) + '\n', 'utf-8');
+export function saveSdkSettings(workspace: string, settings: { mode: string; arch: string; vsDevCmdPath: string; pinnedProject: string | null; scanDepth?: number }): void {
+    const all = loadSettings(workspace);
+    all.sdk = {
+        mode: (settings.mode === 'debug' || settings.mode === 'release') ? settings.mode : 'debug',
+        arch: (settings.arch === 'x86' || settings.arch === 'x64') ? settings.arch : 'x86',
+        vsInstall: settings.vsDevCmdPath ? inferVsInstall(settings.vsDevCmdPath) : all.sdk.vsInstall,
+        pinnedProject: settings.pinnedProject,
+        ...(settings.scanDepth ? { scanDepth: settings.scanDepth } : {})
+    };
+    saveSettings(workspace, all);
 }
