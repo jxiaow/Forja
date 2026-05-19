@@ -10,7 +10,6 @@ import { scanProFiles, parseProFile } from './projectScanner';
 import {
     ensureLocalStateDir,
     ensureCompilotGitignored,
-    readLocalCache,
 } from './localState';
 import { loadSettings, saveSettings, settingsFilePath, QtPilotSettings } from '../../core/settingsIO';
 import { buildRunCommand } from './commandRunner';
@@ -246,8 +245,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             diagnostics.push({ level: 'warning', message: `Makefile 与当前配置不匹配（${makefileValidation.mismatch!.join(', ')}）` });
         }
 
-        const cache = readLocalCache(workspace);
-        const statusResolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, cache?.detected.qt?.version, cache?.detected.vs?.version, jomPath || undefined);
+        const statusResolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
         if (projectRel) {
             statusResolved.project = projectRel;
         }
@@ -371,10 +369,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const vsDevShell = options.vsDevShell || settings.vsDevShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
     const target = options.target || settings.target || '';
     const jomPath = settings.jomPath || '';
-    const cache = readLocalCache(workspace);
-    const qtVersion = cache?.detected.qt?.version || undefined;
-    const vsVersion = cache?.detected.vs?.version || undefined;
-    const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, qtVersion, vsVersion, jomPath || undefined);
+    const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
 
     if (options.action === 'init') {
         if (options.executionMode === 'execute') {

@@ -28,7 +28,10 @@ function createTemplateData(): TemplateData {
         syncEnabled: false,
         syncSelectedServer: '',
         syncServers: [],
-        syncIgnore: '.git, node_modules, out'
+        syncIgnore: '.git, node_modules, out',
+        syncRemotePath: '',
+        syncPendingCount: 0,
+        syncLastTime: ''
     };
 }
 

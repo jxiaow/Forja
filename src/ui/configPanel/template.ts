@@ -28,6 +28,9 @@ export interface TemplateData {
     syncSelectedServer: string;
     syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string; remotePath: string }[];
     syncIgnore: string;
+    syncRemotePath: string;
+    syncPendingCount: number;
+    syncLastTime: string;
 }
 
 let _templateCache: string | null = null;
@@ -141,11 +144,18 @@ export function getHtml(data: TemplateData): string {
         chkFileSyncPrompt: data.fileSyncPromptEnabled ? 'checked' : '',
         chkQmakeReminder: data.qmakeReminderEnabled ? 'checked' : '',
         version: _escapeHtml(data.version),
-        syncServerOptions: data.syncServers
-            .map(s => `<option value="${_escapeHtml(s.id)}" ${s.id === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
-            .join(''),
+        syncServerOptions: data.syncServers.length > 0
+            ? data.syncServers
+                .map(s => `<option value="${_escapeHtml(s.id)}" ${s.id === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
+                .join('')
+            : '<option value="">— 无服务器 —</option>',
         syncServerData: JSON.stringify(data.syncServers).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/<\//g, '<\\/'),
         syncIgnore: _escapeHtml(data.syncIgnore),
+        syncEnabledChecked: data.syncEnabled ? 'checked' : '',
+        syncRemotePath: _escapeHtml(data.syncRemotePath),
+        syncPendingCount: String(data.syncPendingCount),
+        syncLastTime: _escapeHtml(data.syncLastTime),
+        syncHasServer: data.syncServers.length > 0 ? 'true' : '',
     };
 
     let html = _loadTemplate();

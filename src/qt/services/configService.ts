@@ -5,7 +5,6 @@ import { decodePinnedProject } from '../project/pinnedProject';
 import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
 import { getSetting, setSetting, QtPilotSettings } from '../../core/settingsStore';
 import { resolveProjectRoot } from '../../core/workspaceResolver';
-import { readLocalCache } from '../shared/localState';
 
 // ── 配置读取 ──
 
@@ -130,20 +129,14 @@ export function getBuildConfig(): BuildConfig {
 
 export function getEffectiveVsDevShell(): string {
     const state = getState();
-    const root = getWorkspaceRoot();
-    const localCache = root ? readLocalCache(root) : null;
     return getVsDevShellPath()
         || state.envInfo?.vs?.devShellPath
-        || localCache?.detected.vs?.devShellPath
         || '';
 }
 
 export function getEffectiveQtPath(): string {
     const state = getState();
-    const root = getWorkspaceRoot();
-    const localCache = root ? readLocalCache(root) : null;
     return getQtPath()
         || state.envInfo?.qt?.path
-        || localCache?.detected.qt?.path
         || '';
 }

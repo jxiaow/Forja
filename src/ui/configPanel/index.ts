@@ -9,6 +9,7 @@ import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
+import { getSyncPendingInfo } from '../../core/syncState';
 
 const logger = createLogger('ConfigPanelView');
 
@@ -67,6 +68,17 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                 () => this._updateHtml())
                 .catch(e => console.warn('[compilot] configPanel message error:', (e as Error).message))
         );
+
+        // 监听 sync-state.json 变化，同步完成后刷新面板中的待同步数
+        const wsRoot = getWorkspaceRoot();
+        if (wsRoot) {
+            const syncStatePattern = new vscode.RelativePattern(wsRoot, '.compilot/sync-state.json');
+            const syncStateWatcher = vscode.workspace.createFileSystemWatcher(syncStatePattern);
+            const refreshIfVisible = () => { if (webviewView.visible) { this._updateHtml(); } };
+            syncStateWatcher.onDidChange(refreshIfVisible);
+            syncStateWatcher.onDidCreate(refreshIfVisible);
+            webviewView.onDidDispose(() => syncStateWatcher.dispose());
+        }
     }
 
     private _pushEnvUpdate(): void {
@@ -122,12 +134,16 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                 const wsRoot = getWorkspaceRoot();
                 const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'] };
                 const servers = readServers();
+                const pendingInfo = wsRoot ? getSyncPendingInfo(wsRoot, sync.ignore) : { count: 0, lastTime: '' };
 
                 return {
                     syncEnabled: sync.enabled,
                     syncSelectedServer: sync.selectedServer,
                     syncServers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, authMode: s.authMode, privateKeyPath: s.privateKeyPath, password: s.password, remotePath: s.remotePath })),
-                    syncIgnore: sync.ignore.join(', ')
+                    syncIgnore: sync.ignore.join(', '),
+                    syncRemotePath: sync.remotePath || '',
+                    syncPendingCount: pendingInfo.count,
+                    syncLastTime: pendingInfo.lastTime
                 };
             })()
         };

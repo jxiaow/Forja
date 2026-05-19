@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { setState, getState, loadPersistedState } from './core/stateManager';
+import { setState, loadPersistedState } from './core/stateManager';
 import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath } from './qt/services/configService';
 import { createStatusBar } from './ui/statusBar';
 import { registerPriWatcher } from './qt/project/priWatcher';
@@ -11,8 +11,7 @@ import { registerDebugSessionWatcher } from './qt/build/debugger';
 import { generateCppProperties } from './qt/build/configGenerator';
 import { createLogger, initLogger } from './core/logger';
 import { detectEnv } from './qt/env/envDetector';
-import { ensureLocalStateDir, LocalCache, writeLocalCache } from './qt/shared/localState';
-import { scanProFiles } from './qt/shared/projectScanner';
+import { ensureLocalStateDir } from './qt/shared/localState';
 import { registerSyncWatcher } from './qt/sync/syncWatcher';
 import { initSettingsStore } from './core/settingsStore';
 import { registerWorkspaceWatcher } from './core/workspaceResolver';
@@ -41,7 +40,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.window.registerWebviewViewProvider(ConfigPanel.viewId, panel)
     );
     context.subscriptions.push(
-        vscode.commands.registerCommand('compilot.qt.showSyncTab', () => panel.switchTab('sync'))
+        vscode.commands.registerCommand('compilot.qt.showSyncTab', () => panel.switchTab('remote'))
     );
 
     registerPriWatcher(context);
@@ -64,42 +63,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // 环境检测（一次）— 完成后写入 cache.json
+    // 环境检测（一次）
     detectEnv(getQtPath(), getVsDevShellPath()).then((env) => {
         setState('envInfo', env);
         logger.info('启动环境检测完成');
-
-        // 环境检测完成后写入 cache.json（确保 envInfo 已就绪）
-        const wsRoot = getWorkspaceRoot();
-        const currentProject = getState().currentProject;
-        if (wsRoot && currentProject) {
-            try {
-                ensureLocalStateDir(wsRoot);
-                const qtPath = env.qt?.path || '';
-                const cache: LocalCache = {
-                    version: 1,
-                    updatedAt: new Date().toISOString(),
-                    detected: {
-                        qt: qtPath ? {
-                            path: qtPath,
-                            qmake: path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake'),
-                            version: env.qt?.version || undefined,
-                            compiler: env.qt?.compiler || undefined
-                        } : null,
-                        vs: env.vs?.devShellPath ? {
-                            devShellPath: env.vs.devShellPath,
-                            version: env.vs?.version || undefined
-                        } : null,
-                        jom: env.jom,
-                        projects: scanProFiles(wsRoot).map(rel => path.join(wsRoot, rel))
-                    }
-                };
-                writeLocalCache(wsRoot, cache);
-                logger.info('cache.json 已更新');
-            } catch (e) {
-                logger.warn(`写入 cache.json 失败: ${e instanceof Error ? e.message : e}`);
-            }
-        }
     }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
 
     // 启动时优先恢复手动指定项目，其次再走工作区扫描/记忆选择

@@ -15,7 +15,8 @@ function parseVsPath(devShellPath: string): VSInfo {
         const verMatch = installPath.match(/\\(\d{2})\\/);
         if (verMatch) {
             const n = parseInt(verMatch[1]);
-            if (n >= 17) { version = '2022'; }
+            if (n >= 18) { version = '2025'; }
+            else if (n >= 17) { version = '2022'; }
             else if (n === 16) { version = '2019'; }
             else if (n === 15) { version = '2017'; }
             else { version = verMatch[1]; }
@@ -203,9 +204,13 @@ async function scanVS(): Promise<VSInfo[]> {
         const out = (await execAsync(vswhere, ['-all', '-property', 'installationPath'])).trim();
         if (!out) { return []; }
         const results: VSInfo[] = [];
+        const seen = new Set<string>();
         for (const line of out.split('\n')) {
             const installPath = line.trim();
             if (!installPath) { continue; }
+            const normalized = installPath.toLowerCase();
+            if (seen.has(normalized)) { continue; }
+            seen.add(normalized);
             const devShellPath = `${installPath}\\Common7\\Tools\\Launch-VsDevShell.ps1`;
             if (fs.existsSync(devShellPath)) {
                 results.push(parseVsPath(devShellPath));

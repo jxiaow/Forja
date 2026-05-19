@@ -301,41 +301,6 @@ test('project error branch fills resolved with current config', async () => {
     assert.equal(result.resolved?.qtPath, 'D:/Qt');
 });
 
-test('createActionPlan propagates version info from cache to resolved', async () => {
-    const workspace = makeWorkspace();
-    // Pre-populate cache with version info
-    const { writeLocalCache } = require('../qt/shared/localState');
-    writeLocalCache(workspace, {
-        version: 1,
-        updatedAt: new Date().toISOString(),
-        detected: {
-            qt: { path: 'D:/Qt/5.15.2/msvc2019_64', qmake: 'D:/Qt/5.15.2/msvc2019_64/bin/qmake.exe', version: '5.15.2', compiler: 'msvc2019_64' },
-            vs: { devShellPath: 'C:/VS/Launch-VsDevShell.ps1', version: '17.8.0', edition: 'Professional' },
-            jom: null,
-            projects: [path.join(workspace, 'demo.pro')]
-        }
-    });
-
-    const result = await createActionPlan({
-        action: 'build',
-        executionMode: 'dryRun',
-        workspace,
-        project: path.join(workspace, 'demo.pro'),
-        mode: 'debug',
-        arch: 'x86',
-        qtPath: null,
-        vsDevShell: null,
-        target: null,
-        saveLocal: false,
-        json: true
-    });
-
-    assert.equal(result.ok, true);
-    assert.equal(result.resolved?.qtVersion, '5.15.2');
-    assert.equal(result.resolved?.vsVersion, '17.8.0');
-});
-
-
 test('run with Makefile generates full command chain including executable', async () => {
     const workspace = makeWorkspace();
     const projectDir = workspace;

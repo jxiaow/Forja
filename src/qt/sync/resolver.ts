@@ -15,6 +15,9 @@ export function getResolvedConfig(workspaceRoot: string): ResolvedSyncConfig | n
     if (!project.enabled || !project.selectedServer) { return null; }
     // 优先按 id 查找，兼容旧配置按 name 查找
     const server = getServerById(project.selectedServer) || getServerByName(project.selectedServer);
-    if (!server || !server.remotePath) { return null; }
-    return { server, remotePath: server.remotePath, ignore: project.ignore };
+    if (!server) { return null; }
+    // 项目级 remotePath 优先，fallback 到服务器级
+    const remotePath = project.remotePath || server.remotePath;
+    if (!remotePath) { return null; }
+    return { server, remotePath, ignore: project.ignore };
 }

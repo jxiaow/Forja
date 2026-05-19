@@ -312,6 +312,79 @@ details[open] .arrow { transform: rotate(90deg); }
 /* ── Misc ── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { display: inline-block; animation: spin 1s linear infinite; }
+
+/* ── Toggle Switch ── */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  margin-left: auto;
+  cursor: pointer;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, rgba(255,255,255,0.1));
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 14px; height: 14px;
+  left: 2px; bottom: 2px;
+  background: var(--vscode-descriptionForeground);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: rgba(34,197,94,0.2);
+  border-color: #22C55E;
+}
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+  background: #22C55E;
+}
+
+/* ── Sync Status ── */
+.sync-status-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--vscode-input-background);
+  border-radius: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.sync-status-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sync-status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sync-status-meta {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  padding-left: 13px;
+}
+.sync-status-warn {
+  border-left: 2px solid #F59E0B;
+}
+.sync-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.sync-actions .btn { flex: 1; }
+
 .footer {
   padding: 8px 12px;
   text-align: center;
@@ -512,31 +585,82 @@ details[open] .arrow { transform: rotate(90deg); }
 <!-- ═══════════ Section: 远程 ═══════════ -->
 <div class="section-header collapsed" onclick="toggleSection(this)">
   <span class="section-arrow">▼</span>
-  <span class="section-title">远程</span>
+  <span class="section-title">远程同步</span>
 </div>
 <div id="tab-remote" class="section-body">
 
-  <!-- 编译机 -->
+  <!-- 远程同步（合并卡片） -->
   <div class="card">
     <div class="card-header">
-      <span class="card-title">编译机</span>
-      <span class="card-badge badge-muted">全局</span>
+      <span class="card-title">远程同步</span>
+      <label class="toggle-switch" title="启用/禁用远程同步">
+        <input type="checkbox" id="syncEnabledToggle" {{syncEnabledChecked}} onchange="onSyncToggle()" />
+        <span class="toggle-slider"></span>
+      </label>
     </div>
-    <div class="field">
-      <div class="input-row">
-        <select id="syncServerSelect" onchange="onServerSelectChange()">
-          <option value="__add__">— 添加服务器 —</option>
-          {{syncServerOptions}}
-        </select>
-        <button class="btn btn-sm" id="btnTestConn" onclick="testSyncConnection()" style="display:none">测试</button>
+
+    <!-- 状态区 -->
+    <div id="syncStatusArea">
+      <div id="syncStatusConfigured" class="sync-status-bar" style="display:none;">
+        <div class="sync-status-info">
+          <span class="sync-status-dot dot-ok"></span>
+          <span id="syncStatusText"></span>
+        </div>
+        <div class="sync-status-meta" id="syncStatusMeta"></div>
+      </div>
+      <div id="syncStatusUnconfigured" class="sync-status-bar sync-status-warn" style="display:none;">
+        <span class="sync-status-dot dot-warn"></span>
+        <span>未配置服务器，请先选择或添加服务器</span>
       </div>
     </div>
-    <!-- 服务器摘要 -->
-    <div id="serverSummary" style="display:none; margin-top:8px; padding:8px; background:var(--bg-card-inner, rgba(255,255,255,0.03)); border-radius:4px;">
-      <div id="serverSummaryText" style="font-size:12px; color:var(--text-secondary); line-height:1.5;"></div>
-      <button class="btn btn-sm" style="margin-top:8px;" onclick="toggleServerForm()">编辑服务器</button>
+
+    <!-- 操作按钮 -->
+    <div id="syncActions" class="sync-actions" style="display:none;">
+      <button class="btn" onclick="testSyncConnection()">测试连接</button>
+      <span class="hint" style="flex:1; text-align:right;">点击底部状态栏 ☁ 图标同步</span>
     </div>
-    <!-- 服务器表单 -->
+
+    <!-- 服务器选择 -->
+    <div id="syncConfigArea" style="display:none;">
+      <div class="field" style="margin-top:10px;">
+        <label>服务器</label>
+        <div class="input-row">
+          <select id="syncServerSelect" onchange="onServerSelectChange()">
+            {{syncServerOptions}}
+          </select>
+          <button class="btn btn-sm" onclick="showAddServerForm()" title="添加服务器">+</button>
+        </div>
+      </div>
+
+      <!-- 远程路径（项目级） -->
+      <div class="field">
+        <label>远程路径</label>
+        <input id="syncRemotePath" value="{{syncRemotePath}}" placeholder="/home/user/project" onblur="saveSyncRemotePath()" />
+        <div class="hint">本项目同步到的远程目录；多文件夹工作区时自动追加文件夹名</div>
+      </div>
+
+      <!-- 服务器摘要 -->
+      <div id="serverSummary" style="display:none; margin-top:8px; padding:8px; background:var(--bg-card-inner, rgba(255,255,255,0.03)); border-radius:4px;">
+        <div id="serverSummaryText" style="font-size:12px; color:var(--text-secondary); line-height:1.5;"></div>
+        <button class="btn btn-sm" style="margin-top:6px;" onclick="toggleServerForm()">编辑服务器</button>
+      </div>
+
+      <!-- 高级设置 -->
+      <details style="margin-top:12px;">
+        <summary><span class="arrow">▶</span> 高级设置</summary>
+        <div class="details-content">
+          <div class="field">
+            <label>忽略目录</label>
+            <div class="tag-input" id="syncIgnoreWrap">
+              <input id="syncIgnoreInput" placeholder="输入目录名，回车添加" onkeydown="onTagKey(event, 'syncIgnore')" />
+            </div>
+            <div class="hint">回车添加，点击标签删除</div>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <!-- 服务器表单（添加/编辑） -->
     <div id="serverFormSection" style="margin-top:10px; display:none;">
       <div class="field">
         <label>名称</label>
@@ -574,35 +698,13 @@ details[open] .arrow { transform: rotate(90deg); }
           <button class="btn btn-sm" onclick="togglePasswordVisibility()" id="togglePwdBtn">显示</button>
         </div>
       </div>
-      <div class="field">
-        <label>远程根路径</label>
-        <input id="newServerRemotePath" placeholder="/home/user/project" />
-        <div class="hint">多文件夹工作区时，同步到 根路径/文件夹名</div>
-      </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button class="btn btn-primary" style="flex:1;" id="btnServerAction" onclick="submitServer()">添加</button>
         <button class="btn" style="flex:1; display:none;" id="btnDeleteServer" onclick="removeSelectedServer()">删除</button>
+        <button class="btn" onclick="cancelServerForm()">取消</button>
       </div>
     </div>
   </div>
-
-  <!-- 代码同步 -->
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">代码同步</span>
-      <span class="card-badge badge-muted">当前项目</span>
-    </div>
-    <div class="hint" style="margin-bottom:8px;">基于 git diff 增量上传变更文件</div>
-    <div class="field">
-      <label>忽略目录</label>
-      <div class="tag-input" id="syncIgnoreWrap">
-        <input id="syncIgnoreInput" placeholder="输入目录名，回车添加" onkeydown="onTagKey(event, 'syncIgnore')" />
-      </div>
-      <div class="hint">回车添加，点击标签删除</div>
-    </div>
-  </div>
-
-
 
 </div>
 
@@ -683,11 +785,18 @@ function saveRccProjectPath() {
 function generateIntelliSense() { vscode.postMessage({ command: 'generateIntelliSense', cStandard: document.getElementById('cStandard').value, cppStandard: document.getElementById('cppStandard').value }); }
 
 // ── Sync handlers ──
+function onSyncToggle() {
+  const enabled = document.getElementById('syncEnabledToggle').checked;
+  vscode.postMessage({ command: 'saveSyncEnabled', value: enabled });
+  updateSyncUI();
+}
 function saveSyncSelectedServer() {
   const val = document.getElementById('syncServerSelect').value;
-  if (val !== '__add__') {
-    vscode.postMessage({ command: 'saveSyncSelectedServer', value: val });
-  }
+  vscode.postMessage({ command: 'saveSyncSelectedServer', value: val });
+}
+function saveSyncRemotePath() {
+  const val = document.getElementById('syncRemotePath').value.trim();
+  vscode.postMessage({ command: 'saveSyncRemotePath', value: val });
 }
 function saveSyncIgnore() {
   const tags = Array.from(document.querySelectorAll('#syncIgnoreWrap .tag-item')).map(el => el.dataset.value);
@@ -708,35 +817,50 @@ function toggleServerForm() {
   const form = document.getElementById('serverFormSection');
   if (form.style.display === 'none') {
     const id = document.getElementById('syncServerSelect').value;
-    if (id && id !== '__add__') { _showEditMode(id); }
+    if (id) { _showEditMode(id); }
   } else {
     form.style.display = 'none';
   }
 }
+function showAddServerForm() {
+  _showAddMode();
+}
+function cancelServerForm() {
+  document.getElementById('serverFormSection').style.display = 'none';
+}
 // ── Server form interaction ──
 let _serverCache = {};
+let _serverFormMode = 'add'; // 'add' or 'edit'
 function onServerSelectChange() {
   const val = document.getElementById('syncServerSelect').value;
-  if (val === '__add__') {
-    document.getElementById('serverSummary').style.display = 'none';
-    _showAddMode();
-  } else {
-    _showServerSummary(val);
-    document.getElementById('serverFormSection').style.display = 'none';
-    saveSyncSelectedServer();
+  _showServerSummary(val);
+  document.getElementById('serverFormSection').style.display = 'none';
+  saveSyncSelectedServer();
+  // 如果服务器有 remotePath 且项目级为空，自动填充
+  const s = _serverCache[val];
+  const remoteInput = document.getElementById('syncRemotePath');
+  if (s && s.remotePath && !remoteInput.value.trim()) {
+    remoteInput.value = s.remotePath;
+    saveSyncRemotePath();
   }
+  updateSyncUI();
 }
 function _showServerSummary(id) {
   const s = _serverCache[id];
-  if (!s) { return; }
+  if (!s) {
+    document.getElementById('serverSummary').style.display = 'none';
+    return;
+  }
   const summary = document.getElementById('serverSummary');
   const text = document.getElementById('serverSummaryText');
-  text.innerHTML = escapeHtml(s.username + '@' + s.host + ':' + s.port) + '<br>' + '→ ' + escapeHtml(s.remotePath || '/');
+  text.innerHTML = escapeHtml(s.username + '@' + s.host + ':' + s.port) +
+    (s.authMode === 'key' ? ' · SSH 密钥' : ' · 密码');
   summary.style.display = '';
-  document.getElementById('btnTestConn').style.display = '';
 }
 function _showAddMode() {
+  _serverFormMode = 'add';
   document.getElementById('serverFormSection').style.display = '';
+  document.getElementById('serverSummary').style.display = 'none';
   document.getElementById('newServerName').value = '';
   document.getElementById('newServerName').readOnly = false;
   document.getElementById('newServerHost').value = '';
@@ -745,13 +869,12 @@ function _showAddMode() {
   document.getElementById('newServerAuthMode').value = 'key';
   document.getElementById('newServerKeyPath').value = '';
   document.getElementById('newServerPassword').value = '';
-  document.getElementById('newServerRemotePath').value = '';
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '添加';
   document.getElementById('btnDeleteServer').style.display = 'none';
-  document.getElementById('btnTestConn').style.display = 'none';
 }
 function _showEditMode(id) {
+  _serverFormMode = 'edit';
   const s = _serverCache[id];
   if (!s) { return; }
   document.getElementById('serverFormSection').style.display = '';
@@ -763,15 +886,13 @@ function _showEditMode(id) {
   document.getElementById('newServerAuthMode').value = s.authMode || 'key';
   document.getElementById('newServerKeyPath').value = s.privateKeyPath || '';
   document.getElementById('newServerPassword').value = s.password || '';
-  document.getElementById('newServerRemotePath').value = s.remotePath || '';
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '保存修改';
   document.getElementById('btnDeleteServer').style.display = '';
-  document.getElementById('btnTestConn').style.display = '';
 }
 function submitServer() {
   const select = document.getElementById('syncServerSelect');
-  const isAdd = select.value === '__add__';
+  const isAdd = _serverFormMode === 'add';
   const server = {
     name: document.getElementById('newServerName').value.trim(),
     host: document.getElementById('newServerHost').value.trim(),
@@ -780,7 +901,7 @@ function submitServer() {
     authMode: document.getElementById('newServerAuthMode').value,
     privateKeyPath: document.getElementById('newServerKeyPath').value.trim(),
     password: document.getElementById('newServerPassword').value,
-    remotePath: document.getElementById('newServerRemotePath').value.trim()
+    remotePath: ''
   };
   if (!server.name || !server.host || !server.username) { return; }
   if (isAdd) {
@@ -792,10 +913,58 @@ function submitServer() {
 }
 function removeSelectedServer() {
   const id = document.getElementById('syncServerSelect').value;
-  if (!id || id === '__add__') { return; }
+  if (!id) { return; }
   vscode.postMessage({ command: 'removeServer', id });
 }
 function testSyncConnection() { vscode.postMessage({ command: 'testSyncConnection' }); }
+
+// ── Sync UI state management ──
+function updateSyncUI() {
+  const enabled = document.getElementById('syncEnabledToggle').checked;
+  const configArea = document.getElementById('syncConfigArea');
+  const statusArea = document.getElementById('syncStatusArea');
+  const actionsArea = document.getElementById('syncActions');
+  const select = document.getElementById('syncServerSelect');
+  const hasServer = select && select.value && _serverCache[select.value];
+  const remotePath = document.getElementById('syncRemotePath')?.value?.trim();
+
+  if (!enabled) {
+    configArea.style.display = 'none';
+    statusArea.style.display = 'none';
+    actionsArea.style.display = 'none';
+    return;
+  }
+
+  configArea.style.display = '';
+
+  if (hasServer && remotePath) {
+    const s = _serverCache[select.value];
+    document.getElementById('syncStatusConfigured').style.display = '';
+    document.getElementById('syncStatusUnconfigured').style.display = 'none';
+    document.getElementById('syncStatusText').textContent = s.name + ' · ' + s.username + '@' + s.host;
+    const pendingCount = parseInt('{{syncPendingCount}}') || 0;
+    const lastTime = '{{syncLastTime}}';
+    let metaText = '';
+    if (!lastTime && pendingCount === 0) {
+      metaText = '尚未同步';
+    } else if (pendingCount > 0) {
+      metaText = pendingCount + ' 个文件待同步';
+    } else {
+      metaText = '已同步';
+    }
+    if (lastTime) { metaText += ' · 上次: ' + lastTime; }
+    document.getElementById('syncStatusMeta').textContent = metaText;
+    actionsArea.style.display = '';
+  } else if (!hasServer) {
+    document.getElementById('syncStatusConfigured').style.display = 'none';
+    document.getElementById('syncStatusUnconfigured').style.display = '';
+    actionsArea.style.display = 'none';
+  } else {
+    document.getElementById('syncStatusConfigured').style.display = 'none';
+    document.getElementById('syncStatusUnconfigured').style.display = 'none';
+    actionsArea.style.display = 'none';
+  }
+}
 
 // ── Utilities ──
 function preserveBrowseInputFocus(event) { event.preventDefault(); }
@@ -858,17 +1027,23 @@ window.addEventListener('message', e => {
     _serverCache = {};
     d.servers.forEach(s => { _serverCache[s.id] = s; });
     // Rebuild options
-    select.innerHTML = '<option value="__add__">\u2014 添加服务器 \u2014</option>' +
-      d.servers.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + esc(s.username) + '@' + esc(s.host) + ')</option>').join('');
+    select.innerHTML = d.servers.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + esc(s.username) + '@' + esc(s.host) + ')</option>').join('');
+    if (d.servers.length === 0) {
+      select.innerHTML = '<option value="">— 无服务器 —</option>';
+    }
     if (d.servers.some(s => s.id === prev)) {
       select.value = prev;
       _showServerSummary(prev);
       document.getElementById('serverFormSection').style.display = 'none';
+    } else if (d.servers.length > 0) {
+      select.value = d.servers[0].id;
+      _showServerSummary(d.servers[0].id);
+      document.getElementById('serverFormSection').style.display = 'none';
     } else {
-      select.value = '__add__';
       document.getElementById('serverSummary').style.display = 'none';
       document.getElementById('serverFormSection').style.display = 'none';
     }
+    updateSyncUI();
     if (select._customRefresh) { select._customRefresh(); }
   }
 });
@@ -909,6 +1084,21 @@ function initTags(wrapperId, csv) {
 }
 initTags('scanExcludeDirsWrap', '{{scanExcludeDirs}}');
 initTags('syncIgnoreWrap', '{{syncIgnore}}');
+
+// ── Init sync UI ──
+(function initSyncUI() {
+  const serverDataRaw = '{{syncServerData}}';
+  try {
+    const servers = JSON.parse(serverDataRaw);
+    servers.forEach(function(s) { _serverCache[s.id] = s; });
+  } catch(e) { /* ignore */ }
+  // Show summary for selected server
+  const select = document.getElementById('syncServerSelect');
+  if (select && select.value && _serverCache[select.value]) {
+    _showServerSummary(select.value);
+  }
+  updateSyncUI();
+})();
 
 // ── Custom Select Component ──
 // 将所有 native select 转换为自定义下拉
@@ -986,20 +1176,6 @@ document.addEventListener('mousedown', (e) => {
 window.addEventListener('blur', () => {
   document.querySelectorAll('.custom-select.open').forEach(s => s.classList.remove('open'));
 });
-
-// 初始化服务器表单
-(function() {
-  const servers = JSON.parse('{{syncServerData}}');
-  servers.forEach(s => { _serverCache[s.id] = s; });
-  const select = document.getElementById('syncServerSelect');
-  const selected = select.value;
-  if (selected && selected !== '__add__' && _serverCache[selected]) {
-    _showServerSummary(selected);
-  }
-})();
-
-
-
 
 // 初始化
 initCustomSelects();

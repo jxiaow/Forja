@@ -39,6 +39,8 @@ export interface ProjectSyncConfig {
     enabled: boolean;
     selectedServer: string; // server id
     ignore: string[];
+    /** 项目级远程路径（优先于服务器上的 remotePath） */
+    remotePath?: string;
 }
 
 // ── 路径 ──
@@ -175,7 +177,8 @@ export function readProjectSyncConfig(workspaceRoot: string): ProjectSyncConfig 
             return {
                 enabled: !!raw.enabled,
                 selectedServer: raw.selectedServer || '',
-                ignore: Array.isArray(raw.ignore) ? raw.ignore : DEFAULT_IGNORE
+                ignore: Array.isArray(raw.ignore) ? raw.ignore : DEFAULT_IGNORE,
+                remotePath: raw.remotePath || undefined
             };
         }
     } catch (e) {
@@ -202,6 +205,7 @@ export function writeProjectSyncConfig(workspaceRoot: string, config: Partial<Pr
     // 顶层字段覆盖
     if (config.enabled !== undefined) { existing.enabled = config.enabled; }
     if (config.selectedServer !== undefined) { existing.selectedServer = config.selectedServer; }
+    if (config.remotePath !== undefined) { existing.remotePath = config.remotePath; }
     // 数组字段整体替换
     if (config.ignore !== undefined) { existing.ignore = config.ignore; }
 

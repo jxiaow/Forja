@@ -1,23 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-export interface LocalCache {
-    version: 1;
-    updatedAt: string;
-    detected: {
-        qt: { path: string; qmake: string; version?: string; compiler?: string } | null;
-        vs: { devShellPath: string; version?: string; edition?: string } | null;
-        jom: string | null;
-        projects: string[];
-    };
-}
-
 export function localRoot(workspace: string): string {
     return path.join(workspace, '.compilot');
-}
-
-export function cachePath(workspace: string): string {
-    return path.join(localRoot(workspace), 'cache.json');
 }
 
 export function logsDir(workspace: string): string {
@@ -30,14 +15,6 @@ export function logsDir(workspace: string): string {
 export function ensureLocalStateDir(workspace: string): void {
     fs.mkdirSync(localRoot(workspace), { recursive: true });
     fs.mkdirSync(logsDir(workspace), { recursive: true });
-}
-
-export function readLocalCache(workspace: string): LocalCache | null {
-    return readJson<LocalCache>(cachePath(workspace));
-}
-
-export function writeLocalCache(workspace: string, cache: LocalCache): void {
-    writeJson(cachePath(workspace), cache);
 }
 
 export function ensureCompilotGitignored(workspace: string): void {

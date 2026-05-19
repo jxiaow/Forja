@@ -6,7 +6,7 @@ import { updateConfig, getQtPath, getVsDevShellPath, getTarget, getWorkspaceRoot
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers } from '../../core/serverStore';
-import { executeSyncChangedFiles, executeTestConnection } from '../../qt/sync/syncWatcher';
+import { executeTestConnection } from '../../qt/sync/syncWatcher';
 
 const logger = createLogger('ConfigPanel');
 
@@ -180,6 +180,12 @@ export async function handleMessage(
             }
             break;
         }
+        case 'saveSyncRemotePath': {
+            logger.info(`保存项目远程路径: "${msg.value}"`);
+            const ws3 = getWorkspaceRoot();
+            if (ws3) { updateProjectSyncField(ws3, 'remotePath', String(msg.value || '')); }
+            break;
+        }
         case 'saveSyncIgnore': {
             logger.info(`保存同步忽略列表: ${JSON.stringify(msg.value)}`);
             const ws4 = getWorkspaceRoot();
@@ -266,11 +272,6 @@ export async function handleMessage(
             } else {
                 vscode.window.showInformationMessage('该服务器未保存密码（可能使用密钥认证）');
             }
-            break;
-        }
-        case 'syncChangedFiles': {
-            logger.info('面板触发同步变更文件');
-            await executeSyncChangedFiles();
             break;
         }
     }
