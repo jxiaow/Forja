@@ -30,15 +30,22 @@ const dirs = [
 
 // Individual files from qt/sync/ needed by CLI (only non-vscode ones)
 const syncFiles = [
-    'qt/sync/syncCli.js',
-    'qt/sync/syncState.js',
     'qt/sync/resolver.js',
-    'qt/sync/transport.js',
-    'qt/sync/serverStore.js'
+    'qt/sync/transport.js'
 ];
 
 // Individual files needed from core/
-const coreFiles = ['core/logger.js', 'core/loggerBase.js', 'core/settingsIO.js', 'core/types.js'];
+const coreFiles = [
+    'core/logger.js',
+    'core/loggerBase.js',
+    'core/settingsIO.js',
+    'core/types.js',
+    'core/syncCli.js',
+    'core/syncState.js',
+    'core/serverStore.js',
+    'core/ssh.js',
+    'core/gitChangedFiles.js'
+];
 
 // Version file at root of out/
 const rootFiles = ['version.js'];
