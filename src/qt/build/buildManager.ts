@@ -31,7 +31,8 @@ function _ensureEnvReady(): boolean {
 
 /**
  * 检查 Makefile 是否与当前配置匹配。
- * 返回 true 表示可以继续 build；返回 false 表示用户选择先 qmake（或取消）。
+ * 不匹配或不存在时自动执行 qmake 并等待完成。
+ * 返回 true 表示 Makefile 已就绪可以继续 build；返回 false 表示 qmake 失败。
  */
 async function _ensureMakefileFresh(cfg: ReturnType<typeof getBuildConfig>): Promise<boolean> {
     if (!cfg.projectDir) { return true; }
@@ -42,28 +43,30 @@ async function _ensureMakefileFresh(cfg: ReturnType<typeof getBuildConfig>): Pro
         proFile: cfg.proFile,
         target: cfg.target
     });
-    if (!validation.exists) {
-        const answer = await vscode.window.showWarningMessage(
-            '未找到 Makefile，需要先运行 QMake',
-            '运行 QMake', '取消'
-        );
-        if (answer === '运行 QMake') {
-            await vscode.commands.executeCommand('compilot.qt.qmake');
-        }
+    if (validation.exists && validation.matches) { return true; }
+
+    // Makefile 不存在或与当前配置不匹配，自动执行 qmake
+    const reason = !validation.exists
+        ? '未找到 Makefile'
+        : `Makefile 与当前配置不匹配（${validation.mismatch!.join(', ')}）`;
+    logger.info(`自动 QMake：${reason}`);
+
+    const { commands, matcher } = builder.qmakeCommands(cfg);
+    const execution = await runTask(`QMake ${cfg.mode}`, commands, matcher);
+
+    // 等待 qmake 任务完成
+    const exitCode = await new Promise<number | undefined>(resolve => {
+        const d = vscode.tasks.onDidEndTaskProcess(e => {
+            if (e.execution === execution) {
+                d.dispose();
+                resolve(e.exitCode);
+            }
+        });
+    });
+
+    if (exitCode !== 0) {
+        vscode.window.showErrorMessage('QMake 失败，无法继续构建');
         return false;
-    }
-    if (!validation.matches) {
-        const detail = validation.mismatch!.join(', ');
-        const answer = await vscode.window.showWarningMessage(
-            `Makefile 与当前配置不匹配（${detail}），建议先重新 QMake`,
-            '先 QMake 再 Build', '直接 Build', '取消'
-        );
-        if (answer === '先 QMake 再 Build') {
-            await vscode.commands.executeCommand('compilot.qt.qmake');
-            return false;
-        }
-        if (answer === '取消') { return false; }
-        // '直接 Build' — 继续
     }
     return true;
 }
