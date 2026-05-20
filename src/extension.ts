@@ -20,7 +20,28 @@ import { activateSdk } from './sdk/sdkExtension';
 import { registerQtCommands } from './qt/commands';
 import { TASK_SOURCE_QT } from './qt/constants';
 
+import { listProjectConfigs } from './core/settingsIO';
+import { listSyncStates } from './core/syncState';
+
 const logger = createLogger('Extension');
+
+/** 启动时后台清理不存在的工作区对应的配置和同步状态 */
+function autoCleanupStaleConfigs(): void {
+    let removed = 0;
+    for (const config of listProjectConfigs()) {
+        if (!fs.existsSync(config.workspace)) {
+            try { fs.unlinkSync(config.filePath); removed++; } catch { /* ignore */ }
+        }
+    }
+    for (const ss of listSyncStates()) {
+        if (!fs.existsSync(ss.workspace)) {
+            try { fs.unlinkSync(ss.filePath); removed++; } catch { /* ignore */ }
+        }
+    }
+    if (removed > 0) {
+        logger.info(`自动清理了 ${removed} 个残留配置`);
+    }
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const channel = initLogger();
@@ -34,12 +55,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     initSettingsStore(context);
     loadPersistedState();
 
+    // 后台清理残留配置（不阻塞启动）
+    setTimeout(() => { try { autoCleanupStaleConfigs(); } catch { /* ignore */ } }, 5000);
+
     createUnifiedStatusBar(context);
 
     const navTree = new ConfigNavTreeProvider();
     const pageManager = new ConfigPageManager(context);
     const configTreeView = vscode.window.createTreeView(ConfigNavTreeProvider.viewId, { treeDataProvider: navTree });
-    configTreeView.description = `v${context.extension.packageJSON.version || ''}`;
+    configTreeView.title = `配置 v${context.extension.packageJSON.version || ''}`;
     context.subscriptions.push(configTreeView);
     context.subscriptions.push(
         vscode.commands.registerCommand('compilot.config.openPage', (pageId: string) => {

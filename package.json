@@ -131,7 +131,8 @@
       "compilot": [
         {
           "id": "compilot.configView",
-          "name": "配置"
+          "name": "配置",
+          "when": "workspaceFolderCount > 0"
         }
       ]
     }

@@ -63,10 +63,15 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                 .catch(e => console.warn('[compilot] configPanel message error:', (e as Error).message))
         );
 
-        // 监听 sync-state.json 变化，同步完成后刷新面板中的待同步数
+        // 监听 sync-state 变化，同步完成后刷新面板中的待同步数
         const wsRoot = getWorkspaceRoot();
         if (wsRoot) {
-            const syncStatePattern = new vscode.RelativePattern(wsRoot, '.compilot/sync-state.json');
+            const os = require('os');
+            const crypto = require('crypto');
+            const normalized = wsRoot.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+            const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
+            const syncStateDir = vscode.Uri.file(require('path').join(os.homedir(), '.compilot', 'sync'));
+            const syncStatePattern = new vscode.RelativePattern(syncStateDir, `${hash}.json`);
             const syncStateWatcher = vscode.workspace.createFileSystemWatcher(syncStatePattern);
             const refreshIfVisible = () => { if (webviewView.visible) { this._updateHtml(); } };
             syncStateWatcher.onDidChange(refreshIfVisible);

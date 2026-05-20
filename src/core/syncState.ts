@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import * as crypto from 'crypto';
 import { createLogger } from './logger';
 
 const logger = createLogger('SyncState');
@@ -13,11 +15,14 @@ interface SyncRecord {
 
 interface SyncStateData {
     version: 1;
+    workspace?: string;
     files: Record<string, SyncRecord>;
 }
 
 function _stateFilePath(workspaceRoot: string): string {
-    return path.join(workspaceRoot, '.compilot', 'sync-state.json');
+    const normalized = workspaceRoot.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
+    return path.join(os.homedir(), '.compilot', 'sync', `${hash}.json`);
 }
 
 function _readState(workspaceRoot: string): SyncStateData {
@@ -40,6 +45,7 @@ function _writeState(workspaceRoot: string, state: SyncStateData): void {
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
+        state.workspace = workspaceRoot;
         fs.writeFileSync(filePath, JSON.stringify(state, null, 2), 'utf-8');
     } catch (e) {
         logger.warn(`写入 sync-state.json 失败: ${e instanceof Error ? e.message : e}`);
@@ -132,6 +138,14 @@ export function markSyncedBatch(workspaceRoot: string, files: string[]): void {
         }
     }
 
+    // 清理本地已不存在的文件条目
+    for (const key of Object.keys(state.files)) {
+        const absPath = path.join(workspaceRoot, key);
+        if (!fs.existsSync(absPath)) {
+            delete state.files[key];
+        }
+    }
+
     _writeState(workspaceRoot, state);
 }
 
@@ -210,4 +224,25 @@ export function getSyncPendingInfo(workspaceRoot: string, ignore: string[]): { c
     }
 
     return { count, lastTime: lastTimeDisplay };
+}
+
+
+/** 列出所有 sync state 文件（用于 cleanup 命令） */
+export function listSyncStates(): Array<{ filePath: string; workspace: string }> {
+    const dir = path.join(os.homedir(), '.compilot', 'sync');
+    if (!fs.existsSync(dir)) { return []; }
+    const results: Array<{ filePath: string; workspace: string }> = [];
+    try {
+        const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+        for (const file of files) {
+            const filePath = path.join(dir, file);
+            try {
+                const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+                if (raw.workspace) {
+                    results.push({ filePath, workspace: raw.workspace });
+                }
+            } catch { /* skip malformed */ }
+        }
+    } catch { /* dir read failure */ }
+    return results;
 }

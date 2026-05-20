@@ -63,13 +63,15 @@ export function buildProjectPage(data: TemplateData): string {
     h += `<button class="bgi${mDebug}" onclick="setM('debug')">debug</button>`;
     h += `<button class="bgi${mRelease}" onclick="setM('release')">release</button>`;
     h += '</div></div></div>';
-    h += '<div class="ci"><div class="cii"><div class="cil">目标架构</div></div>';
-    h += '<div class="cic"><div class="btn-group" id="aG">';
-    const aX86 = data.arch !== 'x64' ? ' active' : '';
-    const aX64 = data.arch === 'x64' ? ' active' : '';
-    h += `<button class="bgi${aX86}" onclick="setA('x86')">x86</button>`;
-    h += `<button class="bgi${aX64}" onclick="setA('x64')">x64</button>`;
-    h += '</div></div></div>';
+    if (data.isWin) {
+        h += '<div class="ci"><div class="cii"><div class="cil">目标架构</div></div>';
+        h += '<div class="cic"><div class="btn-group" id="aG">';
+        const aX86 = data.arch !== 'x64' ? ' active' : '';
+        const aX64 = data.arch === 'x64' ? ' active' : '';
+        h += `<button class="bgi${aX86}" onclick="setA('x86')">x86</button>`;
+        h += `<button class="bgi${aX64}" onclick="setA('x64')">x64</button>`;
+        h += '</div></div></div>';
+    }
     // 语言标准
     h += '<div class="cs"><div class="cst">语言标准</div>';
     h += '<div class="ci"><div class="cii"><div class="cil">C 标准</div></div>';
