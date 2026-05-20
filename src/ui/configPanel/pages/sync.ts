@@ -40,14 +40,8 @@ export function buildSyncPage(data: TemplateData): string {
             ? data.syncPendingCount + ' 个文件待同步' : '已同步';
         const last = data.syncLastTime ? ' · 上次: ' + esc(data.syncLastTime) : '';
         h += `<div class="ecp" style="font-family:var(--vscode-font-family);margin-top:4px">${pending}${last}</div>`;
-        // 远程路径（在卡片内）
-        h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)">';
-        h += '<div style="font-size:12px;font-weight:500;margin-bottom:4px">远程路径 <span style="color:#EF4444;font-size:11px">*必填</span></div>';
-        h += `<input id="syncRemotePath" value="${esc(data.syncRemotePath)}"`;
-        h += ' style="width:100%;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);padding:6px 10px;border-radius:4px;font-size:13px;font-family:var(--vscode-font-family);outline:none"';
-        h += ' placeholder="/home/user/project"';
-        h += " onblur=\"vscode.postMessage({command:'saveSyncRemotePath',value:this.value.trim()})\"/>";
-        h += '</div>';
+        // 远程路径（在卡片内，纯展示）
+        h += `<div class="ecp" style="margin-top:6px">${esc(data.syncRemotePath || '未设置')}</div>`;
         h += '<div class="eca">';
         h += '<button class="btn btn-sm" onclick="vscode.postMessage({command:\'testSyncConnection\'})">测试连接</button>';
         h += `<button class="btn btn-sm" onclick="showServerForm('edit')">编辑</button>`;
@@ -131,7 +125,10 @@ function buildServerForm(_data: TemplateData, _srv: TemplateData['syncServers'][
 
     // 密码（默认隐藏）
     h += '<div id="sf-pwd-row" class="sf-row" style="display:none"><label class="sf-label">密码</label>';
-    h += '<input id="sf-password" class="sf-input" type="password" placeholder="SSH 密码"/></div>';
+    h += '<div class="input-row"><input id="sf-password" class="sf-input" type="password" placeholder="SSH 密码" style="flex:1"/>';
+    h += '<button class="btn btn-sm" type="button" onclick="var p=document.getElementById(\'sf-password\');';
+    h += 'if(p.type===\'password\'){p.type=\'text\';this.textContent=\'隐藏\'}';
+    h += 'else{p.type=\'password\';this.textContent=\'显示\'}">显示</button></div></div>';
 
     // 远程路径
     h += '<div class="sf-row"><label class="sf-label">远程路径 <span style="color:#EF4444;font-size:11px">*必填</span></label>';
@@ -164,7 +161,9 @@ function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0]
     const srvJson = srv ? JSON.stringify({
         id: srv.id, name: srv.name, host: srv.host, port: srv.port,
         username: srv.username, authMode: srv.authMode,
-        privateKeyPath: srv.privateKeyPath
+        privateKeyPath: srv.privateKeyPath,
+        password: srv.password || '',
+        remotePath: data.syncRemotePath
     }).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/<\//g, '<\\/') : 'null';
 
     let h = '<script>(function(){';
@@ -216,9 +215,10 @@ function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0]
     h += 'document.getElementById("sf-username").value=_currentServer.username||"";';
     h += 'setAuthMode(_currentServer.authMode||"key");';
     h += 'if(_currentServer.privateKeyPath)document.getElementById("sf-privateKeyPath").value=_currentServer.privateKeyPath;';
+    h += 'var pwdEl=document.getElementById("sf-password");';
+    h += 'if(pwdEl){pwdEl.value=_currentServer.password||""}';
     h += 'var rpEl=document.getElementById("sf-remotePath");';
-    h += 'var rpInput=document.getElementById("syncRemotePath");';
-    h += 'if(rpEl&&rpInput)rpEl.value=rpInput.value||"";';
+    h += 'if(rpEl)rpEl.value=_currentServer.remotePath||"";';
     h += '}else{';
     h += '_editMode=false;_editId="";';
     h += 'title.textContent="添加服务器";submit.textContent="添加";';
@@ -255,8 +255,14 @@ function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0]
     h += 'privateKeyPath:document.getElementById("sf-privateKeyPath").value.trim(),';
     h += 'password:document.getElementById("sf-password").value};';
     h += 'var remotePath=document.getElementById("sf-remotePath").value.trim();';
-    h += 'if(!s.name||!s.host||!s.username){alert("名称、主机地址和用户名不能为空");return}';
-    h += 'if(!remotePath){alert("远程路径不能为空");return}';
+    h += 'var rpInput=document.getElementById("sf-remotePath");';
+    h += 'if(!s.name||!s.host||!s.username){';
+    h += 'document.getElementById("sf-name").style.borderColor=!s.name?"#EF4444":"";';
+    h += 'document.getElementById("sf-host").style.borderColor=!s.host?"#EF4444":"";';
+    h += 'document.getElementById("sf-username").style.borderColor=!s.username?"#EF4444":"";';
+    h += 'return}';
+    h += 'if(!remotePath){rpInput.style.borderColor="#EF4444";rpInput.placeholder="必填：远程目录路径";return}';
+    h += 'rpInput.style.borderColor="";';
     h += 'if(_editMode){s.id=_editId;vscode.postMessage({command:"updateServer",server:s,remotePath:remotePath})}';
     h += 'else{vscode.postMessage({command:"addServer",server:s,remotePath:remotePath})}';
     h += 'hideServerForm()};';

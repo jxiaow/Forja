@@ -139,8 +139,16 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
         const remoteDir = path.posix.dirname(remoteFile);
 
         if (!remoteDirs.has(remoteDir)) {
-            await ensureRemoteDir(server, remoteDir, password);
-            remoteDirs.add(remoteDir);
+            logger.info(`[v0.7.32-test] mkdir -p: ${remoteDir}`);
+            try {
+                await ensureRemoteDir(server, remoteDir, password);
+                remoteDirs.add(remoteDir);
+            } catch (e) {
+                const dirErr = e instanceof Error ? e.message : String(e);
+                logger.error(`创建远程目录失败: ${remoteDir} - ${dirErr}`);
+                result.failed.push({ file: relativePath, error: `mkdir 失败: ${dirErr}` });
+                continue;
+            }
         }
 
         try {

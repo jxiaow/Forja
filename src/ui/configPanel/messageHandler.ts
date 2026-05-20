@@ -209,10 +209,15 @@ export async function handleMessage(
                 const currentConfig = readProjectSyncConfig(ws3);
                 const serverId = currentConfig.selectedServer;
                 if (serverId) {
-                    const newPaths = { ...currentConfig.remotePaths, [serverId]: String(msg.value || '') };
-                    updateProjectSyncField(ws3, 'remotePaths', newPaths);
+                    const newVal = String(msg.value || '');
+                    // 不用空值覆盖已有路径（防止页面重渲染时 onblur 误触发）
+                    if (newVal || !currentConfig.remotePaths[serverId]) {
+                        const newPaths = { ...currentConfig.remotePaths, [serverId]: newVal };
+                        updateProjectSyncField(ws3, 'remotePaths', newPaths);
+                    }
                 }
             }
+            refreshSyncStatusBar();
             break;
         }
         case 'saveSyncIgnore': {
@@ -233,19 +238,23 @@ export async function handleMessage(
                 privateKeyPath: msg.server.privateKeyPath || '',
                 password: msg.server.password || ''
             };
+            logger.info(`服务器认证: ${newServerData.authMode}`);
             if (!newServerData.name || !newServerData.host || !newServerData.username) {
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
                 break;
             }
             const created = addServer(newServerData);
-            // 保存远程路径到项目配置
+            // 保存远程路径和选中服务器到项目配置
             const wsAdd = getWorkspaceRoot();
-            if (wsAdd && msg.remotePath) {
-                const syncCfg = readProjectSyncConfig(wsAdd);
-                const newPaths = { ...syncCfg.remotePaths, [created.id]: String(msg.remotePath) };
-                updateProjectSyncField(wsAdd, 'remotePaths', newPaths);
+            if (wsAdd) {
+                updateProjectSyncField(wsAdd, 'selectedServer', created.id);
+                updateProjectSyncField(wsAdd, 'enabled', true);
+                if (msg.remotePath) {
+                    const syncCfg = readProjectSyncConfig(wsAdd);
+                    const newPaths = { ...syncCfg.remotePaths, [created.id]: String(msg.remotePath) };
+                    updateProjectSyncField(wsAdd, 'remotePaths', newPaths);
+                }
             }
-            _pushServerList(webview, created.id);
             refreshSyncStatusBar();
             updateHtml();
             break;
@@ -285,14 +294,18 @@ export async function handleMessage(
                 break;
             }
             vscode.window.showInformationMessage(`服务器 "${updates.name}" 已更新`);
-            // 保存远程路径到项目配置
+            // 保存远程路径到项目配置，并确保选中的是当前编辑的服务器
             const wsUpd = getWorkspaceRoot();
-            if (wsUpd && msg.remotePath !== undefined) {
-                const syncCfgUpd = readProjectSyncConfig(wsUpd);
-                const newPathsUpd = { ...syncCfgUpd.remotePaths, [serverId]: String(msg.remotePath || '') };
-                updateProjectSyncField(wsUpd, 'remotePaths', newPathsUpd);
+            if (wsUpd) {
+                updateProjectSyncField(wsUpd, 'selectedServer', serverId);
+                if (msg.remotePath !== undefined) {
+                    const syncCfgUpd = readProjectSyncConfig(wsUpd);
+                    const newPathsUpd = { ...syncCfgUpd.remotePaths, [serverId]: String(msg.remotePath || '') };
+                    updateProjectSyncField(wsUpd, 'remotePaths', newPathsUpd);
+                }
             }
             _pushServerList(webview, serverId);
+            refreshSyncStatusBar();
             updateHtml();
             break;
         }

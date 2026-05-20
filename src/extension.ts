@@ -38,9 +38,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const navTree = new ConfigNavTreeProvider();
     const pageManager = new ConfigPageManager(context);
-    context.subscriptions.push(
-        vscode.window.registerTreeDataProvider(ConfigNavTreeProvider.viewId, navTree)
-    );
+    const configTreeView = vscode.window.createTreeView(ConfigNavTreeProvider.viewId, { treeDataProvider: navTree });
+    configTreeView.description = `v${context.extension.packageJSON.version || ''}`;
+    context.subscriptions.push(configTreeView);
     context.subscriptions.push(
         vscode.commands.registerCommand('compilot.config.openPage', (pageId: string) => {
             pageManager.openPage(pageId as 'project' | 'env' | 'sync' | 'advanced');

@@ -19,8 +19,10 @@ export { buildSshArgs, buildScpArgs, sshTarget, SshArgsOptions } from '../../cor
 export function scpUpload(server: ServerConfig, localFile: string, remoteFile: string, password: string | null): Promise<void> {
     return new Promise((resolve, reject) => {
         const baseArgs = buildScpArgs(server);
-        const escapedRemote = remoteFile.replace(/'/g, "'\\''");
-        const dest = `${sshTarget(server)}:'${escapedRemote}'`;
+        // Windows scp 不需要单引号包裹远程路径；Linux/macOS 需要防止 shell 展开
+        const dest = process.platform === 'win32'
+            ? `${sshTarget(server)}:${remoteFile}`
+            : `${sshTarget(server)}:'${remoteFile.replace(/'/g, "'\\''")}'`;
         const args = [...baseArgs, localFile, dest];
 
         const askpass = createAskpassEnv(
@@ -49,14 +51,14 @@ export function scpUpload(server: ServerConfig, localFile: string, remoteFile: s
 
 /** 确保远程目录存在 */
 export function ensureRemoteDir(server: ServerConfig, remoteDir: string, password: string | null): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const sshArgs = buildSshArgs(server);
         const escaped = remoteDir.replace(/'/g, "'\\''");
         const cmd = `mkdir -p '${escaped}'`;
         const args = [...sshArgs, sshTarget(server), cmd];
 
         const askpass = createAskpassEnv(
-            server.authMode === 'password' ? password : null, `transport-${process.pid}`
+            server.authMode === 'password' ? password : null, `mkdir-${process.pid}`
         );
 
         const proc = cp.spawn('ssh', args, {
@@ -64,7 +66,17 @@ export function ensureRemoteDir(server: ServerConfig, remoteDir: string, passwor
             env: askpass?.env,
             stdio: ['pipe', 'pipe', 'pipe']
         });
-        proc.on('close', () => { askpass?.cleanup(); resolve(); });
+
+        let stderr = '';
+        proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+        proc.on('close', (code) => {
+            askpass?.cleanup();
+            // mkdir -p 失败不阻塞（目录可能已存在）
+            if (code !== 0 && stderr) {
+                console.warn(`[compilot] ensureRemoteDir (code=${code}): ${stderr.trim()}`);
+            }
+            resolve();
+        });
         proc.on('error', () => { askpass?.cleanup(); resolve(); });
     });
 }
