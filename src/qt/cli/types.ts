@@ -55,6 +55,8 @@ export interface CliResult {
     stderr: string;
     /** Extracted error lines from compiler output (when exitCode !== 0) */
     errors: string[];
+    /** Warning summary: total count and deduplicated breakdown */
+    warningSummary?: { total: number; summary: string };
     logFile: string | null;
     diagnostics: CliDiagnostic[];
     resolved: CliResolvedConfig | null;
