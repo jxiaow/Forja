@@ -51,7 +51,7 @@ export function scpUpload(server: ServerConfig, localFile: string, remoteFile: s
 
 /** 确保远程目录存在 */
 export function ensureRemoteDir(server: ServerConfig, remoteDir: string, password: string | null): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const sshArgs = buildSshArgs(server);
         const escaped = remoteDir.replace(/'/g, "'\\''");
         const cmd = `mkdir -p '${escaped}'`;
@@ -67,17 +67,32 @@ export function ensureRemoteDir(server: ServerConfig, remoteDir: string, passwor
             stdio: ['pipe', 'pipe', 'pipe']
         });
 
-        let stderr = '';
-        proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
-        proc.on('close', (code) => {
-            askpass?.cleanup();
-            // mkdir -p 失败不阻塞（目录可能已存在）
-            if (code !== 0 && stderr) {
-                console.warn(`[compilot] ensureRemoteDir (code=${code}): ${stderr.trim()}`);
+        let done = false;
+        const timeout = setTimeout(() => {
+            if (!done) {
+                done = true;
+                proc.kill();
+                askpass?.cleanup();
+                resolve();
             }
-            resolve();
+        }, 5000);
+
+        proc.on('close', () => {
+            if (!done) {
+                done = true;
+                clearTimeout(timeout);
+                askpass?.cleanup();
+                resolve();
+            }
         });
-        proc.on('error', () => { askpass?.cleanup(); resolve(); });
+        proc.on('error', () => {
+            if (!done) {
+                done = true;
+                clearTimeout(timeout);
+                askpass?.cleanup();
+                resolve();
+            }
+        });
     });
 }
 

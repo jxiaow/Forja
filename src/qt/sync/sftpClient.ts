@@ -103,7 +103,7 @@ export interface SyncResult {
     failed: { file: string; error: string }[];
 }
 
-export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRoot: string): Promise<SyncResult> {
+export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRoot: string, token?: { isCancellationRequested: boolean }): Promise<SyncResult> {
     const { server, remotePath, ignore } = resolved;
     const result: SyncResult = { uploaded: [], skipped: [], failed: [] };
 
@@ -134,12 +134,12 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
     const successFiles: string[] = [];
 
     for (const relativePath of needSync) {
+        if (token?.isCancellationRequested) { break; }
         const localFile = path.join(workspaceRoot, relativePath);
         const remoteFile = remotePath.replace(/\/$/, '') + '/' + relativePath.replace(/\\/g, '/');
         const remoteDir = path.posix.dirname(remoteFile);
 
         if (!remoteDirs.has(remoteDir)) {
-            logger.info(`[v0.7.32-test] mkdir -p: ${remoteDir}`);
             try {
                 await ensureRemoteDir(server, remoteDir, password);
                 remoteDirs.add(remoteDir);

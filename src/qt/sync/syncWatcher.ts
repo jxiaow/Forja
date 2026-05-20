@@ -13,15 +13,9 @@ const logger = createLogger('SyncManager');
 let _statusItem: vscode.StatusBarItem | null = null;
 const _hostKeyWarningShown = new Set<string>();
 
-/** 首次连接时提示用户 StrictHostKeyChecking 状态 */
-function _warnHostKeyCheckingIfNeeded(server: ServerConfig): void {
-    if (server.strictHostKeyChecking) { return; }
-    if (_hostKeyWarningShown.has(server.id)) { return; }
-    _hostKeyWarningShown.add(server.id);
-    vscode.window.showInformationMessage(
-        `服务器 "${server.name}" 未启用主机密钥检查（StrictHostKeyChecking=no）。如连接公网服务器，建议在服务器配置中启用。`,
-        '知道了'
-    );
+/** 首次连接时提示用户 StrictHostKeyChecking 状态（已禁用） */
+function _warnHostKeyCheckingIfNeeded(_server: ServerConfig): void {
+    // 内网场景为主，不再弹出提示
 }
 
 export function registerSyncWatcher(context: vscode.ExtensionContext): void {
@@ -140,8 +134,8 @@ export async function executeSyncChangedFiles(): Promise<void> {
     await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: `正在同步到 ${resolved.server.name}...`,
-        cancellable: false
-    }, async () => {
+        cancellable: true
+    }, async (_progress, token) => {
         _warnHostKeyCheckingIfNeeded(resolved.server);
         try {
             let totalUploaded = 0;
@@ -149,11 +143,12 @@ export async function executeSyncChangedFiles(): Promise<void> {
             const totalFailed: { file: string; error: string }[] = [];
 
             for (const { dir: gitDir, name: gitName } of selectedRoots) {
+                if (token.isCancellationRequested) { break; }
                 const repoResolved: ResolvedSyncConfig = {
                     ...resolved,
                     remotePath: resolved.remotePath.replace(/\/$/, '') + '/' + gitName
                 };
-                const result = await syncChangedFiles(repoResolved, gitDir);
+                const result = await syncChangedFiles(repoResolved, gitDir, token);
                 totalUploaded += result.uploaded.length;
                 totalSkipped += result.skipped.length;
                 totalFailed.push(...result.failed.map(f => ({ file: `${gitName}/${f.file}`, error: f.error })));
