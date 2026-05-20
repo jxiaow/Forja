@@ -22,9 +22,21 @@ function cleanDetachScripts(dir: string): void {
     } catch { /* dir read failure, non-critical */ }
 }
 
+/**
+ * On Windows, prepend `chcp 65001` to force UTF-8 console output from MSVC/jom.
+ * Without this, Chinese characters in warnings/errors appear garbled because
+ * MSVC outputs GBK (code page 936) but Node.js reads as UTF-8.
+ */
+function wrapForUtf8(commandLine: string): string {
+    if (process.platform === 'win32') {
+        return `chcp 65001 >nul && ${commandLine}`;
+    }
+    return commandLine;
+}
+
 function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+        cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
             let exitCode = 0;
             if (error) {
                 const execError = error as cp.ExecException;
@@ -46,7 +58,7 @@ function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; 
  */
 function executeStreaming(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        const child = cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 });
+        const child = cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 });
 
         let stdout = '';
         let stderr = '';
@@ -104,6 +116,34 @@ function extractErrors(output: string): string[] {
     return errors.slice(0, 20);
 }
 
+/**
+ * Summarize warnings from compiler output: deduplicate by warning code and return counts.
+ * Returns a compact summary like "C4819 x 47, C4068 x 3, C4189 x 2"
+ */
+export function summarizeWarnings(output: string): { total: number; summary: string } {
+    const lines = output.split(/\r?\n/);
+    const warningPattern = /warning (C\d+|#\d+|-W[\w-]+)|: warning:/i;
+    const codePattern = /warning (C\d+|#\d+|-W[\w-]+)/i;
+    const counts = new Map<string, number>();
+    let total = 0;
+
+    for (const line of lines) {
+        if (!warningPattern.test(line)) { continue; }
+        total++;
+        const match = codePattern.exec(line);
+        const code = match ? match[1] : 'other';
+        counts.set(code, (counts.get(code) || 0) + 1);
+    }
+
+    if (total === 0) { return { total: 0, summary: '' }; }
+
+    // Sort by count descending, take top 5
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const parts = sorted.map(([code, count]) => `${code} x ${count}`);
+    if (counts.size > 5) { parts.push(`+${counts.size - 5} others`); }
+    return { total, summary: parts.join(', ') };
+}
+
 export interface RunOptions {
     /** When true, pipes stdout/stderr to the terminal in real-time */
     streaming?: boolean;
@@ -137,6 +177,8 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             ensureLocalStateDir(result.workspace);
             const filePath = logFileFor(result.workspace, result.action);
             fs.writeFileSync(filePath, [`$ ${buildLine}`, '', buildResult.stdout, buildResult.stderr].join('\n'), 'utf8');
+            const combinedOutput = buildResult.stdout + '\n' + buildResult.stderr;
+            const ws = summarizeWarnings(combinedOutput);
             return {
                 ...result,
                 ok: false,
@@ -144,6 +186,8 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 durationMs,
                 stdout: buildResult.stdout,
                 stderr: buildResult.stderr,
+                errors: extractErrors(combinedOutput),
+                warningSummary: ws.total > 0 ? ws : undefined,
                 logFile: filePath,
                 commands: commandParts,
                 diagnostics: [...result.diagnostics, { level: 'error', message: '编译失败' }]
@@ -266,6 +310,10 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         ? extractErrors(executed.stdout + '\n' + executed.stderr)
         : [];
 
+    const warningSummary = executed.exitCode !== 0
+        ? summarizeWarnings(executed.stdout + '\n' + executed.stderr)
+        : undefined;
+
     return {
         ...result,
         ok: executed.exitCode === 0,
@@ -274,6 +322,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         stdout: executed.stdout,
         stderr: executed.stderr,
         errors,
+        warningSummary: warningSummary && warningSummary.total > 0 ? warningSummary : undefined,
         logFile: filePath,
         commands: commandParts,
         diagnostics: executed.exitCode === 0

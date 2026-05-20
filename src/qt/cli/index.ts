@@ -10,6 +10,7 @@ import * as fs from 'fs';
 /**
  * Compact JSON output: omit empty/null/default fields to reduce token consumption.
  * Only warning/error diagnostics are included; info-level is conveyed through resolved.
+ * When build fails: omit raw stdout/stderr (available via logFile), output errors + warningSummary instead.
  */
 function compactResult(result: CliResult): Record<string, unknown> {
     const out: Record<string, unknown> = { ok: result.ok, action: result.action };
@@ -19,6 +20,7 @@ function compactResult(result: CliResult): Record<string, unknown> {
     if (result.nextActions.length > 0) { out.nextActions = result.nextActions; }
     if (result.exitCode !== null) { out.exitCode = result.exitCode; }
     if (result.errors.length > 0) { out.errors = result.errors; }
+    if (result.warningSummary) { out.warningSummary = result.warningSummary; }
     if (result.logFile) { out.logFile = result.logFile; }
 
     // Successful detach launches: minimal output
@@ -35,8 +37,19 @@ function compactResult(result: CliResult): Record<string, unknown> {
     if (result.commands.length > 0) { out.commands = result.commands; }
     if (result.shellCommand) { out.shellCommand = result.shellCommand; }
     if (result.durationMs > 0) { out.durationMs = result.durationMs; }
-    if (result.stdout) { out.stdout = result.stdout; }
-    if (result.stderr) { out.stderr = result.stderr; }
+
+    // When build failed: don't dump full stdout/stderr (it's in logFile).
+    // Only include stdout/stderr for non-build actions or successful builds.
+    const isBuildFailure = !result.ok && result.exitCode !== null && result.exitCode !== 0
+        && ['build', 'run', 'clean', 'qmake', 'rcc'].includes(result.action);
+    if (!isBuildFailure) {
+        if (result.stdout) { out.stdout = result.stdout; }
+        if (result.stderr) { out.stderr = result.stderr; }
+    } else {
+        // For build failures, include only stderr if it's short (jom/make error summary)
+        if (result.stderr && result.stderr.length < 500) { out.stderr = result.stderr; }
+    }
+
     if (result.resolved) {
         const r: Record<string, unknown> = {};
         if (result.resolved.mode) { r.mode = result.resolved.mode; }
