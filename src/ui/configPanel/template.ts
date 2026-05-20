@@ -136,6 +136,7 @@ export function getHtml(data: TemplateData): string {
         jomBadgeClass: jomOk ? 'badge-ok' : 'badge-warn',
         jomSource: jomOk ? '自动检测' : '未找到',
         effectiveJomPath: _escapeHtml(env?.jom || '未检测到'),
+        buildToolLabel: makeLabel,
         qtCandidateOptions: (env?.qtCandidates ?? [])
             .map((c: QtInfo) => `<option value="${_escapeHtml(c.path)}">Qt ${_escapeHtml(c.version)} (${_escapeHtml(c.compiler)})</option>`)
             .join(''),

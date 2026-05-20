@@ -4,18 +4,26 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-    DEFAULT_SETTINGS,
     DEFAULT_QT,
     DEFAULT_SDK,
     DEFAULT_SYNC,
-    loadSettings,
-    saveSettings,
-    settingsFilePath,
-    CompilotSettings
+    loadQtSettings,
+    saveQtSettings,
+    loadSdkSettings,
+    saveSdkSettings,
+    loadSyncSettings,
+    saveSyncSettings,
+    projectConfigPath,
+    listProjectConfigs,
 } from '../core/settingsIO';
 
 const _tmpDirs: string[] = [];
-after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
+const _createdFiles: string[] = [];
+
+after(() => {
+    for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); }
+    for (const f of _createdFiles) { try { fs.unlinkSync(f); } catch { /* ok */ } }
+});
 
 function makeWorkspace(): string {
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-settings-'));
@@ -23,139 +31,235 @@ function makeWorkspace(): string {
     return ws;
 }
 
-// ── loadSettings ──
+function trackFile(filePath: string): void {
+    _createdFiles.push(filePath);
+}
 
-test('loadSettings returns defaults when settings.json does not exist', () => {
+// ── loadQtSettings ──
+
+test('loadQtSettings returns defaults when no config exists', () => {
     const workspace = makeWorkspace();
-    const settings = loadSettings(workspace);
-    assert.deepEqual(settings, DEFAULT_SETTINGS);
+    const settings = loadQtSettings(workspace);
+    assert.deepEqual(settings, DEFAULT_QT);
 });
 
-test('loadSettings merges partial file with defaults', () => {
+test('loadQtSettings reads from ~/.compilot/projects/<hash>.json', () => {
     const workspace = makeWorkspace();
-    const dir = path.join(workspace, '.compilot');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({
-        qt: { qtPath: 'D:/Qt/5.15', mode: 'release' }
+    const filePath = projectConfigPath(workspace, 'qt');
+    trackFile(filePath);
+
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    fs.writeFileSync(filePath, JSON.stringify({
+        workspace,
+        type: 'qt',
+        qtPath: 'D:/Qt/5.15',
+        mode: 'release'
     }), 'utf8');
 
-    const settings = loadSettings(workspace);
-    assert.equal(settings.qt.qtPath, 'D:/Qt/5.15');
-    assert.equal(settings.qt.mode, 'release');
-    // 未指定的字段使用默认值（arch 默认 '' 表示运行时解析）
-    assert.equal(settings.qt.arch, '');
-    assert.equal(settings.qt.cStandard, 'c11');
-    assert.equal(settings.qt.fileSyncPromptEnabled, true);
-    assert.equal(settings.qt.pinnedProject, null);
+    const settings = loadQtSettings(workspace);
+    assert.equal(settings.qtPath, 'D:/Qt/5.15');
+    assert.equal(settings.mode, 'release');
+    // 未指定的字段使用默认值
+    assert.equal(settings.arch, '');
+    assert.equal(settings.cStandard, 'c11');
+    assert.equal(settings.fileSyncPromptEnabled, true);
+    assert.equal(settings.pinnedProject, null);
 });
 
-test('loadSettings returns defaults when settings.json is malformed', () => {
+test('loadQtSettings preserves all field types correctly', () => {
     const workspace = makeWorkspace();
-    const dir = path.join(workspace, '.compilot');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'settings.json'), '{ invalid json !!!', 'utf8');
+    const filePath = projectConfigPath(workspace, 'qt');
+    trackFile(filePath);
 
-    const settings = loadSettings(workspace);
-    assert.deepEqual(settings, DEFAULT_SETTINGS);
-});
-
-test('loadSettings preserves all field types correctly', () => {
-    const workspace = makeWorkspace();
-    const dir = path.join(workspace, '.compilot');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({
-        qt: {
-            qtPath: 'D:/Qt',
-            arch: 'x64',
-            mode: 'release',
-            scanExcludeDirs: ['vendor'],
-            pinnedProject: { root: 'C:/ws', relative: 'app.pro' },
-            fileSyncPromptEnabled: false,
-            qmakeReminderEnabled: false
-        },
-        sdk: { mode: 'debug', arch: 'x86' },
-        sync: { enabled: false }
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    fs.writeFileSync(filePath, JSON.stringify({
+        workspace,
+        type: 'qt',
+        qtPath: 'D:/Qt',
+        arch: 'x64',
+        mode: 'release',
+        scanExcludeDirs: ['vendor'],
+        pinnedProject: { root: 'C:/ws', relative: 'app.pro' },
+        fileSyncPromptEnabled: false,
+        qmakeReminderEnabled: false
     }), 'utf8');
 
-    const settings = loadSettings(workspace);
-    assert.equal(settings.qt.qtPath, 'D:/Qt');
-    assert.equal(settings.qt.arch, 'x64');
-    assert.equal(settings.qt.mode, 'release');
-    assert.deepEqual(settings.qt.scanExcludeDirs, ['vendor']);
-    assert.deepEqual(settings.qt.pinnedProject, { root: 'C:/ws', relative: 'app.pro' });
-    assert.equal(settings.qt.fileSyncPromptEnabled, false);
-    assert.equal(settings.qt.qmakeReminderEnabled, false);
+    const settings = loadQtSettings(workspace);
+    assert.equal(settings.qtPath, 'D:/Qt');
+    assert.equal(settings.arch, 'x64');
+    assert.equal(settings.mode, 'release');
+    assert.deepEqual(settings.scanExcludeDirs, ['vendor']);
+    assert.deepEqual(settings.pinnedProject, { root: 'C:/ws', relative: 'app.pro' });
+    assert.equal(settings.fileSyncPromptEnabled, false);
+    assert.equal(settings.qmakeReminderEnabled, false);
 });
 
-// ── saveSettings ──
-
-test('saveSettings creates .compilot directory and writes settings.json', () => {
+test('loadQtSettings returns defaults when file is malformed', () => {
     const workspace = makeWorkspace();
-    const settings: CompilotSettings = {
-        qt: { ...DEFAULT_QT, qtPath: 'C:/Qt/6.5', vsInstall: 'C:/VS', mode: 'release', arch: 'x64' },
-        sdk: { ...DEFAULT_SDK },
-        sync: { ...DEFAULT_SYNC }
-    };
+    const filePath = projectConfigPath(workspace, 'qt');
+    trackFile(filePath);
 
-    saveSettings(workspace, settings);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    fs.writeFileSync(filePath, '{ invalid json !!!', 'utf8');
 
-    const filePath = settingsFilePath(workspace);
+    const settings = loadQtSettings(workspace);
+    assert.deepEqual(settings, DEFAULT_QT);
+});
+
+// ── saveQtSettings ──
+
+test('saveQtSettings writes to ~/.compilot/projects/ with workspace and type fields', () => {
+    const workspace = makeWorkspace();
+    const filePath = projectConfigPath(workspace, 'qt');
+    trackFile(filePath);
+
+    saveQtSettings(workspace, { ...DEFAULT_QT, qtPath: 'C:/Qt/6.5', mode: 'release', arch: 'x64' });
+
     assert.equal(fs.existsSync(filePath), true);
-
     const loaded = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    assert.equal(loaded.qt.qtPath, 'C:/Qt/6.5');
-    assert.equal(loaded.qt.vsInstall, 'C:/VS');
-    assert.equal(loaded.qt.mode, 'release');
-    assert.equal(loaded.qt.arch, 'x64');
+    assert.equal(loaded.workspace, workspace);
+    assert.equal(loaded.type, 'qt');
+    assert.equal(loaded.qtPath, 'C:/Qt/6.5');
+    assert.equal(loaded.mode, 'release');
+    assert.equal(loaded.arch, 'x64');
 });
 
-test('saveSettings persists and loadSettings round-trips correctly', () => {
+test('saveQtSettings round-trips with loadQtSettings', () => {
     const workspace = makeWorkspace();
-    const settings: CompilotSettings = {
-        qt: {
-            ...DEFAULT_QT,
-            qtPath: 'D:/Qt',
-            pinnedProject: { root: 'C:/workspace', relative: 'app/demo.pro' },
-            scanExcludeDirs: ['vendor', 'third_party'],
-            fileSyncPromptEnabled: false,
-            qmakeReminderEnabled: false
-        },
-        sdk: { ...DEFAULT_SDK },
-        sync: { ...DEFAULT_SYNC }
+    trackFile(projectConfigPath(workspace, 'qt'));
+
+    const original = {
+        ...DEFAULT_QT,
+        qtPath: 'D:/Qt',
+        pinnedProject: { root: 'C:/workspace', relative: 'app/demo.pro' },
+        scanExcludeDirs: ['vendor', 'third_party'],
+        fileSyncPromptEnabled: false,
+        qmakeReminderEnabled: false
     };
 
-    saveSettings(workspace, settings);
-    const loaded = loadSettings(workspace);
+    saveQtSettings(workspace, original);
+    const loaded = loadQtSettings(workspace);
 
-    assert.equal(loaded.qt.qtPath, 'D:/Qt');
-    assert.deepEqual(loaded.qt.pinnedProject, { root: 'C:/workspace', relative: 'app/demo.pro' });
-    assert.deepEqual(loaded.qt.scanExcludeDirs, ['vendor', 'third_party']);
-    assert.equal(loaded.qt.fileSyncPromptEnabled, false);
-    assert.equal(loaded.qt.qmakeReminderEnabled, false);
+    assert.equal(loaded.qtPath, 'D:/Qt');
+    assert.deepEqual(loaded.pinnedProject, { root: 'C:/workspace', relative: 'app/demo.pro' });
+    assert.deepEqual(loaded.scanExcludeDirs, ['vendor', 'third_party']);
+    assert.equal(loaded.fileSyncPromptEnabled, false);
+    assert.equal(loaded.qmakeReminderEnabled, false);
 });
 
-test('saveSettings overwrites existing file', () => {
+test('saveQtSettings overwrites existing file', () => {
     const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'qt'));
 
-    saveSettings(workspace, { qt: { ...DEFAULT_QT, qtPath: 'first' }, sdk: { ...DEFAULT_SDK }, sync: { ...DEFAULT_SYNC } });
-    saveSettings(workspace, { qt: { ...DEFAULT_QT, qtPath: 'second' }, sdk: { ...DEFAULT_SDK }, sync: { ...DEFAULT_SYNC } });
+    saveQtSettings(workspace, { ...DEFAULT_QT, qtPath: 'first' });
+    saveQtSettings(workspace, { ...DEFAULT_QT, qtPath: 'second' });
 
-    const loaded = loadSettings(workspace);
-    assert.equal(loaded.qt.qtPath, 'second');
+    const loaded = loadQtSettings(workspace);
+    assert.equal(loaded.qtPath, 'second');
 });
 
-test('saveSettings writes valid JSON with 4-space indentation', () => {
+// ── SDK ──
+
+test('loadSdkSettings returns defaults when no config exists', () => {
     const workspace = makeWorkspace();
-    saveSettings(workspace, { qt: { ...DEFAULT_QT, qtPath: 'D:/Qt' }, sdk: { ...DEFAULT_SDK }, sync: { ...DEFAULT_SYNC } });
-
-    const raw = fs.readFileSync(settingsFilePath(workspace), 'utf8');
-    assert.match(raw, /^{\n {4}"qt": {\n {8}"mode"/);
-    assert.match(raw, /\n$/); // trailing newline
+    const settings = loadSdkSettings(workspace);
+    assert.deepEqual(settings, DEFAULT_SDK);
 });
 
-// ── settingsFilePath ──
+test('saveSdkSettings round-trips with loadSdkSettings', () => {
+    const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'sdk'));
 
-test('settingsFilePath returns correct path under .compilot', () => {
-    const result = settingsFilePath('C:/workspace');
-    assert.equal(result, path.join('C:/workspace', '.compilot', 'settings.json'));
+    saveSdkSettings(workspace, { ...DEFAULT_SDK, vsInstall: 'C:/VS/2022', pinnedProject: 'my.sln' });
+    const loaded = loadSdkSettings(workspace);
+
+    assert.equal(loaded.vsInstall, 'C:/VS/2022');
+    assert.equal(loaded.pinnedProject, 'my.sln');
 });
+
+// ── Sync ──
+
+test('loadSyncSettings returns defaults when no config exists', () => {
+    const workspace = makeWorkspace();
+    const settings = loadSyncSettings(workspace);
+    assert.deepEqual(settings, DEFAULT_SYNC);
+});
+
+test('saveSyncSettings round-trips with loadSyncSettings', () => {
+    const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'sync'));
+
+    saveSyncSettings(workspace, { ...DEFAULT_SYNC, enabled: true, selectedServer: 'dev-server' });
+    const loaded = loadSyncSettings(workspace);
+
+    assert.equal(loaded.enabled, true);
+    assert.equal(loaded.selectedServer, 'dev-server');
+});
+
+test('loadSyncSettings looks up parent directory', () => {
+    const parent = makeWorkspace();
+    const child = path.join(parent, 'qt_client');
+    fs.mkdirSync(child, { recursive: true });
+
+    // Save sync config for parent
+    trackFile(projectConfigPath(parent, 'sync'));
+    saveSyncSettings(parent, { ...DEFAULT_SYNC, enabled: true, selectedServer: 'parent-server' });
+
+    // Load from child should find parent's config
+    const loaded = loadSyncSettings(child);
+    assert.equal(loaded.enabled, true);
+    assert.equal(loaded.selectedServer, 'parent-server');
+});
+
+test('loadSyncSettings prefers current directory over parent', () => {
+    const parent = makeWorkspace();
+    const child = path.join(parent, 'qt_client');
+    fs.mkdirSync(child, { recursive: true });
+
+    trackFile(projectConfigPath(parent, 'sync'));
+    trackFile(projectConfigPath(child, 'sync'));
+
+    saveSyncSettings(parent, { ...DEFAULT_SYNC, enabled: true, selectedServer: 'parent-server' });
+    saveSyncSettings(child, { ...DEFAULT_SYNC, enabled: true, selectedServer: 'child-server' });
+
+    const loaded = loadSyncSettings(child);
+    assert.equal(loaded.selectedServer, 'child-server');
+});
+
+// ── projectConfigPath ──
+
+test('projectConfigPath returns path under ~/.compilot/projects/', () => {
+    const result = projectConfigPath('C:/workspace/dev/qt_client', 'qt');
+    assert.match(result, /\.compilot[/\\]projects[/\\][a-f0-9]{12}\.json$/);
+});
+
+test('projectConfigPath generates different hashes for different types', () => {
+    const qtPath = projectConfigPath('C:/workspace', 'qt');
+    const sdkPath = projectConfigPath('C:/workspace', 'sdk');
+    const syncPath = projectConfigPath('C:/workspace', 'sync');
+    assert.notEqual(qtPath, sdkPath);
+    assert.notEqual(qtPath, syncPath);
+    assert.notEqual(sdkPath, syncPath);
+});
+
+test('projectConfigPath is case-insensitive on path', () => {
+    const lower = projectConfigPath('c:/workspace/dev', 'qt');
+    const upper = projectConfigPath('C:/Workspace/Dev', 'qt');
+    assert.equal(lower, upper);
+});
+
+// ── listProjectConfigs ──
+
+test('listProjectConfigs returns saved configs', () => {
+    const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'qt'));
+
+    saveQtSettings(workspace, { ...DEFAULT_QT, qtPath: 'test' });
+    const configs = listProjectConfigs();
+    const found = configs.find(c => c.workspace === workspace && c.type === 'qt');
+    assert.ok(found, 'should find the saved qt config');
+});
+

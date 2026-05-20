@@ -4,7 +4,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-    ensureCompilotGitignored
+    ensureLocalStateDir,
+    logsDir
 } from '../qt/shared/localState';
 
 const _tmpDirs: string[] = [];
@@ -16,11 +17,12 @@ function makeWorkspace(): string {
     return ws;
 }
 
-test('ensureCompilotGitignored appends .compilot/ once', () => {
+test('ensureLocalStateDir creates logs directory only', () => {
     const workspace = makeWorkspace();
-    ensureCompilotGitignored(workspace);
-    ensureCompilotGitignored(workspace);
+    ensureLocalStateDir(workspace);
 
-    const gitignore = fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8');
-    assert.equal(gitignore.split('.compilot/').length - 1, 1);
+    // Logs dir should exist
+    assert.equal(fs.existsSync(logsDir(workspace)), true);
+    // .compilot/ should NOT be created in project directory
+    assert.equal(fs.existsSync(path.join(workspace, '.compilot')), false);
 });

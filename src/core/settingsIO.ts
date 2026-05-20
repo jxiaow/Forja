@@ -1,11 +1,16 @@
 /**
  * 统一配置文件读写 — 不依赖 vscode，可独立测试。
  *
- * 单文件结构：.compilot/settings.json
- * 顶层分组：qt / sdk / sync
+ * 配置存储在用户数据目录 ~/.compilot/projects/ 下，
+ * 文件名为 workspace 路径的 hash，内容平铺不加前缀分组。
+ *
+ * 每个 workspace 目录对应一个配置文件，只存一种配置（qt 或 sdk 或 sync）。
+ * 配置类型通过文件内的 `type` 字段区分。
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
+import * as os from 'os';
 
 // ── 类型定义 ──
 
@@ -94,36 +99,106 @@ export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
 
 // ── 路径 ──
 
-export function settingsFilePath(workspace: string): string {
-    return path.join(workspace, '.compilot', 'settings.json');
+/** 用户数据目录下的 projects 配置目录 */
+export function projectsDir(): string {
+    return path.join(os.homedir(), '.compilot', 'projects');
 }
 
-// ── 加载 ──
+/** 根据 workspace 路径和配置类型生成配置文件路径 */
+export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string {
+    const normalized = workspace.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const hash = crypto.createHash('sha256').update(`${normalized}:${type}`).digest('hex').slice(0, 12);
+    return path.join(projectsDir(), `${hash}.json`);
+}
 
-export function loadSettings(workspace: string): CompilotSettings {
-    const filePath = settingsFilePath(workspace);
+// ── Qt 配置读写 ──
+
+export function loadQtSettings(workspace: string): QtSettings {
+    const filePath = projectConfigPath(workspace, 'qt');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            return sanitizeSettings(raw);
+            return sanitizeQt(raw);
         }
     } catch { /* file missing or malformed */ }
-    return { qt: { ...DEFAULT_QT }, sdk: { ...DEFAULT_SDK }, sync: { ...DEFAULT_SYNC } };
+    return { ...DEFAULT_QT };
 }
 
-// ── 保存 ──
+export function saveQtSettings(workspace: string, settings: QtSettings): void {
+    const filePath = projectConfigPath(workspace, 'qt');
+    _ensureDir(filePath);
+    const data: Record<string, unknown> = {
+        workspace,
+        type: 'qt',
+        ...settings
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+}
 
-export function saveSettings(workspace: string, settings: CompilotSettings): void {
+// ── SDK 配置读写 ──
+
+export function loadSdkSettings(workspace: string): SdkSettings {
+    const filePath = projectConfigPath(workspace, 'sdk');
     try {
-        const filePath = settingsFilePath(workspace);
-        const dir = path.dirname(filePath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
+        if (fs.existsSync(filePath)) {
+            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            return sanitizeSdk(raw);
         }
-        fs.writeFileSync(filePath, JSON.stringify(settings, null, 4) + '\n', 'utf8');
-    } catch (e) {
-        console.warn(`[compilot] saveSettings 失败: ${e instanceof Error ? e.message : e}`);
+    } catch { /* file missing or malformed */ }
+    return { ...DEFAULT_SDK };
+}
+
+export function saveSdkSettings(workspace: string, settings: SdkSettings): void {
+    const filePath = projectConfigPath(workspace, 'sdk');
+    _ensureDir(filePath);
+    const data: Record<string, unknown> = {
+        workspace,
+        type: 'sdk',
+        ...settings
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+}
+
+// ── Sync 配置读写 ──
+
+/**
+ * 加载 sync 配置。向上一级查找：如果当前 workspace 没有 sync 配置，
+ * 尝试父目录。
+ */
+export function loadSyncSettings(workspace: string): SyncSettings {
+    // 先找当前 workspace
+    const filePath = projectConfigPath(workspace, 'sync');
+    try {
+        if (fs.existsSync(filePath)) {
+            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            return sanitizeSync(raw);
+        }
+    } catch { /* file missing or malformed */ }
+
+    // 向上一级查找（monorepo 场景：子项目继承父目录的 sync 配置）
+    const parent = path.dirname(workspace);
+    if (parent !== workspace) {
+        const parentPath = projectConfigPath(parent, 'sync');
+        try {
+            if (fs.existsSync(parentPath)) {
+                const raw = JSON.parse(fs.readFileSync(parentPath, 'utf8'));
+                return sanitizeSync(raw);
+            }
+        } catch { /* file missing or malformed */ }
     }
+
+    return { ...DEFAULT_SYNC };
+}
+
+export function saveSyncSettings(workspace: string, settings: SyncSettings): void {
+    const filePath = projectConfigPath(workspace, 'sync');
+    _ensureDir(filePath);
+    const data: Record<string, unknown> = {
+        workspace,
+        type: 'sync',
+        ...settings
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
 }
 
 // ── VS 路径推导 ──
@@ -141,30 +216,46 @@ export function resolveVsDevCmdPath(vsInstall: string): string {
 /** 从 vsDevShellPath 或 vsDevCmdPath 反推 vsInstall 路径 */
 export function inferVsInstall(vsPath: string): string {
     if (!vsPath) { return ''; }
-    // 路径格式: {vsInstall}/Common7/Tools/Launch-VsDevShell.ps1 或 VsDevCmd.bat
     const normalized = vsPath.replace(/\\/g, '/');
     const match = normalized.match(/^(.+?)\/Common7\/Tools\//i);
     return match ? match[1].replace(/\//g, path.sep) : '';
 }
 
+// ── 工具函数 ──
+
+/** 列出所有项目配置文件（用于 cleanup 命令） */
+export function listProjectConfigs(): Array<{ filePath: string; workspace: string; type: string }> {
+    const dir = projectsDir();
+    if (!fs.existsSync(dir)) { return []; }
+    const results: Array<{ filePath: string; workspace: string; type: string }> = [];
+    try {
+        const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+        for (const file of files) {
+            const filePath = path.join(dir, file);
+            try {
+                const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                if (raw.workspace && raw.type) {
+                    results.push({ filePath, workspace: raw.workspace, type: raw.type });
+                }
+            } catch { /* skip malformed */ }
+        }
+    } catch { /* dir read failure */ }
+    return results;
+}
+
 // ── 内部工具 ──
+
+function _ensureDir(filePath: string): void {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+}
 
 function isString(v: unknown): v is string { return typeof v === 'string'; }
 function isBool(v: unknown): v is boolean { return typeof v === 'boolean'; }
 function isStringArray(v: unknown): v is string[] { return Array.isArray(v) && v.every(i => typeof i === 'string'); }
 function isNumber(v: unknown): v is number { return typeof v === 'number'; }
-
-function sanitizeSettings(raw: Record<string, unknown>): CompilotSettings {
-    const qtRaw = (raw.qt && typeof raw.qt === 'object') ? raw.qt as Record<string, unknown> : {};
-    const sdkRaw = (raw.sdk && typeof raw.sdk === 'object') ? raw.sdk as Record<string, unknown> : {};
-    const syncRaw = (raw.sync && typeof raw.sync === 'object') ? raw.sync as Record<string, unknown> : {};
-
-    return {
-        qt: sanitizeQt(qtRaw),
-        sdk: sanitizeSdk(sdkRaw),
-        sync: sanitizeSync(syncRaw)
-    };
-}
 
 function sanitizeQt(raw: Record<string, unknown>): QtSettings {
     const d = DEFAULT_QT;
@@ -226,9 +317,4 @@ function sanitizeSync(raw: Record<string, unknown>): SyncSettings {
     };
 }
 
-// ── 兼容旧接口（过渡期，逐步移除） ──
 
-/** @deprecated 使用 loadSettings(workspace).qt 替代 */
-export type QtPilotSettings = QtSettings;
-/** @deprecated 使用 DEFAULT_SETTINGS.qt 替代 */
-export { DEFAULT_QT as LEGACY_DEFAULT_SETTINGS };

@@ -1,10 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-export function localRoot(workspace: string): string {
-    return path.join(workspace, '.compilot');
-}
-
 export function logsDir(workspace: string): string {
     const tmpBase = process.env.TEMP || process.env.TMP || require('os').tmpdir();
     // Use a hash-like folder name based on workspace path to avoid collisions
@@ -13,24 +9,7 @@ export function logsDir(workspace: string): string {
 }
 
 export function ensureLocalStateDir(workspace: string): void {
-    fs.mkdirSync(localRoot(workspace), { recursive: true });
     fs.mkdirSync(logsDir(workspace), { recursive: true });
-}
-
-export function ensureCompilotGitignored(workspace: string): void {
-    const gitignorePath = path.join(workspace, '.gitignore');
-    let lines: string[] = [];
-
-    try {
-        lines = fs.readFileSync(gitignorePath, 'utf8').split(/\r?\n/);
-    } catch { /* file not found OK */ }
-
-    const otherLines = lines.filter(line =>
-        line.trim() !== '.compilot/' && line.trim() !== '.qtpilot/'
-    );
-    otherLines.push('.compilot/');
-    fs.mkdirSync(path.dirname(gitignorePath), { recursive: true });
-    fs.writeFileSync(gitignorePath, `${otherLines.join('\n')}\n`, 'utf8');
 }
 
 function readJson<T>(filePath: string): T | null {
@@ -55,7 +34,7 @@ export interface RunState {
 }
 
 export function runStatePath(workspace: string): string {
-    return path.join(localRoot(workspace), 'run-state.json');
+    return path.join(logsDir(workspace), 'run-state.json');
 }
 
 export function runLogPath(workspace: string): string {

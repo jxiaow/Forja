@@ -3,6 +3,7 @@ export const CMD_BUILD = 'compilot.sdk.build';
 export const CMD_REBUILD = 'compilot.sdk.rebuild';
 export const CMD_CLEAN = 'compilot.sdk.clean';
 export const CMD_SHOW_ACTIONS = 'compilot.sdk.showActions';
+export const CMD_SELECT_PROJECT = 'compilot.sdk.selectProject';
 
 /** Context key */
 export const CTX_ACTIVATED = 'compilot.sdk.activated';

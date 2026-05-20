@@ -43,6 +43,26 @@ export async function handleMessage(
     logger.info(`收到消息: ${msg.command}`);
 
     switch (msg.command) {
+        case 'saveMode': {
+            const modeVal = String(msg.value || '');
+            if (modeVal !== '' && modeVal !== 'debug' && modeVal !== 'release') {
+                logger.warn(`无效的构建模式值: "${modeVal}"`);
+                break;
+            }
+            logger.info(`保存构建模式: "${modeVal}"`);
+            await updateConfig('mode', modeVal as '' | 'debug' | 'release');
+            break;
+        }
+        case 'saveArch': {
+            const archVal = String(msg.value || '');
+            if (archVal !== '' && archVal !== 'x86' && archVal !== 'x64') {
+                logger.warn(`无效的目标架构值: "${archVal}"`);
+                break;
+            }
+            logger.info(`保存目标架构: "${archVal}"`);
+            await updateConfig('arch', archVal as '' | 'x86' | 'x64');
+            break;
+        }
         case 'refreshEnv': {
             const env = await detectEnv();
             setState('envInfo', env);

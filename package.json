@@ -3,7 +3,7 @@
   "displayName": "Compilot",
   "publisher": "compilot",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.22",
+  "version": "0.7.26",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -23,6 +23,10 @@
   },
   "contributes": {
     "commands": [
+      {
+        "command": "compilot.config.openPage",
+        "title": "Compilot: 打开配置页"
+      },
       {
         "command": "compilot.showActions",
         "title": "Compilot: 显示操作菜单"
@@ -95,6 +99,11 @@
         "enablement": "compilot.sdk.activated"
       },
       {
+        "command": "compilot.sdk.selectProject",
+        "title": "Compilot SDK: Select Project",
+        "enablement": "compilot.sdk.activated"
+      },
+      {
         "command": "compilot.sdk.showActions",
         "title": "Compilot SDK: Show Actions",
         "enablement": "compilot.sdk.activated"
@@ -121,7 +130,6 @@
     "views": {
       "compilot": [
         {
-          "type": "webview",
           "id": "compilot.configView",
           "name": "配置"
         }
@@ -138,7 +146,9 @@
     "package": "npm run compile && node scripts/package-vs.js",
     "package:cli": "npm run build:cli",
     "package:all": "node scripts/bump-version.js && npm run package && npm run package:cli",
-    "vsix": "vsce package --allow-missing-repository"
+    "vsix": "vsce package --allow-missing-repository",
+    "harness:check": "node harness/core/automation/check-harness.js",
+    "harness:ops:init": "node harness/core/operations/create-operation-docs.js"
   },
   "devDependencies": {
     "@eslint/js": "9.39.4",

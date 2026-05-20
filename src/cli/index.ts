@@ -10,6 +10,7 @@
 
 import { runQtCli } from '../qt/cli/index';
 import { runSdkCli } from '../sdk/cli/index';
+import { runCleanup } from './cleanup';
 import { VERSION } from '../version';
 import { setSilent } from '../core/loggerBase';
 
@@ -24,6 +25,7 @@ Compilot v${VERSION} — C++ 项目构建工具
 子命令:
   qt       Qt/qmake 项目操作 (init, env, projects, status, qmake, build, run, clean, stop, sync, rcc, logs)
   sdk      SDK/库项目操作 (build, rebuild, clean, status)
+  cleanup  清理已删除/移动项目的残留配置
 
 全局选项:
   --help, -h     显示帮助
@@ -65,9 +67,12 @@ async function main(argv: string[]): Promise<void> {
         case 'sdk':
             await runSdkCli(subArgs);
             break;
+        case 'cleanup':
+            runCleanup(subArgs);
+            break;
         default: {
             const wantsJson = argv.includes('--json');
-            const msg = `未知子命令: ${subcommand}。可用子命令: qt, sdk`;
+            const msg = `未知子命令: ${subcommand}。可用子命令: qt, sdk, cleanup`;
             if (wantsJson) {
                 console.log(JSON.stringify({ ok: false, diagnostics: [{ level: 'error', message: msg }] }));
             } else {

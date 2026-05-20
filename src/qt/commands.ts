@@ -14,11 +14,11 @@ import { showUnifiedActions } from '../ui/unifiedStatusBar';
 import { executeSyncChangedFiles, executeTestConnection } from './sync/syncWatcher';
 import { ensureLocalStateDir } from './shared/localState';
 import { createLogger } from '../core/logger';
-import { ConfigPanel } from '../ui/configPanel/index';
+import { ConfigPageManager } from '../ui/configPanel/configPagePanel';
 
 const logger = createLogger('QtCommands');
 
-export function registerQtCommands(context: vscode.ExtensionContext, panel: ConfigPanel): void {
+export function registerQtCommands(context: vscode.ExtensionContext, panel: ConfigPageManager): void {
     const resolveDesignerExecutable = (): string => {
         const configured = (getDesignerPath() || '').trim();
         if (configured) { return configured; }

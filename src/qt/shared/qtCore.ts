@@ -9,9 +9,8 @@ import { resolveBuildConfig } from './configResolver';
 import { scanProFiles, parseProFile } from './projectScanner';
 import {
     ensureLocalStateDir,
-    ensureCompilotGitignored,
 } from './localState';
-import { loadSettings, saveSettings, settingsFilePath, CompilotSettings, QtSettings, resolveVsDevShellPath, inferVsInstall } from '../../core/settingsIO';
+import { loadQtSettings, saveQtSettings, projectConfigPath, QtSettings, resolveVsDevShellPath, inferVsInstall } from '../../core/settingsIO';
 import { buildRunCommand } from './commandRunner';
 import { resolveRuntimeTarget, validateMakefile } from './runtimeTarget';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from './rccResolver';
@@ -182,11 +181,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         return result;
     }
 
-    const allSettings = loadSettings(workspace);
-    const settings = allSettings.qt;
+    const settings = loadQtSettings(workspace);
 
     if (options.action === 'status') {
-        const hasSettings = fs.existsSync(settingsFilePath(workspace));
+        const hasSettings = fs.existsSync(projectConfigPath(workspace, 'qt'));
         const selectedProj = settings.pinnedProject;
         const projectRel = selectedProj ? selectedProj.relative : null;
         const projectFull = projectRel ? path.join(workspace, projectRel) : null;
@@ -378,7 +376,6 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     if (options.action === 'init') {
         if (options.executionMode === 'execute') {
             ensureLocalStateDir(workspace);
-            ensureCompilotGitignored(workspace);
             // #1: detectEnvironment 内部已调用 detectEnv，直接复用其结果，不再重复调用
             const detected = await detectEnvironment(workspace, options);
             // 直接从检测结果获取候选列表
@@ -403,7 +400,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                     target: effectiveTarget,
                     pinnedProject: { root: workspace, relative: relativeProject }
                 };
-                saveSettings(workspace, { ...allSettings, qt: updatedQt });
+                saveQtSettings(workspace, updatedQt);
             } else {
                 // #3: 多 .pro 文件或无 .pro 时，仍保存 qtPath 等，显式清除 pinnedProject
                 // mode/arch 只在用户显式传参时写入，否则保持 settings 原值（可能为空）
@@ -417,7 +414,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                     target: effectiveTarget,
                     pinnedProject: null
                 };
-                saveSettings(workspace, { ...allSettings, qt: updatedQt });
+                saveQtSettings(workspace, updatedQt);
             }
             const effectiveQtPath = qtPath || detected.detected.qt?.path || '';
             const effectiveVsDevShell = vsDevShell || detected.detected.vs?.devShellPath || '';

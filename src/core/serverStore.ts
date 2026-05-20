@@ -163,18 +163,18 @@ export function getServerByName(name: string): ServerConfig | null {
 
 // ── 项目同步配置（读写统一 .compilot/settings.json 的 sync 部分） ──
 
-import { loadSettings, saveSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
+import { loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
 
 const DEFAULT_IGNORE = DEFAULT_SYNC.ignore;
 
 export function readProjectSyncConfig(workspaceRoot: string): ProjectSyncConfig {
     try {
-        const settings = loadSettings(workspaceRoot);
+        const sync = loadSyncSettings(workspaceRoot);
         return {
-            enabled: settings.sync.enabled,
-            selectedServer: settings.sync.selectedServer,
-            ignore: settings.sync.ignore.length > 0 ? settings.sync.ignore : [...DEFAULT_IGNORE],
-            remotePath: settings.sync.remotePath || undefined
+            enabled: sync.enabled,
+            selectedServer: sync.selectedServer,
+            ignore: sync.ignore.length > 0 ? sync.ignore : [...DEFAULT_IGNORE],
+            remotePath: sync.remotePath || undefined
         };
     } catch {
         return { enabled: false, selectedServer: '', ignore: [...DEFAULT_IGNORE] };
@@ -182,15 +182,15 @@ export function readProjectSyncConfig(workspaceRoot: string): ProjectSyncConfig 
 }
 
 export function writeProjectSyncConfig(workspaceRoot: string, config: Partial<ProjectSyncConfig>): void {
-    const settings = loadSettings(workspaceRoot);
-    const updated: SyncSettings = { ...settings.sync };
+    const current = loadSyncSettings(workspaceRoot);
+    const updated: SyncSettings = { ...current };
 
     if (config.enabled !== undefined) { updated.enabled = config.enabled; }
     if (config.selectedServer !== undefined) { updated.selectedServer = config.selectedServer; }
     if (config.remotePath !== undefined) { updated.remotePath = config.remotePath; }
     if (config.ignore !== undefined) { updated.ignore = config.ignore; }
 
-    saveSettings(workspaceRoot, { ...settings, sync: updated });
+    saveSyncSettings(workspaceRoot, updated);
 }
 
 /**

@@ -7,8 +7,7 @@ import { StateManager } from './modules/stateManager';
 import { ConfigService } from './modules/configService';
 import { ProjectScanner } from './modules/projectScanner';
 import { SdkBuilder } from './modules/sdkBuilder';
-import { ShowActions } from './modules/showActions';
-import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN, CMD_SHOW_ACTIONS, CTX_ACTIVATED, TASK_SOURCE } from './constants';
+import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN, CMD_SHOW_ACTIONS, CMD_SELECT_PROJECT, CTX_ACTIVATED, TASK_SOURCE } from './constants';
 import { isWindows } from './platform';
 import { initLogger, log, logError } from './utils/logger';
 import { setSdkState, setActiveModule, onSdkUpdate } from '../ui/unifiedStatusBar';
@@ -94,6 +93,28 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     const sdkBuilder = new SdkBuilder(stateManager, configService);
 
     // 8. 注册命令
+    const selectProjectHandler = async () => {
+        log('执行命令: Select Project');
+        const projects = projectScanner.projects;
+        if (projects.length === 0) {
+            vscode.window.showInformationMessage('SDK Pilot: 未找到可用的 SDK 项目');
+            return;
+        }
+        const currentPath = stateManager.currentProject?.path;
+        const items = projects.map(p => ({
+            label: p.name,
+            description: p.path === currentPath ? '（当前）' : p.path,
+            project: p
+        }));
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: '选择 SDK 项目'
+        });
+        if (selected) {
+            stateManager.currentProject = (selected as typeof items[0]).project;
+            await stateManager.persistToConfig();
+        }
+    };
+
     context.subscriptions.push(
         vscode.commands.registerCommand(CMD_BUILD, () => {
             log('执行命令: Build');
@@ -107,12 +128,11 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
             log('执行命令: Clean');
             return sdkBuilder.clean();
         }),
-        vscode.commands.registerCommand(CMD_SHOW_ACTIONS, () => {
-            const showActions = new ShowActions(stateManager, projectScanner);
-            return showActions.show();
-        })
+        vscode.commands.registerCommand(CMD_SELECT_PROJECT, selectProjectHandler),
+        // 保留旧命令 ID 作为别名，避免用户快捷键绑定失效
+        vscode.commands.registerCommand(CMD_SHOW_ACTIONS, selectProjectHandler)
     );
-    log('命令已注册: build, rebuild, clean, showActions');
+    log('命令已注册: build, rebuild, clean, selectProject, showActions(alias)');
 
     // 9. 监听 Task 结束事件
     const taskEndListener = vscode.tasks.onDidEndTaskProcess((e) => {

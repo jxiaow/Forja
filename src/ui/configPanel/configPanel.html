@@ -566,10 +566,10 @@ details[open] .arrow { transform: rotate(90deg); }
     </details>
   </div>
 
-  <!-- jom -->
+  <!-- jom/make -->
   <div class="card">
     <div class="card-header">
-      <span class="card-title">jom</span>
+      <span class="card-title">{{buildToolLabel}}</span>
       <span id="jom-badge" class="card-badge {{jomBadgeClass}}">{{jomSource}}</span>
     </div>
     <div id="jom-path" class="path-display">{{effectiveJomPath}}</div>
@@ -985,17 +985,7 @@ window.addEventListener('message', e => {
     else if (d.targetId === 'manualProPath') { saveManualProPath(); }
     else if (d.targetId === 'rccProjectPath') { saveRccProjectPath(); }
   } else if (d.command === 'envUpdated') {
-    // 更新环境区卡片的 badge 和路径
-    if (d.isWin) {
-      const vsBadge = document.getElementById('vs-badge');
-      if (vsBadge) { vsBadge.className = 'card-badge ' + (d.env.vs ? 'badge-ok' : 'badge-warn'); vsBadge.textContent = d.env.vs ? '自动检测' : '未配置'; }
-      const vsPath = document.getElementById('vs-path');
-      if (vsPath) { vsPath.textContent = d.env.vs || '未检测到'; }
-    }
-    const qtBadge = document.getElementById('qt-badge');
-    if (qtBadge) { qtBadge.className = 'card-badge ' + (d.env.qt ? 'badge-ok' : 'badge-warn'); }
-    const qtPath = document.getElementById('qt-path');
-    if (qtPath && d.env.qt) { qtPath.textContent = d.env.qt; }
+    // 仅更新 jom 和刷新按钮状态；VS/Qt 的 badge 和路径由 devShellUpdated/qtPathUpdated 管理
     const jomBadge = document.getElementById('jom-badge');
     if (jomBadge) { jomBadge.className = 'card-badge ' + (d.env.jom ? 'badge-ok' : 'badge-warn'); jomBadge.textContent = d.env.jom ? '自动检测' : '未找到'; }
     const jomPath = document.getElementById('jom-path');

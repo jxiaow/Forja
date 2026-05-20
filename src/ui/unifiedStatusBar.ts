@@ -194,16 +194,15 @@ export async function showUnifiedActions(): Promise<void> {
         label: `$(terminal) ${cmd.name}`, description: '', action: `qt:custom:${i}`
     }));
 
-    // 切换模块
-    const moduleItems: Item[] = [
-        { label: '$(folder) 切换到 Qt 项目',  description: _activeModule === 'qt' ? '当前' : '', action: 'switch:qt' },
-        { label: '$(folder) 切换到 SDK 项目', description: _activeModule === 'sdk' ? '当前' : '', action: 'switch:sdk' }
-    ];
-
-    // 项目选择
+    // 项目选择 + 模块切换（合并为一个分组）
     const projectItems: Item[] = _activeModule === 'qt'
         ? [{ label: '$(list-tree) 选择 Qt 项目...', description: '', action: 'qt:selectProject' }]
         : [{ label: '$(list-tree) 选择 SDK 项目...', description: '', action: 'sdk:selectProject' }];
+
+    const moduleItems: Item[] = [
+        { label: '$(folder) 切换到 Qt 模块',  description: _activeModule === 'qt' ? '当前' : '', action: 'switch:qt' },
+        { label: '$(folder) 切换到 SDK 模块', description: _activeModule === 'sdk' ? '当前' : '', action: 'switch:sdk' }
+    ];
 
     const currentName = _activeModule === 'qt'
         ? getEffectiveProjectName(state.currentProject, getTarget(), '未选择项目')
@@ -220,13 +219,14 @@ export async function showUnifiedActions(): Promise<void> {
         ...(customItems.length > 0 ? [sep('自定义'), ...customItems] : []),
         sep('项目'),
         ...projectItems,
-        sep('模块'),
         ...moduleItems
     ];
 
+    const moduleLabel = _activeModule === 'qt' ? 'Qt' : 'SDK';
+
     const selected = await vscode.window.showQuickPick(
         pickItems,
-        { placeHolder: `${currentName} · ${currentMode}` }
+        { placeHolder: `[${moduleLabel}] ${currentName} · ${currentMode}` }
     ) as Item | undefined;
 
     if (!selected?.action) { return; }
