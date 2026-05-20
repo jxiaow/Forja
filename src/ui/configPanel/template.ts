@@ -1,18 +1,20 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getEffectiveProjectName } from '../../core/projectDisplay';
-import { EnvInfo, QtInfo } from '../../env/envDetector';
-import type { ProjectInfo } from '../../project/projectManager';
+import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
+import { EnvInfo, QtInfo, VSInfo } from '../../qt/env/envDetector';
+import type { ProjectInfo } from '../../qt/project/projectManager';
 
 export interface TemplateData {
     env: EnvInfo | null;
     project: ProjectInfo | null;
     vsDevShellPath: string;
-    selectedProject: string;
+    pinnedProject: string;
+    mode: string;
+    arch: string;
     cStandard: string;
     cppStandard: string;
     scanExcludeDirs: string;
-    qmakeTarget: string;
+    target: string;
     isWin: boolean;
     autoDevShell: string;
     autoQtPath: string;
@@ -22,7 +24,15 @@ export interface TemplateData {
     manualProPath: string;
     fileSyncPromptEnabled: boolean;
     qmakeReminderEnabled: boolean;
+    rccProjectPath: string;
     version: string;
+    syncEnabled: boolean;
+    syncSelectedServer: string;
+    syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string }[];
+    syncIgnore: string;
+    syncRemotePath: string;
+    syncPendingCount: number;
+    syncLastTime: string;
 }
 
 let _templateCache: string | null = null;
@@ -53,18 +63,18 @@ function _escapeHtml(value: string): string {
 }
 
 export function getHtml(data: TemplateData): string {
-    const { env, project, vsDevShellPath, selectedProject, cStandard, cppStandard,
-            scanExcludeDirs, qmakeTarget, isWin, autoDevShell, autoQtPath, qtPath } = data;
+    const { env, project, vsDevShellPath, pinnedProject, cStandard, cppStandard,
+            scanExcludeDirs, target, isWin, autoDevShell, autoQtPath, qtPath } = data;
 
-    const projectName = getEffectiveProjectName(project, qmakeTarget, selectedProject || '未选择');
-    const defaultQmakeTarget = project?.target || '';
-    const effectiveQmakeTarget = qmakeTarget || defaultQmakeTarget;
+    const projectName = getEffectiveProjectName(project, target, pinnedProject || '未选择');
+    const defaultTarget = project?.target || '';
+    const effectiveTarget = target || defaultTarget;
     const effectiveDevShell = vsDevShellPath || autoDevShell;
     const devShellSource = vsDevShellPath ? '手动配置' : (autoDevShell ? '自动检测' : '未配置');
     const effectiveQtPath = qtPath || autoQtPath;
     const qtSource = qtPath ? '手动配置' : (autoQtPath ? '自动检测' : '未配置');
 
-    const jomOk = env?.jom ?? false;
+    const jomOk = !!env?.jom;
     const makeLabel = isWin ? 'jom' : 'make';
 
     // 状态摘要
@@ -81,6 +91,11 @@ export function getHtml(data: TemplateData): string {
     const textQt = env ? (env.qt ? 'Qt ' + env.qt.version + ' (' + env.qt.compiler + ')' : '未检测到 Qt') : '检测中...';
     const textJom = env ? (jomOk ? makeLabel + ' 可用' : makeLabel + ' 未找到') : '检测中...';
 
+    // Chip 文本（紧凑版）
+    const textVsChip = env ? (env.vs ? 'VS ' + env.vs.version : 'VS 未检测') : '检测中...';
+    const textQtChip = env ? (env.qt ? 'Qt ' + env.qt.version : 'Qt 未检测') : '检测中...';
+    const textJomChip = env ? (jomOk ? makeLabel : makeLabel + ' ✗') : '检测中...';
+
     const vars: Record<string, string> = {
         dotVsClass: _dotClass(env, !!env?.vs),
         dotQtClass: _dotClass(env, !!env?.qt),
@@ -89,8 +104,11 @@ export function getHtml(data: TemplateData): string {
         textVs: _escapeHtml(textVs),
         textQt: _escapeHtml(textQt),
         textJom: _escapeHtml(textJom),
+        textVsChip: _escapeHtml(textVsChip),
+        textQtChip: _escapeHtml(textQtChip),
+        textJomChip: _escapeHtml(textJomChip),
         refreshDisabled: !env ? 'disabled' : '',
-        refreshLabel: !env ? '<span class="spin">↻</span> 检测中...' : '刷新检测',
+        refreshLabel: !env ? '<span class="spin">↻</span> 检测中...' : '刷新环境检测',
         projectName: _escapeHtml(projectName),
         selC89: _sel(cStandard, 'c89'),
         selC99: _sel(cStandard, 'c99'),
@@ -102,26 +120,48 @@ export function getHtml(data: TemplateData): string {
         'selCpp20': _sel(cppStandard, 'c++20'),
         'selCpp23': _sel(cppStandard, 'c++23'),
         scanExcludeDirs: _escapeHtml(scanExcludeDirs),
-        effectiveQmakeTarget: _escapeHtml(effectiveQmakeTarget),
-        defaultQmakeTarget: _escapeHtml(defaultQmakeTarget),
-        savedQmakeTarget: _escapeHtml(qmakeTarget),
+        effectiveTarget: _escapeHtml(effectiveTarget),
+        defaultTarget: _escapeHtml(defaultTarget),
+        savedTarget: _escapeHtml(target),
         dotVsBlockClass: effectiveDevShell ? 'dot-ok' : 'dot-warn',
+        vsBadgeClass: effectiveDevShell ? 'badge-ok' : 'badge-warn',
         devShellSource: _escapeHtml(devShellSource),
         effectiveDevShell: _escapeHtml(effectiveDevShell || '未配置'),
         vsDevShellPath: _escapeHtml(vsDevShellPath),
         dotQtBlockClass: effectiveQtPath ? 'dot-ok' : 'dot-warn',
+        qtBadgeClass: effectiveQtPath ? 'badge-ok' : 'badge-warn',
         qtSource: _escapeHtml(qtSource),
         effectiveQtPath: _escapeHtml(effectiveQtPath || '未配置'),
         qtPathValue: _escapeHtml(qtPath),
         designerPathValue: _escapeHtml(data.designerPath),
         qtSourcePathValue: _escapeHtml(data.qtSourcePath),
+        jomBadgeClass: jomOk ? 'badge-ok' : 'badge-warn',
+        jomSource: jomOk ? '自动检测' : '未找到',
+        effectiveJomPath: _escapeHtml(env?.jom || '未检测到'),
+        buildToolLabel: makeLabel,
         qtCandidateOptions: (env?.qtCandidates ?? [])
             .map((c: QtInfo) => `<option value="${_escapeHtml(c.path)}">Qt ${_escapeHtml(c.version)} (${_escapeHtml(c.compiler)})</option>`)
             .join(''),
+        vsCandidateOptions: (env?.vsCandidates ?? [])
+            .map((c: VSInfo) => `<option value="${_escapeHtml(c.devShellPath)}">VS ${_escapeHtml(c.version)} ${_escapeHtml(c.edition)}</option>`)
+            .join(''),
         manualProPath: _escapeHtml(data.manualProPath),
+        rccProjectPath: _escapeHtml(data.rccProjectPath),
         chkFileSyncPrompt: data.fileSyncPromptEnabled ? 'checked' : '',
         chkQmakeReminder: data.qmakeReminderEnabled ? 'checked' : '',
-        version: _escapeHtml(data.version)
+        version: _escapeHtml(data.version),
+        syncServerOptions: data.syncServers.length > 0
+            ? data.syncServers
+                .map(s => `<option value="${_escapeHtml(s.id)}" ${s.id === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
+                .join('')
+            : '<option value="">— 无服务器 —</option>',
+        syncServerData: JSON.stringify(data.syncServers).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/<\//g, '<\\/'),
+        syncIgnore: _escapeHtml(data.syncIgnore),
+        syncEnabledChecked: data.syncEnabled ? 'checked' : '',
+        syncRemotePath: _escapeHtml(data.syncRemotePath),
+        syncPendingCount: String(data.syncPendingCount),
+        syncLastTime: _escapeHtml(data.syncLastTime),
+        syncHasServer: data.syncServers.length > 0 ? 'true' : '',
     };
 
     let html = _loadTemplate();

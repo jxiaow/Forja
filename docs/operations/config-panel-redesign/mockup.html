@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Compilot 配置面板 - 优化版（基于现有面板）</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  color-scheme: dark;
+  --bg-sidebar: #252526;
+  --bg-card: rgba(255,255,255,0.03);
+  --bg-input: #3c3c3c;
+  --fg: #cccccc;
+  --fg-dim: #888888;
+  --fg-muted: #666666;
+  --border: rgba(255,255,255,0.06);
+  --border-input: rgba(255,255,255,0.1);
+  --accent: #007acc;
+  --accent-fg: #ffffff;
+  --green: #22C55E;
+  --yellow: #F59E0B;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+body {
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg-sidebar);
+  line-height: 1.5;
+  width: 320px;
+  height: 100vh;
+  margin: 0 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Section headers ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  margin: 0;
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.section-header:first-child { border-top: none; }
+.section-header:hover { background: rgba(255,255,255,0.03); }
+.section-arrow { font-size: 10px; margin-right: 6px; color: var(--fg-dim); transition: transform 0.15s; }
+.section-header.collapsed .section-arrow { transform: rotate(-90deg); }
+.section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--fg-dim); flex: 1; }
+.section-body { padding: 8px 10px; }
+.section-header.collapsed + .section-body { display: none; }
+
+/* ── Project hero ── */
+.project-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border-radius: 6px;
+}
+.project-hero-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Status chips ── */
+.status-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 12px; font-size: 12px; background: var(--bg-input); }
+.chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-ok { background: var(--green); }
+.dot-warn { background: var(--yellow); }
+.dot-detecting { background: #64748B; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ── Cards ── */
+.card { margin-bottom: 14px; background: var(--bg-card); border-radius: 6px; padding: 10px 12px; }
+.card:last-child { margin-bottom: 0; }
+.card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.card-title { font-size: 13px; font-weight: 600; }
+.card-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: auto; }
+.badge-ok { background: rgba(34,197,94,0.12); color: var(--green); }
+.badge-warn { background: rgba(245,158,11,0.12); color: var(--yellow); }
+
+/* ── Form ── */
+label { display: block; font-size: 11px; color: var(--fg-dim); margin-bottom: 3px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.3px; }
+input, select {
+  width: 100%;
+  background: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--border-input);
+  padding: 7px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus, select:focus { border-color: var(--accent); }
+input::placeholder { color: var(--fg-muted); }
+.field { margin-bottom: 10px; }
+.field:last-child { margin-bottom: 0; }
+.field-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.field-row .field { flex: 1; min-width: 0; margin-bottom: 0; }
+.input-row { display: flex; gap: 6px; }
+.input-row input { flex: 1; min-width: 0; }
+.hint { font-size: 11px; color: var(--fg-muted); margin-top: 3px; }
+
+/* ── Buttons ── */
+.btn { background: rgba(255,255,255,0.06); color: var(--fg); border: none; padding: 6px 14px; border-radius: 4px; font-size: 12px; cursor: pointer; font-family: var(--font); transition: background 0.15s; white-space: nowrap; }
+.btn:hover { background: rgba(255,255,255,0.1); }
+.btn-primary { background: var(--accent); color: var(--accent-fg); }
+.btn-primary:hover { background: #1a8ad4; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn-full { width: 100%; }
+
+/* ── Details ── */
+details { margin-top: 10px; }
+details summary { cursor: pointer; list-style: none; color: var(--fg-dim); font-size: 12px; display: flex; align-items: center; gap: 4px; }
+details summary::-webkit-details-marker { display: none; }
+details .arrow { display: inline-block; transition: transform 0.2s; font-size: 9px; }
+details[open] .arrow { transform: rotate(90deg); }
+.details-content { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+
+/* ── Path display ── */
+.path-display { font-size: 11px; color: var(--fg-dim); word-break: break-all; line-height: 1.4; padding: 2px 0 4px; }
+
+/* ── Toggle row ── */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.toggle-copy { flex: 1; min-width: 0; }
+.toggle-title { font-size: 13px; font-weight: 500; }
+input[type="checkbox"] { width: 16px; height: 16px; margin: 0; flex-shrink: 0; }
+
+/* ── Toggle switch ── */
+.toggle-switch { position: relative; width: 36px; height: 20px; cursor: pointer; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-slider { position: absolute; inset: 0; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 10px; transition: 0.2s; }
+.toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; bottom: 2px; background: var(--fg-dim); border-radius: 50%; transition: 0.2s; }
+.toggle-switch input:checked + .toggle-slider { background: rgba(34,197,94,0.2); border-color: var(--green); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); background: var(--green); }
+
+/* ── Tag input ── */
+.tag-input { display: flex; flex-wrap: wrap; gap: 4px; padding: 5px 8px; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 4px; min-height: 34px; align-items: center; }
+.tag-item { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 3px; font-size: 11px; background: rgba(255,255,255,0.08); color: var(--fg); cursor: pointer; }
+.tag-item::after { content: '×'; margin-left: 3px; opacity: 0.5; }
+.tag-item:hover { opacity: 0.7; }
+.tag-input input { flex: 1; min-width: 60px; border: none; background: none; padding: 2px 4px; font-size: 12px; color: var(--fg); outline: none; }
+
+/* ── Sync status ── */
+.sync-status-bar { padding: 8px 10px; background: var(--bg-input); border-radius: 4px; margin-top: 8px; font-size: 12px; }
+.sync-status-info { display: flex; align-items: center; gap: 6px; }
+.sync-status-meta { color: var(--fg-dim); font-size: 11px; margin-top: 3px; padding-left: 13px; }
+.sync-actions { display: flex; gap: 8px; margin-top: 10px; }
+.sync-actions .btn { flex: 1; }
+
+/* ── Footer ── */
+.footer { padding: 8px 12px; text-align: center; color: var(--fg-muted); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ Section: 项目 ═══════════ -->
+<div class="section-header" onclick="this.classList.toggle('collapsed')">
+  <span class="section-arrow">▼</span>
+  <span class="section-title">项目</span>
+</div>
+<div class="section-body">
+
+  <!-- 项目 -->
+  <div class="project-hero">
+    <span class="project-hero-name">XYAccessible</span>
+    <button class="btn btn-sm">切换</button>
+  </div>
+
+  <!-- 项目设置 -->
+  <div class="card">
+    <div class="field-row">
+      <div class="field">
+        <label>C 标准</label>
+        <select><option>C89</option><option>C99</option><option selected>C11</option><option>C17</option></select>
+      </div>
+      <div class="field">
+        <label>C++ 标准</label>
+        <select><option selected>C++11</option><option>C++14</option><option>C++17</option><option>C++20</option><option>C++23</option></select>
+      </div>
+    </div>
+    <div class="field">
+      <label>QMake TARGET</label>
+      <input value="XYAccessible" placeholder="留空使用 .pro 默认值" />
+    </div>
+    <div class="field">
+      <label>排除目录</label>
+      <div class="tag-input">
+        <input placeholder="输入目录名，回车添加" />
+      </div>
+      <div class="hint">仅影响 IntelliSense 扫描；已内置排除 build*, debug, release</div>
+    </div>
+    <button class="btn btn-full" style="margin-top:10px;">生成 IntelliSense 配置</button>
+
+    <details>
+      <summary><span class="arrow">▶</span> 更多设置</summary>
+      <div class="details-content">
+        <div class="field">
+          <label>手动指定 .pro 文件</label>
+          <div class="input-row">
+            <input placeholder="扫描不到时手动指定" />
+            <button class="btn btn-sm">浏览</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>RCC 项目路径</label>
+          <div class="input-row">
+            <input placeholder="留空自动扫描 XYRcc" />
+            <button class="btn btn-sm">浏览</button>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-copy">
+            <div class="toggle-title">文件同步提醒</div>
+            <div class="hint">新增/删除文件时提示同步 .pri/.pro</div>
+          </div>
+          <input type="checkbox" checked />
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-copy">
+            <div class="toggle-title">QMake 提醒</div>
+            <div class="hint">.pro/.pri 变更时提示重新运行 QMake</div>
+          </div>
+          <input type="checkbox" checked />
+        </div>
+      </div>
+    </details>
+  </div>
+
+</div>
+
+<!-- ═══════════ Section: 环境 ═══════════ -->
+<div class="section-header" onclick="this.classList.toggle('collapsed')">
+  <span class="section-arrow">▼</span>
+  <span class="section-title">环境</span>
+</div>
+<div class="section-body">
+
+  <!-- Visual Studio -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Visual Studio</span>
+      <span class="card-badge badge-ok">自动检测</span>
+    </div>
+    <div class="path-display">C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1</div>
+    <details>
+      <summary><span class="arrow">▶</span> 手动覆盖</summary>
+      <div class="details-content">
+        <div class="field">
+          <label>快速选择</label>
+          <select><option value="">-- 选择版本 --</option><option>VS 2022 Community</option></select>
+        </div>
+        <div class="field">
+          <label>DevShell 路径</label>
+          <div class="input-row">
+            <input placeholder="Launch-VsDevShell.ps1" />
+            <button class="btn btn-sm">浏览</button>
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <!-- Qt -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Qt</span>
+      <span class="card-badge badge-ok">手动配置</span>
+    </div>
+    <div class="path-display">C:\QtCompile\msvc2019-accessible</div>
+    <details>
+      <summary><span class="arrow">▶</span> 手动覆盖</summary>
+      <div class="details-content">
+        <div class="field">
+          <label>快速选择</label>
+          <select><option value="">-- 选择版本 --</option><option>Qt 5.15 (msvc2019)</option></select>
+        </div>
+        <div class="field">
+          <label>Qt 路径</label>
+          <div class="input-row">
+            <input value="C:\QtCompile\msvc2019-accessible" />
+            <button class="btn btn-sm">浏览</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Qt Designer 路径</label>
+          <div class="input-row">
+            <input placeholder="可选，designer.exe 路径" />
+            <button class="btn btn-sm">浏览</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Qt 源码路径</label>
+          <div class="input-row">
+            <input placeholder="可选，用于调试定位源码" />
+            <button class="btn btn-sm">浏览</button>
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <!-- jom -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">jom</span>
+      <span class="card-badge badge-ok">自动检测</span>
+    </div>
+    <div class="path-display">C:\Qt\Tools\QtCreator\bin\jom\jom.exe</div>
+  </div>
+
+  <button class="btn btn-full" style="margin-top: 4px;">刷新环境检测</button>
+</div>
+
+<!-- ═══════════ Section: 远程同步 (默认折叠) ═══════════ -->
+<div class="section-header collapsed" onclick="this.classList.toggle('collapsed')">
+  <span class="section-arrow">▼</span>
+  <span class="section-title">远程同步</span>
+</div>
+<div class="section-body">
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">远程同步</span>
+      <label class="toggle-switch">
+        <input type="checkbox" checked />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <!-- 配置 -->
+    <div class="field">
+      <label>服务器</label>
+      <div class="input-row">
+        <select><option>开发服务器 (dev@10.0.0.1)</option></select>
+        <button class="btn btn-sm">+</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>远程路径</label>
+      <input value="/home/dev/xy-accessible" placeholder="/home/user/project" />
+      <div class="hint">本项目同步到的远程目录</div>
+    </div>
+
+    <!-- 状态 -->
+    <div class="sync-status-bar">
+      <div class="sync-status-info">
+        <span class="chip-dot dot-ok"></span>
+        <span>dev@10.0.0.1:22 · SSH 密钥</span>
+      </div>
+      <div class="sync-status-meta">3 个文件待同步 · 上次: 14:30</div>
+    </div>
+
+    <!-- 操作 -->
+    <div class="sync-actions">
+      <button class="btn">测试连接</button>
+      <button class="btn">编辑服务器</button>
+    </div>
+
+    <!-- 服务器表单（编辑/添加时显示） -->
+    <details>
+      <summary><span class="arrow">▶</span> 服务器详情</summary>
+      <div class="details-content">
+        <div class="field">
+          <label>名称</label>
+          <input value="开发服务器" />
+        </div>
+        <div class="field">
+          <label>地址</label>
+          <input value="10.0.0.1" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>端口</label>
+            <input value="22" type="number" />
+          </div>
+          <div class="field">
+            <label>用户名</label>
+            <input value="dev" />
+          </div>
+        </div>
+        <div class="field">
+          <label>认证方式</label>
+          <select><option selected>SSH 密钥</option><option>密码</option></select>
+        </div>
+        <div class="field">
+          <label>私钥路径</label>
+          <input placeholder="留空使用 ~/.ssh/id_rsa" />
+        </div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button class="btn btn-primary" style="flex:1;">保存</button>
+          <button class="btn" style="color:#EF4444;">删除</button>
+          <button class="btn">取消</button>
+        </div>
+      </div>
+    </details>
+
+    <!-- 忽略列表 -->
+    <details style="margin-top:8px;">
+      <summary><span class="arrow">▶</span> 忽略列表</summary>
+      <div class="details-content">
+        <div class="tag-input">
+          <span class="tag-item">.git</span>
+          <span class="tag-item">node_modules</span>
+          <span class="tag-item">out</span>
+          <span class="tag-item">build</span>
+          <span class="tag-item">debug</span>
+          <span class="tag-item">release</span>
+          <input placeholder="输入目录名，回车添加" />
+        </div>
+      </div>
+    </details>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">Compilot v0.7.18</div>
+
+</body>
+</html>

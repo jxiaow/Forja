@@ -1,72 +1,118 @@
 {
-  "name": "qt-pilot",
-  "displayName": "Qt Pilot",
-  "publisher": "qtpilot",
-  "description": "Build, run, debug, and configure qmake-based Qt/C++ projects in VSCode",
-  "version": "0.3.11",
+  "name": "compilot",
+  "displayName": "Compilot",
+  "publisher": "compilot",
+  "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
+  "version": "0.7.38",
+  "icon": "media/icon.png",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.85.0",
+    "node": ">=18.0.0"
   },
   "categories": [
     "Other"
   ],
   "activationEvents": [
     "workspaceContains:**/*.pro",
-    "onView:qtPilot.configView",
-    "onCommand:qtPilot.selectProject",
-    "onCommand:qtPilot.showActions",
-    "onCommand:qtPilot.qmake",
-    "onCommand:qtPilot.build",
-    "onCommand:qtPilot.clean",
-    "onCommand:qtPilot.run",
-    "onCommand:qtPilot.stop",
-    "onCommand:qtPilot.debug",
-    "onCommand:qtPilot.openWithQtDesigner"
+    "workspaceContains:**/*.sln",
+    "workspaceContains:**/Makefile"
   ],
   "main": "./out/extension.js",
+  "bin": {
+    "compilot": "./out/cli/index.js"
+  },
   "contributes": {
     "commands": [
       {
-        "command": "qtPilot.selectProject",
-        "title": "Qt Pilot: 选择项目"
+        "command": "compilot.config.openPage",
+        "title": "Compilot: 打开配置页"
       },
       {
-        "command": "qtPilot.showActions",
-        "title": "Qt Pilot: 显示操作菜单"
+        "command": "compilot.showActions",
+        "title": "Compilot: 显示操作菜单"
       },
       {
-        "command": "qtPilot.qmake",
-        "title": "Qt Pilot: QMake"
+        "command": "compilot.qt.selectProject",
+        "title": "Compilot Qt: 选择项目"
       },
       {
-        "command": "qtPilot.build",
-        "title": "Qt Pilot: Build"
+        "command": "compilot.qt.showActions",
+        "title": "Compilot Qt: 显示操作菜单"
       },
       {
-        "command": "qtPilot.clean",
-        "title": "Qt Pilot: Clean"
+        "command": "compilot.qt.qmake",
+        "title": "Compilot Qt: QMake"
       },
       {
-        "command": "qtPilot.run",
-        "title": "Qt Pilot: Run"
+        "command": "compilot.qt.build",
+        "title": "Compilot Qt: Build"
       },
       {
-        "command": "qtPilot.stop",
-        "title": "Qt Pilot: 停止"
+        "command": "compilot.qt.clean",
+        "title": "Compilot Qt: Clean"
       },
       {
-        "command": "qtPilot.debug",
-        "title": "Qt Pilot: 调试"
+        "command": "compilot.qt.run",
+        "title": "Compilot Qt: Run"
       },
       {
-        "command": "qtPilot.openWithQtDesigner",
-        "title": "Qt Pilot: 用 Qt Designer 打开"
+        "command": "compilot.qt.stop",
+        "title": "Compilot Qt: 停止"
+      },
+      {
+        "command": "compilot.qt.debug",
+        "title": "Compilot Qt: 调试"
+      },
+      {
+        "command": "compilot.qt.openWithQtDesigner",
+        "title": "Compilot Qt: 用 Qt Designer 打开"
+      },
+      {
+        "command": "compilot.qt.syncTestConnection",
+        "title": "Compilot Qt: 测试远程连接"
+      },
+      {
+        "command": "compilot.qt.syncChangedFiles",
+        "title": "Compilot Qt: 同步变更文件到远程"
+      },
+      {
+        "command": "compilot.qt.rcc",
+        "title": "Compilot Qt: RCC 编译"
+      },
+      {
+        "command": "compilot.qt.runCustomCommand",
+        "title": "Compilot Qt: 执行自定义命令"
+      },
+      {
+        "command": "compilot.sdk.build",
+        "title": "Compilot SDK: Build",
+        "enablement": "compilot.sdk.activated"
+      },
+      {
+        "command": "compilot.sdk.rebuild",
+        "title": "Compilot SDK: Rebuild",
+        "enablement": "compilot.sdk.activated"
+      },
+      {
+        "command": "compilot.sdk.clean",
+        "title": "Compilot SDK: Clean",
+        "enablement": "compilot.sdk.activated"
+      },
+      {
+        "command": "compilot.sdk.selectProject",
+        "title": "Compilot SDK: Select Project",
+        "enablement": "compilot.sdk.activated"
+      },
+      {
+        "command": "compilot.sdk.showActions",
+        "title": "Compilot SDK: Show Actions",
+        "enablement": "compilot.sdk.activated"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "command": "qtPilot.openWithQtDesigner",
+          "command": "compilot.qt.openWithQtDesigner",
           "when": "resourceExtname == .ui",
           "group": "navigation@100"
         }
@@ -75,150 +121,43 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "qt-pilot",
-          "title": "Qt Pilot",
+          "id": "compilot",
+          "title": "Compilot",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "qt-pilot": [
+      "compilot": [
         {
-          "type": "webview",
-          "id": "qtPilot.configView",
-          "name": "配置"
+          "id": "compilot.configView",
+          "name": "配置",
+          "when": "workspaceFolderCount > 0"
         }
       ]
-    },
-    "configuration": {
-      "title": "Qt Pilot",
-      "properties": {
-        "qtPilot.qtPath": {
-          "type": "string",
-          "default": "",
-          "description": "Qt 安装路径（手动指定，留空则自动检测）"
-        },
-        "qtPilot.designerPath": {
-          "type": "string",
-          "default": "",
-          "description": "Qt Designer 可执行文件路径（可选，优先于自动推断）"
-        },
-        "qtPilot.qtSourcePath": {
-          "type": "string",
-          "default": "",
-          "description": "Qt 源码根目录（可选，用于调试时定位 Qt 源码）"
-        },
-        "qtPilot.vsDevShellPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to Launch-VsDevShell.ps1 (VsDevCmd.bat will be used automatically)"
-        },
-        "qtPilot.selectedProject": {
-          "type": "object",
-          "default": {},
-          "additionalProperties": false,
-          "required": [
-            "root",
-            "relative"
-          ],
-          "properties": {
-            "root": {
-              "type": "string"
-            },
-            "relative": {
-              "type": "string"
-            }
-          },
-          "description": "当前选中的 .pro 文件记录（扩展内部维护）"
-        },
-        "qtPilot.arch": {
-          "type": "string",
-          "default": "x86",
-          "enum": [
-            "x86",
-            "x64"
-          ],
-          "description": "目标架构"
-        },
-        "qtPilot.mode": {
-          "type": "string",
-          "default": "debug",
-          "enum": [
-            "debug",
-            "release"
-          ],
-          "description": "构建模式"
-        },
-        "qtPilot.scanExcludeDirs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "生成 IntelliSense 配置时额外排除的目录名（已内置排除 build*/debug/release）"
-        },
-        "qtPilot.qmakeTarget": {
-          "type": "string",
-          "default": "",
-          "description": "QMake 时指定的 TARGET 名称（留空则使用 .pro 文件默认值）"
-        },
-        "qtPilot.cStandard": {
-          "type": "string",
-          "default": "c11",
-          "enum": [
-            "c89",
-            "c99",
-            "c11",
-            "c17"
-          ],
-          "description": "IntelliSense C 标准版本"
-        },
-        "qtPilot.cppStandard": {
-          "type": "string",
-          "default": "c++11",
-          "enum": [
-            "c++11",
-            "c++14",
-            "c++17",
-            "c++20",
-            "c++23"
-          ],
-          "description": "IntelliSense C++ 标准版本"
-        },
-        "qtPilot.proPath": {
-          "type": "string",
-          "default": "",
-          "description": "（已废弃）请使用 qtPilot.selectedProject"
-        },
-        "qtPilot.manualProPath": {
-          "type": "string",
-          "default": "",
-          "description": "手动指定 .pro 文件绝对路径（扫描不到时使用）"
-        },
-        "qtPilot.fileSyncPromptEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "新增/删除 .cpp/.h/.ui 文件时是否提示同步 .pri/.pro"
-        },
-        "qtPilot.qmakeReminderEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": ".pro/.pri 文件变更后是否提示重新运行 QMake"
-        }
-      }
     }
   },
   "scripts": {
     "copy-html": "powershell -Command \"Copy-Item -Path src/ui/configPanel/configPanel.html -Destination out/ui/configPanel/ -Force\"",
     "compile": "tsc -p ./ && npm run copy-html",
     "watch": "tsc -watch -p ./",
-    "package": "npm run compile && vsce package --allow-missing-repository",
-    "vsix": "vsce package --allow-missing-repository"
+    "test": "npm run compile && node --test --test-reporter=spec out/test",
+    "lint": "eslint src/",
+    "build:cli": "npm run compile && node scripts/build-cli.js",
+    "package": "npm run compile && node scripts/package-vs.js",
+    "package:cli": "npm run build:cli",
+    "package:all": "node scripts/bump-version.js && npm run package && npm run package:cli",
+    "vsix": "vsce package --allow-missing-repository",
+    "harness:check": "node harness/core/automation/check-harness.js",
+    "harness:ops:init": "node harness/core/operations/create-operation-docs.js"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.3.0",
-    "@vscode/vsce": "^2.22.0"
+    "@eslint/js": "9.39.4",
+    "@types/node": "20.19.37",
+    "@types/vscode": "1.85.0",
+    "@vscode/vsce": "2.32.0",
+    "eslint": "9.39.4",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.59.3"
   }
 }

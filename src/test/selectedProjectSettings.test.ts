@@ -1,41 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as fs from 'fs';
-import * as path from 'path';
-import { decodeSelectedProject, encodeSelectedProject } from '../core/selectedProject';
+import { decodePinnedProject, encodePinnedProject } from '../qt/project/pinnedProject';
 
-test('selectedProject setting is declared as an object for readable workspace JSON', () => {
-    const packageJsonPath = path.join(process.cwd(), 'package.json');
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
-        contributes?: {
-            configuration?: {
-                properties?: Record<string, unknown>;
-            };
-        };
-    };
+test('pinnedProject setting is managed in .compilot/settings.json (not in package.json contributes)', () => {
+    // Configuration is now self-managed in .compilot/settings.json
+    // This test verifies the codec still works correctly with the expected format
+    const encoded = encodePinnedProject('C:/workspace', 'app/demo.pro');
+    assert.deepEqual(encoded, { root: 'C:/workspace', relative: 'app/demo.pro' });
 
-    const properties = packageJson.contributes?.configuration?.properties as Record<string, any>;
-    const selectedProject = properties['qtPilot.selectedProject'];
-
-    assert.equal(selectedProject.type, 'object');
-    assert.deepEqual(selectedProject.default, {});
-    assert.equal(selectedProject.additionalProperties, false);
-    assert.deepEqual(selectedProject.required, ['root', 'relative']);
+    const decoded = decodePinnedProject(encoded);
+    assert.deepEqual(decoded, { root: 'C:/workspace', relative: 'app/demo.pro' });
 });
 
-test('selectedProject codec supports object config values and legacy string values', () => {
+test('pinnedProject codec supports object config values and legacy string values', () => {
     assert.deepEqual(
-        decodeSelectedProject({ root: 'C:/workspace', relative: 'app/demo.pro' }),
+        decodePinnedProject({ root: 'C:/workspace', relative: 'app/demo.pro' }),
         { root: 'C:/workspace', relative: 'app/demo.pro' }
     );
 
     assert.deepEqual(
-        decodeSelectedProject('{"root":"C:/workspace","relative":"app/demo.pro"}'),
+        decodePinnedProject('{"root":"C:/workspace","relative":"app/demo.pro"}'),
         { root: 'C:/workspace', relative: 'app/demo.pro' }
     );
 
     assert.equal(
-        JSON.stringify(encodeSelectedProject('C:/workspace', 'app/demo.pro')),
+        JSON.stringify(encodePinnedProject('C:/workspace', 'app/demo.pro')),
         JSON.stringify({ root: 'C:/workspace', relative: 'app/demo.pro' })
     );
 });

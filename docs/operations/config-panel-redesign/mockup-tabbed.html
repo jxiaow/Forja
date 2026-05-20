@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Compilot 配置面板 - 标签页方案</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  color-scheme: dark;
+  --bg-sidebar: #252526;
+  --bg-editor: #1e1e1e;
+  --bg-tab-bar: #2d2d2d;
+  --bg-tab-active: #1e1e1e;
+  --bg-tab-inactive: #2d2d2d;
+  --bg-card: rgba(255,255,255,0.03);
+  --bg-input: #3c3c3c;
+  --fg: #cccccc;
+  --fg-dim: #888888;
+  --fg-muted: #666666;
+  --border: rgba(255,255,255,0.06);
+  --border-input: rgba(255,255,255,0.1);
+  --accent: #007acc;
+  --accent-fg: #ffffff;
+  --green: #22C55E;
+  --yellow: #F59E0B;
+  --red: #EF4444;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+body {
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--fg);
+  background: #171717;
+  line-height: 1.5;
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ══════════ 左侧：侧边栏导航 ══════════ */
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+.sidebar-header {
+  padding: 12px 14px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--fg-dim);
+  border-bottom: 1px solid var(--border);
+}
+.nav-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-left: 3px solid transparent;
+}
+.nav-item:hover { background: rgba(255,255,255,0.04); }
+.nav-item.active {
+  background: rgba(255,255,255,0.06);
+  border-left-color: var(--accent);
+}
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  opacity: 0.7;
+}
+.nav-item.active .nav-icon { opacity: 1; }
+.nav-label { font-size: 13px; flex: 1; }
+.nav-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(34,197,94,0.12);
+  color: var(--green);
+}
+.nav-badge.warn {
+  background: rgba(245,158,11,0.12);
+  color: var(--yellow);
+}
+.sidebar-footer {
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  border-top: 1px solid var(--border);
+}
+
+/* ══════════ 右侧：编辑器区域 ══════════ */
+.editor-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tab-bar {
+  display: flex;
+  background: var(--bg-tab-bar);
+  border-bottom: 1px solid var(--border);
+  min-height: 36px;
+  overflow-x: auto;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 36px;
+  font-size: 12px;
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+  background: var(--bg-tab-inactive);
+  color: var(--fg-dim);
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+.tab:hover { background: rgba(255,255,255,0.04); }
+.tab.active {
+  background: var(--bg-tab-active);
+  color: var(--fg);
+  border-bottom: 1px solid var(--bg-tab-active);
+  margin-bottom: -1px;
+}
+.tab-close {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.tab:hover .tab-close { opacity: 0.6; }
+.tab-close:hover { opacity: 1; background: rgba(255,255,255,0.1); }
+
+/* ══════════ 配置页面内容 ══════════ */
+.page-container {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-editor);
+  padding: 24px 32px;
+}
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.page-desc {
+  font-size: 13px;
+  color: var(--fg-dim);
+  margin-bottom: 24px;
+}
+
+/* ── 配置区块 ── */
+.config-section {
+  margin-bottom: 28px;
+}
+.config-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.config-group {
+  margin-bottom: 20px;
+}
+.config-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.config-item:last-child { border-bottom: none; }
+.config-item-info { flex: 1; min-width: 0; }
+.config-item-label {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.config-item-desc {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+.config-item-control {
+  flex-shrink: 0;
+  min-width: 200px;
+}
+.config-item-control input,
+.config-item-control select {
+  width: 100%;
+  background: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--border-input);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+}
+.config-item-control input:focus,
+.config-item-control select:focus {
+  border-color: var(--accent);
+}
+.config-item-control .input-row {
+  display: flex;
+  gap: 6px;
+}
+.config-item-control .input-row input { flex: 1; min-width: 0; }
+
+/* ── 环境卡片（宽版） ── */
+.env-card {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+.env-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.env-card-title { font-size: 14px; font-weight: 600; }
+.env-card-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+.env-card-path {
+  font-size: 12px;
+  color: var(--fg-dim);
+  word-break: break-all;
+  padding: 4px 0;
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+}
+.env-card-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+/* ── 按钮组 ── */
+.btn-group {
+  display: inline-flex;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border-input);
+}
+.btn-group-item {
+  padding: 5px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--fg-dim);
+  border: none;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+.btn-group-item:not(:last-child) { border-right: 1px solid var(--border-input); }
+.btn-group-item.active {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.btn-group-item:hover:not(.active) { background: rgba(255,255,255,0.05); }
+
+/* ── 通用按钮 ── */
+.btn {
+  background: rgba(255,255,255,0.06);
+  color: var(--fg);
+  border: none;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.btn:hover { background: rgba(255,255,255,0.1); }
+.btn-primary { background: var(--accent); color: var(--accent-fg); }
+.btn-primary:hover { background: #1a8ad4; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+
+/* ── 状态点 ── */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-ok { background: var(--green); }
+.dot-warn { background: var(--yellow); }
+
+/* ── Toggle switch ── */
+.toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-slider { position: absolute; inset: 0; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 10px; transition: 0.2s; }
+.toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; bottom: 2px; background: var(--fg-dim); border-radius: 50%; transition: 0.2s; }
+.toggle-switch input:checked + .toggle-slider { background: rgba(34,197,94,0.2); border-color: var(--green); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); background: var(--green); }
+
+/* ── 页面隐藏 ── */
+.page { display: none; }
+.page.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ══════════ 侧边栏 ══════════ -->
+<div class="sidebar">
+  <div class="sidebar-header">Compilot: 配置</div>
+  <div class="nav-list">
+    <div class="nav-item active" onclick="openPage('project')">
+      <span class="nav-icon">📁</span>
+      <span class="nav-label">项目</span>
+    </div>
+    <div class="nav-item" onclick="openPage('env')">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">环境</span>
+      <span class="nav-badge">就绪</span>
+    </div>
+    <div class="nav-item" onclick="openPage('sync')">
+      <span class="nav-icon">☁️</span>
+      <span class="nav-label">远程同步</span>
+      <span class="nav-badge">3 待同步</span>
+    </div>
+    <div class="nav-item" onclick="openPage('advanced')">
+      <span class="nav-icon">🔧</span>
+      <span class="nav-label">高级</span>
+    </div>
+  </div>
+  <div class="sidebar-footer">Compilot v0.7.18</div>
+</div>
+
+<!-- ══════════ 编辑器区域 ══════════ -->
+<div class="editor-area">
+  <!-- 标签栏 -->
+  <div class="tab-bar" id="tabBar">
+    <div class="tab active" data-page="project" onclick="switchTab('project')">
+      <span>项目配置</span>
+      <span class="tab-close" onclick="event.stopPropagation(); closeTab('project')">×</span>
+    </div>
+  </div>
+
+  <!-- 页面容器 -->
+  <div class="page-container" id="pageContainer">
+
+    <!-- ════ 项目配置页 ════ -->
+    <div class="page active" id="page-project">
+      <div class="page-title">项目配置</div>
+      <div class="page-desc">管理当前项目的构建参数和 IntelliSense 设置</div>
+
+      <div class="config-section">
+        <div class="config-section-title">当前项目</div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">活动项目</div>
+            <div class="config-item-desc">选择当前工作区中要构建的 .pro 项目</div>
+          </div>
+          <div class="config-item-control">
+            <div class="input-row">
+              <input value="XYAccessible" readonly style="opacity:0.8;" />
+              <button class="btn btn-sm">切换</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-title">构建参数</div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">构建模式</div>
+            <div class="config-item-desc">Debug 包含调试符号，Release 启用优化</div>
+          </div>
+          <div class="config-item-control">
+            <div class="btn-group">
+              <button class="btn-group-item active">debug</button>
+              <button class="btn-group-item">release</button>
+            </div>
+          </div>
+        </div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">目标架构</div>
+            <div class="config-item-desc">编译输出的目标平台架构</div>
+          </div>
+          <div class="config-item-control">
+            <div class="btn-group">
+              <button class="btn-group-item active">x86</button>
+              <button class="btn-group-item">x64</button>
+            </div>
+          </div>
+        </div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">QMake TARGET</div>
+            <div class="config-item-desc">覆盖 .pro 文件中的 TARGET 值，留空使用默认</div>
+          </div>
+          <div class="config-item-control">
+            <input value="XYAccessible" placeholder="留空使用 .pro 默认值" />
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-title">语言标准</div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">C 标准</div>
+            <div class="config-item-desc">用于 IntelliSense 解析的 C 语言标准版本</div>
+          </div>
+          <div class="config-item-control">
+            <select>
+              <option>C89</option><option>C99</option>
+              <option selected>C11</option><option>C17</option>
+            </select>
+          </div>
+        </div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">C++ 标准</div>
+            <div class="config-item-desc">用于 IntelliSense 解析的 C++ 语言标准版本</div>
+          </div>
+          <div class="config-item-control">
+            <select>
+              <option selected>C++11</option><option>C++14</option>
+              <option>C++17</option><option>C++20</option><option>C++23</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="btn btn-primary">生成 IntelliSense 配置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ 环境配置页 ════ -->
+    <div class="page" id="page-env">
+      <div class="page-title">环境配置</div>
+      <div class="page-desc">管理构建工具链：Visual Studio、Qt、jom</div>
+
+      <div class="config-section">
+        <div class="config-section-title">Visual Studio</div>
+        <div class="env-card">
+          <div class="env-card-header">
+            <span class="status-dot dot-ok"></span>
+            <span class="env-card-title">VS 2022 Community</span>
+            <span class="env-card-badge badge-ok">自动检测</span>
+          </div>
+          <div class="env-card-path">C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1</div>
+          <div class="env-card-actions">
+            <button class="btn btn-sm">手动覆盖</button>
+          </div>
+        </div>
+        <div class="config-item" style="display:none;" id="vs-override">
+          <div class="config-item-info">
+            <div class="config-item-label">快速选择</div>
+          </div>
+          <div class="config-item-control">
+            <select>
+              <option value="">-- 选择版本 --</option>
+              <option>VS 2022 Community</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-title">Qt</div>
+        <div class="env-card">
+          <div class="env-card-header">
+            <span class="status-dot dot-ok"></span>
+            <span class="env-card-title">Qt 5.15 (msvc2019)</span>
+            <span class="env-card-badge badge-ok">手动配置</span>
+          </div>
+          <div class="env-card-path">C:\QtCompile\msvc2019-accessible</div>
+          <div class="env-card-actions">
+            <button class="btn btn-sm">修改路径</button>
+            <button class="btn btn-sm">浏览</button>
+          </div>
+        </div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">Qt Designer 路径</div>
+            <div class="config-item-desc">可选，用于快速打开 .ui 文件</div>
+          </div>
+          <div class="config-item-control">
+            <div class="input-row">
+              <input placeholder="designer.exe 路径" />
+              <button class="btn btn-sm">浏览</button>
+            </div>
+          </div>
+        </div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">Qt 源码路径</div>
+            <div class="config-item-desc">可选，用于调试时定位 Qt 源码</div>
+          </div>
+          <div class="config-item-control">
+            <div class="input-row">
+              <input placeholder="Qt 源码目录" />
+              <button class="btn btn-sm">浏览</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-title">构建工具</div>
+        <div class="env-card">
+          <div class="env-card-header">
+            <span class="status-dot dot-ok"></span>
+            <span class="env-card-title">jom</span>
+            <span class="env-card-badge badge-ok">自动检测</span>
+          </div>
+          <div class="env-card-path">C:\Qt\Tools\QtCreator\bin\jom\jom.exe</div>
+        </div>
+      </div>
+
+      <div style="margin-top:8px;">
+        <button class="btn">刷新环境检测</button>
+      </div>
+    </div>
+
+    <!-- ════ 远程同步页 ════ -->
+    <div class="page" id="page-sync">
+      <div class="page-title">远程同步</div>
+      <div class="page-desc">将本地变更文件同步到远程开发服务器</div>
+
+      <div class="config-section">
+        <div class="config-section-title">同步设置</div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">启用远程同步</div>
+            <div class="config-item-desc">开启后，文件保存时自动同步到远程服务器</div>
+          </div>
+          <div class="config-item-control" style="min-width:auto;">
+            <label class="toggle-switch">
+              <input type="checkbox" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">服务器</div>
+            <div class="config-item-desc">选择同步目标服务器</div>
+          </div>
+          <div class="config-item-control">
+            <div class="input-row">
+              <select><option>开发服务器 (dev@10.0.0.1)</option></select>
+              <button class="btn btn-sm">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">远程路径</div>
+            <div class="config-item-desc">项目在远程服务器上的目录路径</div>
+          </div>
+          <div class="config-item-control">
+            <input value="/home/dev/xy-accessible" placeholder="/home/user/project" />
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-title">连接状态</div>
+        <div class="env-card">
+          <div class="env-card-header">
+            <span class="status-dot dot-ok"></span>
+            <span class="env-card-title">dev@10.0.0.1:22</span>
+            <span class="env-card-badge badge-ok">SSH 密钥</span>
+          </div>
+          <div class="env-card-path" style="font-family:var(--font);">3 个文件待同步 · 上次同步: 14:30</div>
+          <div class="env-card-actions">
+            <button class="btn btn-sm">测试连接</button>
+            <button class="btn btn-sm">编辑服务器</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-title">忽略列表</div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">忽略目录</div>
+            <div class="config-item-desc">同步时跳过这些目录</div>
+          </div>
+          <div class="config-item-control" style="min-width:280px;">
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+              <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:3px;font-size:11px;background:rgba(255,255,255,0.08);cursor:pointer;">.git ×</span>
+              <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:3px;font-size:11px;background:rgba(255,255,255,0.08);cursor:pointer;">node_modules ×</span>
+              <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:3px;font-size:11px;background:rgba(255,255,255,0.08);cursor:pointer;">build ×</span>
+              <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:3px;font-size:11px;background:rgba(255,255,255,0.08);cursor:pointer;">out ×</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ 高级配置页 ════ -->
+    <div class="page" id="page-advanced">
+      <div class="page-title">高级配置</div>
+      <div class="page-desc">低频使用的配置项</div>
+
+      <div class="config-section">
+        <div class="config-section-title">项目路径</div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">手动指定 .pro 文件</div>
+            <div class="config-item-desc">自动扫描找不到时，手动指定项目文件路径</div>
+          </div>
+          <div class="config-item-control">
+            <div class="input-row">
+              <input placeholder="扫描不到时手动指定" />
+              <button class="btn btn-sm">浏览</button>
+            </div>
+          </div>
+        </div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">RCC 项目路径</div>
+            <div class="config-item-desc">资源编译器项目路径，留空自动扫描</div>
+          </div>
+          <div class="config-item-control">
+            <div class="input-row">
+              <input placeholder="留空自动扫描 XYRcc" />
+              <button class="btn btn-sm">浏览</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-title">扫描设置</div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">排除目录</div>
+            <div class="config-item-desc">IntelliSense 扫描时跳过这些目录；已内置排除 build*, debug, release</div>
+          </div>
+          <div class="config-item-control" style="min-width:280px;">
+            <div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px;background:var(--bg-input);border-radius:4px;border:1px solid var(--border-input);min-height:34px;align-items:center;">
+              <input style="flex:1;min-width:80px;border:none;background:none;padding:2px 4px;font-size:12px;color:var(--fg);outline:none;" placeholder="输入目录名，回车添加" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-title">提醒</div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">文件同步提醒</div>
+            <div class="config-item-desc">新增/删除文件时提示同步 .pri/.pro</div>
+          </div>
+          <div class="config-item-control" style="min-width:auto;">
+            <input type="checkbox" checked style="width:16px;height:16px;" />
+          </div>
+        </div>
+        <div class="config-item">
+          <div class="config-item-info">
+            <div class="config-item-label">QMake 提醒</div>
+            <div class="config-item-desc">.pro/.pri 变更时提示重新运行 QMake</div>
+          </div>
+          <div class="config-item-control" style="min-width:auto;">
+            <input type="checkbox" checked style="width:16px;height:16px;" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── 标签页管理 ──
+const openTabs = new Set(['project']);
+let activeTab = 'project';
+
+const tabNames = {
+  project: '项目配置',
+  env: '环境配置',
+  sync: '远程同步',
+  advanced: '高级配置'
+};
+
+function openPage(name) {
+  // 更新侧边栏高亮
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+
+  // 添加标签（如果不存在）
+  if (!openTabs.has(name)) {
+    openTabs.add(name);
+    renderTabs();
+  }
+
+  // 切换到该标签
+  switchTab(name);
+}
+
+function switchTab(name) {
+  activeTab = name;
+
+  // 更新标签栏高亮
+  document.querySelectorAll('.tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === name);
+  });
+
+  // 更新页面显示
+  document.querySelectorAll('.page').forEach(el => {
+    el.classList.toggle('active', el.id === 'page-' + name);
+  });
+
+  // 更新侧边栏高亮
+  document.querySelectorAll('.nav-item').forEach(el => {
+    const onclick = el.getAttribute('onclick');
+    const match = onclick && onclick.match(/openPage\('(\w+)'\)/);
+    if (match) {
+      el.classList.toggle('active', match[1] === name);
+    }
+  });
+}
+
+function closeTab(name) {
+  openTabs.delete(name);
+  if (activeTab === name) {
+    // 切换到最后一个打开的标签
+    const remaining = Array.from(openTabs);
+    if (remaining.length > 0) {
+      switchTab(remaining[remaining.length - 1]);
+    }
+  }
+  renderTabs();
+}
+
+function renderTabs() {
+  const bar = document.getElementById('tabBar');
+  bar.innerHTML = '';
+  openTabs.forEach(name => {
+    const tab = document.createElement('div');
+    tab.className = 'tab' + (name === activeTab ? ' active' : '');
+    tab.dataset.page = name;
+    tab.onclick = () => switchTab(name);
+    tab.innerHTML = `
+      <span>${tabNames[name]}</span>
+      <span class="tab-close" onclick="event.stopPropagation(); closeTab('${name}')">×</span>
+    `;
+    bar.appendChild(tab);
+  });
+}
+
+// ── 按钮组交互 ──
+document.querySelectorAll('.btn-group').forEach(group => {
+  group.querySelectorAll('.btn-group-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      group.querySelectorAll('.btn-group-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+});
+
+// ── Toggle switch ──
+/* already handled by CSS + checkbox */
+</script>
+
+</body>
+</html>

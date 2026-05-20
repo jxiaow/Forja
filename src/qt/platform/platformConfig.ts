@@ -1,0 +1,25 @@
+import { BuildConfig } from './shellPlan';
+
+export interface PlatformConfig {
+    shellExecutable: string | null;
+    shellArgs: string[] | null;
+    commandJoiner: string;
+
+    /** qmake 二进制文件名（如 'qmake.exe' 或 'qmake'） */
+    qmakeBin: string;
+
+    initCommands(cfg: BuildConfig): string[];
+    cdCommand(dir: string): string;
+    killCommand(exeName: string): string;
+    stopCommands(exeName: string): string[];
+
+    qmakeSpec: string;
+    qmakeExtraArgs(cfg: BuildConfig): string;
+    qmakeMatcher: string | string[];
+
+    buildCommand: string;
+    buildMatcher: string | string[];
+
+    cleanCommand: string;
+    cleanMatcher: string | string[];
+}

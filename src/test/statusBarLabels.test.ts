@@ -17,16 +17,15 @@ test('non-windows mode label uses full mode text without architecture', () => {
 });
 
 test('status bar uses full display label instead of short label text', () => {
-    const statusBarPath = path.join(process.cwd(), 'src', 'ui', 'statusBar.ts');
+    const statusBarPath = path.join(process.cwd(), 'src', 'ui', 'unifiedStatusBar.ts');
     const source = fs.readFileSync(statusBarPath, 'utf8');
 
-    assert.doesNotMatch(source, /_modeShortLabel/);
-    assert.match(source, /_modeDisplayLabel/);
+    assert.match(source, /getModeDisplayLabel/);
     assert.match(source, /getEffectiveProjectName/);
 });
 
 test('project selection and logs use effective project display helpers', () => {
-    const projectManagerPath = path.join(process.cwd(), 'src', 'project', 'projectManager.ts');
+    const projectManagerPath = path.join(process.cwd(), 'src', 'qt', 'project', 'projectManager.ts');
     const projectManagerSource = fs.readFileSync(projectManagerPath, 'utf8');
     const configPanelPath = path.join(process.cwd(), 'src', 'ui', 'configPanel', 'index.ts');
     const configPanelSource = fs.readFileSync(configPanelPath, 'utf8');

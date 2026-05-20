@@ -1,15 +1,41 @@
 import * as vscode from 'vscode';
-import { detectEnv } from '../../env/envDetector';
-import { generateCppProperties, updateCppPropertiesStandard } from '../../build/configGenerator';
-import { getState, setState } from '../../core/stateManager';
-import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget } from '../../core/configService';
+import { detectEnv } from '../../qt/env/envDetector';
+import { generateCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
+import { getState, setState } from '../../core/qtState';
+import { updateConfig, getTarget, getWorkspaceRoot } from '../../qt/services/configService';
 import { createLogger } from '../../core/logger';
-import { getEffectiveProjectName } from '../../core/projectDisplay';
+import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig } from '../../core/serverStore';
+import { executeTestConnection, refreshSyncStatusBar } from '../../qt/sync/syncWatcher';
+import { inferVsInstall } from '../../core/settingsIO';
 
 const logger = createLogger('ConfigPanel');
 
+/** Webview 面板消息类型 */
+interface PanelMessage {
+    command: string;
+    value?: unknown;
+    targetId?: string;
+    isDir?: boolean;
+    dirs?: string[];
+    cStandard?: string;
+    cppStandard?: string;
+    id?: string;
+    remotePath?: string;
+    server?: {
+        id?: string;
+        name?: string;
+        host?: string;
+        port?: number;
+        username?: string;
+        authMode?: string;
+        privateKeyPath?: string;
+        password?: string;
+    };
+}
+
 export async function handleMessage(
-    msg: any,
+    msg: PanelMessage,
     webview: vscode.Webview,
     pushEnvUpdate: () => void,
     updateHtml: () => void
@@ -17,45 +43,63 @@ export async function handleMessage(
     logger.info(`收到消息: ${msg.command}`);
 
     switch (msg.command) {
+        case 'saveMode': {
+            const modeVal = String(msg.value || '');
+            if (modeVal !== '' && modeVal !== 'debug' && modeVal !== 'release') {
+                logger.warn(`无效的构建模式值: "${modeVal}"`);
+                break;
+            }
+            logger.info(`保存构建模式: "${modeVal}"`);
+            await updateConfig('mode', modeVal as '' | 'debug' | 'release');
+            break;
+        }
+        case 'saveArch': {
+            const archVal = String(msg.value || '');
+            if (archVal !== '' && archVal !== 'x86' && archVal !== 'x64') {
+                logger.warn(`无效的目标架构值: "${archVal}"`);
+                break;
+            }
+            logger.info(`保存目标架构: "${archVal}"`);
+            await updateConfig('arch', archVal as '' | 'x86' | 'x64');
+            break;
+        }
         case 'refreshEnv': {
-            const env = await detectEnv(getQtPath(), getVsDevShellPath());
+            const env = await detectEnv();
             setState('envInfo', env);
             pushEnvUpdate();
             break;
         }
         case 'selectProject': {
-            await vscode.commands.executeCommand('qtPilot.selectProject');
+            await vscode.commands.executeCommand('compilot.qt.selectProject');
             updateHtml();
             break;
         }
         case 'saveVsPath': {
             logger.info(`保存 VS 路径: "${msg.value}"`);
-            await updateConfig('vsDevShellPath', msg.value || '');
-            webview.postMessage({ command: 'envDetecting' });
-            const qtPath = getQtPath();
-            const env = await detectEnv(qtPath, msg.value || '');
+            await updateConfig('vsInstall', inferVsInstall(String(msg.value || '')));
+            webview.postMessage({ command: 'envDetecting', scope: 'vs' });
+            const env = await detectEnv();
             setState('envInfo', env);
             pushEnvUpdate();
             break;
         }
         case 'saveQtPath': {
             logger.info(`保存 Qt 路径: "${msg.value}"`);
-            await updateConfig('qtPath', msg.value || '');
-            webview.postMessage({ command: 'envDetecting' });
-            const vsPath = getVsDevShellPath();
-            const env = await detectEnv(msg.value || '', vsPath);
-            setState('envInfo', env);
+            await updateConfig('qtPath', String(msg.value || ''));
+            webview.postMessage({ command: 'envDetecting', scope: 'qt' });
+            const env2 = await detectEnv();
+            setState('envInfo', env2);
             pushEnvUpdate();
             break;
         }
         case 'saveDesignerPath': {
             logger.info(`保存 Designer 路径: "${msg.value}"`);
-            await updateConfig('designerPath', msg.value || '');
+            await updateConfig('designerPath', String(msg.value || ''));
             break;
         }
         case 'saveQtSourcePath': {
             logger.info(`保存 Qt 源码路径: "${msg.value}"`);
-            await updateConfig('qtSourcePath', msg.value || '');
+            await updateConfig('qtSourcePath', String(msg.value || ''));
             break;
         }
         case 'saveStandard': {
@@ -93,19 +137,30 @@ export async function handleMessage(
         }
         case 'saveExcludeDirs': {
             logger.info(`保存排除目录: ${JSON.stringify(msg.dirs)}`);
-            await updateConfig('scanExcludeDirs', msg.dirs);
+            await updateConfig('scanExcludeDirs', msg.dirs || []);
             break;
         }
         case 'saveQmakeTarget': {
-            logger.info(`保存 QMake TARGET: "${msg.value}"`);
-            await updateConfig('qmakeTarget', msg.value || '');
+            const newTarget = String(msg.value || '');
+            const oldTarget = (await import('../../qt/services/configService')).getTarget();
+            logger.info(`保存 QMake TARGET: "${newTarget}"`);
+            await updateConfig('target', newTarget);
+            if (newTarget !== oldTarget) {
+                const answer = await vscode.window.showWarningMessage(
+                    'TARGET 已变更，需要重新运行 QMake 才能生效',
+                    '立即 QMake', '稍后'
+                );
+                if (answer === '立即 QMake') {
+                    vscode.commands.executeCommand('compilot.qt.qmake');
+                }
+            }
             break;
         }
         case 'saveManualProPath': {
             logger.info(`手动指定 .pro: "${msg.value}"`);
-            await updateConfig('manualProPath', msg.value || '');
+            await updateConfig('manualProPath', String(msg.value || ''));
             if (msg.value) {
-                await vscode.commands.executeCommand('qtPilot.loadManualProject');
+                await vscode.commands.executeCommand('compilot.qt.loadManualProject');
             }
             updateHtml();
             break;
@@ -120,13 +175,18 @@ export async function handleMessage(
             await updateConfig('qmakeReminderEnabled', !!msg.value);
             break;
         }
+        case 'saveRccProjectPath': {
+            logger.info(`保存 RCC 项目路径: "${msg.value}"`);
+            await updateConfig('rccProjectPath', String(msg.value || ''));
+            break;
+        }
         case 'generateIntelliSense': {
             logger.info(`生成 IntelliSense: C=${msg.cStandard}, C++=${msg.cppStandard}`);
             if (msg.cStandard) { await updateConfig('cStandard', msg.cStandard); }
             if (msg.cppStandard) { await updateConfig('cppStandard', msg.cppStandard); }
             const project = getState().currentProject;
             if (project) {
-                logger.info(`项目: ${getEffectiveProjectName(project, getQmakeTarget(), project.proFile)}`);
+                logger.info(`项目: ${getEffectiveProjectName(project, getTarget(), project.proFile)}`);
                 generateCppProperties(project);
             } else {
                 logger.warn('无项目，无法生成 IntelliSense');
@@ -134,5 +194,216 @@ export async function handleMessage(
             }
             break;
         }
+        case 'saveSyncEnabled': {
+            logger.info(`保存远程同步开关: ${!!msg.value}`);
+            const ws1 = getWorkspaceRoot();
+            if (ws1) { updateProjectSyncField(ws1, 'enabled', !!msg.value); }
+            refreshSyncStatusBar();
+            break;
+        }
+        case 'saveSyncSelectedServer': {
+            logger.info(`选择服务器: "${msg.value}"`);
+            const ws2 = getWorkspaceRoot();
+            if (ws2) {
+                updateProjectSyncField(ws2, 'selectedServer', String(msg.value || ''));
+                // 选中服务器时自动启用同步
+                if (msg.value) { updateProjectSyncField(ws2, 'enabled', true); }
+            }
+            refreshSyncStatusBar();
+            updateHtml();
+            break;
+        }
+        case 'saveSyncRemotePath': {
+            logger.info(`保存项目远程路径: "${msg.value}"`);
+            const ws3 = getWorkspaceRoot();
+            if (ws3) {
+                const currentConfig = readProjectSyncConfig(ws3);
+                const serverId = currentConfig.selectedServer;
+                if (serverId) {
+                    const newVal = String(msg.value || '');
+                    // 不用空值覆盖已有路径（防止页面重渲染时 onblur 误触发）
+                    if (newVal || !currentConfig.remotePaths[serverId]) {
+                        const newPaths = { ...currentConfig.remotePaths, [serverId]: newVal };
+                        updateProjectSyncField(ws3, 'remotePaths', newPaths);
+                    }
+                }
+            }
+            refreshSyncStatusBar();
+            break;
+        }
+        case 'saveSyncIgnore': {
+            logger.info(`保存同步忽略列表: ${JSON.stringify(msg.value)}`);
+            const ws4 = getWorkspaceRoot();
+            if (ws4) { updateProjectSyncField(ws4, 'ignore', Array.isArray(msg.value) ? msg.value as string[] : []); }
+            break;
+        }
+        case 'addServer': {
+            logger.info(`添加服务器: ${msg.server?.name}`);
+            if (!msg.server) { break; }
+            const newServerData = {
+                name: msg.server.name || '',
+                host: msg.server.host || '',
+                port: msg.server.port || 22,
+                username: msg.server.username || '',
+                authMode: (msg.server.authMode || 'key') as 'key' | 'password',
+                privateKeyPath: msg.server.privateKeyPath || '',
+                password: msg.server.password || ''
+            };
+            logger.info(`服务器认证: ${newServerData.authMode}`);
+            if (!newServerData.name || !newServerData.host || !newServerData.username) {
+                vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
+                break;
+            }
+            const created = addServer(newServerData);
+            // 保存远程路径和选中服务器到项目配置
+            const wsAdd = getWorkspaceRoot();
+            if (wsAdd) {
+                updateProjectSyncField(wsAdd, 'selectedServer', created.id);
+                updateProjectSyncField(wsAdd, 'enabled', true);
+                if (msg.remotePath) {
+                    const syncCfg = readProjectSyncConfig(wsAdd);
+                    const newPaths = { ...syncCfg.remotePaths, [created.id]: String(msg.remotePath) };
+                    updateProjectSyncField(wsAdd, 'remotePaths', newPaths);
+                }
+            }
+            refreshSyncStatusBar();
+            updateHtml();
+            break;
+        }
+        case 'removeServer': {
+            logger.info(`删除服务器: "${msg.id}"`);
+            if (msg.id) {
+                removeServer(msg.id);
+                // 如果删除的是当前选中的服务器，切换到剩余的第一个
+                const wsRm = getWorkspaceRoot();
+                if (wsRm) {
+                    const syncCfgRm = readProjectSyncConfig(wsRm);
+                    if (syncCfgRm.selectedServer === msg.id) {
+                        const remaining = readServers();
+                        updateProjectSyncField(wsRm, 'selectedServer', remaining.length > 0 ? remaining[0].id : '');
+                    }
+                }
+            }
+            refreshSyncStatusBar();
+            updateHtml();
+            break;
+        }
+        case 'updateServer': {
+            logger.info(`修改服务器: id=${msg.server?.id}, name=${msg.server?.name}`);
+            if (!msg.server) { break; }
+            const serverId: string = msg.server.id || '';
+            const updates = {
+                name: msg.server.name || '',
+                host: msg.server.host || '',
+                port: msg.server.port || 22,
+                username: msg.server.username || '',
+                authMode: (msg.server.authMode || 'key') as 'key' | 'password',
+                privateKeyPath: msg.server.privateKeyPath || '',
+                password: msg.server.password || ''
+            };
+            if (!updates.name || !updates.host || !updates.username) {
+                vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
+                break;
+            }
+            // 如果密码为空，保留原密码
+            if (!updates.password) {
+                const existing = readServers().find(s => s.id === serverId);
+                if (existing) { updates.password = existing.password; }
+            }
+            const updated = updateServer(serverId, updates);
+            if (!updated) {
+                vscode.window.showWarningMessage('服务器不存在');
+                break;
+            }
+            vscode.window.showInformationMessage(`服务器 "${updates.name}" 已更新`);
+            // 保存远程路径到项目配置，并确保选中的是当前编辑的服务器
+            const wsUpd = getWorkspaceRoot();
+            if (wsUpd) {
+                updateProjectSyncField(wsUpd, 'selectedServer', serverId);
+                if (msg.remotePath !== undefined) {
+                    const syncCfgUpd = readProjectSyncConfig(wsUpd);
+                    const newPathsUpd = { ...syncCfgUpd.remotePaths, [serverId]: String(msg.remotePath || '') };
+                    updateProjectSyncField(wsUpd, 'remotePaths', newPathsUpd);
+                }
+            }
+            _pushServerList(webview, serverId);
+            refreshSyncStatusBar();
+            updateHtml();
+            break;
+        }
+        case 'syncNow': {
+            logger.info('手动触发同步');
+            await vscode.commands.executeCommand('compilot.qt.syncChangedFiles');
+            break;
+        }
+        case 'testSyncConnection': {
+            logger.info('测试远程连接');
+            await executeTestConnection();
+            break;
+        }
+        case 'testFormConnection': {
+            logger.info('测试表单中的连接');
+            if (!msg.server) { break; }
+            const testServer = {
+                host: msg.server.host || '',
+                port: msg.server.port || 22,
+                username: msg.server.username || '',
+                authMode: (msg.server.authMode || 'key') as 'key' | 'password',
+                privateKeyPath: msg.server.privateKeyPath || '',
+                password: msg.server.password || ''
+            };
+            try {
+                const { testConnection } = await import('../../qt/sync/transport');
+                const tempServerConfig = {
+                    id: '', name: 'test', ...testServer, strictHostKeyChecking: false
+                };
+                const pwd = testServer.authMode === 'password' ? testServer.password : null;
+                const result = await testConnection(tempServerConfig as import('../../core/serverStore').ServerConfig, pwd);
+                if (result.ok) {
+                    vscode.window.showInformationMessage(`连接成功: ${testServer.username}@${testServer.host}:${testServer.port}`);
+                } else {
+                    vscode.window.showErrorMessage(`连接失败: ${result.error || '未知错误'}`);
+                }
+            } catch (e) {
+                vscode.window.showErrorMessage(`连接失败: ${e instanceof Error ? e.message : e}`);
+            }
+            break;
+        }
+        case 'viewPassword': {
+            logger.info(`查看密码: "${msg.id}"`);
+            const servers = readServers();
+            const srv = servers.find(s => s.id === msg.id);
+            if (srv && srv.password) {
+                // 通过 VSCode 原生输入框显示（不发送到 webview）
+                const action = await vscode.window.showInformationMessage(
+                    `${srv.name} 的密码已复制到剪贴板`,
+                    '复制'
+                );
+                if (action === '复制') {
+                    await vscode.env.clipboard.writeText(srv.password);
+                }
+            } else {
+                vscode.window.showInformationMessage('该服务器未保存密码（可能使用密钥认证）');
+            }
+            break;
+        }
     }
+}
+
+function _pushServerList(webview: vscode.Webview, selectId?: string): void {
+    const servers = readServers();
+    webview.postMessage({
+        command: 'serversUpdated',
+        servers: servers.map(s => ({
+            id: s.id,
+            name: s.name,
+            host: s.host,
+            port: s.port,
+            username: s.username,
+            authMode: s.authMode,
+            privateKeyPath: s.privateKeyPath,
+            password: s.password ? '••••••••' : ''
+        })),
+        select: selectId || ''
+    });
 }
