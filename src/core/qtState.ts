@@ -1,5 +1,5 @@
 import type { ProjectInfo, EnvInfo } from './types';
-import { getQtSetting, setQtSetting } from './settingsStore';
+import { getQtSetting, setQtSetting, onSettingsChange } from './settingsStore';
 
 export type BuildMode = 'debug' | 'release';
 export type Arch = 'x86' | 'x64';
@@ -34,6 +34,24 @@ const _listeners: StateListener[] = [];
 export function loadPersistedState(): void {
     _state.mode = getQtSetting('mode') || 'debug';
     _state.arch = getQtSetting('arch') || 'x86';
+
+    // 监听 settingsStore 变化，保持 _state 同步
+    onSettingsChange((section, key) => {
+        if (section !== 'qt') { return; }
+        if (key === 'mode') {
+            const newMode = (getQtSetting('mode') || 'debug') as BuildMode;
+            if (_state.mode !== newMode) {
+                _state.mode = newMode;
+                _listeners.forEach(fn => fn('mode', _state));
+            }
+        } else if (key === 'arch') {
+            const newArch = (getQtSetting('arch') || 'x86') as Arch;
+            if (_state.arch !== newArch) {
+                _state.arch = newArch;
+                _listeners.forEach(fn => fn('arch', _state));
+            }
+        }
+    });
 }
 
 export function getState(): Readonly<AppState> {

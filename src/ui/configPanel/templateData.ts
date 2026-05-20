@@ -11,6 +11,7 @@ import {
     getDesignerPath, getQtSourcePath, getFileSyncPromptEnabled,
     getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot
 } from '../../qt/services/configService';
+import { getQtSetting } from '../../core/settingsStore';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { getSyncPendingInfo } from '../../core/syncState';
 
@@ -21,7 +22,7 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
     const wsRoot = getWorkspaceRoot();
     const sync = wsRoot
         ? readProjectSyncConfig(wsRoot)
-        : { enabled: false, selectedServer: '', remotePath: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'] };
+        : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'], remotePaths: {} };
     const servers = readServers();
     const pendingInfo = wsRoot ? getSyncPendingInfo(wsRoot, sync.ignore) : { count: 0, lastTime: '' };
 
@@ -30,6 +31,8 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         project,
         vsDevShellPath: getVsDevShellPath(),
         pinnedProject: getPinnedProject(),
+        mode: getQtSetting('mode'),
+        arch: getQtSetting('arch'),
         cStandard: getCStandard(),
         cppStandard: getCppStandard(),
         scanExcludeDirs: getScanExcludeDirs().join(', '),
@@ -50,11 +53,10 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         syncServers: servers.map(s => ({
             id: s.id, name: s.name, host: s.host, port: s.port,
             username: s.username, authMode: s.authMode,
-            privateKeyPath: s.privateKeyPath, password: s.password,
-            remotePath: s.remotePath
+            privateKeyPath: s.privateKeyPath, password: s.password
         })),
         syncIgnore: sync.ignore.join(', '),
-        syncRemotePath: sync.remotePath || '',
+        syncRemotePath: sync.remotePaths[sync.selectedServer] || '',
         syncPendingCount: pendingInfo.count,
         syncLastTime: pendingInfo.lastTime
     };

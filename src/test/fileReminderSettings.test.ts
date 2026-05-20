@@ -10,6 +10,8 @@ function createTemplateData(): TemplateData {
         project: null,
         vsDevShellPath: '',
         pinnedProject: '',
+        mode: 'debug',
+        arch: 'x86',
         cStandard: 'c11',
         cppStandard: 'c++17',
         scanExcludeDirs: '',

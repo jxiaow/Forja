@@ -76,11 +76,16 @@ function _refreshStatusBar(): void {
         _statusItem.tooltip = `Compilot: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
         _statusItem.command = 'compilot.qt.syncChangedFiles';
     } else {
-        _statusItem.text = '$(cloud-download)';
-        _statusItem.tooltip = 'Compilot: 同步未就绪，请选择服务器并设置远程路径';
+        _statusItem.text = '$(cloud)';
+        _statusItem.tooltip = 'Compilot: 同步未就绪，点击配置远程服务器';
         _statusItem.command = 'compilot.qt.showSyncTab';
     }
     _statusItem.show();
+}
+
+/** 供外部调用刷新同步状态栏图标（如配置面板切换开关后） */
+export function refreshSyncStatusBar(): void {
+    _refreshStatusBar();
 }
 
 export async function executeSyncChangedFiles(): Promise<void> {

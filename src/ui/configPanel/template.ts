@@ -9,6 +9,8 @@ export interface TemplateData {
     project: ProjectInfo | null;
     vsDevShellPath: string;
     pinnedProject: string;
+    mode: string;
+    arch: string;
     cStandard: string;
     cppStandard: string;
     scanExcludeDirs: string;
@@ -26,7 +28,7 @@ export interface TemplateData {
     version: string;
     syncEnabled: boolean;
     syncSelectedServer: string;
-    syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string; remotePath: string }[];
+    syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string }[];
     syncIgnore: string;
     syncRemotePath: string;
     syncPendingCount: number;

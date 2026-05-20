@@ -176,11 +176,10 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string,
         return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetName}" 未找到，请检查 ~/.compilot/servers.json` }], server: targetName, remotePath: '' };
     }
 
-    if (!server.remotePath) {
+    const remotePath = project.remotePaths[server.id] || '';
+    if (!remotePath) {
         return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未配置远程路径' }], server: server.name, remotePath: '' };
     }
-
-    const remotePath = server.remotePath;
 
     // 密码解析（password 模式）
     let resolvedPassword: string | null = null;

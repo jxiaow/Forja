@@ -45,7 +45,7 @@ export interface SdkSettings {
 export interface SyncSettings {
     enabled: boolean;
     selectedServer: string;
-    remotePath: string;
+    remotePaths: Record<string, string>;
     ignore: string[];
 }
 
@@ -87,7 +87,7 @@ export const DEFAULT_SDK: Readonly<SdkSettings> = {
 export const DEFAULT_SYNC: Readonly<SyncSettings> = {
     enabled: false,
     selectedServer: '',
-    remotePath: '',
+    remotePaths: {},
     ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release']
 };
 
@@ -309,10 +309,17 @@ function sanitizeSdk(raw: Record<string, unknown>): SdkSettings {
 
 function sanitizeSync(raw: Record<string, unknown>): SyncSettings {
     const d = DEFAULT_SYNC;
+    const remotePaths: Record<string, string> = {};
+    if (raw.remotePaths && typeof raw.remotePaths === 'object' && !Array.isArray(raw.remotePaths)) {
+        const rp = raw.remotePaths as Record<string, unknown>;
+        for (const [k, v] of Object.entries(rp)) {
+            if (isString(v)) { remotePaths[k] = v; }
+        }
+    }
     return {
         enabled: isBool(raw.enabled) ? raw.enabled : d.enabled,
         selectedServer: isString(raw.selectedServer) ? raw.selectedServer : d.selectedServer,
-        remotePath: isString(raw.remotePath) ? raw.remotePath : d.remotePath,
+        remotePaths,
         ignore: isStringArray(raw.ignore) ? raw.ignore : [...d.ignore]
     };
 }

@@ -5,8 +5,8 @@ import { getState, setState } from '../../core/qtState';
 import { updateConfig, getTarget, getWorkspaceRoot } from '../../qt/services/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, updateServer, readServers } from '../../core/serverStore';
-import { executeTestConnection } from '../../qt/sync/syncWatcher';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig } from '../../core/serverStore';
+import { executeTestConnection, refreshSyncStatusBar } from '../../qt/sync/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
 
 const logger = createLogger('ConfigPanel');
@@ -21,6 +21,7 @@ interface PanelMessage {
     cStandard?: string;
     cppStandard?: string;
     id?: string;
+    remotePath?: string;
     server?: {
         id?: string;
         name?: string;
@@ -30,7 +31,6 @@ interface PanelMessage {
         authMode?: string;
         privateKeyPath?: string;
         password?: string;
-        remotePath?: string;
     };
 }
 
@@ -187,6 +187,7 @@ export async function handleMessage(
             logger.info(`保存远程同步开关: ${!!msg.value}`);
             const ws1 = getWorkspaceRoot();
             if (ws1) { updateProjectSyncField(ws1, 'enabled', !!msg.value); }
+            refreshSyncStatusBar();
             break;
         }
         case 'saveSyncSelectedServer': {
@@ -197,12 +198,21 @@ export async function handleMessage(
                 // 选中服务器时自动启用同步
                 if (msg.value) { updateProjectSyncField(ws2, 'enabled', true); }
             }
+            refreshSyncStatusBar();
+            updateHtml();
             break;
         }
         case 'saveSyncRemotePath': {
             logger.info(`保存项目远程路径: "${msg.value}"`);
             const ws3 = getWorkspaceRoot();
-            if (ws3) { updateProjectSyncField(ws3, 'remotePath', String(msg.value || '')); }
+            if (ws3) {
+                const currentConfig = readProjectSyncConfig(ws3);
+                const serverId = currentConfig.selectedServer;
+                if (serverId) {
+                    const newPaths = { ...currentConfig.remotePaths, [serverId]: String(msg.value || '') };
+                    updateProjectSyncField(ws3, 'remotePaths', newPaths);
+                }
+            }
             break;
         }
         case 'saveSyncIgnore': {
@@ -221,21 +231,30 @@ export async function handleMessage(
                 username: msg.server.username || '',
                 authMode: (msg.server.authMode || 'key') as 'key' | 'password',
                 privateKeyPath: msg.server.privateKeyPath || '',
-                password: msg.server.password || '',
-                remotePath: msg.server.remotePath || ''
+                password: msg.server.password || ''
             };
             if (!newServerData.name || !newServerData.host || !newServerData.username) {
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
                 break;
             }
             const created = addServer(newServerData);
+            // 保存远程路径到项目配置
+            const wsAdd = getWorkspaceRoot();
+            if (wsAdd && msg.remotePath) {
+                const syncCfg = readProjectSyncConfig(wsAdd);
+                const newPaths = { ...syncCfg.remotePaths, [created.id]: String(msg.remotePath) };
+                updateProjectSyncField(wsAdd, 'remotePaths', newPaths);
+            }
             _pushServerList(webview, created.id);
+            refreshSyncStatusBar();
+            updateHtml();
             break;
         }
         case 'removeServer': {
             logger.info(`删除服务器: "${msg.id}"`);
             if (msg.id) { removeServer(msg.id); }
-            _pushServerList(webview);
+            refreshSyncStatusBar();
+            updateHtml();
             break;
         }
         case 'updateServer': {
@@ -249,8 +268,7 @@ export async function handleMessage(
                 username: msg.server.username || '',
                 authMode: (msg.server.authMode || 'key') as 'key' | 'password',
                 privateKeyPath: msg.server.privateKeyPath || '',
-                password: msg.server.password || '',
-                remotePath: msg.server.remotePath || ''
+                password: msg.server.password || ''
             };
             if (!updates.name || !updates.host || !updates.username) {
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
@@ -267,12 +285,53 @@ export async function handleMessage(
                 break;
             }
             vscode.window.showInformationMessage(`服务器 "${updates.name}" 已更新`);
+            // 保存远程路径到项目配置
+            const wsUpd = getWorkspaceRoot();
+            if (wsUpd && msg.remotePath !== undefined) {
+                const syncCfgUpd = readProjectSyncConfig(wsUpd);
+                const newPathsUpd = { ...syncCfgUpd.remotePaths, [serverId]: String(msg.remotePath || '') };
+                updateProjectSyncField(wsUpd, 'remotePaths', newPathsUpd);
+            }
             _pushServerList(webview, serverId);
+            updateHtml();
+            break;
+        }
+        case 'syncNow': {
+            logger.info('手动触发同步');
+            await vscode.commands.executeCommand('compilot.qt.syncChangedFiles');
             break;
         }
         case 'testSyncConnection': {
             logger.info('测试远程连接');
             await executeTestConnection();
+            break;
+        }
+        case 'testFormConnection': {
+            logger.info('测试表单中的连接');
+            if (!msg.server) { break; }
+            const testServer = {
+                host: msg.server.host || '',
+                port: msg.server.port || 22,
+                username: msg.server.username || '',
+                authMode: (msg.server.authMode || 'key') as 'key' | 'password',
+                privateKeyPath: msg.server.privateKeyPath || '',
+                password: msg.server.password || ''
+            };
+            try {
+                const { testConnection } = await import('../../qt/sync/transport');
+                const tempServerConfig = {
+                    id: '', name: 'test', ...testServer, strictHostKeyChecking: false
+                };
+                const pwd = testServer.authMode === 'password' ? testServer.password : null;
+                const result = await testConnection(tempServerConfig as import('../../core/serverStore').ServerConfig, pwd);
+                if (result.ok) {
+                    vscode.window.showInformationMessage(`连接成功: ${testServer.username}@${testServer.host}:${testServer.port}`);
+                } else {
+                    vscode.window.showErrorMessage(`连接失败: ${result.error || '未知错误'}`);
+                }
+            } catch (e) {
+                vscode.window.showErrorMessage(`连接失败: ${e instanceof Error ? e.message : e}`);
+            }
             break;
         }
         case 'viewPassword': {
@@ -308,8 +367,7 @@ function _pushServerList(webview: vscode.Webview, selectId?: string): void {
             username: s.username,
             authMode: s.authMode,
             privateKeyPath: s.privateKeyPath,
-            password: s.password ? '••••••••' : '',
-            remotePath: s.remotePath
+            password: s.password ? '••••••••' : ''
         })),
         select: selectId || ''
     });

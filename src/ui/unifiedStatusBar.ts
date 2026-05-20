@@ -6,7 +6,7 @@
  */
 import * as vscode from 'vscode';
 import { getState, setState, onStateChange, BuildMode, Arch } from '../core/qtState';
-import { getQtSetting } from '../core/settingsStore';
+import { onSettingsChange } from '../core/settingsStore';
 import { getTarget, getCustomCommands } from '../qt/services/configService';
 import { getEffectiveProjectName } from '../qt/project/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';
@@ -65,6 +65,13 @@ export function createUnifiedStatusBar(context: vscode.ExtensionContext): void {
         if (_activeModule === 'qt') { _updateDisplay(); }
     })));
 
+    // target/mode/arch 等设置变化时也刷新状态栏
+    context.subscriptions.push(onSettingsChange((section, key) => {
+        if (section === 'qt' && (key === 'target' || key === 'mode' || key === 'arch')) {
+            if (_activeModule === 'qt') { _updateDisplay(); }
+        }
+    }));
+
     // 注册统一 showActions 命令
     context.subscriptions.push(
         vscode.commands.registerCommand('compilot.showActions', () => showUnifiedActions())
@@ -85,8 +92,8 @@ function _updateQtDisplay(): void {
     const state = getState();
     const projectName = getEffectiveProjectName(state.currentProject, getTarget(), '未选择项目');
     const modeLabel = getModeDisplayLabel(state.mode, state.arch, process.platform === 'win32');
-    _projectModeItem.text = `$(tools) ${projectName} · ${modeLabel}`;
-    _projectModeItem.tooltip = 'Compilot: 点击选择模式/架构、构建操作、切换项目';
+    _projectModeItem.text = `$(tools) [Qt] ${projectName} · ${modeLabel}`;
+    _projectModeItem.tooltip = 'Compilot Qt 模式 — 点击切换模块/模式/项目';
     _projectModeItem.color = state.mode === 'debug'
         ? new vscode.ThemeColor('statusBarItem.warningForeground')
         : undefined;
@@ -129,8 +136,8 @@ function _updateSdkDisplay(): void {
         _projectModeItem.tooltip = '编译中...';
         _runItem.hide();
     } else {
-        _projectModeItem.text = `$(tools) ${name} · ${mode}${isWin ? ' ' + _sdkArch : ''}`;
-        _projectModeItem.tooltip = 'Compilot: 点击选择模式/架构、构建操作、切换项目';
+        _projectModeItem.text = `$(tools) [SDK] ${name} · ${mode}${isWin ? ' ' + _sdkArch : ''}`;
+        _projectModeItem.tooltip = 'Compilot SDK 模式 — 点击切换模块/模式/项目';
         _runItem.text = '$(play)';
         _runItem.tooltip = 'Compilot SDK: Build';
         _runItem.command = 'compilot.sdk.build';

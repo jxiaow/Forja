@@ -10,6 +10,7 @@ import { detectEnv } from '../../qt/env/envDetector';
 import { getPageHtml } from './pageTemplate';
 import { buildTemplateData } from './templateData';
 import { createLogger } from '../../core/logger';
+import { onSettingsChange, getQtSetting } from '../../core/settingsStore';
 
 const logger = createLogger('ConfigPagePanel');
 
@@ -26,6 +27,21 @@ export class ConfigPageManager {
 
     constructor(context: vscode.ExtensionContext) {
         this._context = context;
+
+        // 监听 mode/arch 变化，推送到已打开的 project 页面
+        const disposable = onSettingsChange((section, key) => {
+            if (section === 'qt' && (key === 'mode' || key === 'arch')) {
+                const projectPanel = this._panels.get('project');
+                if (projectPanel) {
+                    projectPanel.webview.postMessage({
+                        command: 'settingsUpdated',
+                        mode: getQtSetting('mode'),
+                        arch: getQtSetting('arch')
+                    });
+                }
+            }
+        });
+        context.subscriptions.push(disposable);
     }
 
     /** 打开或聚焦指定配置页 */

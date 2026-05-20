@@ -16,7 +16,13 @@ import * as os from 'os';
 function atomicWriteJson(filePath: string, data: unknown): void {
     const tmp = filePath + `.tmp.${process.pid}`;
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tmp, filePath);
+    try {
+        fs.renameSync(tmp, filePath);
+    } catch {
+        // rename 失败时回退为直接写入，并清理临时文件
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+        try { fs.unlinkSync(tmp); } catch { /* ignore */ }
+    }
 }
 
 export type AuthMode = 'key' | 'password';
@@ -30,7 +36,6 @@ export interface ServerConfig {
     authMode: AuthMode;
     privateKeyPath: string;
     password: string;
-    remotePath: string;
     /** 是否启用严格主机密钥检查（默认 false，即 StrictHostKeyChecking=no） */
     strictHostKeyChecking?: boolean;
 }
@@ -39,14 +44,31 @@ export interface ProjectSyncConfig {
     enabled: boolean;
     selectedServer: string; // server id
     ignore: string[];
-    /** 项目级远程路径（优先于服务器上的 remotePath） */
-    remotePath?: string;
+    /** 每个服务器对应的远程路径 */
+    remotePaths: Record<string, string>;
 }
 
 // ── 路径 ──
 
 function _globalDir(): string {
     return path.join(os.homedir(), '.compilot');
+}
+
+/** 清理 ~/.compilot/ 下残留的 .tmp 文件（原子写入失败时遗留） */
+let _cleaned = false;
+function _cleanupTmpFiles(): void {
+    if (_cleaned) { return; }
+    _cleaned = true;
+    try {
+        const dir = _globalDir();
+        if (!fs.existsSync(dir)) { return; }
+        const files = fs.readdirSync(dir);
+        for (const f of files) {
+            if (f.includes('.tmp.')) {
+                try { fs.unlinkSync(path.join(dir, f)); } catch { /* ignore */ }
+            }
+        }
+    } catch { /* ignore */ }
 }
 
 function _serversFilePath(): string {
@@ -68,11 +90,11 @@ interface StoredServer {
     authMode: AuthMode;
     privateKeyPath: string;
     password?: string;
-    remotePath?: string;
     strictHostKeyChecking?: boolean;
 }
 
 export function readServers(): ServerConfig[] {
+    _cleanupTmpFiles();
     const filePath = _serversFilePath();
     try {
         if (fs.existsSync(filePath)) {
@@ -89,7 +111,6 @@ export function readServers(): ServerConfig[] {
                     authMode: (s.authMode === 'password' ? 'password' : 'key') as AuthMode,
                     privateKeyPath: s.privateKeyPath || '',
                     password: s.password || '',
-                    remotePath: s.remotePath || '',
                     strictHostKeyChecking: !!s.strictHostKeyChecking
                 };
             });
@@ -116,7 +137,6 @@ export function writeServers(servers: ServerConfig[]): void {
         authMode: s.authMode,
         privateKeyPath: s.privateKeyPath,
         password: s.password || undefined,
-        remotePath: s.remotePath || undefined,
         strictHostKeyChecking: s.strictHostKeyChecking || undefined
     }));
     atomicWriteJson(_serversFilePath(), stored);
@@ -174,10 +194,10 @@ export function readProjectSyncConfig(workspaceRoot: string): ProjectSyncConfig 
             enabled: sync.enabled,
             selectedServer: sync.selectedServer,
             ignore: sync.ignore.length > 0 ? sync.ignore : [...DEFAULT_IGNORE],
-            remotePath: sync.remotePath || undefined
+            remotePaths: sync.remotePaths
         };
     } catch {
-        return { enabled: false, selectedServer: '', ignore: [...DEFAULT_IGNORE] };
+        return { enabled: false, selectedServer: '', ignore: [...DEFAULT_IGNORE], remotePaths: {} };
     }
 }
 
@@ -187,7 +207,7 @@ export function writeProjectSyncConfig(workspaceRoot: string, config: Partial<Pr
 
     if (config.enabled !== undefined) { updated.enabled = config.enabled; }
     if (config.selectedServer !== undefined) { updated.selectedServer = config.selectedServer; }
-    if (config.remotePath !== undefined) { updated.remotePath = config.remotePath; }
+    if (config.remotePaths !== undefined) { updated.remotePaths = config.remotePaths; }
     if (config.ignore !== undefined) { updated.ignore = config.ignore; }
 
     saveSyncSettings(workspaceRoot, updated);
