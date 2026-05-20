@@ -141,8 +141,19 @@ export async function handleMessage(
             break;
         }
         case 'saveQmakeTarget': {
-            logger.info(`保存 QMake TARGET: "${msg.value}"`);
-            await updateConfig('target', String(msg.value || ''));
+            const newTarget = String(msg.value || '');
+            const oldTarget = (await import('../../qt/services/configService')).getTarget();
+            logger.info(`保存 QMake TARGET: "${newTarget}"`);
+            await updateConfig('target', newTarget);
+            if (newTarget !== oldTarget) {
+                const answer = await vscode.window.showWarningMessage(
+                    'TARGET 已变更，需要重新运行 QMake 才能生效',
+                    '立即 QMake', '稍后'
+                );
+                if (answer === '立即 QMake') {
+                    vscode.commands.executeCommand('compilot.qt.qmake');
+                }
+            }
             break;
         }
         case 'saveManualProPath': {
