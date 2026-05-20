@@ -261,7 +261,18 @@ export async function handleMessage(
         }
         case 'removeServer': {
             logger.info(`删除服务器: "${msg.id}"`);
-            if (msg.id) { removeServer(msg.id); }
+            if (msg.id) {
+                removeServer(msg.id);
+                // 如果删除的是当前选中的服务器，切换到剩余的第一个
+                const wsRm = getWorkspaceRoot();
+                if (wsRm) {
+                    const syncCfgRm = readProjectSyncConfig(wsRm);
+                    if (syncCfgRm.selectedServer === msg.id) {
+                        const remaining = readServers();
+                        updateProjectSyncField(wsRm, 'selectedServer', remaining.length > 0 ? remaining[0].id : '');
+                    }
+                }
+            }
             refreshSyncStatusBar();
             updateHtml();
             break;
