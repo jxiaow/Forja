@@ -160,7 +160,6 @@ debug/release、x86/x64）且用户未设置过时，必须展示选项让用户
 - **只有 run 加 --detach**：程序启动后不会自行退出，不加会阻塞
 - **detach 后看 logs**：`run --detach` 返回 `ok: true` 只表示程序已启动；用 `logs --json` 确认运行状态
 - **非 detach 直接看结果**：`ok` 字段直接反映成功/失败
-- **命令耗时与超时**：`build`、`run --detach`、`clean`、`qmake` 都是前台阻塞命令，会等执行完成后返回 JSON 结果；其中 `build` 和 `run --detach`（内含编译步骤）耗时取决于增量编译量，通常几十秒到几分钟。执行时应设置足够的超时（建议 15 分钟），不要因默认超时中断后反复重试。这些命令最终都会自行退出，**不是长驻进程，禁止用后台进程方式启动**
 - **执行前确认目标**：看 `target`、`project`、`candidates`、`diagnostics`
 - **需要完整日志时**：读 `logFile` 路径指向的文件
 
