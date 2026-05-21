@@ -31,6 +31,7 @@ Skill 文件位于 CLI 包的 `skills/compilot/` 目录下，安装后 AI 助手
 ```bash
 compilot qt status
 compilot qt init
+compilot qt use --mode release
 compilot qt build
 compilot qt run
 ```
@@ -83,19 +84,13 @@ compilot qt status
 
 ### `compilot qt init`
 
-检测 Qt 和 Visual Studio 环境，并保存当前工作区的 Qt 配置。
+检测 Qt 和 Visual Studio 环境，并保存当前工作区中能自动确定的 Qt 配置。
 
 ```bash
 compilot qt init --json
 ```
 
-`init` 会保存检测到的 Qt 路径、VS 环境、项目选择等，后续命令会自动读取，不需要每次指定 `--project`、`--mode`、`--arch`。
-
-初始化时可以显式指定配置：
-
-```bash
-compilot qt init --project app.pro --mode debug --arch x64 --json
-```
+`init` 不接收 `--project`、`--mode`、`--arch`、`--qt-path`、`--vs-dev-shell`、`--target`。这些显式配置统一通过 `compilot qt use` 写入，后续命令会自动读取。
 
 ### `compilot qt use`
 

@@ -223,8 +223,32 @@ test('createActionPlan init dry-run previews what would be created', async () =>
     assert.equal(result.ok, true);
     assert.equal(result.action, 'init');
     assert.ok(result.diagnostics.length > 0);
-    assert.ok(result.diagnostics.some(d => /\.compilot/.test(d.message) || /settings\.json/.test(d.message)));
+    assert.ok(result.diagnostics.some(d => /本地配置/.test(d.message)));
     assert.ok(result.nextActions.some(a => /init --json/.test(a)));
+});
+
+test('createActionPlan init ignores explicit config override fields', async () => {
+    const workspace = makeWorkspace();
+
+    const result = await createActionPlan({
+        action: 'init',
+        executionMode: 'dryRun',
+        workspace,
+        project: path.join(workspace, 'demo.pro'),
+        mode: 'release',
+        arch: 'x86',
+        qtPath: 'D:/manual-qt',
+        vsDevShell: 'C:/manual-vs/Launch-VsDevShell.ps1',
+        target: 'manual-target',
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.resolved!.mode, 'debug');
+    assert.notEqual(result.resolved!.qtPath, 'D:/manual-qt');
+    assert.notEqual(result.resolved!.vsDevShell, 'C:/manual-vs/Launch-VsDevShell.ps1');
+    assert.notEqual(result.resolved!.target, 'manual-target');
 });
 
 test('run without Makefile returns fallback build commands and qmake hint', async () => {

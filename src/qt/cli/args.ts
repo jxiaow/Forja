@@ -7,7 +7,7 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
 用法: compilot qt <command> [options]
 
 命令:
-  init        初始化本地配置（检测环境、保存项目/构建配置）
+  init        自动初始化本地配置（检测环境、保存可自动确定的配置）
   use         切换当前 workspace 使用的项目/构建配置
   env         查看工具链环境（检测到的 Qt/VS/jom 及可选项）
   projects    查看 workspace 下的 .pro 文件列表
@@ -26,16 +26,13 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
 
-init/use 选项:
+use 选项:
   --project <path>       指定当前 .pro 文件路径
   --mode debug|release   指定构建模式
   --arch x86|x64         指定目标架构
   --qt-path <path>       指定 Qt 安装路径
   --vs-dev-shell <path>  指定 Launch-VsDevShell.ps1 路径
   --target <name>        指定 QMake TARGET 覆盖
-
-init 选项:
-  --save-local           将检测结果写入 Compilot 本地配置
 
 执行选项:
   --plan                 仅生成命令计划，不执行（init/use/qmake/build/run/clean/sync/rcc）
@@ -80,7 +77,6 @@ const knownFlags = new Set([
     '--target',
     '--server',
     '--repo',
-    '--save-local',
     '--detach',
     '--json'
 ]);
@@ -89,7 +85,7 @@ const commonFlags = ['--workspace', '--json'];
 const configFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
 const planFlags = ['--plan', '--dry-run'];
 const actionAllowedFlags: Record<CliAction, Set<string>> = {
-    init: new Set([...commonFlags, ...planFlags, ...configFlags, '--save-local']),
+    init: new Set([...commonFlags, ...planFlags]),
     use: new Set([...commonFlags, ...planFlags, ...configFlags]),
     status: new Set(commonFlags),
     env: new Set(commonFlags),
@@ -207,9 +203,6 @@ export function parseCliArgs(args: string[]): CliOptions {
             case '--repo':
                 options.repo = readValue(args, i, arg);
                 i++;
-                break;
-            case '--save-local':
-                options.saveLocal = true;
                 break;
             case '--detach':
                 options.detach = true;

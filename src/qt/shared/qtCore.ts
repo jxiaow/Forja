@@ -42,6 +42,18 @@ function resolveWorkspace(input: string | null): string {
     return path.resolve(input || process.cwd());
 }
 
+function withoutConfigOptions(options: CliOptions): CliOptions {
+    return {
+        ...options,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null
+    };
+}
+
 function insideWorkspace(workspace: string, filePath: string): boolean {
     const rel = path.relative(workspace, filePath);
     return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
@@ -71,9 +83,9 @@ function resolveProject(workspace: string, options: CliOptions, settings: QtSett
         return { project: found[0], error: null };
     }
     if (found.length > 1) {
-        return { project: null, error: `发现多个 .pro 文件: ${found.join(', ')}。请使用 compilot qt init --project <path> --json 初始化项目。` };
+        return { project: null, error: `发现多个 .pro 文件: ${found.join(', ')}。请先运行 compilot qt projects --json 查看候选，再用 compilot qt use --project <path> --json 选择项目。` };
     }
-    return { project: null, error: '未找到 .pro 文件。请使用 compilot qt init --project <path> --json 初始化项目。' };
+    return { project: null, error: '未找到 .pro 文件。请在工作区中创建 .pro 文件，或用 compilot qt use --project <path> --json 选择已有项目。' };
 }
 
 function buildResolvedConfig(
@@ -182,6 +194,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
 
     const settings = loadQtSettings(workspace);
+    const effectiveOptions = options.action === 'init' ? withoutConfigOptions(options) : options;
 
     if (options.action === 'status') {
         const hasSettings = fs.existsSync(projectConfigPath(workspace, 'qt'));
@@ -307,7 +320,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 ...(process.platform === 'win32' ? { vsDevShell: detected.vsCandidates.map(c => ({ path: c.devShellPath, version: c.version, edition: c.edition })) } : {})
             },
             configHints: {
-                usage: 'compilot qt init [options] --json',
+                usage: 'compilot qt use [options] --json',
                 mode: '--mode debug|release',
                 ...(getAvailableArch().length > 1 ? { arch: `--arch ${getAvailableArch().join('|')}` } : {}),
                 ...Object.fromEntries(
@@ -340,7 +353,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             current: currentProject,
             available,
             configHints: {
-                usage: 'compilot qt init --project <path> --json'
+                usage: 'compilot qt use --project <path> --json'
             }
         };
         if (currentProject && !currentExists) {
@@ -432,7 +445,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         };
     }
 
-    const projectResult = resolveProject(workspace, options, settings);
+    const projectResult = resolveProject(workspace, effectiveOptions, settings);
     if (projectResult.error && options.action !== 'init') {
         const errMode = settings.mode || 'debug';
         const errArch = settings.arch || getDefaultArch();
@@ -446,12 +459,11 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
 
     const project = projectResult.project;
-    const allowOptionConfig = options.action === 'init';
-    const mode = (allowOptionConfig ? options.mode : null) || settings.mode || 'debug';
-    const arch = (allowOptionConfig ? options.arch : null) || settings.arch || getDefaultArch();
-    const qtPath = (allowOptionConfig ? options.qtPath : null) || settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = (allowOptionConfig ? options.vsDevShell : null) || resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
-    const target = (allowOptionConfig ? options.target : null) || settings.target || '';
+    const mode = settings.mode || 'debug';
+    const arch = settings.arch || getDefaultArch();
+    const qtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
+    const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const target = settings.target || '';
     const jomPath = settings.jomPath || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
 
@@ -459,7 +471,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         if (options.executionMode === 'execute') {
             ensureLocalStateDir(workspace);
             // #1: detectEnvironment 内部已调用 detectEnv，直接复用其结果，不再重复调用
-            const detected = await detectEnvironment(workspace, options);
+            const detected = await detectEnvironment(workspace, effectiveOptions);
             // 直接从检测结果获取候选列表
             const allQtCandidates = detected.qtCandidates;
             let effectiveTarget = target;
@@ -470,12 +482,11 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                     if (proInfo) { effectiveTarget = proInfo.target; }
                 }
                 // #2: 写入 pinnedProject
-                // mode/arch 只在用户显式传参时写入，否则保持 settings 原值（可能为空）
                 const relativeProject = path.relative(workspace, project).replace(/\\/g, '/');
                 const updatedQt: QtSettings = {
                     ...settings,
-                    mode: options.mode || settings.mode,
-                    arch: options.arch || settings.arch,
+                    mode: settings.mode,
+                    arch: settings.arch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
                     vsInstall: settings.vsInstall || inferVsInstall(vsDevShell || detected.detected.vs?.devShellPath || ''),
                     jomPath: detected.detected.jom || '',
@@ -485,11 +496,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 saveQtSettings(workspace, updatedQt);
             } else {
                 // #3: 多 .pro 文件或无 .pro 时，仍保存 qtPath 等，显式清除 pinnedProject
-                // mode/arch 只在用户显式传参时写入，否则保持 settings 原值（可能为空）
                 const updatedQt: QtSettings = {
                     ...settings,
-                    mode: options.mode || settings.mode,
-                    arch: options.arch || settings.arch,
+                    mode: settings.mode,
+                    arch: settings.arch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
                     vsInstall: settings.vsInstall || inferVsInstall(vsDevShell || detected.detected.vs?.devShellPath || ''),
                     jomPath: detected.detected.jom || '',
@@ -507,7 +517,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 jomPath: detected.detected.jom || ''
             };
             const initDiagnostics = buildInitDiagnostics({
-                options,
+                options: effectiveOptions,
                 qtCandidates: allQtCandidates,
                 projects: detected.detected.projects,
                 project,
@@ -522,12 +532,12 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         }
 
         // dry-run: preview what init would do
-        const detected = await detectEnvironment(workspace, options);
+        const detected = await detectEnvironment(workspace, effectiveOptions);
         const previewQtPath = qtPath || detected.detected.qt?.path || '';
         const previewVsDevShell = vsDevShell || detected.detected.vs?.devShellPath || '';
 
         const previewDiagnostics: CliResult['diagnostics'] = [
-            { level: 'info', message: '将创建 .compilot/ 目录并写入 settings.json' }
+            { level: 'info', message: '将写入 Compilot 本地配置' }
         ];
         const previewSettingsForCheck: QtSettings = {
             ...settings,
@@ -536,7 +546,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             jomPath: detected.detected.jom || ''
         };
         previewDiagnostics.push(...buildInitDiagnostics({
-            options,
+            options: effectiveOptions,
             qtCandidates: detected.qtCandidates,
             projects: detected.detected.projects,
             project,

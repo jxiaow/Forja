@@ -13,9 +13,18 @@ test('parseCliArgs defaults build to execute mode', () => {
     assert.equal(parsed.json, false);
 });
 
-test('parseCliArgs accepts init config options', () => {
+test('parseCliArgs rejects config options on init', () => {
+    for (const flag of ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target', '--save-local']) {
+        assert.throws(
+            () => parseCliArgs(['init', flag, 'value']),
+            flag === '--save-local' ? /未知参数: --save-local/ : new RegExp(`${flag} 不能用于 init`)
+        );
+    }
+});
+
+test('parseCliArgs accepts use config options', () => {
     const parsed = parseCliArgs([
-        'init',
+        'use',
         '--json',
         '--workspace',
         'D:/demo',
@@ -33,7 +42,7 @@ test('parseCliArgs accepts init config options', () => {
         'demo'
     ]);
 
-    assert.equal(parsed.action, 'init');
+    assert.equal(parsed.action, 'use');
     assert.equal(parsed.executionMode, 'execute');
     assert.equal(parsed.json, true);
     assert.equal(parsed.workspace, 'D:/demo');
@@ -43,37 +52,6 @@ test('parseCliArgs accepts init config options', () => {
     assert.equal(parsed.qtPath, 'D:/Qt');
     assert.equal(parsed.vsDevShell, 'C:/VS/Launch-VsDevShell.ps1');
     assert.equal(parsed.target, 'demo');
-});
-
-test('parseCliArgs accepts use config options', () => {
-    const parsed = parseCliArgs([
-        'use',
-        '--workspace',
-        'D:/demo',
-        '--project',
-        'D:/demo/demo.pro',
-        '--mode',
-        'release',
-        '--arch',
-        'x64',
-        '--qt-path',
-        'D:/Qt',
-        '--vs-dev-shell',
-        'C:/VS/Launch-VsDevShell.ps1',
-        '--target',
-        'demo',
-        '--json'
-    ]);
-
-    assert.equal(parsed.action, 'use');
-    assert.equal(parsed.workspace, 'D:/demo');
-    assert.equal(parsed.project, 'D:/demo/demo.pro');
-    assert.equal(parsed.mode, 'release');
-    assert.equal(parsed.arch, 'x64');
-    assert.equal(parsed.qtPath, 'D:/Qt');
-    assert.equal(parsed.vsDevShell, 'C:/VS/Launch-VsDevShell.ps1');
-    assert.equal(parsed.target, 'demo');
-    assert.equal(parsed.json, true);
 });
 
 test('parseCliArgs rejects config options outside init and use', () => {

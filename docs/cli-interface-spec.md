@@ -30,7 +30,7 @@ compilot <subcommand> <action> [options]
 | 命令 | 允许参数 |
 |------|----------|
 | `status` | `--workspace`, `--json` |
-| `init` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--project`, `--mode`, `--arch`, `--qt-path`, `--vs-dev-shell`, `--target`, `--save-local` |
+| `init` | `--workspace`, `--json`, `--plan`, `--dry-run` |
 | `use` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--project`, `--mode`, `--arch`, `--qt-path`, `--vs-dev-shell`, `--target` |
 | `env` | `--workspace`, `--json` |
 | `projects` | `--workspace`, `--json` |
@@ -43,9 +43,9 @@ compilot <subcommand> <action> [options]
 | `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo` |
 | `rcc` | `--workspace`, `--json`, `--plan`, `--dry-run` |
 
-## Qt init/use 配置参数
+## Qt use 配置参数
 
-以下参数只允许用于 `compilot qt init` 和 `compilot qt use`：
+以下参数只允许用于 `compilot qt use`。`compilot qt init` 只做自动初始化，不接收显式构建配置：
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -221,7 +221,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "ok": true,
   "action": "build",
   "diagnostics": [{ "level": "warning", "message": "未找到 .pro 文件" }],
-  "nextActions": ["在工作区中创建 .pro 文件，或使用 compilot qt init --project <path> --json 初始化项目"]
+  "nextActions": ["在工作区中创建 .pro 文件，或使用 compilot qt use --project <path> --json 选择项目"]
 }
 
 // Qt 环境未配置
@@ -229,7 +229,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "ok": true,
   "action": "build",
   "diagnostics": [{ "level": "warning", "message": "Qt 路径未配置" }],
-  "nextActions": ["compilot qt init --qt-path C:/Qt/5.15.2/msvc2019 --json", "compilot qt build --json"]
+  "nextActions": ["compilot qt use --qt-path C:/Qt/5.15.2/msvc2019 --json", "compilot qt build --json"]
 }
 ```
 

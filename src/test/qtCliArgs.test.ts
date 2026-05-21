@@ -18,9 +18,9 @@ test('parseCliArgs defaults to status when no action given', () => {
     assert.equal(opts.json, true);
 });
 
-test('parseCliArgs --mode and --arch are init options', () => {
-    const opts = parseCliArgs(['init', '--mode', 'release', '--arch', 'x64']);
-    assert.equal(opts.action, 'init');
+test('parseCliArgs --mode and --arch are use options', () => {
+    const opts = parseCliArgs(['use', '--mode', 'release', '--arch', 'x64']);
+    assert.equal(opts.action, 'use');
     assert.equal(opts.mode, 'release');
     assert.equal(opts.arch, 'x64');
 });
@@ -37,7 +37,7 @@ test('parseCliArgs accepts use config options', () => {
 
 test('parseCliArgs rejects build config options on execution and read-only actions', () => {
     const restrictedFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
-    for (const action of ['build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'logs', 'stop', 'rcc']) {
+    for (const action of ['init', 'build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'logs', 'stop', 'rcc']) {
         for (const flag of restrictedFlags) {
             assert.throws(
                 () => parseCliArgs([action, flag, 'value']),
@@ -45,6 +45,13 @@ test('parseCliArgs rejects build config options on execution and read-only actio
             );
         }
     }
+});
+
+test('parseCliArgs rejects removed init-only save-local flag', () => {
+    assert.throws(
+        () => parseCliArgs(['init', '--save-local']),
+        /未知参数: --save-local/
+    );
 });
 
 test('parseCliArgs only accepts sync flags on sync', () => {
