@@ -352,13 +352,93 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         return result;
     }
 
+    if (options.action === 'use') {
+        const updatedQt: QtSettings = { ...settings };
+        const updated: Record<string, string> = {};
+        let project: string | null = settings.pinnedProject
+            ? path.join(settings.pinnedProject.root, settings.pinnedProject.relative)
+            : null;
+
+        if (options.project) {
+            const projectResult = resolveProject(workspace, options, settings);
+            if (projectResult.error || !projectResult.project) {
+                result.diagnostics.push({ level: 'error', message: projectResult.error || '项目路径无效' });
+                result.nextActions.push('compilot qt projects --json');
+                return result;
+            }
+            project = projectResult.project;
+            const relativeProject = path.relative(workspace, project).replace(/\\/g, '/');
+            updatedQt.pinnedProject = { root: workspace, relative: relativeProject };
+            updated.project = relativeProject;
+        }
+        if (options.mode) {
+            updatedQt.mode = options.mode;
+            updated.mode = options.mode;
+        }
+        if (options.arch) {
+            updatedQt.arch = options.arch;
+            updated.arch = options.arch;
+        }
+        if (options.qtPath) {
+            updatedQt.qtPath = options.qtPath;
+            updated.qtPath = options.qtPath;
+        }
+        if (options.vsDevShell) {
+            updatedQt.vsInstall = inferVsInstall(options.vsDevShell);
+            updated.vsDevShell = options.vsDevShell;
+        }
+        if (options.target) {
+            updatedQt.target = options.target;
+            updated.target = options.target;
+        }
+
+        if (Object.keys(updated).length === 0) {
+            result.diagnostics.push({ level: 'error', message: 'use 需要至少指定一个配置参数' });
+            result.nextActions.push('compilot qt use --mode release --json');
+            return result;
+        }
+
+        if (options.executionMode === 'execute') {
+            saveQtSettings(workspace, updatedQt);
+        }
+
+        const mode = updatedQt.mode || 'debug';
+        const arch = updatedQt.arch || getDefaultArch();
+        const vsDevShell = resolveVsDevShellPath(updatedQt.vsInstall) || options.vsDevShell || '';
+        const useResolved = buildResolvedConfig(mode, arch, updatedQt.qtPath || '', vsDevShell, updatedQt.target || '', undefined, undefined, updatedQt.jomPath || undefined);
+        if (updatedQt.pinnedProject) {
+            useResolved.project = updatedQt.pinnedProject.relative;
+        }
+
+        const useData = {
+            ok: true,
+            action: 'use',
+            workspace,
+            mode: options.executionMode,
+            updated,
+            resolved: useResolved,
+            nextActions: ['compilot qt status --json', 'compilot qt build --json']
+        };
+
+        return {
+            ...result,
+            ok: true,
+            project,
+            diagnostics: options.executionMode === 'dryRun' ? [{ level: 'info', message: '预览配置切换，未写入本地配置' }] : [],
+            nextActions: ['compilot qt status --json', 'compilot qt build --json'],
+            resolved: useResolved,
+            data: useData,
+            stdout: JSON.stringify(useData)
+        };
+    }
+
     const projectResult = resolveProject(workspace, options, settings);
     if (projectResult.error && options.action !== 'init') {
-        const errMode = options.mode || settings.mode || 'debug';
-        const errArch = options.arch || settings.arch || getDefaultArch();
-        const errQtPath = options.qtPath || settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-        const errVsDevShell = options.vsDevShell || resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
-        const errQmakeTarget = options.target || settings.target || '';
+        const errMode = settings.mode || 'debug';
+        const errArch = settings.arch || getDefaultArch();
+        const errQtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
+        const errVsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+        const errQmakeTarget = settings.target || '';
         result.resolved = buildResolvedConfig(errMode, errArch, errQtPath, errVsDevShell, errQmakeTarget, undefined, undefined, settings.jomPath || undefined);
         result.diagnostics.push({ level: 'error', message: projectResult.error });
         result.nextActions.push('compilot qt status --json');
@@ -366,11 +446,12 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
 
     const project = projectResult.project;
-    const mode = options.mode || settings.mode || 'debug';
-    const arch = options.arch || settings.arch || getDefaultArch();
-    const qtPath = options.qtPath || settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = options.vsDevShell || resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
-    const target = options.target || settings.target || '';
+    const allowOptionConfig = options.action === 'init';
+    const mode = (allowOptionConfig ? options.mode : null) || settings.mode || 'debug';
+    const arch = (allowOptionConfig ? options.arch : null) || settings.arch || getDefaultArch();
+    const qtPath = (allowOptionConfig ? options.qtPath : null) || settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
+    const vsDevShell = (allowOptionConfig ? options.vsDevShell : null) || resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const target = (allowOptionConfig ? options.target : null) || settings.target || '';
     const jomPath = settings.jomPath || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
 

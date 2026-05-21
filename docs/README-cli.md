@@ -24,16 +24,32 @@ compilot sdk --help
 
 Skill 文件位于 CLI 包的 `skills/compilot/` 目录下，安装后 AI 助手可直接调用 `compilot` 命令。
 
+## 使用流程
+
+手动使用时先查看状态，再按状态提示初始化或切换配置：
+
+```bash
+compilot qt status
+compilot qt init
+compilot qt build
+compilot qt run
+```
+
+AI 或脚本需要结构化输出时追加 `--json`：
+
+```bash
+compilot qt status --json
+compilot qt build --json
+```
+
 ## 通用选项
 
-所有 Qt/SDK 命令都支持以下选项：
+Qt/SDK 命令通用选项：
 
 | 选项 | 说明 |
 | --- | --- |
-| `--workspace <dir>` | 工作区目录，默认当前目录 |
-| `--json` | 输出 JSON，适合 AI 工具解析 |
-| `--no-color` | 禁用彩色输出 |
-| `--verbose` | 输出详细日志 |
+| `--workspace <dir>` | 工作区目录，默认当前目录；日常使用通常不需要 |
+| `--json` | 输出 JSON，适合 AI/脚本解析 |
 
 ## JSON 输出
 
@@ -59,16 +75,11 @@ Skill 文件位于 CLI 包的 `skills/compilot/` 目录下，安装后 AI 助手
 
 ### `compilot qt status`
 
-查看当前 Qt 项目状态、环境检测结果、候选 `.pro` 文件列表。
+查看当前 Qt 项目状态、当前 workspace、配置是否就绪和下一步动作。`status` 是推荐的第一条命令。
 
 ```bash
-compilot qt status --json
+compilot qt status
 ```
-
-| 选项 | 说明 |
-| --- | --- |
-| `--detect` | 重新检测环境 |
-| `--save-local` | 将检测结果写入本地配置 |
 
 ### `compilot qt init`
 
@@ -86,12 +97,22 @@ compilot qt init --json
 compilot qt init --project app.pro --mode debug --arch x64 --json
 ```
 
+### `compilot qt use`
+
+切换当前 workspace 正在使用的项目或构建配置，只更新显式传入的字段。
+
+```bash
+compilot qt use --mode release
+compilot qt use --project app.pro
+compilot qt use --qt-path /path/to/Qt
+```
+
 ### `compilot qt qmake`
 
 生成 Makefile。
 
 ```bash
-compilot qt qmake --json
+compilot qt qmake
 ```
 
 ### `compilot qt build`
@@ -99,7 +120,7 @@ compilot qt qmake --json
 编译 Qt 项目。
 
 ```bash
-compilot qt build --json
+compilot qt build
 ```
 
 ### `compilot qt run`
@@ -107,8 +128,8 @@ compilot qt build --json
 先杀掉已运行的程序，再编译并启动程序。
 
 ```bash
-compilot qt run --json
-compilot qt run --detach --json
+compilot qt run
+compilot qt run --detach
 ```
 
 `--detach` 时，编译在前台执行；编译成功后后台启动程序，编译失败直接返回错误。
@@ -118,7 +139,7 @@ compilot qt run --detach --json
 查看后台执行日志。
 
 ```bash
-compilot qt logs --tail 100
+compilot qt logs
 ```
 
 ### `compilot qt stop`
@@ -134,7 +155,7 @@ compilot qt stop
 清理构建产物。
 
 ```bash
-compilot qt clean --json
+compilot qt clean
 ```
 
 ### `compilot qt sync`
@@ -142,13 +163,16 @@ compilot qt clean --json
 按 git 变更文件同步到已配置的远程服务器。
 
 ```bash
-compilot qt sync --json
+compilot qt sync
 ```
 
 | 选项 | 说明 |
 | --- | --- |
-| `--dry-run` | 只预览待同步文件 |
+| `--dry-run` | 预览同步动作，不执行上传 |
 | `--server <name>` | 指定服务器名称，对应 `~/.compilot/servers.json` 中的 `name` |
+| `--repo <name>` | 多 git 仓库 workspace 时只同步指定仓库 |
+
+同步配置目前通过 VSCode 配置面板「远程同步」初始化：服务器列表存储在 `~/.compilot/servers.json`，当前 workspace 的同步开关、选中服务器、远程路径和忽略列表存储在 `~/.compilot/projects/<hash>.json`。
 
 ### `compilot qt rcc`
 
@@ -160,9 +184,8 @@ compilot qt rcc --json
 
 RCC 项目路径解析顺序：
 
-1. 命令行 `--rcc-project`
-2. 已保存的 `rccProjectPath`
-3. 自动扫描 workspace 父目录下的 `XYRcc/` 目录
+1. 已保存的 `rccProjectPath`
+2. 自动扫描 workspace 父目录下的 `XYRcc/` 目录
 
 `run` 命令会自动检测 RCC 资源是否有变更，有变更时自动插入 rcc 编译步骤。
 

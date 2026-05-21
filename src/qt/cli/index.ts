@@ -187,8 +187,8 @@ async function main(argv: string[]): Promise<void> {
 
         const planned = await createActionPlan(options);
 
-        // env/projects/status: custom output structure, bypass compactResult
-        if (options.action === 'env' || options.action === 'projects' || options.action === 'status') {
+        // env/projects/status/use: custom output structure, bypass compactResult
+        if (options.action === 'env' || options.action === 'projects' || options.action === 'status' || options.action === 'use') {
             if (!planned.ok) {
                 if (wantsJson) {
                     console.log(JSON.stringify(compactResult(planned), null, 2));
@@ -229,6 +229,17 @@ async function main(argv: string[]): Promise<void> {
                     console.log(JSON.stringify(projectsOutput, null, 2));
                 } else {
                     console.log(formatProjectsText(projectsOutput));
+                }
+            } else if (options.action === 'use') {
+                const useOutput = {
+                    ok: true,
+                    action: 'use',
+                    ...customData
+                };
+                if (wantsJson) {
+                    console.log(JSON.stringify(useOutput, null, 2));
+                } else {
+                    console.log(textOutput(planned));
                 }
             } else {
                 // status — resolved 只包含非空字段，平台无关字段不输出

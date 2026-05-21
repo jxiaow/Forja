@@ -25,16 +25,41 @@ test('parseCliArgs --mode and --arch are init options', () => {
     assert.equal(opts.arch, 'x64');
 });
 
-test('parseCliArgs rejects build config options on build run and clean', () => {
+test('parseCliArgs accepts use config options', () => {
+    const opts = parseCliArgs(['use', '--project', 'demo.pro', '--mode', 'release', '--arch', 'x64', '--target', 'demo']);
+
+    assert.equal(opts.action, 'use');
+    assert.equal(opts.project, 'demo.pro');
+    assert.equal(opts.mode, 'release');
+    assert.equal(opts.arch, 'x64');
+    assert.equal(opts.target, 'demo');
+});
+
+test('parseCliArgs rejects build config options on execution and read-only actions', () => {
     const restrictedFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
-    for (const action of ['build', 'run', 'clean']) {
+    for (const action of ['build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'logs', 'stop', 'rcc']) {
         for (const flag of restrictedFlags) {
             assert.throws(
                 () => parseCliArgs([action, flag, 'value']),
-                new RegExp(`${flag} 只允许用于 init`)
+                new RegExp(`${flag} 不能用于 ${action}`)
             );
         }
     }
+});
+
+test('parseCliArgs only accepts sync flags on sync', () => {
+    const opts = parseCliArgs(['sync', '--server', 'dev', '--repo', 'app', '--dry-run']);
+
+    assert.equal(opts.action, 'sync');
+    assert.equal(opts.server, 'dev');
+    assert.equal(opts.repo, 'app');
+    assert.equal(opts.executionMode, 'dryRun');
+    assert.throws(() => parseCliArgs(['build', '--server', 'dev']), /--server 不能用于 build/);
+});
+
+test('parseCliArgs only accepts detach on run', () => {
+    assert.equal(parseCliArgs(['run', '--detach']).detach, true);
+    assert.throws(() => parseCliArgs(['build', '--detach']), /--detach 不能用于 build/);
 });
 
 test('parseCliArgs throws on unknown action', () => {

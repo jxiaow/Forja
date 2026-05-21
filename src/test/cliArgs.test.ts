@@ -45,15 +45,46 @@ test('parseCliArgs accepts init config options', () => {
     assert.equal(parsed.target, 'demo');
 });
 
-test('parseCliArgs rejects init config options on build run and clean', () => {
-    for (const action of ['build', 'run', 'clean']) {
+test('parseCliArgs accepts use config options', () => {
+    const parsed = parseCliArgs([
+        'use',
+        '--workspace',
+        'D:/demo',
+        '--project',
+        'D:/demo/demo.pro',
+        '--mode',
+        'release',
+        '--arch',
+        'x64',
+        '--qt-path',
+        'D:/Qt',
+        '--vs-dev-shell',
+        'C:/VS/Launch-VsDevShell.ps1',
+        '--target',
+        'demo',
+        '--json'
+    ]);
+
+    assert.equal(parsed.action, 'use');
+    assert.equal(parsed.workspace, 'D:/demo');
+    assert.equal(parsed.project, 'D:/demo/demo.pro');
+    assert.equal(parsed.mode, 'release');
+    assert.equal(parsed.arch, 'x64');
+    assert.equal(parsed.qtPath, 'D:/Qt');
+    assert.equal(parsed.vsDevShell, 'C:/VS/Launch-VsDevShell.ps1');
+    assert.equal(parsed.target, 'demo');
+    assert.equal(parsed.json, true);
+});
+
+test('parseCliArgs rejects config options outside init and use', () => {
+    for (const action of ['build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'logs', 'stop', 'rcc']) {
         assert.throws(
             () => parseCliArgs([action, '--mode', 'release']),
-            /--mode 只允许用于 init/
+            new RegExp(`--mode 不能用于 ${action}`)
         );
         assert.throws(
             () => parseCliArgs([action, '--project', 'demo.pro']),
-            /--project 只允许用于 init/
+            new RegExp(`--project 不能用于 ${action}`)
         );
     }
 });

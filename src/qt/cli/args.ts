@@ -1,6 +1,6 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs', 'rcc'];
+const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs', 'rcc'];
 
 const helpText = `Compilot Qt CLI — qmake 项目构建工具
 
@@ -8,6 +8,7 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
 
 命令:
   init        初始化本地配置（检测环境、保存项目/构建配置）
+  use         切换当前 workspace 使用的项目/构建配置
   env         查看工具链环境（检测到的 Qt/VS/jom 及可选项）
   projects    查看 workspace 下的 .pro 文件列表
   status      显示当前配置、环境和项目状态
@@ -22,20 +23,24 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
 
 通用选项:
   --workspace <path>     工作区路径（默认当前目录）
-  --plan                 仅生成命令计划，不执行
-  --dry-run              （兼容旧版，等同于 --plan）
-  --detach               后台执行，日志落文件，CLI 立即返回
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
 
+init/use 选项:
+  --project <path>       指定当前 .pro 文件路径
+  --mode debug|release   指定构建模式
+  --arch x86|x64         指定目标架构
+  --qt-path <path>       指定 Qt 安装路径
+  --vs-dev-shell <path>  指定 Launch-VsDevShell.ps1 路径
+  --target <name>        指定 QMake TARGET 覆盖
+
 init 选项:
-  --project <path>       初始化时指定 .pro 文件路径
-  --mode debug|release   初始化构建模式
-  --arch x86|x64         初始化目标架构
-  --qt-path <path>       初始化 Qt 安装路径
-  --vs-dev-shell <path>  初始化 Launch-VsDevShell.ps1 路径
-  --target <name>        初始化 QMake TARGET 覆盖
   --save-local           将检测结果写入 Compilot 本地配置
+
+执行选项:
+  --plan                 仅生成命令计划，不执行（init/use/qmake/build/run/clean/sync/rcc）
+  --dry-run              （兼容旧版，等同于 --plan）
+  --detach               run 成功构建后后台启动程序
 
 sync 选项:
   --server <name>        同步时指定服务器名称
@@ -43,11 +48,12 @@ sync 选项:
 
 示例:
   compilot qt init --json              初始化并保存配置
-  compilot qt build --json             执行构建
-  compilot qt build --plan --json      查看构建命令（不执行）
-  compilot qt run --detach --json      后台构建并运行
-  compilot qt sync --json              同步变更文件到远程
-  compilot qt status --json            查看当前状态
+  compilot qt use --mode release       切换到 release 配置
+  compilot qt build                    执行构建
+  compilot qt build --plan             查看构建命令（不执行）
+  compilot qt run --detach             后台构建并运行
+  compilot qt sync                     同步变更文件到远程
+  compilot qt status                   查看当前状态
 `;
 
 export function isHelpRequest(args: string[]): boolean {
@@ -62,11 +68,49 @@ function isCliAction(value: string): value is CliAction {
     return validActions.includes(value as CliAction);
 }
 
-const initOnlyFlags = new Set(['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target']);
+const knownFlags = new Set([
+    '--plan',
+    '--dry-run',
+    '--workspace',
+    '--project',
+    '--mode',
+    '--arch',
+    '--qt-path',
+    '--vs-dev-shell',
+    '--target',
+    '--server',
+    '--repo',
+    '--save-local',
+    '--detach',
+    '--json'
+]);
+
+const commonFlags = ['--workspace', '--json'];
+const configFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
+const planFlags = ['--plan', '--dry-run'];
+const actionAllowedFlags: Record<CliAction, Set<string>> = {
+    init: new Set([...commonFlags, ...planFlags, ...configFlags, '--save-local']),
+    use: new Set([...commonFlags, ...planFlags, ...configFlags]),
+    status: new Set(commonFlags),
+    env: new Set(commonFlags),
+    projects: new Set(commonFlags),
+    qmake: new Set([...commonFlags, ...planFlags]),
+    build: new Set([...commonFlags, ...planFlags]),
+    clean: new Set([...commonFlags, ...planFlags]),
+    run: new Set([...commonFlags, ...planFlags, '--detach']),
+    stop: new Set(commonFlags),
+    sync: new Set([...commonFlags, ...planFlags, '--server', '--repo']),
+    logs: new Set(commonFlags),
+    rcc: new Set([...commonFlags, ...planFlags])
+};
 
 function assertFlagAllowedForAction(action: CliAction, flag: string): void {
-    if ((action === 'build' || action === 'run' || action === 'clean') && initOnlyFlags.has(flag)) {
-        throw new Error(`${flag} 只允许用于 init；请先运行 compilot qt init 保存配置`);
+    if (!flag.startsWith('--')) { return; }
+    if (!knownFlags.has(flag)) {
+        throw new Error(`未知参数: ${flag}`);
+    }
+    if (!actionAllowedFlags[action].has(flag)) {
+        throw new Error(`${flag} 不能用于 ${action}`);
     }
 }
 

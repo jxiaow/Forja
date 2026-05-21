@@ -99,6 +99,64 @@ test('createActionPlan status returns checks and resolved config', async () => {
     assert.ok(statusData.nextAction);
 });
 
+test('createActionPlan use updates only explicit config fields', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, {
+        ...DEFAULT_QT,
+        pinnedProject: { root: workspace, relative: 'demo.pro' },
+        mode: 'debug',
+        arch: 'x86',
+        qtPath: 'D:/Qt-old',
+        target: 'demo'
+    });
+
+    const result = await createActionPlan({
+        action: 'use',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: 'release',
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.resolved?.mode, 'release');
+    assert.equal(result.resolved?.arch, 'x86');
+    assert.equal(result.resolved?.qtPath, 'D:/Qt-old');
+    assert.equal(result.resolved?.target, 'demo');
+    assert.deepEqual(result.data?.updated, { mode: 'release' });
+});
+
+test('createActionPlan use --project switches pinned project', async () => {
+    const workspace = makeWorkspace();
+    fs.writeFileSync(path.join(workspace, 'other.pro'), 'TARGET = other\n', 'utf8');
+    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' } });
+
+    const result = await createActionPlan({
+        action: 'use',
+        executionMode: 'execute',
+        workspace,
+        project: 'other.pro',
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.project, path.join(workspace, 'other.pro'));
+    assert.equal(result.resolved?.project, 'other.pro');
+    assert.deepEqual(result.data?.updated, { project: 'other.pro' });
+});
+
 test('createActionPlan qmake warns when Qt and VS environment are unresolved', async () => {
     const workspace = makeWorkspace();
 
@@ -213,7 +271,7 @@ test('run without Makefile includes status hint when CLI-passed mode/arch', asyn
     assert.ok(result.nextActions.some(a => /status --json/.test(a)));
 });
 
-test('CLI args override settings for mode/arch/qtPath', async () => {
+test('build action plan ignores config override fields and uses saved settings', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, { ...DEFAULT_QT, mode: 'debug', arch: 'x86', qtPath: 'D:/Qt-old', vsInstall: 'C:/VS-old' });
 
@@ -232,10 +290,10 @@ test('CLI args override settings for mode/arch/qtPath', async () => {
     });
 
     assert.equal(result.ok, true);
-    assert.equal(result.resolved?.mode, 'release');
-    assert.equal(result.resolved?.arch, 'x64');
-    assert.equal(result.resolved?.qtPath, 'D:/Qt-new');
-    assert.equal(result.resolved?.vsDevShell, 'C:/VS-new/Launch-VsDevShell.ps1');
+    assert.equal(result.resolved?.mode, 'debug');
+    assert.equal(result.resolved?.arch, 'x86');
+    assert.equal(result.resolved?.qtPath, 'D:/Qt-old');
+    assert.notEqual(result.resolved?.vsDevShell, 'C:/VS-new/Launch-VsDevShell.ps1');
 });
 
 test('nextActions points to status when Qt path is empty', async () => {
@@ -281,9 +339,9 @@ test('project error branch fills resolved with current config', async () => {
 
     assert.equal(result.ok, false);
     assert.ok(result.resolved, 'resolved should be filled even on project error');
-    assert.equal(result.resolved?.mode, 'release');
-    assert.equal(result.resolved?.arch, 'x64');
-    assert.equal(result.resolved?.qtPath, 'D:/Qt');
+    assert.equal(result.resolved?.mode, 'debug');
+    assert.equal(result.resolved?.arch, process.platform === 'win32' ? 'x86' : 'x64');
+    assert.equal(result.resolved?.qtPath, '');
 });
 
 test('run with Makefile generates full command chain including executable', async () => {

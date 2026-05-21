@@ -21,21 +21,40 @@ compilot <subcommand> <action> [options]
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `--workspace <path>` | string | `process.cwd()` | 工作区根目录 |
-| `--plan` | boolean | `false` | 仅输出命令计划，不执行 |
 | `--json` | boolean | `false` | JSON 格式输出 |
 
-## Qt init 参数
+## Qt 命令参数矩阵
 
-以下参数只允许用于 `compilot qt init`，`build` / `run` / `clean` 只读取已保存配置：
+`status` 是推荐第一条命令。`build` / `run` / `clean` / `qmake` 只读取已保存配置，不接受构建配置参数。
+
+| 命令 | 允许参数 |
+|------|----------|
+| `status` | `--workspace`, `--json` |
+| `init` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--project`, `--mode`, `--arch`, `--qt-path`, `--vs-dev-shell`, `--target`, `--save-local` |
+| `use` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--project`, `--mode`, `--arch`, `--qt-path`, `--vs-dev-shell`, `--target` |
+| `env` | `--workspace`, `--json` |
+| `projects` | `--workspace`, `--json` |
+| `qmake` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `build` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `run` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--detach` |
+| `clean` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `stop` | `--workspace`, `--json` |
+| `logs` | `--workspace`, `--json` |
+| `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo` |
+| `rcc` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+
+## Qt init/use 配置参数
+
+以下参数只允许用于 `compilot qt init` 和 `compilot qt use`：
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--project <path>` | string | 自动检测 | 初始化项目文件路径（.pro） |
-| `--mode <mode>` | `debug` \| `release` | `debug` | 初始化构建模式 |
-| `--arch <arch>` | `x86` \| `x64` | `x86` | 初始化目标架构 |
-| `--qt-path <path>` | string | 自动检测 | 初始化 Qt 安装路径 |
-| `--vs-dev-shell <path>` | string | 自动检测 | 初始化 VS DevShell 路径 |
-| `--target <name>` | string | `.pro` TARGET | 初始化 QMake TARGET 覆盖 |
+| `--project <path>` | string | 自动检测 / 已保存值 | 当前项目文件路径（.pro） |
+| `--mode <mode>` | `debug` \| `release` | `debug` / 已保存值 | 构建模式 |
+| `--arch <arch>` | `x86` \| `x64` | 平台默认值 / 已保存值 | 目标架构 |
+| `--qt-path <path>` | string | 自动检测 / 已保存值 | Qt 安装路径 |
+| `--vs-dev-shell <path>` | string | 自动检测 / 已保存值 | VS DevShell 路径 |
+| `--target <name>` | string | `.pro` TARGET / 已保存值 | QMake TARGET 覆盖 |
 
 ## 远程模式参数（设计稿，暂未实现）
 
@@ -76,7 +95,7 @@ interface QtCliResult {
   rccProjectPath: string | null;  // RCC 项目路径
 }
 
-type CliAction = "init" | "status" | "qmake" | "build" | "clean" | "run" | "stop" | "sync" | "logs" | "rcc";
+type CliAction = "init" | "use" | "status" | "env" | "projects" | "qmake" | "build" | "clean" | "run" | "stop" | "sync" | "logs" | "rcc";
 
 interface Diagnostic {
   level: "info" | "warning" | "error";
