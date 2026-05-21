@@ -39,32 +39,38 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         log(`SDK workspace root: ${sdkWorkspaceRoot}`);
     }
 
-    // 3. 从配置恢复状态（在 workspace root 确定之后，确保读取正确的配置文件）
-    await stateManager.restoreFromConfig();
-    log(`恢复配置: mode=${stateManager.mode}, arch=${stateManager.arch}, project=${stateManager.currentProject?.path ?? 'null'}`);
+    // 3. 无 SDK 项目时，跳过项目初始化
+    if (projects.length === 0) {
+        log('未找到 SDK 项目');
+        stateManager.currentProject = null;
+    } else {
+        // 4. 从配置恢复状态（在 workspace root 确定之后，确保读取正确的配置文件）
+        await stateManager.restoreFromConfig();
+        log(`恢复配置: mode=${stateManager.mode}, arch=${stateManager.arch}, project=${stateManager.currentProject?.path ?? 'null'}`);
 
-    // 4. 解析当前项目
-    if (stateManager.currentProject) {
-        const exists = projects.find(p => p.path === stateManager.currentProject?.path);
-        if (!exists) {
-            log(`持久化的项目不存在: ${stateManager.currentProject.path}，重新选择...`);
-            stateManager.currentProject = null;
-            await stateManager.persistToConfig();
-            stateManager.currentProject = await projectScanner.resolveCurrentProject(projects);
-            if (stateManager.currentProject) {
+        // 5. 解析当前项目
+        if (stateManager.currentProject) {
+            const exists = projects.find(p => p.path === stateManager.currentProject?.path);
+            if (!exists) {
+                log(`持久化的项目不存在: ${stateManager.currentProject.path}，重新选择...`);
+                stateManager.currentProject = null;
                 await stateManager.persistToConfig();
+                stateManager.currentProject = await projectScanner.resolveCurrentProject(projects);
+                if (stateManager.currentProject) {
+                    await stateManager.persistToConfig();
+                }
+            } else {
+                log(`已恢复项目: ${stateManager.currentProject.name}`);
             }
         } else {
-            log(`已恢复项目: ${stateManager.currentProject.name}`);
-        }
-    } else {
-        log('无持久化项目，尝试自动选择...');
-        stateManager.currentProject = await projectScanner.resolveCurrentProject(projects);
-        if (stateManager.currentProject) {
-            log(`自动选择项目: ${stateManager.currentProject.name}`);
-            await stateManager.persistToConfig();
-        } else {
-            log('未选择任何项目');
+            log('无持久化项目，尝试自动选择...');
+            stateManager.currentProject = await projectScanner.resolveCurrentProject(projects);
+            if (stateManager.currentProject) {
+                log(`自动选择项目: ${stateManager.currentProject.name}`);
+                await stateManager.persistToConfig();
+            } else {
+                log('未选择任何项目');
+            }
         }
     }
 
@@ -97,7 +103,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         stateManager.arch = arch as import('./types').Arch;
         stateManager.persistToConfig();
     });
-    // 如果有 SDK 项目但没有 Qt 项目，默认激活 SDK 模块
+    // 有 SDK 项目时激活 SDK 模块
     if (stateManager.currentProject) {
         setActiveModule('sdk');
     }
