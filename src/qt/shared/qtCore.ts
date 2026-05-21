@@ -259,6 +259,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const statusResult: Record<string, unknown> = {
             ok: true,
             action: 'status',
+            workspace,
             ready,
             checks,
             nextAction

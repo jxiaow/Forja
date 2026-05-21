@@ -14,9 +14,11 @@ export function buildSyncPage(data: TemplateData): string {
     let h = '<div class="page-title">远程同步</div>';
     h += '<div class="page-desc">将变更文件同步到远程服务器</div>';
 
-    if (!data.qtActive) {
-        h += '<div class="section-disabled-hint">未检测到 Qt 项目，远程同步不可用</div>';
-        h += '<div style="opacity:0.4;pointer-events:none;user-select:none">';
+    if (!data.qtActive && !data.sdkActive) {
+        h += '<div class="section-inactive">';
+        h += '<div class="section-inactive-hint">未检测到项目，远程同步不可用</div>';
+        h += '</div>';
+        return h;
     }
 
     // ── 同步开关 + 状态概览 ──
@@ -90,7 +92,6 @@ export function buildSyncPage(data: TemplateData): string {
     // ── 脚本 ──
     h += buildSyncScript(data, srv);
 
-    if (!data.qtActive) { h += '</div>'; }
     return h;
 }
 
