@@ -8,7 +8,8 @@
 compilot <subcommand> <action> [options]
 ```
 
-- 子命令：`qt` | `sdk` | `remote`
+- 当前已实现子命令：`qt` | `sdk` | `cleanup`
+- `remote` 相关内容是远程部署设计稿，当前 CLI dispatcher 尚未实现 `compilot remote ...`
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -26,7 +27,7 @@ compilot <subcommand> <action> [options]
 | `--plan` | boolean | `false` | 仅输出命令计划，不执行 |
 | `--json` | boolean | `false` | JSON 格式输出 |
 
-## 远程模式参数
+## 远程模式参数（设计稿，暂未实现）
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -269,9 +270,9 @@ interface SdkCliResult {
 
 ---
 
-## Remote 模式输出结构
+## Remote 模式输出结构（设计稿，暂未实现）
 
-`--remote` 模式返回 `DeployResult`：
+以下协议尚未接入当前 CLI 入口，不能作为已发布命令调用。`--remote` 模式计划返回 `DeployResult`：
 
 ```typescript
 interface DeployResult {
@@ -328,7 +329,7 @@ type DeployStage = "preCheck" | "branchSync" | "sync" | "baselineCheck" | "build
 
 ---
 
-## `compilot remote test` 输出结构
+## `compilot remote test` 输出结构（设计稿，暂未实现）
 
 ```typescript
 interface RemoteTestResult {

@@ -15,6 +15,12 @@ test('cli dispatcher routes to qt and sdk subcommands', () => {
     assert.match(source, /process\.exitCode = 1/);
 });
 
+test('cli interface spec lists only implemented subcommands as available', () => {
+    const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
+    assert.match(spec, /当前已实现子命令：`qt` \| `sdk` \| `cleanup`/);
+    assert.match(spec, /Remote 模式输出结构（设计稿，暂未实现）/);
+});
+
 test('qt cli entry handles parse errors as json when requested', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'cli', 'index.ts'), 'utf8');
     assert.match(source, /parseCliArgs/);
