@@ -7,6 +7,7 @@ import { testConnection } from './transport';
 import { getWorkspaceRoot } from '../services/configService';
 import { createLogger } from '../../vscode/logger';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
+import { onSettingsChange } from '../../vscode/settingsStore';
 
 const logger = createLogger('SyncManager');
 
@@ -19,16 +20,11 @@ function _warnHostKeyCheckingIfNeeded(_server: ServerConfig): void {
 }
 
 export function registerSyncWatcher(context: vscode.ExtensionContext): void {
-    const wsRoot = getWorkspaceRoot();
-    if (wsRoot) {
-        // 监听 settings.json 变化来刷新状态栏（sync 配置已合并到 settings.json）
-        const syncPattern = new vscode.RelativePattern(wsRoot, '.compilot/settings.json');
-        const syncWatcher = vscode.workspace.createFileSystemWatcher(syncPattern);
-        syncWatcher.onDidChange(() => _refreshStatusBar());
-        syncWatcher.onDidCreate(() => _refreshStatusBar());
-        syncWatcher.onDidDelete(() => _refreshStatusBar());
-        context.subscriptions.push(syncWatcher);
-    }
+    context.subscriptions.push(onSettingsChange((section) => {
+        if (section === 'sync') {
+            _refreshStatusBar();
+        }
+    }));
 
     // 监听全局 servers.json（位于 ~/.compilot/）
     const os = require('os') as typeof import('os');

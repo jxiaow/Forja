@@ -11,3 +11,26 @@ test('SDK extension observes unified settingsStore changes instead of old worksp
     assert.doesNotMatch(sdkExtension, /onSettingsFileChanged/);
     assert.doesNotMatch(configService, /\.compilot\/settings\.json/);
 });
+
+test('workspace resolver watches unified project config files instead of old workspace settings file', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'vscode', 'workspaceResolver.ts'), 'utf8');
+
+    assert.match(source, /projectsDir/);
+    assert.match(source, /createFileSystemWatcher\(pattern\)/);
+    assert.doesNotMatch(source, /\.compilot\/settings\.json/);
+});
+
+test('sync watcher refreshes status from unified settings changes', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'sync', 'syncWatcher.ts'), 'utf8');
+
+    assert.match(source, /onSettingsChange/);
+    assert.match(source, /section === 'sync'/);
+    assert.doesNotMatch(source, /\.compilot\/settings\.json/);
+});
+
+test('developer docs describe unified sync settings storage', () => {
+    const docs = fs.readFileSync(path.join(process.cwd(), 'docs', 'development.md'), 'utf8');
+
+    assert.match(docs, /~\/\.compilot\/projects\/<hash>\.json/);
+    assert.doesNotMatch(docs, /\.compilot\/settings\.json/);
+});

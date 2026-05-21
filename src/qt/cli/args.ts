@@ -33,7 +33,7 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   --plan                 仅生成命令计划，不执行
   --dry-run              （兼容旧版，等同于 --plan）
   --detach               后台执行，日志落文件，CLI 立即返回
-  --save-local           将检测结果写入 .compilot/settings.json
+  --save-local           将检测结果写入 Compilot 本地配置
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
 

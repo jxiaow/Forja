@@ -1,7 +1,7 @@
 /**
  * 统一的服务器配置存储。
  * 全局服务器列表：~/.compilot/servers.json
- * 项目同步配置：.compilot/settings.json 的 sync 部分
+ * 项目同步配置：~/.compilot/projects/<hash>.json 中 type=sync 的文件
  * 
  * 扩展和 CLI 共用，不依赖 vscode。
  *
@@ -181,7 +181,7 @@ export function getServerByName(name: string): ServerConfig | null {
     return servers.find(s => s.name === name) || null;
 }
 
-// ── 项目同步配置（读写统一 .compilot/settings.json 的 sync 部分） ──
+// ── 项目同步配置（读写统一 settingsIO 的 sync 配置） ──
 
 import { loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
 

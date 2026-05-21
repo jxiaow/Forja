@@ -24,7 +24,7 @@
 | C1 | 🟡 中 | SDK CLI 静默忽略未知参数，Qt CLI 会抛错 | src/sdk/cli/index.ts parseArgs | 待修 |
 | C2 | 🟡 中 | SDK CLI 不校验 `--mode`/`--arch` 值，无效值直接透传 | src/sdk/cli/index.ts parseArgs | 待修 |
 | C3 | 🟡 中 | SDK CLI help 文本缺少 `--remote`/`--fast`/`--from`/`--force` 文档 | src/sdk/cli/index.ts getHelpText | 待修 |
-| C4 | 🟢 低 | SDK CLI 中 `run`/`stop`/`restart` 的 deploy.json 检查是死代码（SDK 不支持这些 action） | src/sdk/cli/index.ts:193-205 | 待修 |
+| C4 | 🟢 低 | ~~SDK CLI 中 `run`/`stop`/`restart` 的部署配置检查是死代码~~ 当前 SDK CLI 已不包含该检查 | — | ✅ 不再适用 |
 
 ## 错误处理
 

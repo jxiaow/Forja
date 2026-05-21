@@ -250,10 +250,10 @@ compilot/
 
 ```
 VSCode 配置面板
-  → 写入 ~/.compilot/servers.json 和 .compilot/settings.json 的 sync 部分
+  → 写入 ~/.compilot/servers.json 和 ~/.compilot/projects/<hash>.json 的 sync 配置
 
 CLI
-  → 读取 .compilot/settings.json 的 sync 部分
+  → 读取 ~/.compilot/projects/<hash>.json 的 sync 配置
   → 执行同步
 
 两者共用
@@ -265,9 +265,9 @@ CLI
 | 配置项 | 作用域 | 存储位置 |
 |--------|--------|----------|
 | 服务器列表 | 全局 | `~/.compilot/servers.json` |
-| 启用开关 | 项目 | `.compilot/settings.json` 的 `sync` 部分 |
-| 远程路径 | 项目 | `.compilot/settings.json` 的 `sync` 部分 |
-| 忽略列表 | 项目 | `.compilot/settings.json` 的 `sync` 部分 |
+| 启用开关 | 项目 | `~/.compilot/projects/<hash>.json` (`type=sync`) |
+| 远程路径 | 项目 | `~/.compilot/projects/<hash>.json` (`type=sync`) |
+| 忽略列表 | 项目 | `~/.compilot/projects/<hash>.json` (`type=sync`) |
 | 同步状态 | 项目 | `.compilot/sync-state.json` |
 
 ---
