@@ -80,12 +80,18 @@ compilot qt init --json
 
 `init` 会保存检测到的 Qt 路径、VS 环境、项目选择等，后续命令会自动读取，不需要每次指定 `--project`、`--mode`、`--arch`。
 
-### `compilot qt configure`
+初始化时可以显式指定配置：
+
+```bash
+compilot qt init --project app.pro --mode debug --arch x64 --json
+```
+
+### `compilot qt qmake`
 
 生成 Makefile。
 
 ```bash
-compilot qt configure --project app.pro --mode debug --arch x64 --json
+compilot qt qmake --json
 ```
 
 ### `compilot qt build`
@@ -93,7 +99,7 @@ compilot qt configure --project app.pro --mode debug --arch x64 --json
 编译 Qt 项目。
 
 ```bash
-compilot qt build --project app.pro --mode debug --arch x64 --json
+compilot qt build --json
 ```
 
 ### `compilot qt run`
@@ -101,7 +107,7 @@ compilot qt build --project app.pro --mode debug --arch x64 --json
 先杀掉已运行的程序，再编译并启动程序。
 
 ```bash
-compilot qt run --project app.pro --mode debug --arch x64 --json
+compilot qt run --json
 compilot qt run --detach --json
 ```
 
@@ -120,7 +126,7 @@ compilot qt logs --tail 100
 停止运行中的程序。
 
 ```bash
-compilot qt stop --project app.pro
+compilot qt stop
 ```
 
 ### `compilot qt clean`
@@ -128,7 +134,7 @@ compilot qt stop --project app.pro
 清理构建产物。
 
 ```bash
-compilot qt clean --project app.pro --json
+compilot qt clean --json
 ```
 
 ### `compilot qt sync`

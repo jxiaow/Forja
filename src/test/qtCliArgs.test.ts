@@ -18,10 +18,23 @@ test('parseCliArgs defaults to status when no action given', () => {
     assert.equal(opts.json, true);
 });
 
-test('parseCliArgs --mode and --arch set correctly', () => {
-    const opts = parseCliArgs(['build', '--mode', 'release', '--arch', 'x64']);
+test('parseCliArgs --mode and --arch are init options', () => {
+    const opts = parseCliArgs(['init', '--mode', 'release', '--arch', 'x64']);
+    assert.equal(opts.action, 'init');
     assert.equal(opts.mode, 'release');
     assert.equal(opts.arch, 'x64');
+});
+
+test('parseCliArgs rejects build config options on build run and clean', () => {
+    const restrictedFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
+    for (const action of ['build', 'run', 'clean']) {
+        for (const flag of restrictedFlags) {
+            assert.throws(
+                () => parseCliArgs([action, flag, 'value']),
+                new RegExp(`${flag} 只允许用于 init`)
+            );
+        }
+    }
 });
 
 test('parseCliArgs throws on unknown action', () => {

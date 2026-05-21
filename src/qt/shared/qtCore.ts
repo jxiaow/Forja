@@ -71,9 +71,9 @@ function resolveProject(workspace: string, options: CliOptions, settings: QtSett
         return { project: found[0], error: null };
     }
     if (found.length > 1) {
-        return { project: null, error: `发现多个 .pro 文件: ${found.join(', ')}。请使用 --project 指定。` };
+        return { project: null, error: `发现多个 .pro 文件: ${found.join(', ')}。请使用 compilot qt init --project <path> --json 初始化项目。` };
     }
-    return { project: null, error: '未找到 .pro 文件。请使用 --project 指定。' };
+    return { project: null, error: '未找到 .pro 文件。请使用 compilot qt init --project <path> --json 初始化项目。' };
 }
 
 function buildResolvedConfig(

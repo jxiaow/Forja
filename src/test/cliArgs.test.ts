@@ -13,9 +13,9 @@ test('parseCliArgs defaults build to execute mode', () => {
     assert.equal(parsed.json, false);
 });
 
-test('parseCliArgs accepts json and typed options', () => {
+test('parseCliArgs accepts init config options', () => {
     const parsed = parseCliArgs([
-        'run',
+        'init',
         '--json',
         '--workspace',
         'D:/demo',
@@ -33,7 +33,7 @@ test('parseCliArgs accepts json and typed options', () => {
         'demo'
     ]);
 
-    assert.equal(parsed.action, 'run');
+    assert.equal(parsed.action, 'init');
     assert.equal(parsed.executionMode, 'execute');
     assert.equal(parsed.json, true);
     assert.equal(parsed.workspace, 'D:/demo');
@@ -43,6 +43,19 @@ test('parseCliArgs accepts json and typed options', () => {
     assert.equal(parsed.qtPath, 'D:/Qt');
     assert.equal(parsed.vsDevShell, 'C:/VS/Launch-VsDevShell.ps1');
     assert.equal(parsed.target, 'demo');
+});
+
+test('parseCliArgs rejects init config options on build run and clean', () => {
+    for (const action of ['build', 'run', 'clean']) {
+        assert.throws(
+            () => parseCliArgs([action, '--mode', 'release']),
+            /--mode 只允许用于 init/
+        );
+        assert.throws(
+            () => parseCliArgs([action, '--project', 'demo.pro']),
+            /--project 只允许用于 init/
+        );
+    }
 });
 
 test('parseCliArgs --plan switches to dryRun mode', () => {

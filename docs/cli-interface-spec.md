@@ -21,11 +21,21 @@ compilot <subcommand> <action> [options]
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `--workspace <path>` | string | `process.cwd()` | 工作区根目录 |
-| `--project <path>` | string | 自动检测 | 项目文件路径（.pro / .sln / Makefile） |
-| `--mode <mode>` | `debug` \| `release` | `debug` | 构建模式 |
-| `--arch <arch>` | `x86` \| `x64` | `x86` | 目标架构 |
 | `--plan` | boolean | `false` | 仅输出命令计划，不执行 |
 | `--json` | boolean | `false` | JSON 格式输出 |
+
+## Qt init 参数
+
+以下参数只允许用于 `compilot qt init`，`build` / `run` / `clean` 只读取已保存配置：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--project <path>` | string | 自动检测 | 初始化项目文件路径（.pro） |
+| `--mode <mode>` | `debug` \| `release` | `debug` | 初始化构建模式 |
+| `--arch <arch>` | `x86` \| `x64` | `x86` | 初始化目标架构 |
+| `--qt-path <path>` | string | 自动检测 | 初始化 Qt 安装路径 |
+| `--vs-dev-shell <path>` | string | 自动检测 | 初始化 VS DevShell 路径 |
+| `--target <name>` | string | `.pro` TARGET | 初始化 QMake TARGET 覆盖 |
 
 ## 远程模式参数（设计稿，暂未实现）
 
@@ -192,7 +202,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "ok": true,
   "action": "build",
   "diagnostics": [{ "level": "warning", "message": "未找到 .pro 文件" }],
-  "nextActions": ["在工作区中创建 .pro 文件，或使用 --project 指定路径"]
+  "nextActions": ["在工作区中创建 .pro 文件，或使用 compilot qt init --project <path> --json 初始化项目"]
 }
 
 // Qt 环境未配置
@@ -200,7 +210,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "ok": true,
   "action": "build",
   "diagnostics": [{ "level": "warning", "message": "Qt 路径未配置" }],
-  "nextActions": ["compilot qt init --json", "compilot qt build --qt-path C:/Qt/5.15.2/msvc2019 --json"]
+  "nextActions": ["compilot qt init --qt-path C:/Qt/5.15.2/msvc2019 --json", "compilot qt build --json"]
 }
 ```
 
