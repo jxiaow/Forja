@@ -9,7 +9,7 @@ import * as os from 'os';
 import * as cp from 'child_process';
 import { EXCLUDE_DIRS, EXCLUDE_PATH_SEGMENTS, DEFAULT_SCAN_DEPTH } from '../constants';
 import { getSdkDefaultArch, getSdkAvailableArch } from './requirements';
-import { loadSdkSettings, saveSdkSettings, SdkSettings, sdkSettingsFilePath } from './settings';
+import { loadSdkSettings, saveSdkSettings, sdkSettingsFilePath } from './settings';
 import { detectVsInstallations, detectMake } from './envDetector';
 
 interface SdkCliOptions {

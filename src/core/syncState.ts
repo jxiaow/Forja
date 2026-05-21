@@ -2,9 +2,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { createLogger } from './logger';
+import { createLoggerBase } from './loggerBase';
 
-const logger = createLogger('SyncState');
+const logger = createLoggerBase('SyncState');
 
 interface SyncRecord {
     /** 上次同步成功时文件的 mtime (ms) */

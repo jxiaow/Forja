@@ -1,4 +1,4 @@
-import type { ProjectInfo, EnvInfo } from './types';
+import type { ProjectInfo, EnvInfo } from '../core/types';
 import { getQtSetting, setQtSetting, onSettingsChange } from './settingsStore';
 
 export type BuildMode = 'debug' | 'release';

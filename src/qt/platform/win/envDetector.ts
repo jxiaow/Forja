@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { EnvInfo, VSInfo, QtInfo, execAsync, hasQmake, parseQtInfo, scanQt } from '../../env/envDetector';
-import { log } from '../../../core/logger';
+import { log } from '../../../core/loggerBase';
 
 // ── VS 检测 ──
 

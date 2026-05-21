@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import { detectEnv } from '../../qt/env/envDetector';
 import { generateCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
-import { getState, setState } from '../../core/qtState';
+import { getState, setState } from '../../vscode/qtState';
 import { updateConfig, getTarget, getWorkspaceRoot } from '../../qt/services/configService';
-import { createLogger } from '../../core/logger';
+import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { executeTestConnection, refreshSyncStatusBar } from '../../qt/sync/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
-import { setSdkSetting } from '../../core/settingsStore';
+import { setSdkSetting } from '../../vscode/settingsStore';
 
 const logger = createLogger('ConfigPanel');
 

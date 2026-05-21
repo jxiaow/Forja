@@ -1,5 +1,6 @@
 import { TemplateData } from '../template';
 import { getEffectiveProjectName } from '../../../qt/project/projectDisplay';
+import { jsLiteral } from '../jsLiteral';
 
 function esc(v: string): string {
     return v.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -160,7 +161,7 @@ function buildQtScript(data: TemplateData): string {
     h += 'vscode.postMessage({command:"saveArch",value:a})}';
     // tag input
     h += '(function(){';
-    h += `var d='${esc(data.scanExcludeDirs)}'.split(', ').filter(function(s){return s.length>0});`;
+    h += `var d=${jsLiteral(data.scanExcludeDirs)}.split(', ').filter(function(s){return s.length>0});`;
     h += 'var w=document.getElementById("edw");var i=w.querySelector("input");';
     h += 'd.forEach(aT);';
     h += 'function aT(v){var t=document.createElement("span");t.className="tag-item";';

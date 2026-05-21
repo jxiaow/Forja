@@ -5,12 +5,12 @@
 import * as vscode from 'vscode';
 import { ConfigPageId } from './configNavTree';
 import { handleMessage } from './messageHandler';
-import { getState, setState } from '../../core/qtState';
+import { getState, setState } from '../../vscode/qtState';
 import { detectEnv } from '../../qt/env/envDetector';
 import { getPageHtml } from './pageTemplate';
 import { buildTemplateData } from './templateData';
-import { createLogger } from '../../core/logger';
-import { onSettingsChange, getQtSetting, getSdkSetting } from '../../core/settingsStore';
+import { createLogger } from '../../vscode/logger';
+import { onSettingsChange, getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
 
 const logger = createLogger('ConfigPagePanel');
 

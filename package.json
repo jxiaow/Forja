@@ -138,7 +138,7 @@
     }
   },
   "scripts": {
-    "copy-html": "powershell -Command \"Copy-Item -Path src/ui/configPanel/configPanel.html -Destination out/ui/configPanel/ -Force\"",
+    "copy-html": "node scripts/copy-html.js",
     "compile": "tsc -p ./ && npm run copy-html",
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test --test-reporter=spec out/test",

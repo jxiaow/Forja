@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cp from 'child_process';
-import { createLogger } from '../../core/logger';
+import { createLogger } from '../../vscode/logger';
 import { filterNeedsSync, markSyncedBatch } from '../../core/syncState';
 import { ServerConfig } from '../../core/serverStore';
 import { ResolvedSyncConfig } from './resolver';

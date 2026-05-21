@@ -5,7 +5,7 @@ import { readServers, readProjectSyncConfig, ServerConfig } from '../../core/ser
 import { syncChangedFiles, askPassword, clearPasswordCache } from './sftpClient';
 import { testConnection } from './transport';
 import { getWorkspaceRoot } from '../services/configService';
-import { createLogger } from '../../core/logger';
+import { createLogger } from '../../vscode/logger';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
 
 const logger = createLogger('SyncManager');

@@ -1,24 +1,25 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { setState, loadPersistedState } from './core/qtState';
+import { setState, loadPersistedState } from './vscode/qtState';
 import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, updateConfig, getJomPath } from './qt/services/configService';
-import { createUnifiedStatusBar, setActiveModule, setSdkState } from './ui/unifiedStatusBar';
+import { createUnifiedStatusBar } from './ui/unifiedStatusBar';
 import { registerPriWatcher } from './qt/project/priWatcher';
 import { ConfigNavTreeProvider } from './ui/configPanel/configNavTree';
 import { ConfigPageManager } from './ui/configPanel/configPagePanel';
 import { selectProject, parseProFile } from './qt/project/projectManager';
 import { registerDebugSessionWatcher } from './qt/build/debugger';
 import { generateCppProperties } from './qt/build/configGenerator';
-import { createLogger, initLogger } from './core/logger';
+import { createLogger, initLogger } from './vscode/logger';
 import { detectEnv } from './qt/env/envDetector';
 import { ensureLocalStateDir } from './qt/shared/localState';
 import { registerSyncWatcher } from './qt/sync/syncWatcher';
-import { initSettingsStore } from './core/settingsStore';
-import { registerWorkspaceWatcher } from './core/workspaceResolver';
+import { initSettingsStore } from './vscode/settingsStore';
+import { registerWorkspaceWatcher } from './vscode/workspaceResolver';
 import { activateSdk } from './sdk/sdkExtension';
 import { registerQtCommands } from './qt/commands';
 import { TASK_SOURCE_QT } from './qt/constants';
+import { normalizeConfigPageId } from './ui/configPanel/pageIds';
 
 import { listProjectConfigs } from './core/settingsIO';
 import { listSyncStates } from './core/syncState';
@@ -66,8 +67,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     configTreeView.title = `配置 v${context.extension.packageJSON.version || ''}`;
     context.subscriptions.push(configTreeView);
     context.subscriptions.push(
-        vscode.commands.registerCommand('compilot.config.openPage', (pageId: string) => {
-            pageManager.openPage(pageId as 'project' | 'env' | 'sync' | 'advanced');
+        vscode.commands.registerCommand('compilot.config.openPage', (pageId?: string) => {
+            pageManager.openPage(normalizeConfigPageId(pageId));
         })
     );
     context.subscriptions.push(

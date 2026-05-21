@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { SdkProjectInfo, BuildMode, Arch, StateChangeEvent } from '../types';
 import { isLinux } from '../platform';
-import { getSdkSetting, setSdkSetting } from '../../core/settingsStore';
-import { resolveProjectRoot } from '../../core/workspaceResolver';
+import { getSdkSetting, setSdkSetting } from '../../vscode/settingsStore';
+import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 
 export class StateManager implements vscode.Disposable {
   private _currentProject: SdkProjectInfo | null = null;

@@ -3,7 +3,7 @@
  * 抽取为独立模块，供 WebviewPanel 和旧 WebviewViewProvider 共用。
  */
 import * as vscode from 'vscode';
-import { getState } from '../../core/qtState';
+import { getState } from '../../vscode/qtState';
 import { TemplateData } from './template';
 import {
     getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
@@ -11,8 +11,8 @@ import {
     getDesignerPath, getQtSourcePath, getFileSyncPromptEnabled,
     getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot
 } from '../../qt/services/configService';
-import { getQtSetting, getSdkSetting } from '../../core/settingsStore';
-import { resolveProjectRoot } from '../../core/workspaceResolver';
+import { getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
+import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { getSyncPendingInfo } from '../../core/syncState';
 

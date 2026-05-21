@@ -38,7 +38,7 @@ test('createActionPlan uses settings.json when CLI args are omitted', async () =
     assert.equal(result.ok, true);
     assert.equal(result.workspace, workspace);
     assert.equal(result.project, project);
-    assert.match(result.commands.join('\n'), /jom/);
+    assert.match(result.commands.join('\n'), process.platform === 'win32' ? /jom/ : /make/);
 });
 
 test('createActionPlan reports multiple projects without explicit project', async () => {
@@ -86,13 +86,15 @@ test('createActionPlan status returns checks and resolved config', async () => {
 
     assert.equal(result.ok, true);
     assert.equal(result.resolved?.mode, 'debug');
-    assert.equal(result.resolved?.arch, 'x86');
+    assert.equal(result.resolved?.arch, process.platform === 'win32' ? 'x86' : 'x64');
     // stdout contains custom status structure
     const statusData = JSON.parse(result.stdout);
     assert.equal(statusData.checks.settings, true);
     assert.equal(statusData.checks.project, true);
     assert.equal(statusData.checks.qtPath, true);
-    assert.equal(statusData.checks.jom, true);
+    if (process.platform === 'win32') {
+        assert.equal(statusData.checks.jom, true);
+    }
     assert.equal(typeof statusData.ready, 'boolean');
     assert.ok(statusData.nextAction);
 });
@@ -287,9 +289,12 @@ test('project error branch fills resolved with current config', async () => {
 test('run with Makefile generates full command chain including executable', async () => {
     const workspace = makeWorkspace();
     const projectDir = workspace;
-    // Create Makefile that matches debug/x86
-    fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: qmake demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
-    fs.writeFileSync(path.join(projectDir, 'Makefile.Debug'), 'DESTDIR_TARGET = debug\\demo.exe\n', 'utf8');
+    if (process.platform === 'win32') {
+        fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
+        fs.writeFileSync(path.join(projectDir, 'Makefile.Debug'), 'DESTDIR_TARGET = debug\\demo.exe\n', 'utf8');
+    } else {
+        fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake" demo.pro -spec linux-g++ CONFIG+=debug CONFIG+=console\nTARGET = debug/demo\n', 'utf8');
+    }
 
     const result = await createActionPlan({
         action: 'run',
