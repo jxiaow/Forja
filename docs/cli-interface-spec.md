@@ -20,8 +20,10 @@ compilot <subcommand> <action> [options]
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--workspace <path>` | string | `process.cwd()` | 工作区根目录 |
+| `--workspace <path>` | string | `process.cwd()` | 操作根目录，用于定位本地配置、扫描项目和执行命令 |
 | `--json` | boolean | `false` | JSON 格式输出 |
+
+`--workspace` 不是 `.pro` 文件路径。Qt 多项目仓库中，`--workspace` 指向仓库/工作区根目录，具体 `.pro` 通过 `compilot qt use --project <relative.pro>` 选择；`build` / `run` / `clean` / `qmake` 只读取该 workspace 已保存的项目和构建配置。
 
 ## Qt 命令参数矩阵
 
@@ -149,6 +151,8 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "ok": true,
   "action": "status",
   "resolved": { "mode": "debug", "arch": "x86", "qtPath": "C:/Qt/5.15.2/msvc2019", ... },
+  "nextAction": "build",
+  "nextActions": ["compilot qt build --json"],
   "candidates": ["app/app.pro", "lib/lib.pro"],
   "rccProjectPath": "XYRcc/XYRcc.pro",
   "diagnostics": []
@@ -158,6 +162,8 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 - 不执行任何命令，只返回环境状态
 - `candidates` 列出所有找到的 .pro 文件
 - `resolved` 反映当前配置（settings + 环境检测）
+- `nextAction` 是摘要动作；`nextActions` 是可直接执行的建议命令
+- 没有本地配置时返回 `init`；已有配置但缺项目时返回 `projects` 并建议 `use --project`；缺工具链时返回 `env` 并建议 `use --qt-path` / `use --vs-dev-shell`
 
 ### `build` / `run` / `clean` / `qmake`
 

@@ -26,11 +26,13 @@ Skill 文件位于 CLI 包的 `skills/compilot/` 目录下，安装后 AI 助手
 
 ## 使用流程
 
-手动使用时先查看状态，再按状态提示初始化或切换配置：
+手动使用时先查看状态，再按状态提示执行下一步。`init` 只用于首次自动初始化；如果 `status` 提示缺工具链或缺项目，先用 `env` / `projects` 查看候选，再用 `use` 写入显式选择：
 
 ```bash
 compilot qt status
 compilot qt init
+compilot qt env
+compilot qt projects
 compilot qt use --mode release
 compilot qt build
 compilot qt run
@@ -49,8 +51,10 @@ Qt/SDK 命令通用选项：
 
 | 选项 | 说明 |
 | --- | --- |
-| `--workspace <dir>` | 工作区目录，默认当前目录；日常使用通常不需要 |
+| `--workspace <dir>` | 操作根目录，默认当前目录；日常手动使用通常先 `cd` 到项目根目录，不需要传 |
 | `--json` | 输出 JSON，适合 AI/脚本解析 |
+
+`--workspace` 用来确定本次命令读写哪个项目的本地配置、从哪里扫描 `.pro`、以及同步/日志等状态归属。它不是 `.pro` 文件路径；多项目仓库中用 `compilot qt use --project <relative.pro>` 在该 workspace 内选择具体项目。
 
 ## JSON 输出
 
@@ -81,6 +85,8 @@ Qt/SDK 命令通用选项：
 ```bash
 compilot qt status
 ```
+
+`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `projects` / `use --project`；缺 Qt/VS 工具链时提示 `env` / `use --qt-path` 或 `use --vs-dev-shell`；配置齐全后再提示 `qmake`、`build` 或 `run`。
 
 ### `compilot qt init`
 

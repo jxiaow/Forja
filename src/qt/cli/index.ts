@@ -313,6 +313,12 @@ function formatStatusText(data: Record<string, unknown>): string {
 
     lines.push('');
     lines.push(`下一步: compilot qt ${data.nextAction}`);
+    const nextActions = data.nextActions as string[] | undefined;
+    if (nextActions && nextActions.length > 0) {
+        for (const action of nextActions) {
+            lines.push(`  ${action}`);
+        }
+    }
 
     const diagnostics = data.diagnostics as Array<Record<string, string>> | undefined;
     if (diagnostics && diagnostics.length > 0) {

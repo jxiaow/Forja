@@ -105,6 +105,42 @@ function buildResolvedConfig(
     return config;
 }
 
+function buildProjectSelectionActions(): string[] {
+    return [
+        'compilot qt projects --json',
+        'compilot qt use --project <path> --json'
+    ];
+}
+
+function buildToolchainActions(missingTools: ReturnType<typeof getMissingTools>): string[] {
+    const actions = ['compilot qt env --json'];
+    for (const tool of missingTools) {
+        if (tool.cliFlag) {
+            actions.push(`compilot qt use ${tool.cliFlag.replace(/<[^>]+>/g, '<path>')} --json`);
+        }
+    }
+    return actions;
+}
+
+function buildStatusGuidance(hasSettings: boolean, projectExists: boolean, missingTools: ReturnType<typeof getMissingTools>, hasMakefile: boolean, hasExecutable: boolean): { nextAction: string; nextActions: string[] } {
+    if (!hasSettings) {
+        return { nextAction: 'init', nextActions: ['compilot qt init --json'] };
+    }
+    if (!projectExists) {
+        return { nextAction: 'projects', nextActions: buildProjectSelectionActions() };
+    }
+    if (missingTools.length > 0) {
+        return { nextAction: 'env', nextActions: buildToolchainActions(missingTools) };
+    }
+    if (!hasMakefile) {
+        return { nextAction: 'qmake', nextActions: ['compilot qt qmake --json'] };
+    }
+    if (!hasExecutable) {
+        return { nextAction: 'build', nextActions: ['compilot qt build --json'] };
+    }
+    return { nextAction: 'run', nextActions: ['compilot qt run --json'] };
+}
+
 interface InitDiagnosticsInput {
     options: CliOptions;
     qtCandidates: Array<{path: string; version: string; compiler: string}>;
@@ -143,6 +179,24 @@ function buildInitDiagnostics(input: InitDiagnosticsInput): CliResult['diagnosti
     }
 
     return diagnostics;
+}
+
+function buildInitNextActions(project: string | null, projects: string[], missingTools: ReturnType<typeof getMissingTools>): string[] {
+    const nextActions: string[] = [];
+    if (!project) {
+        if (projects.length > 1) {
+            nextActions.push(...buildProjectSelectionActions());
+        } else if (projects.length === 0) {
+            nextActions.push('在工作区中创建 .pro 文件');
+        }
+    }
+    if (missingTools.length > 0) {
+        nextActions.push(...buildToolchainActions(missingTools));
+    }
+    if (nextActions.length === 0) {
+        nextActions.push('compilot qt status --json');
+    }
+    return Array.from(new Set(nextActions));
 }
 
 async function detectEnvironment(workspace: string, options: CliOptions): Promise<{
@@ -227,21 +281,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             executable: hasExecutable
         };
 
-        // 推导 nextAction（ready = "ready to build"，不含 executable）
-        let nextAction: string;
-        if (!hasSettings) {
-            nextAction = 'init';
-        } else if (!projectExists) {
-            nextAction = 'init';
-        } else if (missingTools.length > 0) {
-            nextAction = 'init';
-        } else if (!hasMakefile) {
-            nextAction = 'qmake';
-        } else if (!hasExecutable) {
-            nextAction = 'build';
-        } else {
-            nextAction = 'run';
-        }
+        // 推导下一步：init 只用于首次 bootstrap，已有配置后的缺项改由 env/projects/use 处理。
+        const guidance = buildStatusGuidance(hasSettings, projectExists, missingTools, hasMakefile, hasExecutable);
 
         // ready = 所有构建前置条件满足（可以 build）
         const ready = hasSettings && projectExists && toolsReady && hasMakefile;
@@ -275,7 +316,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             workspace,
             ready,
             checks,
-            nextAction
+            nextAction: guidance.nextAction,
+            nextActions: guidance.nextActions
         };
 
         // missing: 列出哪些前置条件未满足（辅助调用方决定调 env 还是 projects）
@@ -294,6 +336,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         // 用 stdout 传自定义结构（和 env/projects 一样）
         result.ok = true;
         result.resolved = statusResolved;
+        result.nextActions = guidance.nextActions;
         result.data = statusResult;
         result.stdout = JSON.stringify(statusResult);
         return result;
@@ -523,12 +566,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 project,
                 effectiveSettings: effectiveSettingsForCheck
             });
+            const initNextActions = buildInitNextActions(project, detected.detected.projects, getMissingTools(effectiveSettingsForCheck));
 
             const initResolved = buildResolvedConfig(mode, arch, effectiveQtPath, effectiveVsDevShell, effectiveTarget, detected.detected.qt?.version, detected.detected.vs?.version, detected.detected.jom || undefined);
             if (project) {
                 initResolved.project = path.relative(workspace, project).replace(/\\/g, '/');
             }
-            return { ...result, ok: true, project, diagnostics: initDiagnostics, resolved: initResolved };
+            return { ...result, ok: true, project, diagnostics: initDiagnostics, nextActions: initNextActions, resolved: initResolved };
         }
 
         // dry-run: preview what init would do
@@ -552,6 +596,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             project,
             effectiveSettings: previewSettingsForCheck
         }));
+        const previewNextActions = [
+            '确认无误后运行 compilot qt init --json 写入本地配置',
+            ...buildInitNextActions(project, detected.detected.projects, getMissingTools(previewSettingsForCheck))
+        ];
 
         const previewResolved = buildResolvedConfig(mode, arch, previewQtPath, previewVsDevShell, target, detected.detected.qt?.version, detected.detected.vs?.version, detected.detected.jom || undefined);
 
@@ -560,7 +608,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             ok: true,
             project,
             diagnostics: previewDiagnostics,
-            nextActions: ['确认无误后运行 compilot qt init --json 写入本地配置'],
+            nextActions: Array.from(new Set(previewNextActions)),
             resolved: previewResolved
         };
     }

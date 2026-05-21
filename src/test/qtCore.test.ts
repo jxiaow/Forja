@@ -99,6 +99,79 @@ test('createActionPlan status returns checks and resolved config', async () => {
     assert.ok(statusData.nextAction);
 });
 
+test('status points to init before local qt settings exist', async () => {
+    const workspace = makeWorkspace();
+
+    const result = await createActionPlan({
+        action: 'status',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    const data = JSON.parse(result.stdout);
+    assert.equal(data.nextAction, 'init');
+    assert.deepEqual(data.nextActions, ['compilot qt init --json']);
+});
+
+test('status points to projects/use when settings exist but no project is selected', async () => {
+    const workspace = makeWorkspace();
+    fs.writeFileSync(path.join(workspace, 'other.pro'), 'TARGET = other\n', 'utf8');
+    saveQtSettings(workspace, { ...DEFAULT_QT, qtPath: 'D:/Qt' });
+
+    const result = await createActionPlan({
+        action: 'status',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    const data = JSON.parse(result.stdout);
+    assert.equal(data.nextAction, 'projects');
+    assert.deepEqual(data.nextActions, [
+        'compilot qt projects --json',
+        'compilot qt use --project <path> --json'
+    ]);
+});
+
+test('status points to env/use when project exists but toolchain is missing', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' } });
+
+    const result = await createActionPlan({
+        action: 'status',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    const data = JSON.parse(result.stdout);
+    assert.equal(data.nextAction, 'env');
+    assert.ok(data.nextActions.includes('compilot qt env --json'));
+    assert.ok(data.nextActions.some((action: string) => /compilot qt use --qt-path <path> --json/.test(action)));
+});
+
 test('createActionPlan use updates only explicit config fields', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, {
@@ -225,6 +298,29 @@ test('createActionPlan init dry-run previews what would be created', async () =>
     assert.ok(result.diagnostics.length > 0);
     assert.ok(result.diagnostics.some(d => /本地配置/.test(d.message)));
     assert.ok(result.nextActions.some(a => /init --json/.test(a)));
+});
+
+test('init dry-run points to projects/use when multiple projects prevent auto selection', async () => {
+    const workspace = makeWorkspace();
+    fs.writeFileSync(path.join(workspace, 'other.pro'), 'TARGET = other\n', 'utf8');
+
+    const result = await createActionPlan({
+        action: 'init',
+        executionMode: 'dryRun',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.ok(result.nextActions.includes('compilot qt projects --json'));
+    assert.ok(result.nextActions.includes('compilot qt use --project <path> --json'));
 });
 
 test('createActionPlan init ignores explicit config override fields', async () => {
