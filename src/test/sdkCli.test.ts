@@ -95,6 +95,48 @@ test('SDK CLI build plan inherits mode and arch saved by init', async () => {
     }
 });
 
+function createSdkProjectFile(workspace: string, relativeDir: string): string {
+    const dir = path.join(workspace, relativeDir);
+    fs.mkdirSync(dir, { recursive: true });
+    const filename = os.platform() === 'win32' ? 'App.sln' : 'Makefile';
+    const filePath = path.join(dir, filename);
+    fs.writeFileSync(filePath, os.platform() === 'win32' ? '' : 'all:\n\t@echo ok\n', 'utf-8');
+    return filePath;
+}
+
+test('SDK CLI status reports missing project without failing', async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-status-empty-'));
+    _tmpDirs.push(ws);
+
+    const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
+    const parsed = JSON.parse(output);
+
+    assert.equal(process.exitCode, undefined);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.ready, false);
+    assert.equal(parsed.project, null);
+    assert.deepEqual(parsed.candidates, []);
+    assert.ok(parsed.missing.includes('project'));
+});
+
+test('SDK CLI status reports candidate projects when workspace has multiple projects', async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-status-multi-'));
+    _tmpDirs.push(ws);
+    createSdkProjectFile(ws, 'app');
+    createSdkProjectFile(ws, 'lib');
+
+    const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
+    const parsed = JSON.parse(output);
+
+    assert.equal(process.exitCode, undefined);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.ready, false);
+    assert.equal(parsed.project, null);
+    assert.equal(parsed.candidates.length, 2);
+    assert.ok(parsed.missing.includes('project'));
+    assert.ok(parsed.diagnostics.some((d: { message: string }) => d.message.includes('发现 2 个项目文件')));
+});
+
 
 // ── scanProjects ──
 import * as fs from 'fs';

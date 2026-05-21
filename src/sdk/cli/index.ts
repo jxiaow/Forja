@@ -359,6 +359,89 @@ export async function runSdkCli(argv: string[]): Promise<void> {
 
         // ── 解析项目 ──
         const candidates = scanProjects(options.workspace, settings.scanDepth || DEFAULT_SCAN_DEPTH);
+
+        // ── status ──
+        if (options.action === 'status') {
+            let statusProjectPath = options.project ? path.resolve(options.project) : null;
+            if (!statusProjectPath && settings.pinnedProject) {
+                const pinned = path.join(options.workspace, settings.pinnedProject);
+                if (fs.existsSync(pinned)) { statusProjectPath = pinned; }
+            }
+            if (!statusProjectPath && candidates.length === 1) {
+                statusProjectPath = candidates[0];
+            }
+
+            const hasSettings = fs.existsSync(sdkSettingsFilePath(options.workspace));
+            const projectExists = !!statusProjectPath && fs.existsSync(statusProjectPath);
+            const projectRel = statusProjectPath ? path.relative(options.workspace, statusProjectPath) || statusProjectPath : null;
+            const checks: Record<string, boolean> = { settings: hasSettings, project: projectExists };
+            const missing: string[] = [];
+
+            if (!hasSettings) { missing.push('settings'); }
+            if (!projectExists) { missing.push('project'); }
+
+            if (process.platform === 'win32') {
+                const vsDevCmdPath = options.vsDevCmd || settings.vsDevCmdPath || '';
+                const hasVsDevCmd = !!vsDevCmdPath && fs.existsSync(vsDevCmdPath);
+                checks.vsDevCmd = hasVsDevCmd;
+                if (!hasVsDevCmd) { missing.push('vsDevCmd'); }
+            } else {
+                const hasMake = !!detectMake();
+                checks.make = hasMake;
+                if (!hasMake) { missing.push('make'); }
+            }
+
+            const ready = Object.values(checks).every(v => v);
+            let nextAction: string;
+            if (!hasSettings || missing.includes('vsDevCmd') || missing.includes('make')) { nextAction = 'init'; }
+            else if (!projectExists && candidates.length > 1) { nextAction = 'projects'; }
+            else if (!projectExists) { nextAction = 'init'; }
+            else { nextAction = 'build'; }
+
+            const diagnostics: SdkDiagnostic[] = [];
+            if (!hasSettings) { diagnostics.push({ level: 'warning', message: '尚未初始化' }); }
+            if (!projectExists) {
+                if (candidates.length > 1) {
+                    diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，请使用 --project 指定` });
+                } else if (candidates.length === 0) {
+                    diagnostics.push({ level: 'warning', message: '未找到项目文件' });
+                } else if (hasSettings) {
+                    diagnostics.push({ level: 'warning', message: '项目文件不存在' });
+                }
+            }
+
+            const out: Record<string, unknown> = {
+                ok: true,
+                action: 'status',
+                workspace: options.workspace,
+                ready,
+                checks,
+                nextAction,
+                project: projectRel,
+                candidates: candidates.map(c => path.relative(options.workspace, c) || c),
+                resolved: { mode: effectiveMode, arch: effectiveArch }
+            };
+            if (missing.length > 0) { out.missing = missing; }
+            if (diagnostics.length > 0) { out.diagnostics = diagnostics; }
+
+            if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
+            else {
+                console.log(`SDK 项目状态: ${ready ? '就绪' : '未就绪'}`);
+                console.log(`  项目: ${projectRel || '未选择'}`);
+                console.log(`  模式: ${effectiveMode}/${effectiveArch}`);
+                console.log('');
+                console.log('检查项:');
+                for (const [key, ok] of Object.entries(checks)) { console.log(`  ${ok ? '✓' : '✗'} ${key}`); }
+                if (diagnostics.length > 0) {
+                    console.log('');
+                    diagnostics.forEach(d => console.log(`${d.level}: ${d.message}`));
+                }
+                console.log('');
+                console.log(`下一步: compilot sdk ${nextAction}`);
+            }
+            return;
+        }
+
         let projectPath = options.project ? path.resolve(options.project) : null;
         if (!projectPath && settings.pinnedProject) {
             const pinned = path.join(options.workspace, settings.pinnedProject);
@@ -383,63 +466,6 @@ export async function runSdkCli(argv: string[]): Promise<void> {
 
         const projectRel = path.relative(options.workspace, projectPath) || projectPath;
         const vsDevCmdPath = options.vsDevCmd || settings.vsDevCmdPath || '';
-
-        // ── status ──
-        if (options.action === 'status') {
-            const hasSettings = fs.existsSync(sdkSettingsFilePath(options.workspace));
-            const projectExists = fs.existsSync(projectPath);
-            const checks: Record<string, boolean> = { settings: hasSettings, project: projectExists };
-            const missing: string[] = [];
-
-            if (!hasSettings) { missing.push('settings'); }
-            if (!projectExists) { missing.push('project'); }
-
-            if (process.platform === 'win32') {
-                const hasVsDevCmd = !!vsDevCmdPath && fs.existsSync(vsDevCmdPath);
-                checks.vsDevCmd = hasVsDevCmd;
-                if (!hasVsDevCmd) { missing.push('vsDevCmd'); }
-            } else {
-                const hasMake = !!detectMake();
-                checks.make = hasMake;
-                if (!hasMake) { missing.push('make'); }
-            }
-
-            const ready = Object.values(checks).every(v => v);
-            let nextAction: string;
-            if (!hasSettings || missing.includes('vsDevCmd') || missing.includes('make')) { nextAction = 'init'; }
-            else if (!projectExists) { nextAction = 'init'; }
-            else { nextAction = 'build'; }
-
-            const diagnostics: SdkDiagnostic[] = [];
-            if (!hasSettings) { diagnostics.push({ level: 'warning', message: '尚未初始化' }); }
-            if (!projectExists && hasSettings) { diagnostics.push({ level: 'warning', message: '项目文件不存在' }); }
-
-            const out: Record<string, unknown> = {
-                ok: true,
-                action: 'status',
-                workspace: options.workspace,
-                ready,
-                checks,
-                nextAction,
-                project: projectRel,
-                resolved: { mode: effectiveMode, arch: effectiveArch }
-            };
-            if (missing.length > 0) { out.missing = missing; }
-            if (diagnostics.length > 0) { out.diagnostics = diagnostics; }
-
-            if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else {
-                console.log(`SDK 项目状态: ${ready ? '就绪' : '未就绪'}`);
-                console.log(`  项目: ${projectRel}`);
-                console.log(`  模式: ${effectiveMode}/${effectiveArch}`);
-                console.log('');
-                console.log('检查项:');
-                for (const [key, ok] of Object.entries(checks)) { console.log(`  ${ok ? '✓' : '✗'} ${key}`); }
-                console.log('');
-                console.log(`下一步: compilot sdk ${nextAction}`);
-            }
-            return;
-        }
 
         // ── build/rebuild/clean ──
         const commands = buildCommand(effectiveOptions, projectPath, vsDevCmdPath);
