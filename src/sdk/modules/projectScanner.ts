@@ -75,6 +75,10 @@ export class ProjectScanner {
         if (EXCLUDE_PATH_SEGMENTS.some(seg => relativePath.includes(seg))) { continue; }
         this.walk(subDir, wsRoot, currentDepth + 1, maxDepth, filePattern, results);
       } else if (entry.isFile() && filePattern.test(entry.name)) {
+        // 同目录或父目录有 .pro 文件说明是 Qt 项目，跳过
+        if (this.isQtProjectDir(dir)) {
+          continue;
+        }
         results.push(vscode.Uri.file(path.join(dir, entry.name)));
       }
     }
@@ -108,6 +112,23 @@ export class ProjectScanner {
       : path.basename(path.dirname(filePath));
 
     return { name, path: filePath, type };
+  }
+
+  /** 检查目录是否属于 Qt 项目（当前目录或父目录包含 .pro 文件） */
+  private isQtProjectDir(dir: string): boolean {
+    if (this.hasPro(dir)) { return true; }
+    const parent = path.dirname(dir);
+    if (parent !== dir && this.hasPro(parent)) { return true; }
+    return false;
+  }
+
+  private hasPro(dir: string): boolean {
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      return entries.some(e => e.isFile() && e.name.endsWith('.pro'));
+    } catch {
+      return false;
+    }
   }
 
   /** 根据扫描结果解析当前项目 */

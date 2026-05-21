@@ -33,6 +33,14 @@ export interface TemplateData {
     syncRemotePath: string;
     syncPendingCount: number;
     syncLastTime: string;
+    // SDK
+    sdkProjectName: string;
+    sdkMode: string;
+    sdkArch: string;
+    sdkVsInstall: string;
+    // 模块激活状态
+    qtActive: boolean;
+    sdkActive: boolean;
 }
 
 let _templateCache: string | null = null;

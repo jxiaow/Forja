@@ -23,7 +23,7 @@ let _sdkProjectName: string = '';
 let _sdkMode: string = 'debug';
 let _sdkArch: string = 'x86';
 let _sdkIsBuilding: boolean = false;
-let _sdkUpdateListeners: (() => void)[] = [];
+let _sdkUpdateListeners: ((update: { mode: string; arch: string }) => void)[] = [];
 
 export function getActiveModule(): ActiveModule { return _activeModule; }
 export function setActiveModule(m: ActiveModule): void {
@@ -42,7 +42,7 @@ export function setSdkState(opts: { projectName?: string; mode?: string; arch?: 
     if (_activeModule === 'sdk') { _updateDisplay(); }
 }
 
-export function onSdkUpdate(fn: () => void): void { _sdkUpdateListeners.push(fn); }
+export function onSdkUpdate(fn: (update: { mode: string; arch: string }) => void): void { _sdkUpdateListeners.push(fn); }
 
 export function createUnifiedStatusBar(context: vscode.ExtensionContext): void {
     _projectModeItem = vscode.window.createStatusBarItem('compilot.projectMode', vscode.StatusBarAlignment.Left, 113);
@@ -251,11 +251,8 @@ export async function showUnifiedActions(): Promise<void> {
         setActiveModule('sdk');
         _sdkMode = m;
         _sdkArch = a;
-        // 持久化 SDK mode/arch
-        const { setSdkSetting } = await import('../core/settingsStore');
-        setSdkSetting('mode', m as 'debug' | 'release');
-        setSdkSetting('arch', a as 'x86' | 'x64');
-        _sdkUpdateListeners.forEach(fn => fn());
+        // 通过回调通知 SDK 模块持久化（由 SDK 模块使用正确的 workspace 路径写入）
+        _sdkUpdateListeners.forEach(fn => fn({ mode: m, arch: a }));
         _updateDisplay();
     } else if (selected.action === 'qt:qmake') { vscode.commands.executeCommand('compilot.qt.qmake'); }
     else if (selected.action === 'qt:build') { vscode.commands.executeCommand('compilot.qt.build'); }

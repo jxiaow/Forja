@@ -405,6 +405,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             const out: Record<string, unknown> = {
                 ok: true,
                 action: 'status',
+                workspace: options.workspace,
                 ready,
                 checks,
                 nextAction,

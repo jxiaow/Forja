@@ -10,7 +10,7 @@ import { detectEnv } from '../../qt/env/envDetector';
 import { getPageHtml } from './pageTemplate';
 import { buildTemplateData } from './templateData';
 import { createLogger } from '../../core/logger';
-import { onSettingsChange, getQtSetting } from '../../core/settingsStore';
+import { onSettingsChange, getQtSetting, getSdkSetting } from '../../core/settingsStore';
 
 const logger = createLogger('ConfigPagePanel');
 
@@ -37,6 +37,17 @@ export class ConfigPageManager {
                         command: 'settingsUpdated',
                         mode: getQtSetting('mode'),
                         arch: getQtSetting('arch')
+                    });
+                }
+            }
+            if (section === 'sdk' && (key === 'mode' || key === 'arch' || key === 'pinnedProject')) {
+                const projectPanel = this._panels.get('project');
+                if (projectPanel) {
+                    projectPanel.webview.postMessage({
+                        command: 'sdkSettingsUpdated',
+                        sdkMode: getSdkSetting('mode'),
+                        sdkArch: getSdkSetting('arch'),
+                        sdkProjectName: getSdkSetting('pinnedProject') || '未选择'
                     });
                 }
             }

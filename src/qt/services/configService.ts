@@ -96,7 +96,7 @@ export function getBuildConfig(): BuildConfig {
         } else if (project.projectDir && project.proFile) {
             const dir = path.isAbsolute(project.projectDir)
                 ? project.projectDir
-                : path.join(root, project.projectDir);
+                : root ? path.join(root, project.projectDir) : project.projectDir;
             projectPath = path.join(dir, project.proFile);
         }
     }

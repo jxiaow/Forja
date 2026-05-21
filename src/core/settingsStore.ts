@@ -25,37 +25,39 @@ let _loaded = false;
 let _watcher: vscode.FileSystemWatcher | null = null;
 const _listeners: SettingsListener[] = [];
 
-function _getWorkspace(): string | null {
-    const root = resolveProjectRoot();
+function _getWorkspace(module: 'qt' | 'sdk' | 'sync' = 'qt'): string | null {
+    // sync 跟随 qt 的 workspace
+    const root = resolveProjectRoot(module === 'sync' ? 'qt' : module);
     return root || null;
 }
 
 function _load(): CompilotSettings {
-    const ws = _getWorkspace();
-    if (!ws) { return { qt: { ...DEFAULT_SETTINGS.qt }, sdk: { ...DEFAULT_SETTINGS.sdk }, sync: { ...DEFAULT_SETTINGS.sync } }; }
+    const qtWs = _getWorkspace('qt');
+    const sdkWs = _getWorkspace('sdk');
+    const syncWs = _getWorkspace('sync');
     return {
-        qt: loadQtSettings(ws),
-        sdk: loadSdkSettings(ws),
-        sync: loadSyncSettings(ws)
+        qt: qtWs ? loadQtSettings(qtWs) : { ...DEFAULT_SETTINGS.qt },
+        sdk: sdkWs ? loadSdkSettings(sdkWs) : { ...DEFAULT_SETTINGS.sdk },
+        sync: syncWs ? loadSyncSettings(syncWs) : { ...DEFAULT_SETTINGS.sync }
     };
 }
 
 function _saveQt(): void {
-    const ws = _getWorkspace();
+    const ws = _getWorkspace('qt');
     if (!ws) { return; }
     try { saveQtSettings(ws, _settings.qt); }
     catch (e) { logger.warn(`写入 Qt 配置失败: ${e instanceof Error ? e.message : e}`); }
 }
 
 function _saveSdk(): void {
-    const ws = _getWorkspace();
+    const ws = _getWorkspace('sdk');
     if (!ws) { return; }
     try { saveSdkSettings(ws, _settings.sdk); }
     catch (e) { logger.warn(`写入 SDK 配置失败: ${e instanceof Error ? e.message : e}`); }
 }
 
 function _saveSync(): void {
-    const ws = _getWorkspace();
+    const ws = _getWorkspace('sync');
     if (!ws) { return; }
     try { saveSyncSettings(ws, _settings.sync); }
     catch (e) { logger.warn(`写入 Sync 配置失败: ${e instanceof Error ? e.message : e}`); }
@@ -78,8 +80,9 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
     _watcher.onDidCreate(() => _reload());
     context.subscriptions.push(_watcher);
 
-    const ws = _getWorkspace();
-    logger.info(`配置存储已初始化 (root: ${ws || 'none'})`);
+    const qtWs = _getWorkspace('qt');
+    const sdkWs = _getWorkspace('sdk');
+    logger.info(`配置存储已初始化 (qt: ${qtWs || 'none'}, sdk: ${sdkWs || 'none'})`);
 }
 
 function _reload(): void {

@@ -33,7 +33,13 @@ function createTemplateData(): TemplateData {
         syncIgnore: '.git, node_modules, out',
         syncRemotePath: '',
         syncPendingCount: 0,
-        syncLastTime: ''
+        syncLastTime: '',
+        sdkProjectName: '',
+        sdkMode: 'debug',
+        sdkArch: 'x86',
+        sdkVsInstall: '',
+        qtActive: true,
+        sdkActive: false
     };
 }
 

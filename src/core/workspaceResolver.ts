@@ -1,18 +1,21 @@
 /**
- * 解析 Qt 项目所在的 workspace folder。
+ * 解析项目所在的 workspace folder。
  *
- * 多文件夹工作区中，.compilot/ 应该生成在包含 Qt 项目的文件夹下，而非固定 workspaceFolders[0]。
- *
- * 解析优先级：
- * 1. 已有 .compilot/settings.json 的文件夹（说明之前已初始化过）
- * 2. 包含 .pro 文件的第一个文件夹
- * 3. fallback 到 workspaceFolders[0]
+ * 解析策略（Qt 和 SDK 统一）：
+ *   1. 查找 ~/.compilot/projects/ 下已有的配置文件，匹配当前 workspaceFolders
+ *   2. Qt fallback：浅层扫描找 .pro 文件
+ *   3. SDK fallback：等待 sdkExtension 激活后通过 setSdkProjectRoot 设置
+ *   4. 未识别到项目 → 返回空字符串
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { listProjectConfigs } from './settingsIO';
 
-let _resolved: string | null = null;
+export type ModuleType = 'qt' | 'sdk';
+
+let _resolvedQt: string | null = null;
+let _resolvedSdk: string | null = null;
 let _watcherRegistered = false;
 
 /** 注册 workspace folder 变化监听，自动重置缓存 */
@@ -21,76 +24,124 @@ export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void
     _watcherRegistered = true;
     context.subscriptions.push(
         vscode.workspace.onDidChangeWorkspaceFolders(() => {
-            _resolved = null;
+            _resolvedQt = null;
+            _resolvedSdk = null;
         })
     );
 
-    // 监听 .compilot/settings.json 的创建事件，重置缓存
-    // （多文件夹工作区中，用户在某个 folder 下初始化后应切换到该 folder）
+    // 监听 ~/.compilot/projects/ 配置文件变化，重置缓存
     const folders = vscode.workspace.workspaceFolders;
     if (folders && folders.length > 1) {
-        const pattern = new vscode.RelativePattern(
-            folders[0].uri,
-            '**/.compilot/settings.json'
-        );
-        const settingsWatcher = vscode.workspace.createFileSystemWatcher(pattern);
-        settingsWatcher.onDidCreate(() => { _resolved = null; });
-        context.subscriptions.push(settingsWatcher);
-
-        // 也监听其他 folder
-        for (let i = 1; i < folders.length; i++) {
-            const p = new vscode.RelativePattern(folders[i].uri, '.compilot/settings.json');
+        for (const folder of folders) {
+            const p = new vscode.RelativePattern(folder.uri, '.compilot/settings.json');
             const w = vscode.workspace.createFileSystemWatcher(p);
-            w.onDidCreate(() => { _resolved = null; });
+            w.onDidCreate(() => { _resolvedQt = null; _resolvedSdk = null; });
             context.subscriptions.push(w);
         }
     }
 }
 
-/** 解析并缓存项目根目录 */
-export function resolveProjectRoot(): string {
-    if (_resolved) { return _resolved; }
-
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) { return ''; }
-
-    // 单文件夹直接返回
-    if (folders.length === 1) {
-        _resolved = folders[0].uri.fsPath;
-        return _resolved;
-    }
-
-    // 多文件夹：优先找已有 .compilot/settings.json 的
-    for (const folder of folders) {
-        const settingsPath = path.join(folder.uri.fsPath, '.compilot', 'settings.json');
-        if (fs.existsSync(settingsPath)) {
-            _resolved = folder.uri.fsPath;
-            return _resolved;
-        }
-    }
-
-    // 其次找包含 .pro 文件的（浅层扫描，只看根目录和一级子目录）
-    for (const folder of folders) {
-        if (_hasProFile(folder.uri.fsPath)) {
-            _resolved = folder.uri.fsPath;
-            return _resolved;
-        }
-    }
-
-    // fallback
-    _resolved = folders[0].uri.fsPath;
-    return _resolved;
+/**
+ * 解析并缓存项目根目录。
+ * @param module 模块类型，默认 'qt'（向后兼容）
+ */
+export function resolveProjectRoot(module: ModuleType = 'qt'): string {
+    if (module === 'sdk') { return _resolveSdk(); }
+    return _resolveQt();
 }
 
-/** 当用户选择项目后，更新缓存的项目根目录 */
+/** 当用户选择 Qt 项目后，更新缓存 */
 export function setProjectRoot(root: string): void {
-    _resolved = root;
+    _resolvedQt = root;
+}
+
+/** 当 SDK 项目变化后，更新缓存 */
+export function setSdkProjectRoot(root: string): void {
+    _resolvedSdk = root;
 }
 
 /** 重置缓存（用于测试或 workspace 变化时） */
 export function resetProjectRoot(): void {
-    _resolved = null;
+    _resolvedQt = null;
+    _resolvedSdk = null;
 }
+
+// ── 从已有配置文件反查 workspace ──
+
+/**
+ * 在 ~/.compilot/projects/ 下查找指定类型的配置文件，
+ * 如果其中记录的 workspace 路径匹配当前打开的某个 folder，返回该路径。
+ */
+function _findFromExistingConfig(type: 'qt' | 'sdk'): string | null {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) { return null; }
+
+    // 构建当前 folders 的 normalized 路径集合（用于快速匹配）
+    const folderPaths = new Set(
+        folders.map(f => f.uri.fsPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase())
+    );
+
+    const configs = listProjectConfigs();
+    for (const config of configs) {
+        if (config.type !== type) { continue; }
+        const normalized = config.workspace.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        if (folderPaths.has(normalized)) {
+            // 找到匹配的配置，返回原始 folder 路径（保持大小写）
+            for (const folder of folders) {
+                const folderNorm = folder.uri.fsPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+                if (folderNorm === normalized) {
+                    return folder.uri.fsPath;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+// ── Qt 解析 ──
+
+function _resolveQt(): string {
+    if (_resolvedQt) { return _resolvedQt; }
+
+    // 1. 从已有配置文件反查
+    const fromConfig = _findFromExistingConfig('qt');
+    if (fromConfig) {
+        _resolvedQt = fromConfig;
+        return _resolvedQt;
+    }
+
+    // 2. Fallback：浅层扫描找 .pro 文件
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) { return ''; }
+
+    for (const folder of folders) {
+        if (_hasProFile(folder.uri.fsPath)) {
+            _resolvedQt = folder.uri.fsPath;
+            return _resolvedQt;
+        }
+    }
+
+    // 未识别到 Qt 项目 → 不返回无关目录
+    return '';
+}
+
+// ── SDK 解析 ──
+
+function _resolveSdk(): string {
+    if (_resolvedSdk) { return _resolvedSdk; }
+
+    // 1. 从已有配置文件反查
+    const fromConfig = _findFromExistingConfig('sdk');
+    if (fromConfig) {
+        _resolvedSdk = fromConfig;
+        return _resolvedSdk;
+    }
+
+    // 2. 不做文件系统扫描，等待 sdkExtension 激活后通过 setSdkProjectRoot 设置
+    return '';
+}
+
+// ── 辅助函数 ──
 
 function _hasProFile(dir: string): boolean {
     try {
