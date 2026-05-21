@@ -9,6 +9,9 @@
 ## 日常开发
 
 ```bash
+# 首次克隆后初始化 harness/core submodule
+git submodule update --init --recursive
+
 # 安装依赖
 npm install
 
@@ -24,6 +27,42 @@ npx tsc --noEmit
 # 运行测试
 npm test
 ```
+
+## Harness Core 更新
+
+`harness/core/` 是独立的 git submodule，保存通用 agent 流程、gate、模板和自动化检查；项目专属规则放在 `harness/project/`。
+
+首次克隆或发现 `harness/core/` 为空时：
+
+```bash
+git submodule update --init --recursive
+```
+
+更新通用流程层时：
+
+```bash
+git -C harness/core pull --ff-only origin main
+git status --short
+```
+
+如果 `git status` 显示 `M harness/core`，表示主仓库记录的 submodule 指针需要更新。确认新 core 版本可用后，在主仓库提交这个指针：
+
+```bash
+git add harness/core
+git commit -m "chore: update harness core"
+git push
+```
+
+常用入口：
+
+| 路径 | 作用 |
+|------|------|
+| `harness/core/README.zh-CN.md` | 通用流程说明和维护命令 |
+| `harness/core/ONBOARD.md` | 将 harness 接入新项目的步骤 |
+| `harness/core/rules/` | 通用执行规则 |
+| `harness/core/gates/` | Scope / Plan / Build / Close gate 定义 |
+| `harness/core/automation/` | harness 检查脚本 |
+| `harness/project/` | Compilot 项目专属 profile 和规则 |
 
 ## 调试扩展
 
@@ -77,10 +116,10 @@ npm run package:cli
 - `qt/cli/` — Qt CLI 逻辑
 - `qt/shared/` — 核心逻辑（命令规划、环境检测、配置解析）
 - `qt/env/` — 环境检测
-- `qt/platform/` — 平台配置（win/linux）
+- `qt/platform/` — 平台配置（仅 CLI 可用的 win/linux 子模块和纯函数）
 - `qt/sync/` — 远程同步（不依赖 vscode）
 - `sdk/cli/` — SDK CLI 逻辑
-- `core/` — 日志和配置 IO
+- `core/` — 纯 Node 日志、配置 IO、同步状态和 SSH 工具
 
 分发方式：
 - 全局安装：`npm install -g dist/compilot-cli-x.x.x.tgz`
@@ -93,7 +132,7 @@ npm run package:cli
 
 项目还产出独立的 npm 包 `compilot-cli`，用于终端操作、脚本自动化和 AI 编程工具集成。
 
-CLI 的使用文档见 [`cli/README.md`](../cli/README.md)。
+CLI 的使用文档见 [`docs/README-cli.md`](./README-cli.md)。
 
 ---
 
@@ -137,13 +176,16 @@ compilot/
 ├── src/
 │   ├── extension.ts            # 扩展入口（activate/deactivate）
 │   ├── core/                   # 核心服务
-│   │   ├── stateManager.ts     # 全局状态管理，事件订阅
-│   │   ├── configService.ts    # 配置读写、BuildConfig 组装
 │   │   ├── settingsIO.ts       # 配置文件 IO（纯 Node，不依赖 vscode）
-│   │   ├── settingsStore.ts    # 配置存储（vscode 集成 + 文件监听）
-│   │   ├── workspaceResolver.ts # 多文件夹工作区根目录解析
+│   │   ├── loggerBase.ts       # 纯 Node 日志基础能力
 │   │   ├── ssh.ts              # SSH/SCP 公共工具（纯 Node）
-│   │   └── logger.ts           # Output channel 日志（共享 "Compilot" channel）
+│   │   ├── serverStore.ts      # 服务器配置存储（纯 Node）
+│   │   └── syncState.ts        # 同步状态记录（纯 Node）
+│   ├── vscode/                 # VSCode 适配层
+│   │   ├── logger.ts           # Output channel 日志
+│   │   ├── qtState.ts          # Qt 状态存储适配
+│   │   ├── settingsStore.ts    # 配置存储（vscode 集成 + 文件监听）
+│   │   └── workspaceResolver.ts # 多文件夹工作区根目录解析
 │   ├── qt/                     # Qt 模块
 │   │   ├── build/              # QMake/Build/Run 任务、调试、IntelliSense 生成
 │   │   ├── project/            # .pro 扫描解析、项目选择、文件监听
@@ -158,10 +200,6 @@ compilot/
 │   │   ├── platform/           # 平台命令生成（windows/linux）
 │   │   ├── cli/                # SDK CLI 入口
 │   │   └── utils/              # 日志（委托给 core/logger）
-│   ├── remote/                 # 远程编译部署
-│   │   ├── core/               # 流程编排、SSH、传输、基线校验（纯 Node）
-│   │   ├── vscode/             # VSCode 适配（进度、诊断、Output、命令注册）
-│   │   └── shellFallbackFactory.ts # Shell fallback 命令生成（依赖 qt/shared）
 │   ├── ui/                     # UI 层
 │   │   ├── statusBar.ts        # 状态栏按钮
 │   │   ├── statusBarLabels.ts  # 状态栏标签文本
@@ -212,10 +250,10 @@ compilot/
 
 ```
 VSCode 配置面板
-  → 写入 .compilot/sync-config.json（服务器列表 + 项目同步配置）
+  → 写入 ~/.compilot/servers.json 和 .compilot/settings.json 的 sync 部分
 
 CLI
-  → 读取 .compilot/sync-config.json
+  → 读取 .compilot/settings.json 的 sync 部分
   → 执行同步
 
 两者共用
@@ -227,9 +265,9 @@ CLI
 | 配置项 | 作用域 | 存储位置 |
 |--------|--------|----------|
 | 服务器列表 | 全局 | `~/.compilot/servers.json` |
-| 启用开关 | 项目 | `.compilot/sync-config.json` |
-| 远程路径 | 项目 | `.compilot/sync-config.json` |
-| 忽略列表 | 项目 | `.compilot/sync-config.json` |
+| 启用开关 | 项目 | `.compilot/settings.json` 的 `sync` 部分 |
+| 远程路径 | 项目 | `.compilot/settings.json` 的 `sync` 部分 |
+| 忽略列表 | 项目 | `.compilot/settings.json` 的 `sync` 部分 |
 | 同步状态 | 项目 | `.compilot/sync-state.json` |
 
 ---
