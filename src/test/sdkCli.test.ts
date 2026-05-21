@@ -95,6 +95,51 @@ test('SDK CLI build plan inherits mode and arch saved by init', async () => {
     }
 });
 
+test('SDK CLI resolves relative --project from workspace', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-project-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
+
+        const initOutput = await captureOutput(() => runSdkCli([
+            'init',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'Makefile'
+        ]));
+        const initParsed = JSON.parse(initOutput);
+        assert.equal(initParsed.ok, true);
+        assert.equal(initParsed.resolved.project, 'Makefile');
+
+        const planOutput = await captureOutput(() => runSdkCli([
+            'build',
+            '--json',
+            '--plan',
+            '--workspace',
+            ws,
+            '--project',
+            'Makefile'
+        ]));
+        const planParsed = JSON.parse(planOutput);
+        assert.equal(planParsed.ok, true);
+        assert.equal(planParsed.project, 'Makefile');
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
 function createSdkProjectFile(workspace: string, relativeDir: string): string {
     const dir = path.join(workspace, relativeDir);
     fs.mkdirSync(dir, { recursive: true });

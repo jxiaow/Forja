@@ -110,6 +110,10 @@ function parseArgs(argv: string[]): SdkCliOptions {
     return options;
 }
 
+function resolveProjectPath(workspace: string, project: string): string {
+    return path.isAbsolute(project) ? path.resolve(project) : path.resolve(workspace, project);
+}
+
 export function scanProjects(workspace: string, depth: number = DEFAULT_SCAN_DEPTH): string[] {
     const results: string[] = [];
     const isWindows = os.platform() === 'win32';
@@ -247,7 +251,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             const mode = effectiveMode;
             const arch = effectiveArch;
             const vsDevCmd = options.vsDevCmd || (vsInstallations.length > 0 ? vsInstallations[0].vsDevCmdPath : '');
-            const project = options.project ? path.relative(options.workspace, path.resolve(options.project)) : settings.pinnedProject;
+            const project = options.project ? path.relative(options.workspace, resolveProjectPath(options.workspace, options.project)) : settings.pinnedProject;
 
             const newSettings = { mode, arch, vsDevCmdPath: vsDevCmd, pinnedProject: project };
             saveSdkSettings(options.workspace, newSettings);
@@ -362,7 +366,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
 
         // ── status ──
         if (options.action === 'status') {
-            let statusProjectPath = options.project ? path.resolve(options.project) : null;
+            let statusProjectPath = options.project ? resolveProjectPath(options.workspace, options.project) : null;
             if (!statusProjectPath && settings.pinnedProject) {
                 const pinned = path.join(options.workspace, settings.pinnedProject);
                 if (fs.existsSync(pinned)) { statusProjectPath = pinned; }
@@ -442,7 +446,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             return;
         }
 
-        let projectPath = options.project ? path.resolve(options.project) : null;
+        let projectPath = options.project ? resolveProjectPath(options.workspace, options.project) : null;
         if (!projectPath && settings.pinnedProject) {
             const pinned = path.join(options.workspace, settings.pinnedProject);
             if (fs.existsSync(pinned)) { projectPath = pinned; }
