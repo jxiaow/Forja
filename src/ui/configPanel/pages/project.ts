@@ -25,6 +25,15 @@ export function buildProjectPage(data: TemplateData): string {
     const et = data.target || data.project?.target || '';
     let h = '<div class="page-title">项目配置</div>';
     h += '<div class="page-desc">管理构建参数和 IntelliSense 设置</div>';
+
+    // ── Qt 折叠 section ──
+    h += '<details class="section-collapse" open>';
+    h += '<summary class="section-header">Qt 项目</summary>';
+
+    if (!data.qtActive) {
+        h += '<div class="section-disabled-hint">未检测到 Qt 项目（.pro 文件），请先选择或创建项目</div>';
+    }
+
     // 当前项目
     h += '<div class="cs"><div class="cst">当前项目</div>';
     h += '<div class="ci"><div class="cii"><div class="cil">活动项目</div>';
@@ -54,7 +63,8 @@ export function buildProjectPage(data: TemplateData): string {
     h += "{command:'browse',targetId:'rccProjectPath',isDir:true})\">浏览</button>";
     h += '</div></div></div></div>';
     // 构建参数
-    h += '<div class="cs"><div class="cst">构建参数</div>';
+    const qtDisabled = !data.qtActive ? ' disabled' : '';
+    h += `<div class="cs"${qtDisabled}><div class="cst">构建参数</div>`;
     h += '<div class="ci"><div class="cii"><div class="cil">构建模式</div>';
     h += '<div class="cid">Debug 含调试符号，Release 启用优化</div></div>';
     h += '<div class="cic"><div class="btn-group" id="mG">';
@@ -73,7 +83,7 @@ export function buildProjectPage(data: TemplateData): string {
         h += '</div></div></div>';
     }
     // 语言标准
-    h += '<div class="cs"><div class="cst">语言标准</div>';
+    h += `<div class="cs"${qtDisabled}><div class="cst">语言标准</div>`;
     h += '<div class="ci"><div class="cii"><div class="cil">C 标准</div></div>';
     h += '<div class="cic">';
     h += csel('cStd', [
@@ -81,7 +91,15 @@ export function buildProjectPage(data: TemplateData): string {
         { value: 'c11', label: 'C11' }, { value: 'c17', label: 'C17' }
     ], data.cStandard);
     h += '</div></div>';
-    return h + buildProjectPagePart2(data);
+
+    h += buildProjectPagePart2(data);
+
+    h += '</details>'; // end Qt section
+
+    // ── SDK 折叠 section ──
+    h += buildSdkSection(data);
+
+    return h;
 }
 
 function buildProjectPagePart2(data: TemplateData): string {
@@ -151,7 +169,84 @@ function buildProjectPagePart2(data: TemplateData): string {
     h += 'if(d.arch!==undefined){var aBtns=document.querySelectorAll("#aG .bgi");';
     h += 'aBtns.forEach(function(b){b.classList.remove("active")});';
     h += 'var aIdx=d.arch==="x64"?1:0;if(aBtns[aIdx])aBtns[aIdx].classList.add("active")}';
+    h += '}';
+    h += 'else if(d.command==="sdkSettingsUpdated"){';
+    h += 'if(d.sdkMode!==undefined){var sBtns=document.querySelectorAll("#sdkMG .bgi");';
+    h += 'sBtns.forEach(function(b){b.classList.remove("active")});';
+    h += 'var sIdx=d.sdkMode==="release"?1:0;if(sBtns[sIdx])sBtns[sIdx].classList.add("active")}';
+    h += 'if(d.sdkArch!==undefined){var saBtns=document.querySelectorAll("#sdkAG .bgi");';
+    h += 'saBtns.forEach(function(b){b.classList.remove("active")});';
+    h += 'var saIdx=d.sdkArch==="x64"?1:0;if(saBtns[saIdx])saBtns[saIdx].classList.add("active")}';
     h += '}});';
     h += '</script>';
+    return h;
+}
+
+function buildSdkSection(data: TemplateData): string {
+    let h = '<details class="section-collapse" open>';
+    h += '<summary class="section-header">SDK 项目</summary>';
+
+    if (!data.sdkActive) {
+        h += '<div class="section-disabled-hint">未检测到 SDK 项目（.sln / Makefile），请先选择或创建项目</div>';
+    }
+
+    // 当前项目
+    h += '<div class="cs"><div class="cst">当前项目</div>';
+    h += '<div class="ci"><div class="cii"><div class="cil">活动项目</div>';
+    h += '<div class="cid">选择要构建的 .sln 项目</div></div>';
+    h += '<div class="cic"><div class="input-row" style="align-items:center;justify-content:flex-end">';
+    h += `<span style="font-size:14px;font-weight:600;color:var(--vscode-foreground)">${esc(data.sdkProjectName)}</span>`;
+    h += '<button class="btn btn-sm" onclick="vscode.postMessage(';
+    h += "{command:'selectSdkProject'})\">切换</button>";
+    h += '</div></div></div></div>';
+
+    // 构建参数
+    const sdkDisabled = !data.sdkActive ? ' disabled' : '';
+    h += `<div class="cs"${sdkDisabled}><div class="cst">构建参数</div>`;
+    h += '<div class="ci"><div class="cii"><div class="cil">构建模式</div>';
+    h += '<div class="cid">Debug 含调试符号，Release 启用优化</div></div>';
+    h += '<div class="cic"><div class="btn-group" id="sdkMG">';
+    const mDebug = data.sdkMode !== 'release' ? ' active' : '';
+    const mRelease = data.sdkMode === 'release' ? ' active' : '';
+    h += `<button class="bgi${mDebug}" onclick="setSdkM('debug')">debug</button>`;
+    h += `<button class="bgi${mRelease}" onclick="setSdkM('release')">release</button>`;
+    h += '</div></div></div>';
+    if (data.isWin) {
+        h += '<div class="ci"><div class="cii"><div class="cil">目标架构</div></div>';
+        h += '<div class="cic"><div class="btn-group" id="sdkAG">';
+        const aX86 = data.sdkArch !== 'x64' ? ' active' : '';
+        const aX64 = data.sdkArch === 'x64' ? ' active' : '';
+        h += `<button class="bgi${aX86}" onclick="setSdkA('x86')">x86</button>`;
+        h += `<button class="bgi${aX64}" onclick="setSdkA('x64')">x64</button>`;
+        h += '</div></div></div>';
+    }
+    h += '</div>'; // end 构建参数 cs
+
+    // VS 环境
+    h += `<div class="cs"${sdkDisabled}><div class="cst">VS 环境</div>`;
+    h += '<div class="ci"><div class="cii"><div class="cil">Visual Studio 路径</div>';
+    h += '<div class="cid">VsDevCmd.bat 或安装目录</div></div>';
+    h += '<div class="cic"><div class="input-row">';
+    h += `<input id="sdkVsInstall" value="${esc(data.sdkVsInstall)}"`;
+    h += ' placeholder="留空使用自动检测"';
+    h += " onblur=\"vscode.postMessage({command:'saveSdkVsInstall',";
+    h += "value:this.value.trim()})\"/>";
+    h += '<button class="btn btn-sm" onclick="vscode.postMessage(';
+    h += "{command:'browse',targetId:'sdkVsInstall',isDir:true})\">浏览</button>";
+    h += '</div></div></div></div>';
+
+    // SDK section JS
+    h += '<script>';
+    h += 'function setSdkM(m){document.querySelectorAll("#sdkMG .bgi")';
+    h += '.forEach(b=>b.classList.remove("active"));';
+    h += 'event.currentTarget.classList.add("active");';
+    h += 'vscode.postMessage({command:"saveSdkMode",value:m})}';
+    h += 'function setSdkA(a){document.querySelectorAll("#sdkAG .bgi")';
+    h += '.forEach(b=>b.classList.remove("active"));';
+    h += 'event.currentTarget.classList.add("active");';
+    h += 'vscode.postMessage({command:"saveSdkArch",value:a})}';
+    h += '</script>';
+
+    h += '</details>'; // end SDK section
     return h;
 }

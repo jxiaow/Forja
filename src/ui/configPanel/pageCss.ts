@@ -140,4 +140,14 @@ export const PAGE_CSS = [
     '.csel-item:hover{background:var(--vscode-list-hoverBackground,rgba(255,255,255,.06))}',
     '.csel-item.active{background:var(--vscode-list-activeSelectionBackground,rgba(0,122,204,.3));',
     'color:var(--vscode-list-activeSelectionForeground,var(--vscode-foreground))}',
+].join('') + [
+    '.section-collapse{margin-bottom:32px;border:1px solid var(--vscode-panel-border,rgba(255,255,255,.06));',
+    'border-radius:6px;padding:0}',
+    '.section-collapse[open]{padding-bottom:8px}',
+    '.section-header{font-size:14px;font-weight:600;cursor:pointer;padding:14px 20px;',
+    'user-select:none;list-style:none;display:flex;align-items:center;gap:8px}',
+    '.section-header::-webkit-details-marker{display:none}',
+    ".section-header::before{content:'\\25B6';font-size:10px;opacity:.6;transition:transform .2s}",
+    "details.section-collapse[open]>.section-header::before{transform:rotate(90deg)}",
+    '.section-collapse>:not(summary){padding:0 20px}',
 ].join('');

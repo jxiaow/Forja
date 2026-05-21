@@ -19,6 +19,11 @@ export function buildEnvPage(data: TemplateData): string {
     let h = '<div class="page-title">环境配置</div>';
     h += '<div class="page-desc">管理构建工具链</div>';
 
+    if (!data.qtActive) {
+        h += '<div class="section-disabled-hint">未检测到 Qt 项目，环境配置不可用</div>';
+        h += '<div style="opacity:0.4;pointer-events:none;user-select:none">';
+    }
+
     // ── Visual Studio ──
     if (data.isWin) {
         h += '<div class="cs"><div class="cst">Visual Studio</div>';
@@ -112,6 +117,7 @@ export function buildEnvPage(data: TemplateData): string {
     // ── 脚本 ──
     h += buildEnvScript();
 
+    if (!data.qtActive) { h += '</div>'; }
     return h;
 }
 

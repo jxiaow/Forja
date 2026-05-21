@@ -94,17 +94,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // 环境检测（一次，全量扫描获取完整候选列表）
-    detectEnv().then(async (env) => {
-        setState('envInfo', env);
-        logger.info('启动环境检测完成');
-
-        // 自动写入检测结果到配置（如果用户未手动设置过）
-        await autoWriteDetectedEnv(env);
-    }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
-
     // 启动时优先恢复手动指定项目，其次再走工作区扫描/记忆选择
-    let project = null;
+    let project: import('./core/types').ProjectInfo | null = null;
     const manualProPath = getManualProPath();
     if (manualProPath && fs.existsSync(manualProPath)) {
         const info = parseProFile(manualProPath);
@@ -115,6 +106,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         project = await selectProject(context);
     }
     setState('currentProject', project);
+
+    // 环境检测（一次，全量扫描获取完整候选列表）
+    detectEnv().then(async (env) => {
+        setState('envInfo', env);
+        logger.info('启动环境检测完成');
+
+        // 自动写入检测结果到配置（仅当工作区包含相关项目时）
+        if (project) {
+            await autoWriteDetectedEnv(env);
+        }
+    }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
 
     // 有项目时确保 .compilot/ 目录存在
     if (project) {

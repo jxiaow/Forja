@@ -8,6 +8,7 @@ import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { executeTestConnection, refreshSyncStatusBar } from '../../qt/sync/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
+import { setSdkSetting } from '../../core/settingsStore';
 
 const logger = createLogger('ConfigPanel');
 
@@ -374,6 +375,31 @@ export async function handleMessage(
             } else {
                 vscode.window.showInformationMessage('该服务器未保存密码（可能使用密钥认证）');
             }
+            break;
+        }
+        // ── SDK 配置消息 ──
+        case 'saveSdkMode': {
+            const val = String(msg.value || '');
+            if (val !== 'debug' && val !== 'release') { break; }
+            logger.info(`保存 SDK 构建模式: "${val}"`);
+            setSdkSetting('mode', val);
+            break;
+        }
+        case 'saveSdkArch': {
+            const val = String(msg.value || '');
+            if (val !== 'x86' && val !== 'x64') { break; }
+            logger.info(`保存 SDK 目标架构: "${val}"`);
+            setSdkSetting('arch', val);
+            break;
+        }
+        case 'saveSdkVsInstall': {
+            logger.info(`保存 SDK VS 路径: "${msg.value}"`);
+            setSdkSetting('vsInstall', String(msg.value || ''));
+            break;
+        }
+        case 'selectSdkProject': {
+            await vscode.commands.executeCommand('compilot.sdk.selectProject');
+            updateHtml();
             break;
         }
     }

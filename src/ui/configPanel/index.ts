@@ -6,7 +6,8 @@ import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
          getScanExcludeDirs, getPinnedProject, getTarget, getManualProPath, getDesignerPath, getQtSourcePath,
          getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../qt/services/configService';
-import { getQtSetting } from '../../core/settingsStore';
+import { getQtSetting, getSdkSetting } from '../../core/settingsStore';
+import { resolveProjectRoot } from '../../core/workspaceResolver';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
@@ -149,7 +150,13 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                     syncPendingCount: pendingInfo.count,
                     syncLastTime: pendingInfo.lastTime
                 };
-            })()
+            })(),
+            sdkProjectName: getSdkSetting('pinnedProject') || '未选择',
+            sdkMode: getSdkSetting('mode'),
+            sdkArch: getSdkSetting('arch'),
+            sdkVsInstall: getSdkSetting('vsInstall') || '',
+            qtActive: !!resolveProjectRoot('qt'),
+            sdkActive: !!resolveProjectRoot('sdk')
         };
         this._view.webview.html = getHtml(data);
     }

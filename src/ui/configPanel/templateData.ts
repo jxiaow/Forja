@@ -11,7 +11,8 @@ import {
     getDesignerPath, getQtSourcePath, getFileSyncPromptEnabled,
     getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot
 } from '../../qt/services/configService';
-import { getQtSetting } from '../../core/settingsStore';
+import { getQtSetting, getSdkSetting } from '../../core/settingsStore';
+import { resolveProjectRoot } from '../../core/workspaceResolver';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { getSyncPendingInfo } from '../../core/syncState';
 
@@ -58,6 +59,13 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         syncIgnore: sync.ignore.join(', '),
         syncRemotePath: sync.remotePaths[sync.selectedServer] || '',
         syncPendingCount: pendingInfo.count,
-        syncLastTime: pendingInfo.lastTime
+        syncLastTime: pendingInfo.lastTime,
+        // SDK
+        sdkProjectName: getSdkSetting('pinnedProject') || '未选择',
+        sdkMode: getSdkSetting('mode'),
+        sdkArch: getSdkSetting('arch'),
+        sdkVsInstall: getSdkSetting('vsInstall') || '',
+        qtActive: !!resolveProjectRoot('qt'),
+        sdkActive: !!resolveProjectRoot('sdk'),
     };
 }

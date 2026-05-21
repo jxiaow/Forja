@@ -396,6 +396,21 @@ details[open] .arrow { transform: rotate(90deg); }
   opacity: 0.5;
   font-size: 11px;
 }
+/* 模块未激活时禁用设置区域 */
+.cs[disabled] {
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}
+.section-disabled-hint {
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-inputValidation-warningBackground, rgba(255,200,0,0.1));
+  border: 1px solid var(--vscode-inputValidation-warningBorder, rgba(255,200,0,0.3));
+  border-radius: 4px;
+}
 </style>
 </head>
 <body>
