@@ -16,11 +16,16 @@ interface SdkCliOptions {
     action: string;
     workspace: string;
     project: string | null;
-    mode: 'debug' | 'release';
-    arch: 'x86' | 'x64';
+    mode: 'debug' | 'release' | null;
+    arch: 'x86' | 'x64' | null;
     vsDevCmd: string | null;
     execute: boolean;
     json: boolean;
+}
+
+interface EffectiveSdkCliOptions extends Omit<SdkCliOptions, 'mode' | 'arch'> {
+    mode: 'debug' | 'release';
+    arch: 'x86' | 'x64';
 }
 
 interface SdkDiagnostic {
@@ -35,8 +40,8 @@ function parseArgs(argv: string[]): SdkCliOptions {
         action: argv[0] || 'status',
         workspace: process.cwd(),
         project: null,
-        mode: 'debug',
-        arch: getSdkDefaultArch(),
+        mode: null,
+        arch: null,
         vsDevCmd: null,
         execute: true,
         json: false
@@ -135,7 +140,7 @@ export function scanProjects(workspace: string, depth: number = DEFAULT_SCAN_DEP
     return results;
 }
 
-function buildCommand(options: SdkCliOptions, projectPath: string, vsDevCmdPath: string): string[] {
+function buildCommand(options: EffectiveSdkCliOptions, projectPath: string, vsDevCmdPath: string): string[] {
     const isWindows = os.platform() === 'win32';
     const commands: string[] = [];
 
@@ -226,14 +231,21 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         const options = parseArgs(argv);
 
         const settings = loadSdkSettings(options.workspace);
+        const effectiveMode = options.mode || settings.mode || 'debug';
+        const effectiveArch = options.arch || settings.arch || getSdkDefaultArch();
+        const effectiveOptions: EffectiveSdkCliOptions = {
+            ...options,
+            mode: effectiveMode,
+            arch: effectiveArch
+        };
 
         // ── init ──
         if (options.action === 'init') {
             const vsInstallations = detectVsInstallations();
             const _makePath = detectMake();
 
-            const mode = options.mode;
-            const arch = options.arch;
+            const mode = effectiveMode;
+            const arch = effectiveArch;
             const vsDevCmd = options.vsDevCmd || (vsInstallations.length > 0 ? vsInstallations[0].vsDevCmdPath : '');
             const project = options.project ? path.relative(options.workspace, path.resolve(options.project)) : settings.pinnedProject;
 
@@ -277,8 +289,8 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 ok: true,
                 action: 'env',
                 current: {
-                    mode: settings.mode || 'debug',
-                    arch: settings.arch || getSdkDefaultArch(),
+                    mode: effectiveMode,
+                    arch: effectiveArch,
                     vsDevCmd: currentVsDevCmd || null,
                     make: makePath || null
                 },
@@ -301,8 +313,8 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
                 console.log('SDK 构建环境:');
-                console.log(`  mode: ${settings.mode || 'debug'}`);
-                console.log(`  arch: ${settings.arch || getSdkDefaultArch()}`);
+                console.log(`  mode: ${effectiveMode}`);
+                console.log(`  arch: ${effectiveArch}`);
                 if (process.platform === 'win32') {
                     console.log(`  VS: ${currentVsDevCmd || '未检测到'}`);
                     if (vsInstallations.length > 1) {
@@ -410,7 +422,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 checks,
                 nextAction,
                 project: projectRel,
-                resolved: { mode: settings.mode || options.mode, arch: settings.arch || options.arch }
+                resolved: { mode: effectiveMode, arch: effectiveArch }
             };
             if (missing.length > 0) { out.missing = missing; }
             if (diagnostics.length > 0) { out.diagnostics = diagnostics; }
@@ -419,7 +431,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             else {
                 console.log(`SDK 项目状态: ${ready ? '就绪' : '未就绪'}`);
                 console.log(`  项目: ${projectRel}`);
-                console.log(`  模式: ${settings.mode || options.mode}/${settings.arch || options.arch}`);
+                console.log(`  模式: ${effectiveMode}/${effectiveArch}`);
                 console.log('');
                 console.log('检查项:');
                 for (const [key, ok] of Object.entries(checks)) { console.log(`  ${ok ? '✓' : '✗'} ${key}`); }
@@ -430,11 +442,11 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         }
 
         // ── build/rebuild/clean ──
-        const commands = buildCommand(options, projectPath, vsDevCmdPath);
+        const commands = buildCommand(effectiveOptions, projectPath, vsDevCmdPath);
         const shellCommand = commands.join(' && ');
 
         if (!options.execute) {
-            const out = { ok: true, action: options.action, project: projectRel, commands, shellCommand, resolved: { mode: options.mode, arch: options.arch } };
+            const out = { ok: true, action: options.action, project: projectRel, commands, shellCommand, resolved: { mode: effectiveMode, arch: effectiveArch } };
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
                 console.log(`SDK ${options.action} 命令:`);
@@ -454,7 +466,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             project: projectRel,
             exitCode: executed.exitCode,
             durationMs,
-            resolved: { mode: options.mode, arch: options.arch }
+            resolved: { mode: effectiveMode, arch: effectiveArch }
         };
         if (errors.length > 0) { out.errors = errors; }
         if (!out.ok) {

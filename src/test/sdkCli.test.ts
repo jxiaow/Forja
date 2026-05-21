@@ -53,6 +53,48 @@ test('SDK CLI accepts valid build with --plan', async () => {
     }
 });
 
+test('SDK CLI build plan inherits mode and arch saved by init', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-config-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
+
+        const initOutput = await captureOutput(() => runSdkCli([
+            'init',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'Makefile',
+            '--mode',
+            'release',
+            '--arch',
+            'x64'
+        ]));
+        const initParsed = JSON.parse(initOutput);
+        assert.equal(initParsed.ok, true);
+
+        const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(parsed.ok, true);
+        assert.equal(parsed.resolved.mode, 'release');
+        assert.equal(parsed.resolved.arch, 'x64');
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
 
 // ── scanProjects ──
 import * as fs from 'fs';
