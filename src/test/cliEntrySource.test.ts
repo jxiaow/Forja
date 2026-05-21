@@ -21,6 +21,14 @@ test('cli interface spec lists only implemented subcommands as available', () =>
     assert.match(spec, /Remote 模式输出结构（设计稿，暂未实现）/);
 });
 
+test('cli user guide does not document draft remote commands as implemented', () => {
+    const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
+    assert.match(guide, /Remote 命令（设计稿，暂未实现）/);
+    assert.doesNotMatch(guide, /compilot remote test --json/);
+    assert.doesNotMatch(guide, /sync-config\.json/);
+    assert.doesNotMatch(guide, /\uFFFD/);
+});
+
 test('qt cli entry handles parse errors as json when requested', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'cli', 'index.ts'), 'utf8');
     assert.match(source, /parseCliArgs/);

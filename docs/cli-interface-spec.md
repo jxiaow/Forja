@@ -364,10 +364,13 @@ interface RemoteCheck {
 
 ## 配置文件格式
 
-### `.compilot/settings.json`
+### `~/.compilot/projects/<hash>.json`
+
+项目级配置由 `src/core/settingsIO.ts` 管理，按 workspace hash 存储到用户数据目录。文件通过 `type` 区分 Qt、SDK 和 sync 配置。
 
 ```jsonc
 {
+  "type": "qt",
   "mode": "debug",                    // "debug" | "release"
   "arch": "x86",                      // "x86" | "x64"
   "qtPath": "",                       // Qt 安装路径
@@ -382,6 +385,18 @@ interface RemoteCheck {
   "cppStandard": "c++17",            // C++ 标准
   "fileSyncPromptEnabled": true,      // .pri 文件同步提示
   "qmakeReminderEnabled": true        // QMake 提醒
+}
+```
+
+同步配置也保存在同一目录：
+
+```jsonc
+{
+  "type": "sync",
+  "syncEnabled": true,
+  "syncSelectedServer": "server-uuid",
+  "syncRemotePath": "/home/dev/project",
+  "syncIgnore": "node_modules, build"
 }
 ```
 
@@ -403,38 +418,9 @@ interface RemoteCheck {
 ]
 ```
 
-### `.compilot/sync-config.json`
+### `.compilot/sync-state.json`
 
-```jsonc
-{
-  "selectedServer": "server-uuid",
-  "syncEnabled": true,
-  "syncIgnore": ["build", "*.o", "node_modules"],
-  "branchSync": {
-    "enabled": true,
-    "pinned": {
-      "repo-name": "feature/branch"
-    }
-  },
-  "buildOrder": [
-    { "workspace": ".", "type": "qt" },
-    { "workspace": "./core-lib", "type": "sdk" }
-  ]
-}
-```
-
-### `.compilot/deploy.json`
-
-```jsonc
-{
-  "version": 1,
-  "server": "deploy-server-uuid",
-  "launch": {
-    "command": "./bin/MyApp",
-    "mode": "bg"                    // "bg" (后台) | "fg" (前台)
-  }
-}
-```
+同步运行状态写入项目目录下的 `.compilot/sync-state.json`。远程部署、branchSync 和 buildOrder 仍属于设计稿，当前实现不读取独立 deploy 配置文件。
 
 ---
 

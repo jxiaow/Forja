@@ -1112,12 +1112,12 @@ function initTags(wrapperId, csv) {
   const wrap = document.getElementById(wrapperId);
   wrap.addEventListener('click', () => wrap.querySelector('input').focus());
 }
-initTags('scanExcludeDirsWrap', '{{scanExcludeDirs}}');
-initTags('syncIgnoreWrap', '{{syncIgnore}}');
+initTags('scanExcludeDirsWrap', {{scanExcludeDirs}});
+initTags('syncIgnoreWrap', {{syncIgnore}});
 
 // ── Init sync UI ──
 (function initSyncUI() {
-  const serverDataRaw = '{{syncServerData}}';
+  const serverDataRaw = {{syncServerData}};
   try {
     const servers = JSON.parse(serverDataRaw);
     servers.forEach(function(s) { _serverCache[s.id] = s; });

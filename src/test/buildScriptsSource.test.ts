@@ -8,3 +8,11 @@ test('compile copy-html step is cross-platform node script', () => {
 
     assert.equal(pkg.scripts['copy-html'], 'node scripts/copy-html.js');
 });
+
+test('bump-version keeps package-lock root version in sync', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'scripts', 'bump-version.js'), 'utf8');
+
+    assert.match(source, /package-lock\.json/);
+    assert.match(source, /lock\.version = pkg\.version/);
+    assert.match(source, /lock\.packages\[''\]\.version = pkg\.version/);
+});
