@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { SdkProjectInfo, BuildMode, Arch, StateChangeEvent } from '../types';
-import { isLinux } from '../platform';
+import { getDefaultArch, isLinux } from '../platform';
 import { getSdkSetting, setSdkSetting } from '../../vscode/settingsStore';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 
 export class StateManager implements vscode.Disposable {
   private _currentProject: SdkProjectInfo | null = null;
   private _mode: BuildMode = 'debug';
-  private _arch: Arch = 'x86';
+  private _arch: Arch = getDefaultArch();
   private _isBuilding: boolean = false;
 
   private readonly _onStateChanged = new vscode.EventEmitter<StateChangeEvent>();
@@ -42,7 +42,14 @@ export class StateManager implements vscode.Disposable {
   }
 
   set arch(value: Arch) {
-    if (isLinux) { return; }
+    if (isLinux) {
+      const old = this._arch;
+      this._arch = getDefaultArch();
+      if (old !== this._arch) {
+        this._onStateChanged.fire({ field: 'arch', oldValue: old, newValue: this._arch });
+      }
+      return;
+    }
     if (value !== 'x86' && value !== 'x64') { return; }
     const old = this._arch;
     this._arch = value;
@@ -69,6 +76,8 @@ export class StateManager implements vscode.Disposable {
     const arch = getSdkSetting('arch');
     if (!isLinux && (arch === 'x86' || arch === 'x64')) {
       this._arch = arch;
+    } else {
+      this._arch = getDefaultArch();
     }
 
     const pinnedProject = getSdkSetting('pinnedProject');

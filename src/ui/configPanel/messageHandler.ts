@@ -9,6 +9,7 @@ import { updateProjectSyncField, addServer, removeServer, updateServer, readServ
 import { executeTestConnection, refreshSyncStatusBar } from '../../qt/sync/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
 import { setSdkSetting } from '../../vscode/settingsStore';
+import { getDefaultArch, isWindows } from '../../sdk/platform';
 
 const logger = createLogger('ConfigPanel');
 
@@ -387,6 +388,10 @@ export async function handleMessage(
         }
         case 'saveSdkArch': {
             const val = String(msg.value || '');
+            if (!isWindows) {
+                setSdkSetting('arch', getDefaultArch());
+                break;
+            }
             if (val !== 'x86' && val !== 'x64') { break; }
             logger.info(`保存 SDK 目标架构: "${val}"`);
             setSdkSetting('arch', val);

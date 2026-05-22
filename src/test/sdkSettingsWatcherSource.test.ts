@@ -28,6 +28,25 @@ test('sync watcher refreshes status from unified settings changes', () => {
     assert.doesNotMatch(source, /\.compilot\/settings\.json/);
 });
 
+test('SDK state manager uses non-Windows x64 default arch before persisting config', () => {
+    const platformSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'platform', 'index.ts'), 'utf8');
+    const stateManagerSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'modules', 'stateManager.ts'), 'utf8');
+
+    assert.match(platformSource, /getDefaultArch\(\): Arch/);
+    assert.match(platformSource, /return isWindows \? 'x86' : 'x64'/);
+    assert.match(stateManagerSource, /private _arch: Arch = getDefaultArch\(\)/);
+    assert.match(stateManagerSource, /this\._arch = getDefaultArch\(\)/);
+});
+
+test('config panel rejects SDK arch writes on non-Windows platforms', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'messageHandler.ts'), 'utf8');
+
+    assert.match(source, /getDefaultArch/);
+    assert.match(source, /isWindows/);
+    assert.match(source, /if \(!isWindows\)/);
+    assert.match(source, /setSdkSetting\('arch', getDefaultArch\(\)\)/);
+});
+
 test('developer docs describe unified sync settings storage', () => {
     const docs = fs.readFileSync(path.join(process.cwd(), 'docs', 'development.md'), 'utf8');
 
