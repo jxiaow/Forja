@@ -88,6 +88,8 @@ compilot qt status
 
 `status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `projects` / `use --project`；缺 Qt/VS 工具链时提示 `env` / `use --qt-path` 或 `use --vs-dev-shell`；配置齐全后再提示 `qmake`、`build` 或 `run`。
 
+`build` / `run` / `clean` / `qmake` / `stop` 只读取已保存项目配置；如果没有先通过 `init` 自动保存单项目，或通过 `use --project` 选择项目，这些命令会返回 `status` 作为统一入口。
+
 ### `compilot qt init`
 
 检测 Qt 和 Visual Studio 环境，并保存当前工作区中能自动确定的 Qt 配置。

@@ -59,24 +59,48 @@ function insideWorkspace(workspace: string, filePath: string): boolean {
     return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-function resolveProject(workspace: string, options: CliOptions, settings: QtSettings): { project: string | null; error: string | null } {
-    const explicitProject = options.project
-        ? (path.isAbsolute(options.project) ? path.resolve(options.project) : path.resolve(workspace, options.project))
-        : null;
-    if (explicitProject) {
-        if (!insideWorkspace(workspace, explicitProject)) {
-            return { project: null, error: '.pro 文件必须位于 workspace 内' };
-        }
-        return { project: explicitProject, error: null };
+function resolveExplicitProject(workspace: string, projectInput: string): { project: string | null; error: string | null } {
+    const explicitProject = path.isAbsolute(projectInput) ? path.resolve(projectInput) : path.resolve(workspace, projectInput);
+    if (!insideWorkspace(workspace, explicitProject)) {
+        return { project: null, error: '.pro 文件必须位于 workspace 内' };
     }
-    // From settings: pinnedProject or manualProPath
+    if (path.extname(explicitProject).toLowerCase() !== '.pro') {
+        return { project: null, error: '项目文件必须是 .pro 文件' };
+    }
+    if (!fs.existsSync(explicitProject)) {
+        return { project: null, error: `项目文件不存在: ${explicitProject}` };
+    }
+    return { project: explicitProject, error: null };
+}
+
+function resolveSavedProject(workspace: string, settings: QtSettings): { project: string | null; error: string | null } {
     const selectedProj = settings.pinnedProject;
     const savedProject = selectedProj ? path.join(selectedProj.root, selectedProj.relative) : null;
     if (savedProject && fs.existsSync(savedProject)) {
         return { project: savedProject, error: null };
     }
+    if (savedProject) {
+        return { project: null, error: `已配置项目不存在: ${savedProject}` };
+    }
     if (settings.manualProPath && fs.existsSync(settings.manualProPath)) {
         return { project: settings.manualProPath, error: null };
+    }
+    if (settings.manualProPath) {
+        return { project: null, error: `已配置项目不存在: ${settings.manualProPath}` };
+    }
+    return { project: null, error: '未配置项目。请先运行 compilot qt projects --json 查看候选，再用 compilot qt use --project <path> --json 选择项目。' };
+}
+
+function resolveInitProject(workspace: string, options: CliOptions, settings: QtSettings): { project: string | null; error: string | null } {
+    const explicitProject = options.project
+        ? resolveExplicitProject(workspace, options.project)
+        : null;
+    if (explicitProject) {
+        return explicitProject;
+    }
+    const savedProject = resolveSavedProject(workspace, settings);
+    if (savedProject.project) {
+        return savedProject;
     }
     const found = scanProFiles(workspace).map(rel => path.join(workspace, rel));
     if (found.length === 1) {
@@ -416,7 +440,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             : null;
 
         if (options.project) {
-            const projectResult = resolveProject(workspace, options, settings);
+            const projectResult = resolveExplicitProject(workspace, options.project);
             if (projectResult.error || !projectResult.project) {
                 result.diagnostics.push({ level: 'error', message: projectResult.error || '项目路径无效' });
                 result.nextActions.push('compilot qt projects --json');
@@ -488,7 +512,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         };
     }
 
-    const projectResult = resolveProject(workspace, effectiveOptions, settings);
+    const projectResult = options.action === 'init'
+        ? resolveInitProject(workspace, effectiveOptions, settings)
+        : resolveSavedProject(workspace, settings);
     if (projectResult.error && options.action !== 'init') {
         const errMode = settings.mode || 'debug';
         const errArch = settings.arch || getDefaultArch();
@@ -680,7 +706,11 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     } else if (options.action === 'clean') {
         commands = shellBuilder.cleanCommands(buildConfig).commands;
     } else if (options.action === 'stop') {
-        commands = shellBuilder.stopCommands(path.basename(project || 'app', '.pro'));
+        const runtimeTarget = project ? resolveRuntimeTarget(path.dirname(project), mode, arch) : null;
+        const processName = runtimeTarget
+            ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath))
+            : (target || path.basename(project || 'app', '.pro'));
+        commands = shellBuilder.stopCommands(processName);
     } else if (options.action === 'rcc') {
         const rccPath = resolveRccProjectPath(settings.rccProjectPath || '', workspace);
         if (!rccPath) {

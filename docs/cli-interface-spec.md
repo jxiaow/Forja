@@ -27,7 +27,7 @@ compilot <subcommand> <action> [options]
 
 ## Qt 命令参数矩阵
 
-`status` 是推荐第一条命令。`build` / `run` / `clean` / `qmake` 只读取已保存配置，不接受构建配置参数。
+`status` 是推荐第一条命令。`build` / `run` / `clean` / `qmake` / `stop` 只读取已保存配置，不接受构建配置参数；缺项目或配置不完整时返回 `compilot qt status --json`，由 `status` 统一给出后续动作。
 
 | 命令 | 允许参数 |
 |------|----------|
