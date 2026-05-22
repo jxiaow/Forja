@@ -226,18 +226,19 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 
 // 未找到 .pro 文件
 {
-  "ok": true,
+  "ok": false,
   "action": "build",
-  "diagnostics": [{ "level": "warning", "message": "未找到 .pro 文件" }],
-  "nextActions": ["在工作区中创建 .pro 文件，或使用 compilot qt use --project <path> --json 选择项目"]
+  "diagnostics": [{ "level": "error", "message": "未配置项目" }],
+  "nextActions": ["compilot qt status --json"]
 }
 
 // Qt 环境未配置
 {
   "ok": true,
-  "action": "build",
-  "diagnostics": [{ "level": "warning", "message": "Qt 路径未配置" }],
-  "nextActions": ["compilot qt use --qt-path C:/Qt/5.15.2/msvc2019 --json", "compilot qt build --json"]
+  "action": "status",
+  "diagnostics": [{ "level": "warning", "message": "未配置 Qt" }],
+  "nextAction": "env",
+  "nextActions": ["compilot qt env --json", "compilot qt use --qt-path <path> --json"]
 }
 ```
 
