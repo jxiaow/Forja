@@ -140,6 +140,7 @@ async function main(argv: string[]): Promise<void> {
                     }));
                 }
                 else { console.log(msg); }
+                process.exitCode = 1;
                 return;
             }
 
@@ -167,6 +168,7 @@ async function main(argv: string[]): Promise<void> {
                 }
                 console.log(tail);
             }
+            process.exitCode = 0;
             return;
         }
 
@@ -182,6 +184,7 @@ async function main(argv: string[]): Promise<void> {
                         console.log(`Sync (plan) 失败: ${output.failed.map(f => f.error).join(', ')}`);
                     }
                 }
+                process.exitCode = output.ok ? 0 : 1;
                 return;
             }
             const result = await executeSyncCli(workspace, options.server || undefined, options.repo || undefined);

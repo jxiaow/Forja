@@ -1,4 +1,4 @@
-import test, { after } from 'node:test';
+import test, { after, afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import * as cp from 'child_process';
 import * as fs from 'fs';
@@ -11,6 +11,8 @@ import { writeServers } from '../core/serverStore';
 
 const _tmpDirs: string[] = [];
 after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
+beforeEach(() => { process.exitCode = undefined; });
+afterEach(() => { process.exitCode = undefined; });
 
 function makeWorkspace(): string {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-cli-'));
@@ -62,6 +64,18 @@ test('qt sync --plan returns target server and pending files', async () => {
     assert.equal(data.server, 'dev');
     assert.equal(data.remotePath, '/remote/app');
     assert.ok(data.pending.includes(path.basename(workspace) + '/main.cpp'));
+    assert.equal(process.exitCode, 0);
+});
+
+test('qt sync --plan sets exit code when planning fails', async () => {
+    const workspace = makeWorkspace();
+
+    const output = await captureStdout(() => runQtCli(['sync', '--workspace', workspace, '--plan', '--json']));
+    const data = JSON.parse(output);
+
+    assert.equal(data.ok, false);
+    assert.equal(data.action, 'sync');
+    assert.equal(process.exitCode, 1);
 });
 
 test('qt logs --json includes action and workspace when no log exists', async () => {
@@ -74,6 +88,7 @@ test('qt logs --json includes action and workspace when no log exists', async ()
     assert.equal(data.action, 'logs');
     assert.equal(data.workspace, workspace);
     assert.ok(Array.isArray(data.diagnostics));
+    assert.equal(process.exitCode, 1);
 });
 
 test('qt logs --json includes action and workspace when log exists', async () => {
@@ -91,4 +106,5 @@ test('qt logs --json includes action and workspace when log exists', async () =>
     assert.equal(data.workspace, workspace);
     assert.equal(data.logFile, logFile);
     assert.match(data.tail, /line 2/);
+    assert.equal(process.exitCode, 0);
 });
