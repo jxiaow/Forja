@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import * as path from 'path';
 import { SdkProjectInfo, BuildMode, Arch, StateChangeEvent } from '../types';
 import { getDefaultArch, isLinux } from '../platform';
@@ -81,16 +82,24 @@ export class StateManager implements vscode.Disposable {
     }
 
     const pinnedProject = getSdkSetting('pinnedProject');
-    if (pinnedProject) {
-      const wsRoot = resolveProjectRoot('sdk');
-      let resolvedPath = pinnedProject;
-      if (wsRoot && !path.isAbsolute(resolvedPath)) {
-        resolvedPath = path.join(wsRoot, resolvedPath);
-      }
-      const name = path.basename(resolvedPath, path.extname(resolvedPath));
-      const type = resolvedPath.endsWith('.sln') ? 'sln' : 'makefile';
-      this._currentProject = { name, path: resolvedPath, type } as SdkProjectInfo;
+    if (!pinnedProject) {
+      this._currentProject = null;
+      return;
     }
+
+    const wsRoot = resolveProjectRoot('sdk');
+    let resolvedPath = pinnedProject;
+    if (wsRoot && !path.isAbsolute(resolvedPath)) {
+      resolvedPath = path.join(wsRoot, resolvedPath);
+    }
+    if (!fs.existsSync(resolvedPath)) {
+      this._currentProject = null;
+      return;
+    }
+
+    const name = path.basename(resolvedPath, path.extname(resolvedPath));
+    const type = resolvedPath.endsWith('.sln') ? 'sln' : 'makefile';
+    this._currentProject = { name, path: resolvedPath, type } as SdkProjectInfo;
   }
 
   /** 将当前状态持久化到统一配置的 sdk 部分 */

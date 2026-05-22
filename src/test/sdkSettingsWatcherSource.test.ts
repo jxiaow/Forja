@@ -47,6 +47,24 @@ test('config panel rejects SDK arch writes on non-Windows platforms', () => {
     assert.match(source, /setSdkSetting\('arch', getDefaultArch\(\)\)/);
 });
 
+test('SDK state restore clears missing or stale pinned projects', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'modules', 'stateManager.ts'), 'utf8');
+
+    assert.match(source, /import \* as fs from 'fs'/);
+    assert.match(source, /if \(!pinnedProject\)/);
+    assert.match(source, /this\._currentProject = null/);
+    assert.match(source, /if \(!fs\.existsSync\(resolvedPath\)\)/);
+});
+
+test('SDK builder refuses to build when current project file no longer exists', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'modules', 'sdkBuilder.ts'), 'utf8');
+
+    assert.match(source, /import \* as fs from 'fs'/);
+    assert.match(source, /fs\.existsSync\(this\.stateManager\.currentProject\.path\)/);
+    assert.match(source, /stateManager\.currentProject = null/);
+    assert.match(source, /persistToConfig\(\)/);
+});
+
 test('developer docs describe unified sync settings storage', () => {
     const docs = fs.readFileSync(path.join(process.cwd(), 'docs', 'development.md'), 'utf8');
 
