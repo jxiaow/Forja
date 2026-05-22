@@ -534,7 +534,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             mode: options.executionMode,
             updated,
             resolved: useResolved,
-            nextActions: ['compilot qt status --json', 'compilot qt build --json']
+            nextActions: ['compilot qt status --json']
         };
 
         return {
@@ -542,7 +542,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             ok: true,
             project,
             diagnostics: options.executionMode === 'dryRun' ? [{ level: 'info', message: '预览配置切换，未写入本地配置' }] : [],
-            nextActions: ['compilot qt status --json', 'compilot qt build --json'],
+            nextActions: ['compilot qt status --json'],
             resolved: useResolved,
             data: useData,
             stdout: JSON.stringify(useData)

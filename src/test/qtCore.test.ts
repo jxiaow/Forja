@@ -306,6 +306,8 @@ test('createActionPlan use updates only explicit config fields', async () => {
     assert.equal(result.resolved?.qtPath, 'D:/Qt-old');
     assert.equal(result.resolved?.target, 'demo');
     assert.deepEqual(result.data?.updated, { mode: 'release' });
+    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.data?.nextActions, ['compilot qt status --json']);
 });
 
 test('createActionPlan use --project switches pinned project', async () => {
