@@ -3,7 +3,7 @@ import { CliResult } from './types';
 import { createActionPlan } from '../shared/qtCore';
 import { runCliResult } from '../shared/commandRunner';
 import { executeSyncCli, planSyncCli } from '../shared/syncCli';
-import { readRunState, isProcessRunning, runLogPath } from '../shared/localState';
+import { readRunState, isRunStateRunning, runLogPath } from '../shared/localState';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -153,20 +153,22 @@ async function main(argv: string[]): Promise<void> {
             const tail = lines.slice(-100).join('\n');
 
             if (wantsJson) {
-                const running = state ? isProcessRunning(state.pid) : false;
+                const running = state ? isRunStateRunning(state) : false;
                 console.log(JSON.stringify({
                     ok: true,
                     action: 'logs',
                     workspace,
                     pid: state?.pid || null,
+                    executablePath: state?.executablePath || null,
                     running,
                     logFile,
                     tail
                 }, null, 2));
             } else {
                 if (state) {
-                    const running = isProcessRunning(state.pid);
+                    const running = isRunStateRunning(state);
                     console.log(`PID: ${state.pid} (${running ? 'running' : 'exited'})`);
+                    if (state.executablePath) { console.log(`Executable: ${state.executablePath}`); }
                     console.log(`Log: ${logFile}`);
                     console.log('---');
                 }

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as cp from 'child_process';
 
 export function logsDir(workspace: string): string {
     const tmpBase = process.env.TEMP || process.env.TMP || require('os').tmpdir();
@@ -29,6 +30,7 @@ function writeJson(filePath: string, value: unknown): void {
 export interface RunState {
     pid: number;
     exePath: string;
+    executablePath?: string;
     logFile: string;
     startedAt: string;
 }
@@ -60,4 +62,37 @@ export function isProcessRunning(pid: number): boolean {
     } catch {
         return false;
     }
+}
+
+export function isExecutableRunning(executablePath: string): boolean {
+    if (!executablePath) { return false; }
+    if (path.resolve(executablePath) === path.resolve(process.execPath)) {
+        return isProcessRunning(process.pid);
+    }
+    const exeName = path.basename(executablePath).toLowerCase();
+    try {
+        if (process.platform === 'win32') {
+            const output = cp.execFileSync(
+                'tasklist',
+                ['/FI', `IMAGENAME eq ${path.basename(executablePath)}`, '/FO', 'CSV', '/NH'],
+                { encoding: 'utf8', windowsHide: true }
+            );
+            return output.toLowerCase().includes(exeName);
+        }
+
+        const output = cp.execFileSync('ps', ['-axo', 'comm=,args='], { encoding: 'utf8' });
+        const normalizedPath = executablePath.toLowerCase();
+        return output.toLowerCase().split(/\r?\n/).some(line =>
+            line.includes(normalizedPath) || path.basename(line.split(/\s+/)[0] || '') === exeName
+        );
+    } catch {
+        return false;
+    }
+}
+
+export function isRunStateRunning(state: RunState): boolean {
+    if (state.executablePath && isExecutableRunning(state.executablePath)) {
+        return true;
+    }
+    return isProcessRunning(state.pid);
 }

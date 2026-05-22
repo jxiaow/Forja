@@ -236,10 +236,25 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 // detach 成功
 {
   "ok": true,
-  "action": "build",
+  "action": "run",
   "exitCode": 0,
-  "logFile": "C:/Users/.../compilot-logs/workspace/build-20260516.log",
-  "resolved": { "mode": "debug", "arch": "x86" }
+  "logFile": "C:/Users/.../compilot-logs/workspace/run.log",
+  "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
+  "resolved": { "mode": "release", "arch": "x86" }
+}
+```
+
+`logs --json` 返回最近一次 `run --detach` 的状态。Windows 下 `running` 优先按 `executablePath` 的真实进程名判断，避免启动器 PID 退出后误判：
+
+```jsonc
+{
+  "ok": true,
+  "action": "logs",
+  "pid": 13228,
+  "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
+  "running": true,
+  "logFile": "C:/Users/.../compilot-logs/workspace/run.log",
+  "tail": "..."
 }
 ```
 

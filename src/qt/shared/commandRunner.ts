@@ -229,6 +229,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         writeRunState(result.workspace, {
             pid,
             exePath: runCommand,
+            executablePath: result.executablePath,
             logFile,
             startedAt: new Date().toISOString()
         });

@@ -108,3 +108,25 @@ test('qt logs --json includes action and workspace when log exists', async () =>
     assert.match(data.tail, /line 2/);
     assert.equal(process.exitCode, 0);
 });
+
+test('qt logs --json uses executablePath when launcher pid has exited', async () => {
+    const workspace = makeWorkspace();
+    const logFile = runLogPath(workspace);
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.writeFileSync(logFile, 'line 1\nline 2\n', 'utf8');
+    writeRunState(workspace, {
+        pid: 99999999,
+        exePath: 'launcher',
+        executablePath: process.execPath,
+        logFile,
+        startedAt: new Date().toISOString()
+    });
+
+    const output = await captureStdout(() => runQtCli(['logs', '--workspace', workspace, '--json']));
+    const data = JSON.parse(output);
+
+    assert.equal(data.ok, true);
+    assert.equal(data.running, true);
+    assert.equal(data.executablePath, process.execPath);
+    assert.equal(process.exitCode, 0);
+});

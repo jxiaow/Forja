@@ -147,6 +147,8 @@ compilot qt run --detach
 compilot qt logs
 ```
 
+`logs --json` 会返回 `running`、启动器 `pid`、`logFile` 和 `tail`。`run --detach` 成功记录了 `executablePath` 时，Windows 下会优先按真实可执行文件检查运行状态，避免启动脚本 PID 退出后误报 `running: false`。
+
 ### `compilot qt stop`
 
 停止运行中的程序。
