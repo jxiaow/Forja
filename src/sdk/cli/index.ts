@@ -115,6 +115,18 @@ function resolveProjectPath(workspace: string, project: string): string {
     return path.isAbsolute(project) ? path.resolve(project) : path.resolve(workspace, project);
 }
 
+function projectDisplayPath(workspace: string, projectPath: string): string {
+    return path.relative(workspace, projectPath) || projectPath;
+}
+
+function requireExistingProjectPath(workspace: string, project: string): string {
+    const projectPath = resolveProjectPath(workspace, project);
+    if (!fs.existsSync(projectPath)) {
+        throw new Error(`项目文件不存在: ${projectDisplayPath(workspace, projectPath)}`);
+    }
+    return projectPath;
+}
+
 export function scanProjects(workspace: string, depth: number = DEFAULT_SCAN_DEPTH): string[] {
     const results: string[] = [];
     const isWindows = os.platform() === 'win32';
@@ -253,7 +265,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             const mode = effectiveMode;
             const arch = effectiveArch;
             const vsDevCmd = options.vsDevCmd || (vsInstallations.length > 0 ? vsInstallations[0].vsDevCmdPath : '');
-            const project = options.project ? path.relative(options.workspace, resolveProjectPath(options.workspace, options.project)) : settings.pinnedProject;
+            const project = options.project ? projectDisplayPath(options.workspace, requireExistingProjectPath(options.workspace, options.project)) : settings.pinnedProject;
 
             const newSettings = { mode, arch, vsDevCmdPath: vsDevCmd, pinnedProject: project };
             saveSdkSettings(options.workspace, newSettings);
@@ -448,10 +460,23 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             return;
         }
 
-        let projectPath = options.project ? resolveProjectPath(options.workspace, options.project) : null;
+        let projectPath = options.project ? requireExistingProjectPath(options.workspace, options.project) : null;
         if (!projectPath && settings.pinnedProject) {
             const pinned = path.join(options.workspace, settings.pinnedProject);
             if (fs.existsSync(pinned)) { projectPath = pinned; }
+            else {
+                const out = {
+                    ok: false,
+                    action: options.action,
+                    project: settings.pinnedProject,
+                    diagnostics: [{ level: 'error', message: `项目文件不存在: ${settings.pinnedProject}` }],
+                    nextActions: ['compilot sdk status --json']
+                };
+                if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
+                else { console.error(`项目文件不存在: ${settings.pinnedProject}`); }
+                process.exitCode = 1;
+                return;
+            }
         }
         if (!projectPath) {
             if (candidates.length === 1) { projectPath = candidates[0]; }

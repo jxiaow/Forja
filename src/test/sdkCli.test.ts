@@ -184,6 +184,80 @@ test('SDK CLI resolves relative --project from workspace', async () => {
     }
 });
 
+test('SDK CLI init rejects a missing explicit project', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-missing-init-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        const output = await captureOutput(() => runSdkCli([
+            'init',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'MissingMakefile'
+        ]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(process.exitCode, 1);
+        assert.equal(parsed.ok, false);
+        assert.ok(parsed.diagnostics[0].message.includes('项目文件不存在'));
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI build plan rejects a stale pinned project instead of building another candidate', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-stale-project-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        const pinnedProject = path.join(ws, 'Makefile');
+        fs.writeFileSync(pinnedProject, 'all:\n\t@echo old\n', 'utf-8');
+
+        const initOutput = await captureOutput(() => runSdkCli([
+            'init',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'Makefile'
+        ]));
+        assert.equal(JSON.parse(initOutput).ok, true);
+
+        fs.unlinkSync(pinnedProject);
+        createSdkProjectFile(ws, 'other');
+
+        const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(process.exitCode, 1);
+        assert.equal(parsed.ok, false);
+        assert.ok(parsed.diagnostics[0].message.includes('项目文件不存在'));
+        assert.notEqual(parsed.project, path.join('other', os.platform() === 'win32' ? 'App.sln' : 'Makefile'));
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
 function createSdkProjectFile(workspace: string, relativeDir: string): string {
     const dir = path.join(workspace, relativeDir);
     fs.mkdirSync(dir, { recursive: true });
