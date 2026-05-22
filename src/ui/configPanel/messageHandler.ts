@@ -399,7 +399,8 @@ export async function handleMessage(
         }
         case 'saveSdkVsInstall': {
             logger.info(`保存 SDK VS 路径: "${msg.value}"`);
-            setSdkSetting('vsInstall', String(msg.value || ''));
+            const sdkVsInstall = inferVsInstall(String(msg.value || '')) || String(msg.value || '');
+            setSdkSetting('vsInstall', sdkVsInstall);
             break;
         }
         case 'selectSdkProject': {

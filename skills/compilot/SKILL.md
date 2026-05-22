@@ -23,42 +23,33 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
 ## 核心原则
 
 1. **先 status 再动手**：用 `status --json` 看环境就绪状态和 diagnostics
-2. **多候选必须选择**：`candidates` 有多项时，必须加 `--project` 指定
-3. **默认执行**：命令默认执行，加 `--plan` 仅查看计划
-4. **加 --json**：获取结构化输出，省 token
-5. **run 必须 --detach**：程序启动后不会自行退出，不加会阻塞终端
-6. **build/clean/qmake 不加 --detach**：前台执行完直接返回结果
-7. **混合仓库**：同时有 .pro 和 .sln 时，分别用 `compilot qt` 和 `compilot sdk`
+2. **init 只做自动初始化**：不要给 `init` 传 `--project`、`--mode`、`--arch`、工具链路径或 target
+3. **use 负责显式选择**：项目、mode、arch、Qt/VS 路径只通过 `use` 写入保存配置
+4. **执行命令只读配置**：`build`、`run`、`clean`、`qmake`、`rebuild` 不传项目或构建配置参数
+5. **默认执行**：命令默认执行，加 `--plan` 仅查看计划
+6. **加 --json**：获取结构化输出，省 token
+7. **run 必须 --detach**：程序启动后不会自行退出，不加会阻塞终端
+8. **build/clean/qmake 不加 --detach**：前台执行完直接返回结果
+9. **混合仓库**：同时有 .pro 和 .sln 时，分别用 `compilot qt` 和 `compilot sdk`
 
 ## 决策流程
 
 ```
 用户要求构建/运行 →
   1. compilot qt status --json（或 sdk status）
-  2. 检查 ready 字段：
-     - ready: true → 检查 resolved 中 mode/arch/qtPath/vsDevShell/project：
-       - 对应 settings 字段有值（用户设置过）→ 直接执行
-       - 对应 settings 字段为空（用户没设置过）→ 调 env --json 看 available：
-         - 只有一个候选 → 自动使用，不问
-         - 有多个候选 → 展示候选让用户选择，用 init 写入后再执行
-     - ready: false → 看 missing 和 diagnostics：
-       - missing 含 "project" → 用 projects --json 看列表，向用户展示
-         候选并让用户选择，然后 init --project <选择的路径>
-       - missing 含 "qtPath" → 用 env --json 看可选项，向用户展示
-         候选并让用户选择，然后 init --qt-path <选择的路径>
-       - missing 含 "vsDevShellPath" → 同上，init --vs-dev-shell <路径>
-       - missing 含 "makefile" → 先 qmake 生成 Makefile
-  3. 执行命令，检查 ok 字段：
+  2. 看 diagnostics / nextActions：
+     - 没有本地配置 → 运行 init --json，让 CLI 保存可自动确定的配置
+     - 缺项目 → 运行 projects --json，展示候选，让用户选择后运行 use --project <path> --json
+     - 缺 mode/arch 确认 → 按 status 建议运行 use --mode ... --arch ... --json
+     - 缺 Qt/VS 工具链 → 运行 env --json，展示候选，让用户选择后运行 use 写入路径
+     - 缺 Makefile → 先 qmake --json
+  3. 配置齐全后执行 build/run/clean/qmake/rebuild：
+     - 不追加 --project、--mode、--arch、--qt-path、--vs-dev-shell、--vs-dev-cmd、--target
+     - 需要切换配置时，先运行 use，再重新 status
+  4. 执行命令，检查 ok 字段：
      - ok: true → 完成
      - ok: false → 看 errors 和 diagnostics 定位问题
 ```
-
-**如何判断"用户没设置过"：**
-- status 输出的 resolved 中，mode/arch 显示的是实际生效值（含兜底）
-- 但如果 settings 文件里对应字段为空字符串，说明用户从未通过
-  `init --mode`/`--arch` 或 UI 主动设置过
-- agent 可通过 status 的 resolved 与 env 的 available 对比判断：
-  resolved 里有值但 env.available 里有多个选项 → 需要确认
 
 **关键：当存在多个候选（多个 Qt 版本、多个 .pro 文件、多个 VS 版本、
 debug/release、x86/x64）且用户未设置过时，必须展示选项让用户选择，
@@ -68,55 +59,69 @@ debug/release、x86/x64）且用户未设置过时，必须展示选项让用户
 
 | 命令 | 用途 | 关键参数 |
 |------|------|----------|
-| `init` | 检测环境并保存配置到 .compilot/ | `--qt-path`, `--vs-dev-shell`, `--project` |
+| `status` | 当前配置和就绪状态 | |
+| `init` | 自动检测并保存能确定的配置 | |
+| `use` | 切换/确认项目和构建配置 | `--project`, `--mode`, `--arch`, `--qt-path`, `--vs-dev-shell`, `--target` |
 | `env` | 查看工具链环境和可选项 | |
 | `projects` | 列出 workspace 下的 .pro 文件 | |
-| `status` | 当前配置和就绪状态 | `--save-local` |
-| `qmake` | 生成 Makefile | `--project`, `--mode`, `--arch` |
-| `build` | 编译 | `--plan`, `--detach` |
+| `qmake` | 生成 Makefile | `--plan` |
+| `build` | 编译 | `--plan` |
 | `run` | 编译并运行 | `--detach`（必须） |
 | `stop` | 停止运行中的程序 | |
 | `logs` | 查看 detach 模式的运行日志 | |
-| `clean` | 清理构建产物 | |
+| `clean` | 清理构建产物 | `--plan` |
 | `sync` | 同步变更文件到远程服务器 | `--server` |
-| `rcc` | 编译 .qrc 资源文件 | |
+| `rcc` | 编译 .qrc 资源文件 | `--plan` |
 
 ### Qt 通用参数
 
 | 参数 | 说明 |
 |------|------|
 | `--workspace <path>` | 工作区路径，默认当前目录 |
-| `--project <path>` | 指定 .pro 文件（相对路径） |
+| `--plan` | 仅显示命令计划，不执行 |
+| `--detach` | 仅 `run` 可用，后台启动程序并写日志 |
+| `--json` | 结构化 JSON 输出 |
+
+Qt 配置参数只允许用于 `compilot qt use`：
+
+| 参数 | 说明 |
+|------|------|
+| `--project <path>` | 指定 .pro 文件（相对 workspace） |
 | `--mode debug\|release` | 构建模式 |
 | `--arch x86\|x64` | 目标架构 |
+| `--qt-path <path>` | Qt 安装路径 |
+| `--vs-dev-shell <path>` | Launch-VsDevShell.ps1 路径 |
 | `--target <name>` | QMake TARGET 覆盖 |
-| `--plan` | 仅显示命令计划，不执行 |
-| `--detach` | 后台执行，日志落文件 |
-| `--json` | 结构化 JSON 输出 |
 
 ## SDK 命令
 
 | 命令 | 用途 | 关键参数 |
 |------|------|----------|
-| `init` | 检测 VS 环境并保存配置 | `--vs-dev-cmd`, `--project` |
+| `status` | 当前配置和就绪状态 | |
+| `init` | 自动检测并保存能确定的配置 | |
+| `use` | 切换/确认 SDK 项目和构建配置 | `--project`, `--mode`, `--arch`, `--vs-dev-cmd` |
 | `env` | 查看构建环境和可选项 | |
 | `projects` | 列出 .sln/Makefile 文件 | |
-| `status` | 项目就绪状态 | |
 | `build` | 编译 | `--plan` |
-| `rebuild` | clean + build | |
-| `clean` | 清理 | |
+| `rebuild` | clean + build | `--plan` |
+| `clean` | 清理 | `--plan` |
 
 ### SDK 通用参数
 
 | 参数 | 说明 |
 |------|------|
 | `--workspace <path>` | 工作区路径，默认当前目录 |
-| `--project <path>` | 项目入口文件（.sln 或 Makefile） |
-| `--mode debug\|release` | 编译模式（默认 debug） |
-| `--arch x86\|x64` | 目标架构（默认 x86，仅 Windows） |
-| `--vs-dev-cmd <path>` | VsDevCmd.bat 路径 |
 | `--plan` | 仅输出命令计划，不执行 |
 | `--json` | JSON 格式输出 |
+
+SDK 配置参数只允许用于 `compilot sdk use`：
+
+| 参数 | 说明 |
+|------|------|
+| `--project <path>` | 项目入口文件（.sln 或 Makefile，相对 workspace） |
+| `--mode debug\|release` | 编译模式 |
+| `--arch x86\|x64` | 目标架构（非 Windows 只支持 x64） |
+| `--vs-dev-cmd <path>` | VsDevCmd.bat 路径 |
 
 ## JSON 输出关键字段
 
@@ -167,8 +172,12 @@ debug/release、x86/x64）且用户未设置过时，必须展示选项让用户
 ## 常见场景示例
 
 ```bash
-# 首次使用：检测环境并初始化
+# 首次使用：先看状态，再自动初始化
+compilot qt status --json
 compilot qt init --json
+
+# 显式选择配置
+compilot qt use --project src/app.pro --mode release --json
 
 # 日常编译
 compilot qt build --json
@@ -185,9 +194,8 @@ compilot qt stop --json
 # 只看编译计划不执行
 compilot qt build --plan --json
 
-# 指定特定项目文件
-compilot qt build --project src/app.pro --json
-
-# SDK 编译
-compilot sdk build --mode release --arch x64 --json
+# SDK 编译：配置先用 use，build 只读保存配置
+compilot sdk status --json
+compilot sdk use --project Makefile --mode release --json
+compilot sdk build --json
 ```

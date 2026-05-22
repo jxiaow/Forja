@@ -24,8 +24,8 @@ code --install-extension compilot-x.x.x.vsix
 
 1. 打开包含 `.pro`、`.sln` 或 `Makefile` 的工作区
 2. 扩展自动激活，状态栏出现构建按钮
-3. 点击状态栏选择模式（Debug/Release）和架构（x86/x64）
-4. QMake → Build → Run
+3. 点击状态栏选择 Qt 或 SDK 项目、模式和架构
+4. Qt 项目执行 QMake → Build → Run；SDK 项目执行 Build / Rebuild / Clean
 
 ## 状态栏
 
@@ -63,11 +63,12 @@ code --install-extension compilot-x.x.x.vsix
 
 ## 配置面板
 
-点击活动栏 Compilot 图标打开，分三个 Tab：
+点击活动栏 Compilot 图标打开：
 
 - **概览**：项目名称、环境状态、C/C++ 标准、QMake TARGET、IntelliSense 生成
-- **环境**：VS DevShell 路径、Qt 路径、Designer 路径、Qt 源码路径
+- **环境**：Qt VS DevShell、Qt 路径、Designer 路径、Qt 源码路径，以及 SDK Visual Studio 配置
 - **同步**：服务器配置、远程路径、同步开关、忽略规则
+- **高级**：文件提醒和 QMake 提醒等开关
 
 ## 远程编译部署（设计稿，暂未实现）
 
@@ -96,9 +97,10 @@ code --install-extension compilot-x.x.x.vsix
 | `qtSourcePath` | Qt 源码路径（调试跳转用） |
 | `mode` | 构建模式：debug / release |
 | `arch` | 目标架构：x86 / x64 |
+| `vsInstall` | Visual Studio 安装根目录；Qt 推导 DevShell，SDK 推导 VsDevCmd |
 | `qmakeTarget` | 覆盖 QMake TARGET |
 | `rccProjectPath` | RCC 项目路径（留空自动扫描） |
-| `pinnedProject` | 当前固定的 .pro 文件 |
+| `pinnedProject` | 当前固定的项目文件：Qt 为 `.pro`，SDK 为 `.sln` 或 `Makefile` |
 | `cStandard` / `cppStandard` | C/C++ 标准（IntelliSense 用） |
 | `fileSyncPromptEnabled` | 删除文件时是否提示从 .pri/.pro 移除 |
 | `qmakeReminderEnabled` | .pro/.pri 变更后是否提示重新 QMake |

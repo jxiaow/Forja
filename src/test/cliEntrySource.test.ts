@@ -29,6 +29,18 @@ test('cli user guide does not document draft remote commands as implemented', ()
     assert.doesNotMatch(guide, /\uFFFD/);
 });
 
+test('compilot skill documents current status init use flow', () => {
+    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'compilot', 'SKILL.md'), 'utf8');
+
+    assert.match(skill, /先 status 再动手/);
+    assert.match(skill, /init 只做自动初始化/);
+    assert.match(skill, /use 负责显式选择/);
+    assert.match(skill, /执行命令只读配置/);
+    assert.doesNotMatch(skill, /init --project/);
+    assert.doesNotMatch(skill, /build --project/);
+    assert.doesNotMatch(skill, /sdk build --mode/);
+});
+
 test('qt cli entry handles parse errors as json when requested', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'cli', 'index.ts'), 'utf8');
     assert.match(source, /parseCliArgs/);

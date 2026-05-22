@@ -154,10 +154,10 @@ function buildSdkEnvSection(data: TemplateData): string {
     h += " onclick=\"togglePanel('sdkVsPanel',this)\">";
     h += '<span class="env-toggle-arrow">▾</span> 修改路径</button></div>';
     h += '<div id="sdkVsPanel" class="env-expand">';
-    h += '<div class="ef-row"><span class="ef-label">VsDevCmd 路径</span>';
+    h += '<div class="ef-row"><span class="ef-label">VS 安装目录或 VsDevCmd</span>';
     h += '<div class="input-row">';
     h += `<input id="sdkVsInstall" class="ef-input" value="${esc(data.sdkVsInstall)}"`;
-    h += ' placeholder="留空使用自动检测"';
+    h += ' placeholder="留空使用自动检测；可填 VS 安装目录或 VsDevCmd.bat"';
     h += " onblur=\"vscode.postMessage({command:'saveSdkVsInstall',value:this.value.trim()})\"/>";
     h += '<button class="btn btn-sm" onclick="vscode.postMessage(';
     h += "{command:'browse',targetId:'sdkVsInstall',isDir:true})\">浏览</button>";

@@ -47,6 +47,14 @@ test('config panel rejects SDK arch writes on non-Windows platforms', () => {
     assert.match(source, /setSdkSetting\('arch', getDefaultArch\(\)\)/);
 });
 
+test('config panel normalizes SDK VsDevCmd paths before saving vsInstall', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'messageHandler.ts'), 'utf8');
+
+    assert.match(source, /case 'saveSdkVsInstall'/);
+    assert.match(source, /inferVsInstall\(String\(msg\.value \|\| ''\)\) \|\| String\(msg\.value \|\| ''\)/);
+    assert.match(source, /setSdkSetting\('vsInstall', sdkVsInstall\)/);
+});
+
 test('SDK state restore clears missing or stale pinned projects', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'modules', 'stateManager.ts'), 'utf8');
 
