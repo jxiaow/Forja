@@ -103,16 +103,29 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
 }
 
 
+function _isProcessNotFoundError(err: cp.ExecException): boolean {
+    if (!isWin && err.code === 1) { return true; }
+    return err.message.includes('not found')
+        || err.message.includes('找不到')
+        || err.message.includes('没有找到');
+}
+
 // 静默 kill（不开新 terminal）
-function _killApp(exeName: string): void {
+function _killApp(exeName: string): Promise<void> {
+    const escapedName = exeName.replace(/"/g, '\\"');
     const cmd = isWin
-        ? `taskkill /F /IM ${exeName}.exe`
-        : `pkill -x ${exeName}`;
+        ? `taskkill /F /IM "${escapedName}.exe"`
+        : `pkill -x "${escapedName}"`;
     logger.info(`Kill app: ${cmd}`);
-    cp.exec(cmd, (err) => {
-        if (err && !err.message.includes('not found') && !err.message.includes('找不到') && !err.message.includes('没有找到')) {
+    return new Promise((resolve, reject) => {
+        cp.exec(cmd, (err) => {
+            if (!err || _isProcessNotFoundError(err)) {
+                resolve();
+                return;
+            }
             logger.error(`Kill app failed: ${err.message}`);
-        }
+            reject(new Error(`停止旧程序失败: ${err.message}`));
+        });
     });
 }
 
@@ -207,6 +220,22 @@ export async function run(): Promise<void> {
         }
     }
 
+    const mfInfo = _resolveMakefileInfo();
+    if (!mfInfo) {
+        setState('isBuilding', false);
+        setState('buildAction', null);
+        vscode.window.showErrorMessage(`请先运行 QMake (${cfg.mode})`);
+        throw new Error('无法确定可执行文件路径');
+    }
+
+    try {
+        await _killApp(mfInfo.target);
+    } catch (e) {
+        setState('isBuilding', false);
+        setState('buildAction', null);
+        throw e;
+    }
+
     const { commands, matcher } = builder.buildCommands(cfg);
     // Build task: 不清屏，失败时保留编译错误
     const buildTask = new vscode.Task(
@@ -243,16 +272,6 @@ export async function run(): Promise<void> {
                 reject(new Error('构建失败'));
                 return;
             }
-
-            const mfInfo = _resolveMakefileInfo();
-            if (!mfInfo) {
-                vscode.window.showErrorMessage(`请先运行 QMake (${cfg.mode})`);
-                reject(new Error('无法确定可执行文件路径'));
-                return;
-            }
-
-            // 先静默 kill 旧进程，再用 task 启动（保留 shell 环境变量）
-            _killApp(mfInfo.target);
 
             const runCmds: string[] = [];
             if (!isWin) {
@@ -367,7 +386,7 @@ export function stop(): void {
     const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
     const exeName = mfInfo?.target || 'app';
     logger.info(`Stop current target: ${exeName}`);
-    _killApp(exeName);
+    _killApp(exeName).catch((e: Error) => vscode.window.showErrorMessage(e.message));
     setState('isRunning', false);
 }
 
