@@ -244,13 +244,14 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 }
 ```
 
-`logs --json` 返回最近一次 `run --detach` 的状态。Windows 下 `running` 优先按 `executablePath` 的真实进程名判断，避免启动器 PID 退出后误判：
+`logs --json` 返回最近一次 `run --detach` 的状态。`pid` 优先记录后台启动后的真实可执行文件进程；如果启动后短时间内无法解析目标进程，则回退为启动器 PID。`launcherPid` 保留启动脚本/启动器进程，便于排查 Windows 下 `wscript`/`cmd` 启动链路。`running` 优先按 `executablePath` 的真实进程判断，避免启动器 PID 退出后误判：
 
 ```jsonc
 {
   "ok": true,
   "action": "logs",
   "pid": 13228,
+  "launcherPid": 13192,
   "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
   "running": true,
   "logFile": "C:/Users/.../compilot-logs/workspace/run.log",

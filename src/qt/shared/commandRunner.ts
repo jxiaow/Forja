@@ -2,7 +2,7 @@ import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CliResult } from '../cli/types';
-import { ensureLocalStateDir, logsDir, runLogPath, writeRunState } from './localState';
+import { ensureLocalStateDir, findExecutablePids, logsDir, runLogPath, writeRunState } from './localState';
 import { parseRuntimeLibPaths, resolveRuntimeTarget } from './runtimeTarget';
 
 function logFileFor(workspace: string, action: string): string {
@@ -85,6 +85,34 @@ function executeStreaming(commandLine: string, cwd: string): Promise<{ exitCode:
 
 function shellQuote(value: string): string {
     return `"${value.replace(/"/g, '\\"')}"`;
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function resolveDetachedRunPid(
+    executablePath: string | undefined,
+    launcherPid: number,
+    previousPids: number[]
+): Promise<number> {
+    if (!executablePath) {
+        return launcherPid;
+    }
+
+    const previous = new Set(previousPids);
+    const deadline = Date.now() + 2000;
+
+    do {
+        const currentPids = findExecutablePids(executablePath);
+        const newPid = currentPids.find(pid => !previous.has(pid));
+        if (newPid) {
+            return newPid;
+        }
+        await delay(100);
+    } while (Date.now() < deadline);
+
+    return launcherPid;
 }
 
 export function buildRunCommand(project: string, mode: string, arch: string): string | null {
@@ -202,6 +230,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
 
         const cwd = result.project ? path.dirname(result.project) : result.workspace;
         const isWin = process.platform === 'win32';
+        const previousExecutablePids = result.executablePath ? findExecutablePids(result.executablePath) : [];
 
         let child: cp.ChildProcess;
         if (isWin) {
@@ -225,9 +254,11 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         }
         child.unref();
 
-        const pid = child.pid || 0;
+        const launcherPid = child.pid || 0;
+        const pid = await resolveDetachedRunPid(result.executablePath, launcherPid, previousExecutablePids);
         writeRunState(result.workspace, {
             pid,
+            launcherPid,
             exePath: runCommand,
             executablePath: result.executablePath,
             logFile,

@@ -116,6 +116,7 @@ test('qt logs --json uses executablePath when launcher pid has exited', async ()
     fs.writeFileSync(logFile, 'line 1\nline 2\n', 'utf8');
     writeRunState(workspace, {
         pid: 99999999,
+        launcherPid: 99999999,
         exePath: 'launcher',
         executablePath: process.execPath,
         logFile,
@@ -127,6 +128,7 @@ test('qt logs --json uses executablePath when launcher pid has exited', async ()
 
     assert.equal(data.ok, true);
     assert.equal(data.running, true);
+    assert.equal(data.launcherPid, 99999999);
     assert.equal(data.executablePath, process.execPath);
     assert.equal(process.exitCode, 0);
 });

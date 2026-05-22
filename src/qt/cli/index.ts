@@ -159,6 +159,7 @@ async function main(argv: string[]): Promise<void> {
                     action: 'logs',
                     workspace,
                     pid: state?.pid || null,
+                    launcherPid: state?.launcherPid || null,
                     executablePath: state?.executablePath || null,
                     running,
                     logFile,
@@ -168,6 +169,9 @@ async function main(argv: string[]): Promise<void> {
                 if (state) {
                     const running = isRunStateRunning(state);
                     console.log(`PID: ${state.pid} (${running ? 'running' : 'exited'})`);
+                    if (state.launcherPid && state.launcherPid !== state.pid) {
+                        console.log(`Launcher PID: ${state.launcherPid}`);
+                    }
                     if (state.executablePath) { console.log(`Executable: ${state.executablePath}`); }
                     console.log(`Log: ${logFile}`);
                     console.log('---');
