@@ -733,6 +733,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 const exeName = runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro');
                 const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
                 commands = [killCmd, ...rccCmds, ...buildCmds, runCmd];
+                result.executablePath = runtimeTarget?.exePath;
             } else {
                 // Makefile not yet generated or mismatched — return build commands with hint to run status
                 const fallbackExeName = path.basename(project, '.pro');

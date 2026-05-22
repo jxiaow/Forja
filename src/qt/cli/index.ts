@@ -22,6 +22,7 @@ function compactResult(result: CliResult): Record<string, unknown> {
     if (result.errors.length > 0) { out.errors = result.errors; }
     if (result.warningSummary) { out.warningSummary = result.warningSummary; }
     if (result.logFile) { out.logFile = result.logFile; }
+    if (result.executablePath) { out.executablePath = result.executablePath; }
 
     // Successful detach launches: minimal output
     const isDetachSuccess = result.ok && result.logFile && result.exitCode === 0
@@ -76,6 +77,9 @@ function textOutput(result: CliResult): string {
     ];
     if (result.project) {
         lines.push(`项目: ${result.project}`);
+    }
+    if (result.executablePath) {
+        lines.push(`可执行文件: ${result.executablePath}`);
     }
     if (result.commands.length > 0) {
         lines.push('命令:');

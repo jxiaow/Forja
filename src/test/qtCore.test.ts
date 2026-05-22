@@ -678,6 +678,7 @@ test('run with Makefile generates full command chain including executable', asyn
     assert.ok(result.commands.length >= 2);
     // Last command should reference the executable
     assert.ok(result.commands.some(c => /demo/.test(c)));
+    assert.equal(result.executablePath, path.join(workspace, process.platform === 'win32' ? 'debug\\demo.exe' : 'debug/demo'));
     // Should NOT have the "Makefile not generated" warning
     assert.ok(!result.diagnostics.some(d => /Makefile/.test(d.message)));
 });

@@ -58,6 +58,8 @@ export interface CliResult {
     /** Warning summary: total count and deduplicated breakdown */
     warningSummary?: { total: number; summary: string };
     logFile: string | null;
+    /** run 成功时解析出的可执行文件绝对路径 */
+    executablePath?: string;
     diagnostics: CliDiagnostic[];
     resolved: CliResolvedConfig | null;
     /** RCC 项目路径（status 时返回） */

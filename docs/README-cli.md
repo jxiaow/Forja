@@ -137,6 +137,8 @@ compilot qt run --detach
 
 `--detach` 时，编译在前台执行；编译成功后后台启动程序，编译失败直接返回错误。
 
+`--json` 输出在成功解析 Makefile 目标时会包含 `executablePath`，表示最终启动的可执行文件绝对路径。
+
 ### `compilot qt logs`
 
 查看后台执行日志。

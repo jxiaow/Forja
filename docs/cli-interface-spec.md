@@ -120,6 +120,7 @@ interface QtCliResult {
   exitCode: number | null;        // 进程退出码（execute 模式）
   durationMs: number;             // 执行耗时（ms）
   logFile: string | null;         // 日志文件路径（--detach 模式）
+  executablePath?: string;        // run 成功时解析出的可执行文件绝对路径
   stdout: string;                 // 进程标准输出（execute 模式）
   stderr: string;                 // 进程标准错误（execute 模式）
   rccProjectPath: string | null;  // RCC 项目路径
@@ -157,6 +158,7 @@ JSON 模式省略空/默认值字段，只保留非空字段：
 | `exitCode` | 非 null 时保留 |
 | `errors` | 非空数组时保留 |
 | `logFile` | 非空时保留 |
+| `executablePath` | 非空时保留，通常在 `run` 成功或 `run --plan` 可解析目标时返回 |
 | `project` | 非空时保留 |
 | `commands` | 非空数组时保留 |
 | `shellCommand` | 非空时保留 |
@@ -209,9 +211,10 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 // execute 模式成功
 {
   "ok": true,
-  "action": "build",
+  "action": "run",
   "mode": "execute",
   "exitCode": 0,
+  "executablePath": "C:/workspace/debug/app.exe",
   "durationMs": 12345,
   "commands": [...]
 }
