@@ -60,6 +60,32 @@ compilot <subcommand> <action> [options]
 | `--vs-dev-shell <path>` | string | 自动检测 / 已保存值 | VS DevShell 路径 |
 | `--target <name>` | string | `.pro` TARGET / 已保存值 | QMake TARGET 覆盖 |
 
+## SDK 命令参数矩阵
+
+`status` 是 SDK 推荐第一条命令。`build` / `rebuild` / `clean` 只读取已保存配置，不接受构建配置参数；缺项目、缺本地配置或配置不完整时返回 `compilot sdk status --json`，由 `status` 统一给出后续动作。
+
+| 命令 | 允许参数 |
+|------|----------|
+| `status` | `--workspace`, `--json` |
+| `init` | `--workspace`, `--json` |
+| `use` | `--workspace`, `--json`, `--project`, `--mode`, `--arch`, `--vs-dev-cmd` |
+| `env` | `--workspace`, `--json` |
+| `projects` | `--workspace`, `--json` |
+| `build` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `rebuild` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `clean` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+
+## SDK use 配置参数
+
+以下参数只允许用于 `compilot sdk use`。`compilot sdk init` 只做自动初始化，不接收显式构建配置：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--project <path>` | string | 自动检测 / 已保存值 | 当前 SDK 项目入口文件（Windows `.sln`，非 Windows `Makefile`） |
+| `--mode <mode>` | `debug` \| `release` | `debug` / 已保存值 | 构建模式 |
+| `--arch <arch>` | `x86` \| `x64` | 平台默认值 / 已保存值 | 目标架构；非 Windows 只支持 `x64` |
+| `--vs-dev-cmd <path>` | string | 自动检测 / 已保存值 | Windows `VsDevCmd.bat` 路径 |
+
 ## 远程模式参数（设计稿，暂未实现）
 
 | 参数 | 类型 | 说明 |
@@ -250,19 +276,28 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 
 ```typescript
 interface SdkCliResult {
-  ok: boolean;
-  action: "build" | "rebuild" | "clean" | "status";
-  workspace: string;
-  target: string | null;          // 项目名（文件名去扩展名）
-  project: string | null;         // 项目文件路径
+  ok: boolean;                    // 是否成功
+  action: "init" | "use" | "env" | "projects" | "status" | "build" | "rebuild" | "clean";
+  workspace?: string;             // 工作区绝对路径（status 时返回）
+  ready?: boolean;                // 配置是否可直接执行 build（status 时）
+  checks?: Record<string, boolean>; // settings/project/vsDevCmd/make 检查项
+  missing?: string[];             // 缺失项
+  nextAction?: string;            // status 建议的下一条动作
+  nextActions?: string[];         // 错误或 use 后建议的命令
+  project?: string | null;        // 当前项目路径（相对于 workspace）
   candidates?: string[];          // 候选项目列表（status 时）
-  commands: string[];             // shell 命令列表
-  shellCommand: string | null;    // 拼接命令（--plan 时返回，execute 时为 null）
-  exitCode: number | null;        // 执行退出码
-  errors: string[];               // 错误信息
-  diagnostics: Diagnostic[];      // 诊断信息
-  mode?: string;                  // 构建模式（status 时）
-  arch?: string;                  // 架构（status 时）
+  resolved?: {
+    mode: "debug" | "release";
+    arch: "x86" | "x64";
+    vsDevCmdPath?: string;
+    project?: string;
+  };
+  commands?: string[];            // shell 命令列表（--plan 时）
+  shellCommand?: string;          // 拼接后的 shell 命令（--plan 时）
+  exitCode?: number;              // 执行退出码（execute 模式）
+  durationMs?: number;            // 执行耗时（execute 模式）
+  errors?: string[];              // 编译错误行
+  diagnostics?: Diagnostic[];     // 诊断信息
 }
 ```
 
@@ -273,11 +308,34 @@ interface SdkCliResult {
   "ok": true,
   "action": "status",
   "workspace": "C:/projects/myapp",
-  "target": "MyApp",
-  "project": "C:/projects/myapp/MyApp.sln",
+  "ready": true,
+  "checks": {
+    "settings": true,
+    "project": true,
+    "vsDevCmd": true
+  },
+  "nextAction": "build",
+  "project": "MyApp.sln",
   "candidates": ["MyApp.sln"],
-  "mode": "debug",
-  "arch": "x86"
+  "resolved": {
+    "mode": "debug",
+    "arch": "x86"
+  }
+}
+```
+
+### `use`
+
+```jsonc
+{
+  "ok": true,
+  "action": "use",
+  "resolved": {
+    "mode": "release",
+    "arch": "x64",
+    "project": "Makefile"
+  },
+  "nextActions": ["compilot sdk status --json"]
 }
 ```
 
@@ -287,12 +345,13 @@ interface SdkCliResult {
 {
   "ok": true,
   "action": "build",
-  "target": "MyApp",
-  "commands": ["msbuild MyApp.sln /p:Configuration=Debug /p:Platform=x86"],
-  "shellCommand": "msbuild MyApp.sln /p:Configuration=Debug /p:Platform=x86",
-  "exitCode": null,
-  "diagnostics": [],
-  "errors": []
+  "project": "MyApp.sln",
+  "commands": ["msbuild \"C:/projects/myapp/MyApp.sln\" /t:Build /p:Configuration=Debug /p:Platform=Win32 /m"],
+  "shellCommand": "msbuild \"C:/projects/myapp/MyApp.sln\" /t:Build /p:Configuration=Debug /p:Platform=Win32 /m",
+  "resolved": {
+    "mode": "debug",
+    "arch": "x86"
+  }
 }
 ```
 
@@ -302,7 +361,8 @@ interface SdkCliResult {
 {
   "ok": false,
   "action": "build",
-  "diagnostics": [{ "level": "error", "message": "未找到 .sln 或 Makefile 项目文件" }]
+  "diagnostics": [{ "level": "error", "message": "尚未初始化" }],
+  "nextActions": ["compilot sdk status --json"]
 }
 ```
 

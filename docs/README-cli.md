@@ -197,10 +197,35 @@ RCC 项目路径解析顺序：
 
 ### `compilot sdk status`
 
-查看 SDK 项目状态和候选项目列表。
+查看 SDK 项目状态、当前 workspace、配置是否就绪和下一步动作。`status` 是 SDK 推荐的第一条命令。
 
 ```bash
+compilot sdk status
 compilot sdk status --json
+```
+
+`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `projects` / `use --project`；缺 VS/make 工具链时提示 `env` / `use --vs-dev-cmd`；配置齐全后再提示 `build`。
+
+`build` / `rebuild` / `clean` 只读取已保存项目配置；如果没有先通过 `init` 自动保存单项目，或没有通过 `use` 确认项目、mode、arch，这些命令会返回 `status` 作为统一入口。
+
+### `compilot sdk init`
+
+检测 Visual Studio 或 make 环境，并保存当前工作区中能自动确定的 SDK 配置。
+
+```bash
+compilot sdk init --json
+```
+
+`init` 不接收 `--project`、`--mode`、`--arch`、`--vs-dev-cmd`。这些显式配置统一通过 `compilot sdk use` 写入。非 Windows 平台只有 `x64` 架构，`init` 会直接写入；Windows 下可通过 `use --arch` 切换。
+
+### `compilot sdk use`
+
+切换当前 workspace 正在使用的 SDK 项目或构建配置，只更新显式传入的字段。
+
+```bash
+compilot sdk use --project Makefile
+compilot sdk use --mode release
+compilot sdk use --vs-dev-cmd "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/Tools/VsDevCmd.bat"
 ```
 
 ### `compilot sdk build`
@@ -208,7 +233,8 @@ compilot sdk status --json
 编译 SDK 项目。
 
 ```bash
-compilot sdk build --json
+compilot sdk build
+compilot sdk build --plan --json
 ```
 
 ### `compilot sdk rebuild`
