@@ -8,7 +8,7 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
 
 命令:
   init        自动初始化本地配置（检测环境、保存可自动确定的配置）
-  use         切换当前 workspace 使用的项目/构建配置
+  use         确认/切换当前 workspace 使用的项目和构建配置
   env         查看工具链环境（检测到的 Qt/VS/jom 及可选项）
   projects    查看 workspace 下的 .pro 文件列表
   status      显示当前配置、环境和项目状态
@@ -44,8 +44,9 @@ sync 选项:
   --repo <name>          同步时指定子仓库名称（多仓库工作区）
 
 示例:
-  compilot qt init --json              初始化并保存配置
-  compilot qt use --mode release       切换到 release 配置
+  compilot qt status --json            查看配置状态和下一步
+  compilot qt init --json              初始化并保存可自动确定的配置
+  compilot qt use --mode release       确认/切换到 release 配置
   compilot qt build                    执行构建
   compilot qt build --plan             查看构建命令（不执行）
   compilot qt run --detach             后台构建并运行

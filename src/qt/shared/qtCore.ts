@@ -146,12 +146,37 @@ function buildToolchainActions(missingTools: ReturnType<typeof getMissingTools>)
     return actions;
 }
 
-function buildStatusGuidance(hasSettings: boolean, projectExists: boolean, missingTools: ReturnType<typeof getMissingTools>, hasMakefile: boolean, hasExecutable: boolean): { nextAction: string; nextActions: string[] } {
+function getUnconfirmedBuildConfig(settings: QtSettings): Array<'mode' | 'arch'> {
+    const missing: Array<'mode' | 'arch'> = [];
+    if (!settings.mode) { missing.push('mode'); }
+    if (!settings.arch) { missing.push('arch'); }
+    return missing;
+}
+
+function buildConfigConfirmationActions(unconfirmed: Array<'mode' | 'arch'>): string[] {
+    if (unconfirmed.length === 0) { return []; }
+    const parts: string[] = [];
+    if (unconfirmed.includes('mode')) { parts.push('--mode debug'); }
+    if (unconfirmed.includes('arch')) { parts.push(`--arch ${getDefaultArch()}`); }
+    return [`compilot qt use ${parts.join(' ')} --json`];
+}
+
+function buildStatusGuidance(
+    hasSettings: boolean,
+    projectExists: boolean,
+    unconfirmedBuildConfig: Array<'mode' | 'arch'>,
+    missingTools: ReturnType<typeof getMissingTools>,
+    hasMakefile: boolean,
+    hasExecutable: boolean
+): { nextAction: string; nextActions: string[] } {
     if (!hasSettings) {
         return { nextAction: 'init', nextActions: ['compilot qt init --json'] };
     }
     if (!projectExists) {
         return { nextAction: 'projects', nextActions: buildProjectSelectionActions() };
+    }
+    if (unconfirmedBuildConfig.length > 0) {
+        return { nextAction: 'use', nextActions: buildConfigConfirmationActions(unconfirmedBuildConfig) };
     }
     if (missingTools.length > 0) {
         return { nextAction: 'env', nextActions: buildToolchainActions(missingTools) };
@@ -178,8 +203,6 @@ function buildInitDiagnostics(input: InitDiagnosticsInput): CliResult['diagnosti
 
     // 合并 env 相关的自动选择提示为一条 warning
     const autoSelected: string[] = [];
-    if (!input.options.mode) { autoSelected.push('mode'); }
-    if (!input.options.arch && getAvailableArch().length > 1) { autoSelected.push('arch'); }
     if (!input.options.qtPath && input.qtCandidates.length > 1) { autoSelected.push('qtPath'); }
     if (autoSelected.length > 0) {
         diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 compilot qt env --json 查看可选项` });
@@ -281,6 +304,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const projectFull = projectRel ? path.join(workspace, projectRel) : null;
         const projectExists = projectFull ? fs.existsSync(projectFull) : false;
 
+        const unconfirmedBuildConfig = getUnconfirmedBuildConfig(settings);
+        const modeConfirmed = !!settings.mode;
+        const archConfirmed = !!settings.arch;
         const mode = settings.mode || 'debug';
         const arch = settings.arch || getDefaultArch();
         const qtPath = settings.qtPath || '';
@@ -300,16 +326,18 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const checks: Record<string, boolean> = {
             settings: hasSettings,
             project: projectExists,
+            mode: modeConfirmed,
+            arch: archConfirmed,
             ...toolChecks,
             makefile: hasMakefile,
             executable: hasExecutable
         };
 
         // 推导下一步：init 只用于首次 bootstrap，已有配置后的缺项改由 env/projects/use 处理。
-        const guidance = buildStatusGuidance(hasSettings, projectExists, missingTools, hasMakefile, hasExecutable);
+        const guidance = buildStatusGuidance(hasSettings, projectExists, unconfirmedBuildConfig, missingTools, hasMakefile, hasExecutable);
 
         // ready = 所有构建前置条件满足（可以 build）
-        const ready = hasSettings && projectExists && toolsReady && hasMakefile;
+        const ready = hasSettings && projectExists && modeConfirmed && archConfirmed && toolsReady && hasMakefile;
 
         const diagnostics: CliResult['diagnostics'] = [];
         if (!hasSettings) {
@@ -317,6 +345,12 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         } else {
             if (!projectExists) {
                 diagnostics.push({ level: 'warning', message: '未配置项目' });
+            }
+            if (!modeConfirmed) {
+                diagnostics.push({ level: 'warning', message: '未确认构建模式（默认建议 debug）' });
+            }
+            if (!archConfirmed) {
+                diagnostics.push({ level: 'warning', message: `未确认目标架构（默认建议 ${getDefaultArch()}）` });
             }
             for (const tool of missingTools) {
                 diagnostics.push({ level: 'warning', message: `未配置 ${tool.label}` });
@@ -347,8 +381,11 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         // missing: 列出哪些前置条件未满足（辅助调用方决定调 env 还是 projects）
         const missing: string[] = [];
         if (!hasSettings) { missing.push('settings'); }
-        if (!projectExists && hasSettings) { missing.push('project'); }
-        for (const tool of missingTools) { missing.push(tool.key); }
+        if (hasSettings) {
+            if (!projectExists) { missing.push('project'); }
+            missing.push(...unconfirmedBuildConfig);
+            for (const tool of missingTools) { missing.push(tool.key); }
+        }
         if (makefileValidation.exists && !makefileValidation.matches) { missing.push('makefile'); }
         else if (!makefileValidation.exists && projectExists) { missing.push('makefile'); }
         if (hasMakefile && !hasExecutable) { missing.push('executable'); }
@@ -528,6 +565,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
 
     const project = projectResult.project;
+    const unconfirmedBuildConfig = options.action === 'init' ? [] : getUnconfirmedBuildConfig(settings);
     const mode = settings.mode || 'debug';
     const arch = settings.arch || getDefaultArch();
     const qtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
@@ -637,6 +675,16 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             nextActions: Array.from(new Set(previewNextActions)),
             resolved: previewResolved
         };
+    }
+
+    if (unconfirmedBuildConfig.length > 0) {
+        result.resolved = resolved;
+        result.diagnostics.push({
+            level: 'error',
+            message: `未确认构建配置: ${unconfirmedBuildConfig.join(', ')}。请先运行 compilot qt status --json 查看下一步。`
+        });
+        result.nextActions.push('compilot qt status --json');
+        return result;
     }
 
     const shellBuilder = createShellPlanBuilder(process.platform === 'win32' ? winConfig : linuxConfig);

@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createActionPlan } from '../qt/shared/qtCore';
-import { saveQtSettings, DEFAULT_QT } from '../core/settingsIO';
+import { saveQtSettings, DEFAULT_QT, QtSettings } from '../core/settingsIO';
 
 const _tmpDirs: string[] = [];
 after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
@@ -14,6 +14,21 @@ function makeWorkspace(): string {
     _tmpDirs.push(workspace);
     fs.writeFileSync(path.join(workspace, 'demo.pro'), 'TARGET = demo\nQT += core gui widgets\n', 'utf8');
     return workspace;
+}
+
+function defaultArch(): 'x86' | 'x64' {
+    return process.platform === 'win32' ? 'x86' : 'x64';
+}
+
+function readyQtSettings(workspace: string, overrides: Partial<QtSettings> = {}): QtSettings {
+    return {
+        ...DEFAULT_QT,
+        pinnedProject: { root: workspace, relative: 'demo.pro' },
+        mode: 'debug',
+        arch: defaultArch(),
+        qtPath: 'D:/Qt',
+        ...overrides
+    };
 }
 
 test('createActionPlan uses settings.json when CLI args are omitted', async () => {
@@ -92,7 +107,7 @@ test('createActionPlan reports missing saved project before scanning multiple pr
 test('createActionPlan status returns checks and resolved config', async () => {
     const workspace = makeWorkspace();
     // Save settings so status sees an initialized project
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, qtPath: 'D:/Qt', jomPath: 'C:/jom/jom.exe' });
+    saveQtSettings(workspace, readyQtSettings(workspace, { jomPath: 'C:/jom/jom.exe' }));
 
     const result = await createActionPlan({
         action: 'status',
@@ -174,7 +189,7 @@ test('status points to projects/use when settings exist but no project is select
 
 test('status points to env/use when project exists but toolchain is missing', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' } });
+    saveQtSettings(workspace, readyQtSettings(workspace, { qtPath: '' }));
 
     const result = await createActionPlan({
         action: 'status',
@@ -194,6 +209,70 @@ test('status points to env/use when project exists but toolchain is missing', as
     assert.equal(data.nextAction, 'env');
     assert.ok(data.nextActions.includes('compilot qt env --json'));
     assert.ok(data.nextActions.some((action: string) => /compilot qt use --qt-path <path> --json/.test(action)));
+});
+
+test('status points to use when mode and arch need confirmation', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, {
+        ...DEFAULT_QT,
+        pinnedProject: { root: workspace, relative: 'demo.pro' },
+        qtPath: 'D:/Qt',
+        vsInstall: 'C:/VS',
+        jomPath: 'C:/jom/jom.exe'
+    });
+
+    const result = await createActionPlan({
+        action: 'status',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    const data = JSON.parse(result.stdout);
+    assert.equal(data.ready, false);
+    assert.equal(data.checks.mode, false);
+    assert.equal(data.checks.arch, false);
+    assert.deepEqual(data.missing.filter((item: string) => item === 'mode' || item === 'arch'), ['mode', 'arch']);
+    assert.equal(data.nextAction, 'use');
+    assert.deepEqual(data.nextActions, [`compilot qt use --mode debug --arch ${defaultArch()} --json`]);
+    assert.ok(data.diagnostics.some((d: { message: string }) => /未确认构建模式/.test(d.message)));
+    assert.ok(data.diagnostics.some((d: { message: string }) => /未确认目标架构/.test(d.message)));
+});
+
+test('execution actions require confirmed mode and arch', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, {
+        ...DEFAULT_QT,
+        pinnedProject: { root: workspace, relative: 'demo.pro' },
+        qtPath: 'D:/Qt',
+        vsInstall: 'C:/VS',
+        jomPath: 'C:/jom/jom.exe'
+    });
+
+    const result = await createActionPlan({
+        action: 'build',
+        executionMode: 'dryRun',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.some(d => /未确认构建配置/.test(d.message)));
+    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
 });
 
 test('createActionPlan use updates only explicit config fields', async () => {
@@ -232,7 +311,7 @@ test('createActionPlan use updates only explicit config fields', async () => {
 test('createActionPlan use --project switches pinned project', async () => {
     const workspace = makeWorkspace();
     fs.writeFileSync(path.join(workspace, 'other.pro'), 'TARGET = other\n', 'utf8');
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' } });
+    saveQtSettings(workspace, readyQtSettings(workspace));
 
     const result = await createActionPlan({
         action: 'use',
@@ -278,7 +357,7 @@ test('createActionPlan use --project rejects missing project files', async () =>
 
 test('createActionPlan qmake warns when Qt and VS environment are unresolved', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' } });
+    saveQtSettings(workspace, readyQtSettings(workspace, { qtPath: '' }));
 
     const result = await createActionPlan({
         action: 'qmake',
@@ -302,7 +381,7 @@ test('createActionPlan qmake warns when Qt and VS environment are unresolved', a
 
 test('createActionPlan clean generates clean commands', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, qtPath: 'D:/Qt' });
+    saveQtSettings(workspace, readyQtSettings(workspace));
 
     const result = await createActionPlan({
         action: 'clean',
@@ -397,7 +476,7 @@ test('createActionPlan init ignores explicit config override fields', async () =
 
 test('run without Makefile returns fallback build commands and qmake hint', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, qtPath: 'D:/Qt' });
+    saveQtSettings(workspace, readyQtSettings(workspace));
 
     const result = await createActionPlan({
         action: 'run',
@@ -421,7 +500,7 @@ test('run without Makefile returns fallback build commands and qmake hint', asyn
 
 test('run without Makefile includes status hint when CLI-passed mode/arch', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, qtPath: 'D:/Qt' });
+    saveQtSettings(workspace, readyQtSettings(workspace));
 
     const result = await createActionPlan({
         action: 'run',
@@ -468,7 +547,7 @@ test('build action plan ignores config override fields and uses saved settings',
 
 test('nextActions points to status when Qt path is empty', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' } });
+    saveQtSettings(workspace, readyQtSettings(workspace, { qtPath: '' }));
 
     const result = await createActionPlan({
         action: 'build',
@@ -517,7 +596,7 @@ test('project error branch fills resolved with current config', async () => {
 
 test('run with Makefile generates full command chain including executable', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, qtPath: 'D:/Qt' });
+    saveQtSettings(workspace, readyQtSettings(workspace));
     const projectDir = workspace;
     if (process.platform === 'win32') {
         fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
@@ -551,7 +630,7 @@ test('run with Makefile generates full command chain including executable', asyn
 
 test('stop uses runtime executable name when Makefile is available', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, qtPath: 'D:/Qt' });
+    saveQtSettings(workspace, readyQtSettings(workspace));
     if (process.platform === 'win32') {
         fs.writeFileSync(path.join(workspace, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
         fs.writeFileSync(path.join(workspace, 'Makefile.Debug'), 'DESTDIR_TARGET = debug\\realapp.exe\n', 'utf8');
@@ -643,7 +722,7 @@ test('execution action without saved project points back to status', async () =>
 
 test('non-existent qtPath still generates commands (validation delegated to status)', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, qtPath: 'Z:/nonexistent/qt/path' });
+    saveQtSettings(workspace, readyQtSettings(workspace, { qtPath: 'Z:/nonexistent/qt/path' }));
 
     const result = await createActionPlan({
         action: 'build',

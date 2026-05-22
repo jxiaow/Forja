@@ -26,7 +26,7 @@ Skill 文件位于 CLI 包的 `skills/compilot/` 目录下，安装后 AI 助手
 
 ## 使用流程
 
-手动使用时先查看状态，再按状态提示执行下一步。`init` 只用于首次自动初始化；如果 `status` 提示缺工具链或缺项目，先用 `env` / `projects` 查看候选，再用 `use` 写入显式选择：
+手动使用时先查看状态，再按状态提示执行下一步。`init` 只用于首次自动初始化；如果 `status` 提示缺项目、缺构建配置或缺工具链，先用 `projects` / `env` 查看候选，再用 `use` 写入显式选择：
 
 ```bash
 compilot qt status
@@ -86,9 +86,9 @@ Qt/SDK 命令通用选项：
 compilot qt status
 ```
 
-`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `projects` / `use --project`；缺 Qt/VS 工具链时提示 `env` / `use --qt-path` 或 `use --vs-dev-shell`；配置齐全后再提示 `qmake`、`build` 或 `run`。
+`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `projects` / `use --project`；`mode` / `arch` 只有默认建议值但未写入时提示 `use --mode ... --arch ...`；缺 Qt/VS 工具链时提示 `env` / `use --qt-path` 或 `use --vs-dev-shell`；配置齐全后再提示 `qmake`、`build` 或 `run`。
 
-`build` / `run` / `clean` / `qmake` / `stop` 只读取已保存项目配置；如果没有先通过 `init` 自动保存单项目，或通过 `use --project` 选择项目，这些命令会返回 `status` 作为统一入口。
+`build` / `run` / `clean` / `qmake` / `stop` 只读取已保存项目配置；如果没有先通过 `init` 自动保存单项目，或没有通过 `use` 确认项目、mode、arch，这些命令会返回 `status` 作为统一入口。
 
 ### `compilot qt init`
 
@@ -98,7 +98,7 @@ compilot qt status
 compilot qt init --json
 ```
 
-`init` 不接收 `--project`、`--mode`、`--arch`、`--qt-path`、`--vs-dev-shell`、`--target`。这些显式配置统一通过 `compilot qt use` 写入，后续命令会自动读取。
+`init` 不接收 `--project`、`--mode`、`--arch`、`--qt-path`、`--vs-dev-shell`、`--target`。这些显式配置统一通过 `compilot qt use` 写入；其中 `mode` / `arch` 的默认值只会在 `status` 中作为建议展示，必须通过 `use` 确认后执行类命令才会继续。
 
 ### `compilot qt use`
 
