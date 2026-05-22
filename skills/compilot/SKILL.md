@@ -68,7 +68,7 @@ debug/release、x86/x64）且用户未设置过时，必须展示选项让用户
 | `build` | 编译 | `--plan` |
 | `run` | 编译并运行 | `--detach`（必须） |
 | `stop` | 停止运行中的程序 | |
-| `logs` | 查看 detach 模式的运行日志 | |
+| `ps` | 查看 detach 模式的运行状态 | |
 | `clean` | 清理构建产物 | `--plan` |
 | `sync` | 同步变更文件到远程服务器 | `--server` |
 | `rcc` | 编译 .qrc 资源文件 | `--plan` |
@@ -163,7 +163,7 @@ SDK 配置参数只允许用于 `compilot sdk use`：
 - **多候选必须让用户选**：env/projects 返回多个候选时，列出选项让用户决定，不要自动取第一个
 - **首次配置必须确认**：status 中 resolved 的 qtPath、vsDevShell、project 如果是自动检测的，先展示给用户确认再执行
 - **只有 run 加 --detach**：程序启动后不会自行退出，不加会阻塞
-- **detach 后看 logs**：`run --detach` 返回 `ok: true` 只表示程序已启动；用 `logs --json` 确认运行状态
+- **detach 后看 ps**：`run --detach` 返回 `ok: true` 表示程序已启动且已解析到目标进程 PID；用 `ps --json` 随时确认运行状态和日志路径
 - **非 detach 直接看结果**：`ok` 字段直接反映成功/失败
 - **命令耗时与超时**：`build`、`run --detach`、`clean`、`qmake` 都是前台阻塞命令，会等执行完成后返回 JSON 结果；其中 `build` 和 `run --detach`（内含编译步骤）耗时取决于增量编译量，通常几十秒到几分钟。执行时应设置足够的超时（建议 15 分钟），不要因默认超时中断后反复重试。这些命令最终都会自行退出，**不是长驻进程，禁止用后台进程方式启动**
 - **执行前确认目标**：看 `target`、`project`、`candidates`、`diagnostics`
@@ -185,8 +185,8 @@ compilot qt build --json
 # 编译并后台运行
 compilot qt run --detach --json
 
-# 看运行输出
-compilot qt logs --json
+# 查运行状态和日志路径
+compilot qt ps --json
 
 # 停止程序
 compilot qt stop --json

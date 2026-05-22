@@ -12,6 +12,14 @@ test('parseCliArgs --detach sets detach flag', () => {
     assert.equal(opts.action, 'run');
 });
 
+test('parseCliArgs accepts ps action', () => {
+    const opts = parseCliArgs(['ps', '--workspace', '/tmp/app', '--json']);
+
+    assert.equal(opts.action, 'ps');
+    assert.equal(opts.workspace, '/tmp/app');
+    assert.equal(opts.json, true);
+});
+
 test('parseCliArgs defaults to status when no action given', () => {
     const opts = parseCliArgs(['--json']);
     assert.equal(opts.action, 'status');
@@ -37,7 +45,7 @@ test('parseCliArgs accepts use config options', () => {
 
 test('parseCliArgs rejects build config options on execution and read-only actions', () => {
     const restrictedFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
-    for (const action of ['init', 'build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'logs', 'stop', 'rcc']) {
+    for (const action of ['init', 'build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'ps', 'stop', 'rcc']) {
         for (const flag of restrictedFlags) {
             assert.throws(
                 () => parseCliArgs([action, flag, 'value']),
@@ -71,4 +79,8 @@ test('parseCliArgs only accepts detach on run', () => {
 
 test('parseCliArgs throws on unknown action', () => {
     assert.throws(() => parseCliArgs(['deploy']), /未知命令/);
+});
+
+test('parseCliArgs rejects removed logs action', () => {
+    assert.throws(() => parseCliArgs(['logs']), /未知命令/);
 });

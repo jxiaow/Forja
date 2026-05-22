@@ -29,11 +29,17 @@ function writeJson(filePath: string, value: unknown): void {
 
 export interface RunState {
     pid: number;
-    launcherPid?: number;
     exePath: string;
     executablePath?: string;
     logFile: string;
     startedAt: string;
+}
+
+export interface RunProcessStatus {
+    running: boolean;
+    pid: number | null;
+    executablePath: string | null;
+    logFile: string | null;
 }
 
 export function runStatePath(workspace: string): string {
@@ -213,9 +219,37 @@ export function isExecutableRunning(executablePath: string): boolean {
     return findExecutablePids(executablePath).length > 0;
 }
 
-export function isRunStateRunning(state: RunState): boolean {
-    if (state.executablePath && isExecutableRunning(state.executablePath)) {
-        return true;
+export function resolveRunProcessStatus(state: RunState | null): RunProcessStatus {
+    if (!state) {
+        return {
+            running: false,
+            pid: null,
+            executablePath: null,
+            logFile: null
+        };
     }
-    return isProcessRunning(state.pid);
+
+    const logFile = state.logFile && fs.existsSync(state.logFile) ? state.logFile : null;
+    if (state.executablePath) {
+        const pids = findExecutablePids(state.executablePath);
+        const pid = pids.includes(state.pid) ? state.pid : (pids[0] || null);
+        return {
+            running: pid !== null,
+            pid,
+            executablePath: state.executablePath,
+            logFile
+        };
+    }
+
+    const running = isProcessRunning(state.pid);
+    return {
+        running,
+        pid: running ? state.pid : null,
+        executablePath: null,
+        logFile
+    };
+}
+
+export function isRunStateRunning(state: RunState): boolean {
+    return resolveRunProcessStatus(state).running;
 }

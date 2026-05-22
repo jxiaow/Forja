@@ -3,9 +3,8 @@ import { CliResult } from './types';
 import { createActionPlan } from '../shared/qtCore';
 import { runCliResult } from '../shared/commandRunner';
 import { executeSyncCli, planSyncCli } from '../shared/syncCli';
-import { readRunState, isRunStateRunning, runLogPath } from '../shared/localState';
+import { readRunState, resolveRunProcessStatus } from '../shared/localState';
 import * as path from 'path';
-import * as fs from 'fs';
 
 /**
  * Compact JSON output: omit empty/null/default fields to reduce token consumption.
@@ -23,6 +22,7 @@ function compactResult(result: CliResult): Record<string, unknown> {
     if (result.warningSummary) { out.warningSummary = result.warningSummary; }
     if (result.logFile) { out.logFile = result.logFile; }
     if (result.executablePath) { out.executablePath = result.executablePath; }
+    if (typeof result.pid === 'number') { out.pid = result.pid; }
 
     // Successful detach launches: minimal output
     const isDetachSuccess = result.ok && result.logFile && result.exitCode === 0
@@ -128,55 +128,43 @@ async function main(argv: string[]): Promise<void> {
 
         const workspace = path.resolve(options.workspace || process.cwd());
 
-        // logs 查看运行日志
-        if (options.action === 'logs') {
+        // ps 查看后台运行状态
+        if (options.action === 'ps') {
             const state = readRunState(workspace);
-            const logFile = runLogPath(workspace);
+            const status = resolveRunProcessStatus(state);
 
-            if (!fs.existsSync(logFile)) {
-                const msg = '没有运行日志（程序可能未以 --detach 模式启动过）';
+            if (!state) {
+                const msg = '没有后台运行记录，请先执行 compilot qt run --detach';
                 if (wantsJson) {
                     console.log(JSON.stringify({
                         ok: false,
-                        action: 'logs',
-                        workspace,
+                        action: 'ps',
+                        running: false,
+                        pid: null,
+                        executablePath: null,
+                        logFile: null,
                         diagnostics: [{ level: 'warning', message: msg }]
-                    }));
+                    }, null, 2));
                 }
                 else { console.log(msg); }
                 process.exitCode = 1;
                 return;
             }
 
-            const content = fs.readFileSync(logFile, 'utf8');
-            const lines = content.split(/\r?\n/);
-            const tail = lines.slice(-100).join('\n');
-
             if (wantsJson) {
-                const running = state ? isRunStateRunning(state) : false;
                 console.log(JSON.stringify({
                     ok: true,
-                    action: 'logs',
-                    workspace,
-                    pid: state?.pid || null,
-                    launcherPid: state?.launcherPid || null,
-                    executablePath: state?.executablePath || null,
-                    running,
-                    logFile,
-                    tail
+                    action: 'ps',
+                    running: status.running,
+                    pid: status.pid,
+                    executablePath: status.executablePath,
+                    logFile: status.logFile
                 }, null, 2));
             } else {
-                if (state) {
-                    const running = isRunStateRunning(state);
-                    console.log(`PID: ${state.pid} (${running ? 'running' : 'exited'})`);
-                    if (state.launcherPid && state.launcherPid !== state.pid) {
-                        console.log(`Launcher PID: ${state.launcherPid}`);
-                    }
-                    if (state.executablePath) { console.log(`Executable: ${state.executablePath}`); }
-                    console.log(`Log: ${logFile}`);
-                    console.log('---');
-                }
-                console.log(tail);
+                console.log(`运行状态: ${status.running ? 'running' : 'exited'}`);
+                console.log(`PID: ${status.pid ?? '-'}`);
+                if (status.executablePath) { console.log(`Executable: ${status.executablePath}`); }
+                if (status.logFile) { console.log(`Log: ${status.logFile}`); }
             }
             process.exitCode = 0;
             return;

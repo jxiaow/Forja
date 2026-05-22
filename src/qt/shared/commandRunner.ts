@@ -56,12 +56,26 @@ function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; 
 /**
  * Streaming execute: uses cp.exec but pipes stdout/stderr to the current process in real-time.
  */
-function executeStreaming(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+function executeStreaming(commandLine: string, cwd: string, executablePath?: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
         const child = cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 });
 
         let stdout = '';
         let stderr = '';
+
+        const onInterrupt = (): void => {
+            terminateExecutable(executablePath);
+            try { child.kill(); } catch { /* child may already be closed */ }
+        };
+        const cleanupSignalHandlers = (): void => {
+            process.off('SIGINT', onInterrupt);
+            process.off('SIGTERM', onInterrupt);
+        };
+
+        if (executablePath) {
+            process.on('SIGINT', onInterrupt);
+            process.on('SIGTERM', onInterrupt);
+        }
 
         child.stdout?.on('data', (chunk: string) => {
             stdout += chunk;
@@ -74,10 +88,12 @@ function executeStreaming(commandLine: string, cwd: string): Promise<{ exitCode:
         });
 
         child.on('close', (code) => {
+            cleanupSignalHandlers();
             resolve({ exitCode: code ?? 0, stdout, stderr });
         });
 
         child.on('error', (err) => {
+            cleanupSignalHandlers();
             resolve({ exitCode: 1, stdout, stderr: stderr + err.message });
         });
     });
@@ -93,11 +109,10 @@ function delay(ms: number): Promise<void> {
 
 async function resolveDetachedRunPid(
     executablePath: string | undefined,
-    launcherPid: number,
     previousPids: number[]
-): Promise<number> {
+): Promise<number | null> {
     if (!executablePath) {
-        return launcherPid;
+        return null;
     }
 
     const previous = new Set(previousPids);
@@ -112,7 +127,26 @@ async function resolveDetachedRunPid(
         await delay(100);
     } while (Date.now() < deadline);
 
-    return launcherPid;
+    return null;
+}
+
+function terminateExecutable(executablePath: string | undefined): void {
+    if (!executablePath) {
+        return;
+    }
+
+    const pids = findExecutablePids(executablePath);
+    for (const pid of pids) {
+        try {
+            if (process.platform === 'win32') {
+                cp.execFileSync('taskkill', ['/F', '/T', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true });
+            } else {
+                process.kill(pid, 'SIGTERM');
+            }
+        } catch {
+            // Process may have already exited.
+        }
+    }
 }
 
 export function buildRunCommand(project: string, mode: string, arch: string): string | null {
@@ -254,11 +288,9 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         }
         child.unref();
 
-        const launcherPid = child.pid || 0;
-        const pid = await resolveDetachedRunPid(result.executablePath, launcherPid, previousExecutablePids);
+        const pid = await resolveDetachedRunPid(result.executablePath, previousExecutablePids);
         writeRunState(result.workspace, {
-            pid,
-            launcherPid,
+            pid: pid || 0,
             exePath: runCommand,
             executablePath: result.executablePath,
             logFile,
@@ -266,6 +298,26 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         });
 
         const durationMs = Date.now() - started;
+        if (!pid) {
+            return {
+                ...result,
+                ok: false,
+                exitCode: 1,
+                durationMs,
+                stdout: buildResult.stdout,
+                stderr: '',
+                logFile,
+                commands: commandParts,
+                diagnostics: [
+                    ...result.diagnostics,
+                    {
+                        level: 'error',
+                        message: '程序已请求后台启动，但未能在超时时间内获取目标进程 PID'
+                    }
+                ]
+            };
+        }
+
         return {
             ...result,
             ok: true,
@@ -274,6 +326,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             stdout: buildResult.stdout,
             stderr: '',
             logFile,
+            pid,
             commands: commandParts,
             diagnostics: [{ level: 'info', message: `程序已后台启动 (PID: ${pid})，日志: ${logFile}` }]
         };
@@ -326,8 +379,9 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
 
     // Normal mode: execute all commands together
     const commandLine = commandParts.join(' && ');
-    const exec = options?.streaming ? executeStreaming : execute;
-    const executed = await exec(commandLine, result.workspace);
+    const executed = options?.streaming
+        ? await executeStreaming(commandLine, result.workspace, result.action === 'run' ? result.executablePath : undefined)
+        : await execute(commandLine, result.workspace);
     const durationMs = Date.now() - started;
     ensureLocalStateDir(result.workspace);
     const filePath = logFileFor(result.workspace, result.action);

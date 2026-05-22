@@ -1,6 +1,6 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs', 'rcc'];
+const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'ps', 'rcc'];
 
 const helpText = `Compilot Qt CLI — qmake 项目构建工具
 
@@ -17,7 +17,7 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   clean       清理编译产物
   run         构建并运行
   stop        停止运行中的程序
-  logs        查看运行日志（--detach 模式启动后的程序输出）
+  ps          查看后台运行状态
   sync        同步变更文件到远程服务器（基于 git diff）
   rcc         编译 .qrc 资源文件为 .rcc 二进制
 
@@ -50,6 +50,7 @@ sync 选项:
   compilot qt build                    执行构建
   compilot qt build --plan             查看构建命令（不执行）
   compilot qt run --detach             后台构建并运行
+  compilot qt ps --json                查看后台运行状态
   compilot qt sync                     同步变更文件到远程
   compilot qt status                   查看当前状态
 `;
@@ -97,7 +98,7 @@ const actionAllowedFlags: Record<CliAction, Set<string>> = {
     run: new Set([...commonFlags, ...planFlags, '--detach']),
     stop: new Set(commonFlags),
     sync: new Set([...commonFlags, ...planFlags, '--server', '--repo']),
-    logs: new Set(commonFlags),
+    ps: new Set(commonFlags),
     rcc: new Set([...commonFlags, ...planFlags])
 };
 

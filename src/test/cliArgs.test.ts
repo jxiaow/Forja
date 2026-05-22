@@ -55,7 +55,7 @@ test('parseCliArgs accepts use config options', () => {
 });
 
 test('parseCliArgs rejects config options outside init and use', () => {
-    for (const action of ['build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'logs', 'stop', 'rcc']) {
+    for (const action of ['build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'ps', 'stop', 'rcc']) {
         assert.throws(
             () => parseCliArgs([action, '--mode', 'release']),
             new RegExp(`--mode 不能用于 ${action}`)
@@ -65,6 +65,10 @@ test('parseCliArgs rejects config options outside init and use', () => {
             new RegExp(`--project 不能用于 ${action}`)
         );
     }
+});
+
+test('parseCliArgs rejects removed logs action', () => {
+    assert.throws(() => parseCliArgs(['logs']), /未知命令/);
 });
 
 test('parseCliArgs --plan switches to dryRun mode', () => {

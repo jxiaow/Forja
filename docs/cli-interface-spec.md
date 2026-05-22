@@ -41,7 +41,7 @@ compilot <subcommand> <action> [options]
 | `run` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--detach` |
 | `clean` | `--workspace`, `--json`, `--plan`, `--dry-run` |
 | `stop` | `--workspace`, `--json` |
-| `logs` | `--workspace`, `--json` |
+| `ps` | `--workspace`, `--json` |
 | `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo` |
 | `rcc` | `--workspace`, `--json`, `--plan`, `--dry-run` |
 
@@ -121,12 +121,13 @@ interface QtCliResult {
   durationMs: number;             // 执行耗时（ms）
   logFile: string | null;         // 日志文件路径（--detach 模式）
   executablePath?: string;        // run 成功时解析出的可执行文件绝对路径
+  pid?: number;                   // run --detach 成功时解析出的目标进程 PID
   stdout: string;                 // 进程标准输出（execute 模式）
   stderr: string;                 // 进程标准错误（execute 模式）
   rccProjectPath: string | null;  // RCC 项目路径
 }
 
-type CliAction = "init" | "use" | "status" | "env" | "projects" | "qmake" | "build" | "clean" | "run" | "stop" | "sync" | "logs" | "rcc";
+type CliAction = "init" | "use" | "status" | "env" | "projects" | "qmake" | "build" | "clean" | "run" | "stop" | "sync" | "ps" | "rcc";
 
 interface Diagnostic {
   level: "info" | "warning" | "error";
@@ -159,6 +160,7 @@ JSON 模式省略空/默认值字段，只保留非空字段：
 | `errors` | 非空数组时保留 |
 | `logFile` | 非空时保留 |
 | `executablePath` | 非空时保留，通常在 `run` 成功或 `run --plan` 可解析目标时返回 |
+| `pid` | `run --detach` 成功解析到目标进程 PID 时保留 |
 | `project` | 非空时保留 |
 | `commands` | 非空数组时保留 |
 | `shellCommand` | 非空时保留 |
@@ -238,24 +240,25 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "ok": true,
   "action": "run",
   "exitCode": 0,
+  "pid": 13228,
   "logFile": "C:/Users/.../compilot-logs/workspace/run.log",
   "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
   "resolved": { "mode": "release", "arch": "x86" }
 }
 ```
 
-`logs --json` 返回最近一次 `run --detach` 的状态。`pid` 优先记录后台启动后的真实可执行文件进程；如果启动后短时间内无法解析目标进程，则回退为启动器 PID。`launcherPid` 保留启动脚本/启动器进程，便于排查 Windows 下 `wscript`/`cmd` 启动链路。`running` 优先按 `executablePath` 的真实进程判断，避免启动器 PID 退出后误判：
+`run --detach --json` 成功时 `pid` 只表示目标可执行文件进程。若后台启动后无法在超时时间内解析目标 PID，命令返回失败诊断，不用启动器 PID 顶替。
+
+`ps --json` 返回最近一次 `run --detach` 的运行状态，不返回 workspace，不读取日志内容：
 
 ```jsonc
 {
   "ok": true,
-  "action": "logs",
-  "pid": 13228,
-  "launcherPid": 13192,
-  "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
+  "action": "ps",
   "running": true,
-  "logFile": "C:/Users/.../compilot-logs/workspace/run.log",
-  "tail": "..."
+  "pid": 13228,
+  "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
+  "logFile": "C:/Users/.../compilot-logs/workspace/run.log"
 }
 ```
 

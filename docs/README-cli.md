@@ -54,7 +54,7 @@ Qt/SDK 命令通用选项：
 | `--workspace <dir>` | 操作根目录，默认当前目录；日常手动使用通常先 `cd` 到项目根目录，不需要传 |
 | `--json` | 输出 JSON，适合 AI/脚本解析 |
 
-`--workspace` 用来确定本次命令读写哪个项目的本地配置、从哪里扫描 `.pro`、以及同步/日志等状态归属。它不是 `.pro` 文件路径；多项目仓库中用 `compilot qt use --project <relative.pro>` 在该 workspace 内选择具体项目。
+`--workspace` 用来确定本次命令读写哪个项目的本地配置、从哪里扫描 `.pro`、以及同步/运行状态等归属。它不是 `.pro` 文件路径；多项目仓库中用 `compilot qt use --project <relative.pro>` 在该 workspace 内选择具体项目。
 
 ## JSON 输出
 
@@ -137,17 +137,18 @@ compilot qt run --detach
 
 `--detach` 时，编译在前台执行；编译成功后后台启动程序，编译失败直接返回错误。
 
-`--json` 输出在成功解析 Makefile 目标时会包含 `executablePath`，表示最终启动的可执行文件绝对路径。
+`--json` 输出在成功解析 Makefile 目标时会包含 `executablePath`，表示最终启动的可执行文件绝对路径。`run --detach --json` 成功时还会返回 `pid` 和 `logFile`；`pid` 只表示目标可执行文件进程，不表示启动脚本进程。若后台启动后无法在超时时间内解析目标 PID，命令会返回失败诊断。
 
-### `compilot qt logs`
+### `compilot qt ps`
 
-查看后台执行日志。
+查看最近一次 `run --detach` 启动的目标进程是否仍在运行。
 
 ```bash
-compilot qt logs
+compilot qt ps
+compilot qt ps --json
 ```
 
-`logs --json` 会返回 `running`、`pid`、`launcherPid`、`logFile` 和 `tail`。`pid` 会优先记录后台启动后的真实可执行文件进程；如果启动后短时间内无法解析目标进程，则回退为启动器 PID。`launcherPid` 单独保留启动脚本/启动器进程，方便排查 Windows 下 `wscript`/`cmd` 启动链路。`run --detach` 成功记录了 `executablePath` 时，会优先按真实可执行文件检查运行状态，避免启动脚本 PID 退出后误报 `running: false`。
+`ps --json` 返回 `running`、目标进程 `pid`、`executablePath` 和最近一次后台运行的 `logFile`。未运行时 `pid` 为 `null`；如果之前有后台运行记录且日志文件仍存在，`logFile` 仍会返回，便于用户自行打开或 tail 日志。
 
 ### `compilot qt stop`
 
