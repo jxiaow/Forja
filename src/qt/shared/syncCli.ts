@@ -18,6 +18,18 @@ export interface SyncResult {
     remotePath: string;
 }
 
+export interface SyncPlanResult {
+    ok: boolean;
+    action: 'sync';
+    mode: 'dryRun';
+    pending: string[];
+    skipped: string[];
+    failed: { file: string; error: string }[];
+    server: string;
+    remotePath: string;
+    repos: string[];
+}
+
 // ── Git diff ──
 
 function getGitChangedFiles(workspaceRoot: string): Promise<string[]> {
@@ -260,4 +272,75 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string,
 
     result.ok = result.failed.length === 0;
     return result;
+}
+
+export async function planSyncCli(workspaceRoot: string, serverName?: string, repoFilter?: string): Promise<SyncPlanResult> {
+    const project = readProjectSyncConfig(workspaceRoot);
+    const empty = (error: string, server = '', remotePath = ''): SyncPlanResult => ({
+        ok: false,
+        action: 'sync',
+        mode: 'dryRun',
+        pending: [],
+        skipped: [],
+        failed: [{ file: '', error }],
+        server,
+        remotePath,
+        repos: []
+    });
+
+    if (!project.enabled) {
+        return empty('远程同步未启用');
+    }
+
+    const targetName = serverName || project.selectedServer;
+    const server = getServerById(targetName) || getServerByName(targetName);
+    if (!server) {
+        return empty(`服务器 "${targetName}" 未找到，请检查 ~/.compilot/servers.json`, targetName, '');
+    }
+
+    const remotePath = project.remotePaths[server.id] || '';
+    if (!remotePath) {
+        return empty('未配置远程路径', server.name, '');
+    }
+
+    let gitRoots = resolveGitRoots(workspaceRoot);
+    if (gitRoots.length === 0) {
+        return empty(`未找到 git 仓库: ${workspaceRoot}`, server.name, remotePath);
+    }
+
+    if (repoFilter) {
+        gitRoots = gitRoots.filter(r => r.name === repoFilter);
+        if (gitRoots.length === 0) {
+            return empty(`未找到仓库 "${repoFilter}"，可用: ${resolveGitRoots(workspaceRoot).map(r => r.name).join(', ')}`, server.name, remotePath);
+        }
+    }
+
+    const plan: SyncPlanResult = {
+        ok: true,
+        action: 'sync',
+        mode: 'dryRun',
+        pending: [],
+        skipped: [],
+        failed: [],
+        server: server.name,
+        remotePath,
+        repos: gitRoots.map(r => r.name)
+    };
+
+    for (const { dir: gitDir, name: gitName } of gitRoots) {
+        const changedFiles = await getGitChangedFiles(gitDir);
+        if (changedFiles.length === 0) { continue; }
+
+        const notIgnored: string[] = [];
+        for (const f of changedFiles) {
+            if (isIgnored(f, project.ignore)) { plan.skipped.push(`${gitName}/${f}`); }
+            else { notIgnored.push(f); }
+        }
+
+        const needSync = filterNeedsSync(gitDir, notIgnored);
+        plan.skipped.push(...notIgnored.filter(f => !needSync.includes(f)).map(f => `${gitName}/${f}`));
+        plan.pending.push(...needSync.map(f => `${gitName}/${f}`));
+    }
+
+    return plan;
 }

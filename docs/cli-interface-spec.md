@@ -45,6 +45,8 @@ compilot <subcommand> <action> [options]
 | `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo` |
 | `rcc` | `--workspace`, `--json`, `--plan`, `--dry-run` |
 
+`sync --plan` / `sync --dry-run` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
+
 ## Qt use 配置参数
 
 以下参数只允许用于 `compilot qt use`。`compilot qt init` 只做自动初始化，不接收显式构建配置：

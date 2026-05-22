@@ -167,11 +167,12 @@ compilot qt clean
 
 ```bash
 compilot qt sync
+compilot qt sync --plan --json
 ```
 
 | 选项 | 说明 |
 | --- | --- |
-| `--dry-run` | 预览同步动作，不执行上传 |
+| `--plan`, `--dry-run` | 预览待同步文件、目标服务器和远程路径，不执行上传 |
 | `--server <name>` | 指定服务器名称，对应 `~/.compilot/servers.json` 中的 `name` |
 | `--repo <name>` | 多 git 仓库 workspace 时只同步指定仓库 |
 

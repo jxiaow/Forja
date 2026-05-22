@@ -2,7 +2,7 @@ import { parseCliArgs, isHelpRequest, getHelpText } from './args';
 import { CliResult } from './types';
 import { createActionPlan } from '../shared/qtCore';
 import { runCliResult } from '../shared/commandRunner';
-import { executeSyncCli } from '../shared/syncCli';
+import { executeSyncCli, planSyncCli } from '../shared/syncCli';
 import { readRunState, isProcessRunning, runLogPath } from '../shared/localState';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -131,7 +131,14 @@ async function main(argv: string[]): Promise<void> {
 
             if (!fs.existsSync(logFile)) {
                 const msg = '没有运行日志（程序可能未以 --detach 模式启动过）';
-                if (wantsJson) { console.log(JSON.stringify({ ok: false, diagnostics: [{ level: 'warning', message: msg }] })); }
+                if (wantsJson) {
+                    console.log(JSON.stringify({
+                        ok: false,
+                        action: 'logs',
+                        workspace,
+                        diagnostics: [{ level: 'warning', message: msg }]
+                    }));
+                }
                 else { console.log(msg); }
                 return;
             }
@@ -145,6 +152,7 @@ async function main(argv: string[]): Promise<void> {
                 console.log(JSON.stringify({
                     ok: true,
                     action: 'logs',
+                    workspace,
                     pid: state?.pid || null,
                     running,
                     logFile,
@@ -165,9 +173,15 @@ async function main(argv: string[]): Promise<void> {
         // sync 走独立路径
         if (options.action === 'sync') {
             if (options.executionMode === 'dryRun') {
-                const output = { ok: true, action: 'sync', mode: 'dryRun', message: '去掉 --plan 执行同步' };
+                const output = await planSyncCli(workspace, options.server || undefined, options.repo || undefined);
                 if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
-                else { console.log('Sync (plan): 去掉 --plan 执行同步'); }
+                else {
+                    if (output.ok) {
+                        console.log(`Sync (plan): ${output.pending.length} 个文件待同步到 ${output.server}:${output.remotePath}`);
+                    } else {
+                        console.log(`Sync (plan) 失败: ${output.failed.map(f => f.error).join(', ')}`);
+                    }
+                }
                 return;
             }
             const result = await executeSyncCli(workspace, options.server || undefined, options.repo || undefined);
