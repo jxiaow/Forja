@@ -75,6 +75,7 @@ function parseArgs(argv: string[]): SdkCliOptions {
                 if (!val || val.startsWith('--')) { throw new Error('--arch 需要一个值'); }
                 const archVal = argv[++i];
                 if (archVal !== 'x86' && archVal !== 'x64') { throw new Error(`无效的 --arch 值: ${archVal}`); }
+                if (!getSdkAvailableArch().includes(archVal)) { throw new Error(`当前平台不支持 --arch 值: ${archVal}`); }
                 options.arch = archVal;
                 break;
             }
@@ -95,7 +96,7 @@ function parseArgs(argv: string[]): SdkCliOptions {
                 if (arg.startsWith('--')) {
                     throw new Error(`未知参数: ${arg}`);
                 }
-                break;
+                throw new Error(`未知参数: ${arg}`);
         }
     }
 
@@ -197,7 +198,7 @@ Compilot SDK CLI
   compilot sdk <action> [options]
 
 动作:
-  init      初始化本地配置（检测 VS 环境、保存 .compilot/）
+  init      初始化本地配置（检测 VS 环境、保存用户项目配置）
   env       查看构建环境（VS 版本、make 等）
   projects  查看 workspace 下的项目文件
   status    显示项目就绪状态
@@ -236,7 +237,8 @@ export async function runSdkCli(argv: string[]): Promise<void> {
 
         const settings = loadSdkSettings(options.workspace);
         const effectiveMode = options.mode || settings.mode || 'debug';
-        const effectiveArch = options.arch || settings.arch || getSdkDefaultArch();
+        const settingsArch = getSdkAvailableArch().includes(settings.arch) ? settings.arch : getSdkDefaultArch();
+        const effectiveArch = options.arch || settingsArch;
         const effectiveOptions: EffectiveSdkCliOptions = {
             ...options,
             mode: effectiveMode,

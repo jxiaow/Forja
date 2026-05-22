@@ -37,6 +37,24 @@ test('SDK CLI rejects invalid --arch value', async () => {
     assert.ok(parsed.diagnostics[0].message.includes('--arch'));
 });
 
+test('SDK CLI rejects unsupported --arch value on single-arch platforms', async () => {
+    if (os.platform() === 'win32') { return; }
+
+    const output = await captureOutput(() => runSdkCli(['status', '--json', '--arch', 'x86']));
+    assert.equal(process.exitCode, 1);
+    const parsed = JSON.parse(output);
+    assert.equal(parsed.ok, false);
+    assert.ok(parsed.diagnostics[0].message.includes('--arch'));
+});
+
+test('SDK CLI rejects extra positional arguments', async () => {
+    const output = await captureOutput(() => runSdkCli(['status', '--json', 'extra']));
+    assert.equal(process.exitCode, 1);
+    const parsed = JSON.parse(output);
+    assert.equal(parsed.ok, false);
+    assert.ok(parsed.diagnostics[0].message.includes('extra'));
+});
+
 test('SDK CLI rejects unknown run action', async () => {
     const output = await captureOutput(() => runSdkCli(['run', '--json']));
     assert.equal(process.exitCode, 1);
@@ -86,6 +104,32 @@ test('SDK CLI build plan inherits mode and arch saved by init', async () => {
 
         assert.equal(parsed.ok, true);
         assert.equal(parsed.resolved.mode, 'release');
+        assert.equal(parsed.resolved.arch, 'x64');
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI init uses the platform default arch when no SDK config exists', async () => {
+    if (os.platform() === 'win32') { return; }
+
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-default-arch-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        const output = await captureOutput(() => runSdkCli(['init', '--json', '--workspace', ws]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(parsed.ok, true);
         assert.equal(parsed.resolved.arch, 'x64');
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
