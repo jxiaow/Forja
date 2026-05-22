@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createActionPlan } from '../qt/shared/qtCore';
-import { saveQtSettings, DEFAULT_QT, QtSettings } from '../core/settingsIO';
+import { saveQtSettings, loadQtSettings, DEFAULT_QT, QtSettings } from '../core/settingsIO';
 
 const _tmpDirs: string[] = [];
 after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
@@ -211,7 +211,7 @@ test('status points to env/use when project exists but toolchain is missing', as
     assert.ok(data.nextActions.some((action: string) => /compilot qt use --qt-path <path> --json/.test(action)));
 });
 
-test('status points to use when mode and arch need confirmation', async () => {
+test('status points to use when build config needs confirmation', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, {
         ...DEFAULT_QT,
@@ -239,7 +239,10 @@ test('status points to use when mode and arch need confirmation', async () => {
     assert.equal(data.ready, false);
     assert.equal(data.checks.mode, false);
     assert.equal(data.checks.arch, false);
-    assert.deepEqual(data.missing.filter((item: string) => item === 'mode' || item === 'arch'), ['mode', 'arch']);
+    assert.deepEqual(
+        data.missing.filter((item: string) => item === 'mode' || item === 'arch'),
+        ['mode', 'arch']
+    );
     assert.equal(data.nextAction, 'use');
     assert.deepEqual(data.nextActions, [`compilot qt use --mode debug --arch ${defaultArch()} --json`]);
     assert.ok(data.diagnostics.some((d: { message: string }) => /未确认构建模式/.test(d.message)));
@@ -273,6 +276,55 @@ test('execution actions require confirmed mode and arch', async () => {
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未确认构建配置/.test(d.message)));
     assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+});
+
+test('execution actions require saved arch confirmation', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, readyQtSettings(workspace, { arch: '' }));
+
+    const result = await createActionPlan({
+        action: 'build',
+        executionMode: 'dryRun',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.some(d => /未确认构建配置: arch/.test(d.message)));
+    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+});
+
+test('init writes default arch when the platform has a single architecture option', async () => {
+    const workspace = makeWorkspace();
+
+    const result = await createActionPlan({
+        action: 'init',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    const settings = loadQtSettings(workspace);
+    if (process.platform === 'win32') {
+        assert.equal(settings.arch, '');
+    } else {
+        assert.equal(settings.arch, defaultArch());
+    }
 });
 
 test('createActionPlan use updates only explicit config fields', async () => {

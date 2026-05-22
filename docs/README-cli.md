@@ -86,7 +86,7 @@ Qt/SDK 命令通用选项：
 compilot qt status
 ```
 
-`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `projects` / `use --project`；`mode` / `arch` 只有默认建议值但未写入时提示 `use --mode ... --arch ...`；缺 Qt/VS 工具链时提示 `env` / `use --qt-path` 或 `use --vs-dev-shell`；配置齐全后再提示 `qmake`、`build` 或 `run`。
+`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `projects` / `use --project`；`mode` / `arch` 未写入时提示 `use --mode ... --arch ...`；缺 Qt/VS 工具链时提示 `env` / `use --qt-path` 或 `use --vs-dev-shell`；配置齐全后再提示 `qmake`、`build` 或 `run`。
 
 `build` / `run` / `clean` / `qmake` / `stop` 只读取已保存项目配置；如果没有先通过 `init` 自动保存单项目，或没有通过 `use` 确认项目、mode、arch，这些命令会返回 `status` 作为统一入口。
 
@@ -98,7 +98,7 @@ compilot qt status
 compilot qt init --json
 ```
 
-`init` 不接收 `--project`、`--mode`、`--arch`、`--qt-path`、`--vs-dev-shell`、`--target`。这些显式配置统一通过 `compilot qt use` 写入；其中 `mode` / `arch` 的默认值只会在 `status` 中作为建议展示，必须通过 `use` 确认后执行类命令才会继续。
+`init` 不接收 `--project`、`--mode`、`--arch`、`--qt-path`、`--vs-dev-shell`、`--target`。这些显式配置统一通过 `compilot qt use` 写入；其中 `mode` 的默认值只会在 `status` 中作为建议展示。`arch` 如果在当前平台只有一种可选值，`init` 会直接写入；否则由 `status` 提示后再用 `use` 确认。
 
 ### `compilot qt use`
 

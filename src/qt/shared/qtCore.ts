@@ -567,7 +567,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const project = projectResult.project;
     const unconfirmedBuildConfig = options.action === 'init' ? [] : getUnconfirmedBuildConfig(settings);
     const mode = settings.mode || 'debug';
-    const arch = settings.arch || getDefaultArch();
+    const autoArch = getAvailableArch().length === 1 ? getDefaultArch() : '';
+    const arch = settings.arch || autoArch || getDefaultArch();
     const qtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
     const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
     const target = settings.target || '';
@@ -593,7 +594,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 const updatedQt: QtSettings = {
                     ...settings,
                     mode: settings.mode,
-                    arch: settings.arch,
+                    arch: settings.arch || autoArch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
                     vsInstall: settings.vsInstall || inferVsInstall(vsDevShell || detected.detected.vs?.devShellPath || ''),
                     jomPath: detected.detected.jom || '',
@@ -606,7 +607,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 const updatedQt: QtSettings = {
                     ...settings,
                     mode: settings.mode,
-                    arch: settings.arch,
+                    arch: settings.arch || autoArch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
                     vsInstall: settings.vsInstall || inferVsInstall(vsDevShell || detected.detected.vs?.devShellPath || ''),
                     jomPath: detected.detected.jom || '',

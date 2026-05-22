@@ -55,7 +55,7 @@ compilot <subcommand> <action> [options]
 |------|------|--------|------|
 | `--project <path>` | string | 自动检测 / 已保存值 | 当前项目文件路径（.pro） |
 | `--mode <mode>` | `debug` \| `release` | `debug` / 已保存值 | 构建模式；默认值只是 `status` 建议，需 `use` 写入确认 |
-| `--arch <arch>` | `x86` \| `x64` | 平台默认值 / 已保存值 | 目标架构；默认值只是 `status` 建议，需 `use` 写入确认 |
+| `--arch <arch>` | `x86` \| `x64` | 平台默认值 / 已保存值 | 目标架构；单架构平台由 `init` 自动写入，多架构平台需 `use` 写入确认 |
 | `--qt-path <path>` | string | 自动检测 / 已保存值 | Qt 安装路径 |
 | `--vs-dev-shell <path>` | string | 自动检测 / 已保存值 | VS DevShell 路径 |
 | `--target <name>` | string | `.pro` TARGET / 已保存值 | QMake TARGET 覆盖 |
