@@ -16,7 +16,7 @@ code --install-extension compilot-x.x.x.vsix
 - 自动检测 Visual Studio 和 Qt 环境
 - 配置面板可视化管理构建参数
 - 远程同步：基于 git diff 增量上传变更文件
-- 远程 Phase 1：执行位置切换、Status/Test、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean
+- 远程 Phase 1：执行位置切换、Status/Test/Bootstrap、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean
 - `.pri`/`.pro` 文件监听：删除源文件时提示从工程文件中移除
 - 自动生成 `c_cpp_properties.json` 用于 IntelliSense
 - SDK 模块：.sln / Makefile 项目的 Build / Rebuild / Clean
@@ -56,6 +56,7 @@ code --install-extension compilot-x.x.x.vsix
 | Compilot Qt: 测试远程连接 | 测试 SSH 连接 |
 | Compilot Remote: Status | 查看远程配置、连通性和 readiness |
 | Compilot Remote: Test | 测试远程通道和远端 compilot 版本 |
+| Compilot Remote: Bootstrap | 上传当前 CLI artifact 并安装远端 compilot |
 | Compilot: Select Execution Location | 切换 VSCode 状态栏和操作菜单的本地/远程执行位置 |
 | Compilot Remote Qt: Build / Clean / QMake / Run | 执行远程 Qt build/run 类动作 |
 | Compilot Remote Qt: Run Detached / Stop / PS | 管理远端 Qt 后台运行 |
@@ -75,9 +76,9 @@ code --install-extension compilot-x.x.x.vsix
 
 ## 远程编译部署（Phase 1）
 
-当前 VSCode 侧已实现执行位置切换和命令面板辅助入口：Remote Status/Test、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。状态栏和统一操作菜单在远程执行位置下会分流到 remote 命令；build/run-detach 类动作复用 remote core，执行 readiness、baseline、lock、branchSync、overlaySync、baselineCheck，再桥接远端 compilot。Qt foreground run 通过 VSCode Pseudoterminal 直接调用 remote core，由 pipeline 持有远端 lock，不依赖 CLI 入口。远程 build 类动作会把可安全映射回本地文件的编译错误发布到 Problems。
+当前 VSCode 侧已实现执行位置切换和命令面板辅助入口：Remote Status/Test/Bootstrap、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。状态栏和统一操作菜单在远程执行位置下会分流到 remote 命令；build/run-detach 类动作复用 remote core，执行 readiness、baseline、lock、branchSync、overlaySync、baselineCheck，再桥接远端 compilot。Qt foreground run 通过 VSCode Pseudoterminal 直接调用 remote core，由 pipeline 持有远端 lock，不依赖 CLI 入口。远程 build 类动作会把可安全映射回本地文件的编译错误发布到 Problems。
 
-尚未接入 VSCode Bootstrap。Bootstrap 仍通过 `compilot remote bootstrap` CLI 执行。
+`Compilot Remote: Bootstrap` 直接复用 remote core 上传并安装当前扩展目录下的 CLI artifact；如果缺少 `dist/compilot-<version>/cli/compilot-cli-<version>.tgz`，命令会失败并提示先执行 `npm run build:cli` / `npm run package:all`，不会在 VSCode 内自动构建。
 
 ## 远程同步
 

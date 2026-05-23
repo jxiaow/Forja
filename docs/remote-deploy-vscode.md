@@ -106,6 +106,7 @@ Phase 1 先接入命令面板辅助入口，全部走 `src/remote/vscode/command
 ```text
 Compilot Remote: Status
 Compilot Remote: Test
+Compilot Remote: Bootstrap
 Compilot: Select Execution Location
 Compilot: Use Local Execution
 Compilot: Use Remote Execution
@@ -121,9 +122,9 @@ Compilot Remote SDK: Rebuild
 Compilot Remote SDK: Clean
 ```
 
-这些命令复用 sync server、remotePath 和 ignore 配置。build 类动作先执行 remote readiness preflight，再通过 remote core 执行 baseline、lock、branchSync、overlaySync、baselineCheck，最后桥接远端 compilot。
+这些命令复用 sync server、remotePath 和 ignore 配置。bootstrap 直接通过 remote core 上传并安装当前扩展目录下的 CLI artifact；缺少 artifact 时只返回 diagnostics 和 `npm run build:cli` / `npm run package:all` next actions，不在 VSCode 内自动构建。build 类动作先执行 remote readiness preflight，再通过 remote core 执行 baseline、lock、branchSync、overlaySync、baselineCheck，最后桥接远端 compilot。
 
-Phase 1 不贡献 Bootstrap 或 SDK run/stop/ps。Bootstrap 仍通过 `compilot remote bootstrap` CLI 执行，因为 VSIX 不携带 `dist/**` CLI tgz。日常 Build/Run 可通过状态栏和统一操作菜单在远程执行位置下分流，命令面板入口保留为辅助/诊断入口。
+Phase 1 不贡献 SDK run/stop/ps。日常 Build/Run 可通过状态栏和统一操作菜单在远程执行位置下分流，命令面板入口保留为辅助/诊断入口。
 
 新命令实现时必须同步 `package.json` contributes 和 `src/extension.ts` 注册，不修改 activate 导出签名。
 

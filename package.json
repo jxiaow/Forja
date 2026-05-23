@@ -129,6 +129,10 @@
         "title": "Compilot Remote: Test"
       },
       {
+        "command": "compilot.remote.bootstrap",
+        "title": "Compilot Remote: Bootstrap"
+      },
+      {
         "command": "compilot.remote.qt.build",
         "title": "Compilot Remote Qt: Build"
       },

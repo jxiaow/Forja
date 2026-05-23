@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { executeRemoteBootstrap, findBootstrapArtifact } from '../core/bootstrap';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { resolveRemoteConfig } from '../core/config';
 import { executePreparedRemoteAction, ExecutePreparedRemoteActionResult } from '../core/pipeline';
@@ -12,7 +13,7 @@ import { publishRemoteProblems } from './diagnostics';
 const logger = createLogger('RemoteCommands');
 let remoteDiagnostics: vscode.DiagnosticCollection | null = null;
 
-type RemoteVscodeCommandKind = 'status' | 'test' | 'preparedAction' | 'bridgeAction' | 'foregroundTerminal' | 'executionLocation';
+type RemoteVscodeCommandKind = 'status' | 'test' | 'bootstrap' | 'preparedAction' | 'bridgeAction' | 'foregroundTerminal' | 'executionLocation';
 
 interface RemoteVscodeCommandDefinition {
     id: string;
@@ -30,6 +31,7 @@ export const REMOTE_VSCODE_COMMANDS: readonly RemoteVscodeCommandDefinition[] = 
     { id: 'compilot.remote.execution.remote', title: 'Compilot: Use Remote Execution', kind: 'executionLocation', executionLocation: 'remote' },
     { id: 'compilot.remote.status', title: 'Compilot Remote: Status', kind: 'status' },
     { id: 'compilot.remote.test', title: 'Compilot Remote: Test', kind: 'test' },
+    { id: 'compilot.remote.bootstrap', title: 'Compilot Remote: Bootstrap', kind: 'bootstrap' },
     { id: 'compilot.remote.qt.build', title: 'Compilot Remote Qt: Build', kind: 'preparedAction', target: 'qt', remoteAction: 'build' },
     { id: 'compilot.remote.qt.clean', title: 'Compilot Remote Qt: Clean', kind: 'preparedAction', target: 'qt', remoteAction: 'clean' },
     { id: 'compilot.remote.qt.qmake', title: 'Compilot Remote Qt: QMake', kind: 'preparedAction', target: 'qt', remoteAction: 'qmake' },
@@ -73,7 +75,7 @@ async function executeRemoteVscodeCommand(context: vscode.ExtensionContext, comm
         cancellable: false
     }, async () => {
         try {
-            const result = await executeCommand(workspace, command);
+            const result = await executeCommand(context, workspace, command);
             publishProblemsIfApplicable(command, result);
             reportResult(command, result);
         } catch (error) {
@@ -192,7 +194,7 @@ function toTerminalText(text: string): string {
     return text.replace(/\r?\n/g, '\r\n');
 }
 
-async function executeCommand(workspace: string, command: RemoteVscodeCommandDefinition): Promise<{ ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; workspace?: string; remotePath?: string; stdout?: string; stderr?: string; remote?: { result?: unknown; stdout?: string; stderr?: string } }> {
+async function executeCommand(context: vscode.ExtensionContext, workspace: string, command: RemoteVscodeCommandDefinition): Promise<{ ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; workspace?: string; remotePath?: string; stdout?: string; stderr?: string; remote?: { result?: unknown; stdout?: string; stderr?: string } }> {
     if (command.kind === 'status') {
         return buildRemoteStatus({ workspace });
     }
@@ -207,6 +209,11 @@ async function executeCommand(workspace: string, command: RemoteVscodeCommandDef
 
     const password = resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null;
     const runner = createSshRunner(resolved.config.server, password);
+    if (command.kind === 'bootstrap') {
+        const artifact = findBootstrapArtifact(context.extensionPath);
+        const uploader = createScpUploader(resolved.config.server, password);
+        return executeRemoteBootstrap({ artifact, runner, uploader });
+    }
     const uploader = command.kind === 'preparedAction' ? createScpUploader(resolved.config.server, password) : null;
 
     const preflight = await buildRemoteTest({ workspace, config: resolved.config, runner });
