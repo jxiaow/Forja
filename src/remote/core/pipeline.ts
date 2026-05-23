@@ -1,4 +1,5 @@
 import { GitRunner, buildRemoteBaselineStatus, RepoBaselineState } from './baseline';
+import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from './bridge';
 import { RemoteUploader } from './bootstrap';
 import { executeRemoteBranchSync } from './branchSync';
 import { executeRemoteAcquireLock, executeRemoteReleaseLock, RemoteLockMetadata } from './lock';
@@ -13,7 +14,20 @@ export interface PrepareRemoteWorkspaceOptions {
     runner: RemoteRunner;
     uploader: RemoteUploader;
     git?: GitRunner;
+    releaseAfterPrepare?: boolean;
 }
+
+export interface ExecutePreparedRemoteActionOptions extends PrepareRemoteWorkspaceOptions {
+    target: RemoteBridgeTarget;
+    action: RemoteBridgeAction;
+    args: string[];
+    json: boolean;
+}
+
+export type ExecutePreparedRemoteActionResult = Omit<PrepareRemoteWorkspaceResult, 'action'> & {
+    action: 'preparedAction';
+    remote?: Awaited<ReturnType<typeof executeRemoteBridge>>;
+};
 
 export interface PrepareRemoteWorkspaceResult {
     ok: boolean;
@@ -32,6 +46,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
     const diagnostics: RemoteDiagnostic[] = [];
     let repos: RepoBaselineState[] = [];
     let lock: RemoteLockMetadata | undefined;
+    const releaseAfterPrepare = options.releaseAfterPrepare ?? true;
 
     const fail = (stage: string, nextActions: string[] = ['修复 remote prepare 诊断后重试']): PrepareRemoteWorkspaceResult => ({
         ok: false,
@@ -114,17 +129,62 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         };
         return result;
     } finally {
-        const release = await executeRemoteReleaseLock({ remotePath: options.remotePath, lockId: lockResult.lock.lockId, runner: options.runner });
-        diagnostics.push(...release.diagnostics);
-        stages.push({ stage: 'releaseLock', ok: release.ok, message: release.removed ? 'removed' : release.diagnostics[0]?.message });
-        if (result) {
-            result.stages = stages;
-            result.diagnostics = diagnostics;
-            if (!release.ok) {
-                result.ok = false;
-                result.failedStage = result.failedStage || 'releaseLock';
-                result.nextActions = ['手动检查或 unlock 远端 lock'];
+        if (releaseAfterPrepare || !result?.ok) {
+            const release = await executeRemoteReleaseLock({ remotePath: options.remotePath, lockId: lockResult.lock.lockId, runner: options.runner });
+            diagnostics.push(...release.diagnostics);
+            stages.push({ stage: 'releaseLock', ok: release.ok, message: release.removed ? 'removed' : release.diagnostics[0]?.message });
+            if (result) {
+                result.stages = stages;
+                result.diagnostics = diagnostics;
+                if (!release.ok) {
+                    result.ok = false;
+                    result.failedStage = result.failedStage || 'releaseLock';
+                    result.nextActions = ['手动检查或 unlock 远端 lock'];
+                }
             }
         }
     }
+}
+
+
+export async function executePreparedRemoteAction(options: ExecutePreparedRemoteActionOptions): Promise<ExecutePreparedRemoteActionResult> {
+    const prepared = await prepareRemoteWorkspace({ ...options, releaseAfterPrepare: false });
+    const base: ExecutePreparedRemoteActionResult = { ...prepared, action: 'preparedAction' };
+    if (!prepared.ok) {
+        return base;
+    }
+
+    try {
+        const remote = await executeRemoteBridge({
+            target: options.target,
+            action: options.action,
+            args: options.args,
+            json: options.json,
+            remotePath: options.remotePath,
+            runner: options.runner
+        });
+        base.remote = remote;
+        base.stages.push({ stage: 'remoteAction', ok: remote.ok, message: remote.remoteAction });
+        base.diagnostics.push(...remote.diagnostics);
+        if (!remote.ok) {
+            base.ok = false;
+            base.failedStage = 'remoteAction';
+            base.nextActions = remote.nextActions;
+        }
+    } catch (error) {
+        base.ok = false;
+        base.failedStage = 'remoteAction';
+        base.diagnostics.push({ level: 'error', message: error instanceof Error ? error.message : String(error) });
+        base.nextActions = ['检查远端 action 参数后重试'];
+    } finally {
+        const release = await executeRemoteReleaseLock({ remotePath: options.remotePath, lockId: prepared.lock!.lockId, runner: options.runner });
+        base.diagnostics.push(...release.diagnostics);
+        base.stages.push({ stage: 'releaseLock', ok: release.ok, message: release.removed ? 'removed' : release.diagnostics[0]?.message });
+        if (!release.ok) {
+            base.ok = false;
+            base.failedStage = base.failedStage || 'releaseLock';
+            base.nextActions = ['手动检查或 unlock 远端 lock'];
+        }
+    }
+    return base;
 }

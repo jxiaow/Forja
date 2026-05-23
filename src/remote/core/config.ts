@@ -25,7 +25,7 @@ export function resolveRemoteConfig(workspace: string): ResolveRemoteConfigResul
         return blocked(`服务器 ${server.name || server.id} 未配置 remotePath`);
     }
     return {
-        config: { workspace: resolvedWorkspace, server, remotePath },
+        config: { workspace: resolvedWorkspace, server, remotePath, ignore: sync.ignore },
         layer: { name: 'syncConfig', ok: true, message: 'ready' },
         diagnostics: [],
         nextActions: []

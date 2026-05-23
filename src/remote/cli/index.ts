@@ -3,13 +3,14 @@ import { executeRemoteBootstrap, findBootstrapArtifact } from '../core/bootstrap
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { resolveRemoteConfig } from '../core/config';
 import { executeRemoteUnlock } from '../core/lock';
+import { executePreparedRemoteAction } from '../core/pipeline';
 import { executeRemoteRestore } from '../core/restore';
 import { createScpUploader, createSshRunner } from '../core/shell';
 import { buildRemoteStatus, buildRemoteTest } from '../core/status';
 import { RemoteDiagnostic } from '../core/types';
 
 interface RemoteCliOptions {
-    action: 'test' | 'status' | 'bootstrap' | 'unlock' | 'bridge' | 'restore';
+    action: 'test' | 'status' | 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'preparedAction';
     workspace: string;
     json: boolean;
     bootstrap: boolean;
@@ -101,6 +102,39 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             return;
         }
 
+        if (options.action === 'preparedAction') {
+            const resolved = resolveRemoteConfig(options.workspace);
+            if (!resolved.config) {
+                process.exitCode = 1;
+                writeOutput(blockedResult('preparedAction', resolved.diagnostics, resolved.nextActions), options.json);
+                return;
+            }
+            const password = resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null;
+            const runner = createSshRunner(resolved.config.server, password);
+            const uploader = createScpUploader(resolved.config.server, password);
+            const preflight = await buildRemoteTest({ workspace: options.workspace, config: resolved.config, runner });
+            if (!preflight.ok) {
+                process.exitCode = 1;
+                writeOutput({ ...preflight, action: 'preparedAction', target: options.target, remoteAction: options.remoteAction }, options.json);
+                return;
+            }
+            const result = await executePreparedRemoteAction({
+                workspace: resolved.config.workspace,
+                remotePath: resolved.config.remotePath,
+                ignore: resolved.config.ignore,
+                owner: 'cli',
+                target: options.target!,
+                action: options.remoteAction!,
+                args: options.passthrough,
+                json: options.json,
+                runner,
+                uploader
+            });
+            if (!result.ok) { process.exitCode = 1; }
+            writeOutput(result, options.json);
+            return;
+        }
+
         if (options.action === 'restore') {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
@@ -162,14 +196,18 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
             options.action = 'restore';
             options.target = first;
             start = 2;
-        } else {
-            if (remoteAction !== 'status' && remoteAction !== 'init' && remoteAction !== 'use') {
-                throw new Error('remote ' + first + ' 仅支持 status/init/use/restore');
-            }
+        } else if (isBridgeAction(remoteAction)) {
             options.action = 'bridge';
             options.target = first;
             options.remoteAction = remoteAction;
             start = 2;
+        } else if (isPreparedAction(first, remoteAction)) {
+            options.action = 'preparedAction';
+            options.target = first;
+            options.remoteAction = remoteAction;
+            start = 2;
+        } else {
+            throw new Error(remoteSupportMessage(first));
         }
     } else {
         if (first !== 'test' && first !== 'status' && first !== 'bootstrap' && first !== 'unlock') {
@@ -192,7 +230,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 options.json = true;
                 break;
             case '--':
-                if (options.action === 'bridge' || options.action === 'restore') {
+                if (options.action === 'bridge' || options.action === 'restore' || options.action === 'preparedAction') {
                     options.passthrough.push(...argv.slice(i + 1));
                     i = argv.length;
                     break;
@@ -223,7 +261,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 options.force = true;
                 break;
             default:
-                if (options.action === 'bridge') {
+                if (options.action === 'bridge' || options.action === 'preparedAction') {
                     options.passthrough.push(arg);
                     break;
                 }
@@ -237,7 +275,25 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
     return options;
 }
 
-function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore', diagnostics: RemoteDiagnostic[], nextActions: string[]): unknown {
+function isBridgeAction(action: string | undefined): action is RemoteBridgeAction {
+    return action === 'status' || action === 'init' || action === 'use';
+}
+
+function isPreparedAction(target: RemoteBridgeTarget, action: string | undefined): action is RemoteBridgeAction {
+    if (target === 'qt') {
+        return action === 'build' || action === 'clean' || action === 'qmake';
+    }
+    return action === 'build' || action === 'rebuild' || action === 'clean';
+}
+
+function remoteSupportMessage(target: RemoteBridgeTarget): string {
+    if (target === 'qt') {
+        return 'remote qt 仅支持 status/init/use/build/clean/qmake/restore';
+    }
+    return 'remote sdk 仅支持 status/init/use/build/rebuild/clean/restore';
+}
+
+function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'preparedAction', diagnostics: RemoteDiagnostic[], nextActions: string[]): unknown {
     return { ok: false, action, mode: 'remote', diagnostics, nextActions };
 }
 
@@ -246,13 +302,17 @@ function writeOutput(result: unknown, json: boolean): void {
         console.log(JSON.stringify(result, null, 2));
         return;
     }
-    const out = result as { ok?: boolean; action?: string; overall?: string; stdout?: string; diagnostics?: Array<{ message: string }> };
+    const out = result as { ok?: boolean; action?: string; overall?: string; stdout?: string; remote?: { stdout?: string }; diagnostics?: Array<{ message: string }> };
     if (out.action === 'status') {
         console.log('Remote status: ' + (out.overall || 'unknown'));
         return;
     }
     if (out.action === 'bridge' && out.stdout) {
         console.log(out.stdout.trim());
+        return;
+    }
+    if (out.action === 'preparedAction' && out.remote?.stdout) {
+        console.log(out.remote.stdout.trim());
         return;
     }
     if (out.ok === false && out.diagnostics && out.diagnostics.length > 0) {

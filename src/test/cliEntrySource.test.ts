@@ -31,15 +31,19 @@ test('cli interface spec lists only implemented subcommands as available', () =>
     assert.match(spec, /`compilot remote test` 输出结构（Phase 1）/);
     assert.match(spec, /`compilot remote qt\|sdk status\/init\/use`/);
     assert.match(spec, /`compilot remote qt\|sdk restore`/);
+    assert.match(spec, /remote qt build\/clean\/qmake/);
+    assert.match(spec, /remote sdk build\/rebuild\/clean/);
 });
-test('cli user guide documents remote phase 1 without claiming build run support', () => {
+test('cli user guide documents remote phase 1 prepared build support without run support', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
     assert.match(guide, /Remote 命令（Phase 1）/);
     assert.match(guide, /compilot remote test --json/);
     assert.match(guide, /compilot remote qt status --json/);
     assert.match(guide, /compilot remote sdk use --json/);
+    assert.match(guide, /compilot remote qt build --json/);
+    assert.match(guide, /compilot remote sdk rebuild --json/);
     assert.match(guide, /compilot remote qt restore --repo qt-app/);
-    assert.match(guide, /远程 build\/run 仍在设计文档中/);
+    assert.match(guide, /remote qt run\/stop\/ps/);
     assert.doesNotMatch(guide, /sync-config\.json/);
     assert.doesNotMatch(guide, /\uFFFD/);
 });

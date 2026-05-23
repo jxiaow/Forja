@@ -120,7 +120,7 @@ test('remote status uses configured remote compilot bin during probe', async () 
         remoteCompilotBin: '/opt/compilot/bin/compilot',
         baseline: false,
         lock: false,
-        config: { workspace, server: testServer(), remotePath: '/remote/ws' },
+        config: { workspace, server: testServer(), remotePath: '/remote/ws', ignore: [] },
         runner: {
             async run(command: string) {
                 commands.push(command);
@@ -144,7 +144,7 @@ test('remote status includes configured server and remote path without probing w
         probe: false,
         baseline: false,
         lock: false,
-        config: { workspace, server: testServer(), remotePath: '/remote/ws' }
+        config: { workspace, server: testServer(), remotePath: '/remote/ws', ignore: [] }
     });
 
     assert.equal(result.ok, true);
@@ -207,7 +207,7 @@ test('remote test bootstrap installs compilot and retests remote version', async
         workspace: root,
         bootstrap: true,
         artifact,
-        config: { workspace: root, server: testServer(), remotePath: '/remote/ws' },
+        config: { workspace: root, server: testServer(), remotePath: '/remote/ws', ignore: [] },
         runner: {
             async run(command: string) {
                 commands.push(command);
@@ -260,13 +260,24 @@ test('executeRemoteBridge runs qt status under remote workspace and parses JSON'
     assert.ok(commands[0].includes("'--json'"));
 });
 
+test('remote CLI parses qt build prepared action and returns sync config diagnostic', async () => {
+    const workspace = tmpDir('compilot-remote-build-missing-sync-');
+    const output = await captureStdout(() => runRemoteCli(['qt', 'build', '--workspace', workspace, '--json']));
+    const parsed = JSON.parse(output);
+
+    assert.equal(process.exitCode, 1);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.action, 'preparedAction');
+    assert.match(parsed.diagnostics[0].message, /sync 未启用/);
+});
+
 test('remote CLI rejects sdk run bridge action', async () => {
     const output = await captureStdout(() => runRemoteCli(['sdk', 'run', '--json']));
     const parsed = JSON.parse(output);
 
     assert.equal(process.exitCode, 1);
     assert.equal(parsed.ok, false);
-    assert.match(parsed.diagnostics[0].message, /remote sdk 仅支持 status\/init\/use/);
+    assert.match(parsed.diagnostics[0].message, /remote sdk 仅支持 status\/init\/use\/build\/rebuild\/clean\/restore/);
 });
 
 test('executeRemoteRestore restores tracked paths inside selected repo', async () => {

@@ -476,12 +476,20 @@ compilot remote sdk restore --repo sdk-lib -- include/version.h --json
 compilot remote qt status --json
 compilot remote qt init --json
 compilot remote qt use --mode release --json
+compilot remote qt build --json
+compilot remote qt clean --json
+compilot remote qt qmake --json
 compilot remote sdk status --json
 compilot remote sdk init --json
 compilot remote sdk use --json
+compilot remote sdk build --json
+compilot remote sdk rebuild --json
+compilot remote sdk clean --json
 ```
 
-不支持 `remote sdk run/stop/ps`，也不支持 `remote qt|sdk build`。build/run 仍属于后续远程流水线。
+`remote qt build/clean/qmake` 和 `remote sdk build/rebuild/clean` 会先执行 baseline/lock/branchSync/overlaySync/baselineCheck，再桥接远端 compilot 执行动作。
+
+不支持 `remote qt run/stop/ps`，也不支持 `remote sdk run/stop/ps`。run/stop/ps 仍属于后续远程流水线。
 
 ---
 

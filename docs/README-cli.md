@@ -278,14 +278,20 @@ compilot remote unlock --lock-id <id> --force --json
 compilot remote qt status --json
 compilot remote qt init --json
 compilot remote qt use --mode release --json
+compilot remote qt build --json
+compilot remote qt clean --json
+compilot remote qt qmake --json
 compilot remote sdk status --json
 compilot remote sdk init --json
 compilot remote sdk use --json
+compilot remote sdk build --json
+compilot remote sdk rebuild --json
+compilot remote sdk clean --json
 compilot remote qt restore --repo qt-app -- src/main.cpp --json
 compilot remote sdk restore --repo sdk-lib -- include/version.h --json
 ```
 
-Phase 1 只负责远程配置/连通性/CLI bootstrap/lock 清理、远端 Qt/SDK 的 status/init/use 配置桥接，以及路径级 tracked 文件 restore。`compilot remote qt build/run`、`compilot remote sdk build`、`qt build --remote`、`sdk build --remote` 尚未实现。
+Phase 1 负责远程配置/连通性/CLI bootstrap/lock 清理、远端 Qt/SDK 的 status/init/use 配置桥接、路径级 tracked 文件 restore，以及 `remote qt build/clean/qmake`、`remote sdk build/rebuild/clean` 的 prepare 后远端执行。`compilot remote qt run/stop/ps`、`compilot remote sdk run/stop/ps`、`qt build --remote`、`sdk build --remote` 尚未实现。
 
 remote 复用当前 sync 的服务器和 remotePath 配置；缺少配置时 `remote test/status --json` 会返回诊断和下一步建议。
 

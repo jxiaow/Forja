@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { prepareRemoteWorkspace } from '../remote/core/pipeline';
+import { executePreparedRemoteAction, prepareRemoteWorkspace } from '../remote/core/pipeline';
 
 const tmpDirs: string[] = [];
 
@@ -93,4 +93,70 @@ test('prepareRemoteWorkspace releases lock when branchSync fails', async () => {
     assert.equal(result.ok, false);
     assert.equal(result.failedStage, 'branchSync');
     assert.ok(commands.some(command => command.includes('rm -rf "$lock_dir"')));
+});
+
+
+test('executePreparedRemoteAction runs remote qt build after prepare succeeds', async () => {
+    const commands: string[] = [];
+    const result = await executePreparedRemoteAction({
+        workspace: workspace(),
+        remotePath: '/remote/ws',
+        ignore: [],
+        owner: 'cli',
+        target: 'qt',
+        action: 'build',
+        args: [],
+        json: true,
+        runner: {
+            async run(command: string) {
+                commands.push(command);
+                if (command.includes('pwd -P')) { return { exitCode: 0, stdout: '/canonical/ws\n', stderr: '' }; }
+                if (command.includes('mkdir "$lock_dir"')) { return { exitCode: 0, stdout: 'acquired\n{"lockId":"lock-a","targetId":"target-a","owner":"cli","stage":"prepare","remotePath":"/remote/ws","repos":["qt-app"],"startedAt":"2026-05-23T00:00:00.000Z"}\n', stderr: '' }; }
+                if (command.includes('lock-id mismatch')) { return { exitCode: 0, stdout: 'removed\n', stderr: '' }; }
+                if (command.includes('$HOME/.compilot/bin/compilot') && command.includes("'qt' 'build'")) { return { exitCode: 0, stdout: '{"ok":true,"action":"build"}\n', stderr: '' }; }
+                if (command.includes("'qt-app'")) { return { exitCode: 0, stdout: 'mode:git\ncommit:abc123\nstatus:\n', stderr: '' }; }
+                return { exitCode: 0, stdout: '', stderr: '' };
+            }
+        },
+        uploader: { async upload() { /* no-op */ } },
+        git: fakeGit('')
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, 'preparedAction');
+    assert.equal(result.remote?.target, 'qt');
+    assert.equal(result.remote?.remoteAction, 'build');
+    assert.ok(result.stages.some(stage => stage.stage === 'remoteAction' && stage.ok));
+    assert.deepEqual(result.stages.map(stage => stage.stage), ['baselinePrecheck', 'acquireLock', 'branchSync', 'overlaySync', 'baselineCheck', 'remoteAction', 'releaseLock']);
+    const actionIndex = commands.findIndex(command => command.includes("'qt' 'build'"));
+    const releaseIndex = commands.findIndex((command, index) => index > actionIndex && command.includes('lock-id mismatch'));
+    assert.ok(actionIndex >= 0);
+    assert.ok(releaseIndex > actionIndex);
+});
+
+test('executePreparedRemoteAction does not run action when prepare fails', async () => {
+    const commands: string[] = [];
+    const result = await executePreparedRemoteAction({
+        workspace: workspace(),
+        remotePath: '/remote/ws',
+        ignore: [],
+        owner: 'cli',
+        target: 'sdk',
+        action: 'build',
+        args: [],
+        json: true,
+        runner: {
+            async run(command: string) {
+                commands.push(command);
+                if (command.includes("'qt-app'")) { return { exitCode: 0, stdout: 'mode:git\ncommit:mismatch\nstatus:\n', stderr: '' }; }
+                return { exitCode: 0, stdout: '', stderr: '' };
+            }
+        },
+        uploader: { async upload() { throw new Error('not reached'); } },
+        git: fakeGit('')
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.failedStage, 'baselinePrecheck');
+    assert.equal(commands.some(command => command.includes("'sdk' 'build'")), false);
 });

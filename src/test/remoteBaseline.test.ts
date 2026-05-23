@@ -153,7 +153,8 @@ test('remote status includes repo baseline snapshot after readiness probes', asy
                 privateKeyPath: '',
                 password: ''
             },
-            remotePath: '/remote/ws'
+            remotePath: '/remote/ws',
+            ignore: []
         },
         git: fakeGit({
             'qt-app rev-parse --abbrev-ref HEAD': { stdout: 'dev\n' },

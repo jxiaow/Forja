@@ -28,6 +28,7 @@ export interface RemoteConfig {
     workspace: string;
     server: ServerConfig;
     remotePath: string;
+    ignore: string[];
 }
 
 export interface RemoteStage {

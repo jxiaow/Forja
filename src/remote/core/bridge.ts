@@ -2,7 +2,7 @@ import { remoteCommand } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
 export type RemoteBridgeTarget = 'qt' | 'sdk';
-export type RemoteBridgeAction = 'status' | 'init' | 'use';
+export type RemoteBridgeAction = 'status' | 'init' | 'use' | 'build' | 'rebuild' | 'clean' | 'qmake';
 
 export interface ExecuteRemoteBridgeOptions {
     target: RemoteBridgeTarget;
