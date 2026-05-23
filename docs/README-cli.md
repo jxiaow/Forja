@@ -2,7 +2,7 @@
 
 命令行工具用于 C++ 项目的构建、运行和环境管理。
 
-当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`cleanup`。`remote` 已接入基础命令 `test/status/bootstrap/unlock`，以及远端 Qt/SDK 配置桥接 `qt|sdk status/init/use`；远程 build/run 仍在设计文档中。
+当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`cleanup`。`remote` 已接入基础命令 `test/status/bootstrap/unlock`、远端 Qt/SDK 配置桥接 `qt|sdk status/init/use`、远程 Qt/SDK build 类动作和路径级 restore；远程 Qt run/stop/ps 仍在后续设计中，SDK 不提供 run/stop/ps。
 
 ## 安装
 

@@ -1,10 +1,10 @@
 # 远程部署 VSCode 设计
 
-本文补充 `docs/remote-deploy-v3.md` 中 VSCode 插件体验。CLI 使用显式 remote 命令；VSCode 目标体验以执行位置切换为主。Phase 1 先提供命令面板辅助入口，后续再把现有 Qt/SDK 操作按执行位置分流。
+本文补充 `docs/remote-deploy-v3.md` 中 VSCode 插件体验。CLI 使用显式 remote 命令；当前 Phase 1 已提供命令面板辅助入口。VSCode 目标体验以执行位置切换为主，后续再把现有 Qt/SDK 操作按执行位置分流。
 
-## 执行位置
+## 执行位置（后续）
 
-状态栏或项目 QuickPick 显示当前执行位置：
+执行位置切换尚未在当前 Phase 1 接入。后续状态栏或项目 QuickPick 显示当前执行位置：
 
 ```text
 Qt · Debug x64 · 本地

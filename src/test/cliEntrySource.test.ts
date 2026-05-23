@@ -36,7 +36,10 @@ test('cli interface spec lists only implemented subcommands as available', () =>
     assert.match(spec, /`compilot remote qt\|sdk restore`/);
     assert.match(spec, /remote qt build\/clean\/qmake/);
     assert.match(spec, /remote sdk build\/rebuild\/clean/);
-    assert.match(spec, /targetReadiness/);
+    assert.match(spec, /Remote prepared action 输出结构/);
+    assert.match(spec, /targetReadiness -> baselinePrecheck -> acquireLock -> branchSync -> overlaySync -> baselineCheck -> remoteAction -> releaseLock/);
+    assert.doesNotMatch(spec, /远程 build\/run 尚未实现/);
+    assert.match(spec, /remote qt run\/stop\/ps.*尚未实现/);
 });
 test('cli user guide documents remote phase 1 prepared build support without run support', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
@@ -47,7 +50,9 @@ test('cli user guide documents remote phase 1 prepared build support without run
     assert.match(guide, /compilot remote qt build --json/);
     assert.match(guide, /compilot remote sdk rebuild --json/);
     assert.match(guide, /compilot remote qt restore --repo qt-app/);
-    assert.match(guide, /remote qt run\/stop\/ps/);
+    assert.match(guide, /远程 Qt\/SDK build 类动作/);
+    assert.match(guide, /远程 Qt run\/stop\/ps.*后续设计/);
+    assert.doesNotMatch(guide, /远程 build\/run 仍在设计文档中/);
     assert.doesNotMatch(guide, /sync-config\.json/);
     assert.doesNotMatch(guide, /\uFFFD/);
 });
@@ -110,17 +115,32 @@ test('vscode extension contributes and registers remote phase 1 commands', () =>
 
 test('remote vscode design documents phase 1 command palette scope', () => {
     const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-vscode.md'), 'utf8');
+    assert.match(doc, /当前 Phase 1 已提供命令面板辅助入口/);
+    assert.match(doc, /执行位置（后续）/);
     assert.match(doc, /Phase 1 先接入命令面板辅助入口/);
     assert.match(doc, /Compilot Remote Qt: Build/);
     assert.match(doc, /Compilot Remote SDK: Rebuild/);
     assert.match(doc, /不贡献 Bootstrap、Qt run\/stop\/ps 或 SDK run\/stop\/ps/);
+
+    const readme = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-vscode.md'), 'utf8');
+    assert.match(readme, /远程编译部署（Phase 1）/);
+    assert.match(readme, /Compilot Remote: Status/);
+    assert.match(readme, /Compilot Remote Qt: Build \/ Clean \/ QMake/);
+    assert.match(readme, /尚未接入执行位置切换、Bootstrap、Qt run\/stop\/ps/);
+    assert.doesNotMatch(readme, /Run Deploy/);
+    assert.doesNotMatch(readme, /完整远程编译部署流程.*仍是设计稿/);
 });
 
 
 test('remote deploy v3 action policy keeps clean in prepared pipeline', () => {
     const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-v3.md'), 'utf8');
+    assert.match(doc, /当前实现状态/);
+    assert.match(doc, /已实现 Phase 1：.*remote qt build\/clean\/qmake/);
+    assert.match(doc, /后续设计：.*remote qt run\/stop\/ps/);
     assert.match(doc, /remote qt build\/clean\/qmake/);
     assert.match(doc, /remote sdk build\/rebuild\/clean/);
+    assert.match(doc, /当前 Phase 1 不做/);
+    assert.match(doc, /Qt run\/stop\/ps/);
     assert.doesNotMatch(doc, /remote qt\/sdk clean` \| 必须 \| 必须 \| 否 \| 否 \| 否/);
 });
 

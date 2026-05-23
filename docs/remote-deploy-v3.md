@@ -1,8 +1,14 @@
 # 远程编译部署方案 v3
 
-本文是当前远程编译部署的一版正式设计。`docs/remote-deploy-v2.md` 保留为历史设计稿，后续实现以本文为准。
+本文是当前远程编译部署的一版正式设计和实现状态记录。`docs/remote-deploy-v2.md` 保留为历史设计稿，后续实现以本文为准。
 
 已收敛的风险决策记录在 `docs/remote-deploy-decisions.md`。
+
+## 当前实现状态
+
+已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore`、VSCode 命令面板中的 remote status/test/build 类动作。
+
+后续设计：`remote qt run/stop/ps`、VSCode 执行位置切换、Problems 诊断映射、Qt foreground/detach run 体验。SDK 是库，不提供 run/stop/ps。
 
 ## 目标
 
@@ -13,7 +19,7 @@
 - 远端仓库基线和本地分支/提交对齐
 - 本地未提交改动同步到远端
 - 远端 Qt/SDK 构建命令复用 compilot
-- Qt 远程前台运行和后台运行
+- Qt 远程前台运行和后台运行（后续）
 - AI/脚本可解析的远程 JSON pipeline 输出
 
 ## 命令入口
@@ -31,11 +37,6 @@ compilot remote qt build
 compilot remote qt status
 compilot remote qt init
 compilot remote qt use
-compilot remote qt run
-compilot remote qt run --detach
-compilot remote qt run --detach --json
-compilot remote qt stop
-compilot remote qt ps
 compilot remote qt clean
 compilot remote qt qmake
 compilot remote qt restore --repo <repo> -- <paths...>
@@ -62,9 +63,9 @@ compilot remote sdk restore --repo <repo> -- <paths...>
 | `remote unlock --lock-id <id> --force` | 显式清理匹配 lock-id 的远端 stale lock，不 kill 进程 |
 | `remote qt/sdk status/init/use` | 桥接远端 compilot 的 Qt/SDK 用户目录配置，不做 sync/build |
 | `remote qt build/clean/qmake` | 远程 Qt 构建类动作 |
-| `remote qt run` | 远程 Qt 前台运行，人工终端使用 |
-| `remote qt run --detach` | 远程 Qt 后台运行 |
-| `remote qt stop/ps` | 管理远端 Qt 后台运行状态 |
+| `remote qt run` | 后续：远程 Qt 前台运行，人工终端使用 |
+| `remote qt run --detach` | 后续：远程 Qt 后台运行 |
+| `remote qt stop/ps` | 后续：管理远端 Qt 后台运行状态 |
 | `remote sdk build/rebuild/clean` | 远程 SDK 构建类动作 |
 | `remote <type> restore` | 恢复远端指定 tracked 路径到远端当前 git HEAD |
 
@@ -337,9 +338,9 @@ JSON 输出：
 }
 ```
 
-## Qt Run 协议
+## Qt Run 协议（后续）
 
-前台 run 不支持 JSON。本地和远程后续应收紧为同一规则：
+当前 CLI 尚未实现 `remote qt run/stop/ps`。后续实现时，前台 run 不支持 JSON，本地和远程应收紧为同一规则：
 
 ```bash
 compilot qt run
@@ -446,13 +447,14 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 
 ## VSCode 插件体验
 
-VSCode 主入口是“执行位置：本地 / 远程”，不是 CLI remote 命令菜单。切到远程后现有 Qt/SDK 操作映射到 remote core；foreground Qt Run 的 preflight 在 extension progress 中执行，Terminal 只承载远端前台 run。完整规则见 `docs/remote-deploy-vscode.md`。
+当前 Phase 1 已接入命令面板辅助入口：Remote Status/Test、Qt Build/Clean/QMake、SDK Build/Rebuild/Clean。后续主入口是“执行位置：本地 / 远程”，不是 CLI remote 命令菜单；切到远程后现有 Qt/SDK 操作映射到 remote core。完整规则见 `docs/remote-deploy-vscode.md`。
 
-## 第一版不做
+## 当前 Phase 1 不做
 
 - `compilot qt ... --remote` / `compilot sdk ... --remote`
 - 项目内 remote 配置
 - shell fallback 构建
+- Qt run/stop/ps
 - SDK run/stop/ps
 - 大范围远端 reset
 - untracked 文件自动清理

@@ -9,7 +9,7 @@ compilot <subcommand> <action> [options]
 ```
 
 - 当前已实现子命令：`qt` | `sdk` | `remote` | `cleanup`
-- `remote` 当前实现基础命令：`test`、`status`、`bootstrap`、`unlock`，配置桥接：`qt|sdk status/init/use`，以及路径级 restore：`qt|sdk restore --repo <repo> -- <paths...>`；远程 build/run 尚未实现
+- `remote` 当前实现基础命令：`test`、`status`、`bootstrap`、`unlock`，配置桥接：`qt|sdk status/init/use`，build 类动作：`qt build/clean/qmake`、`sdk build/rebuild/clean`，以及路径级 restore：`qt|sdk restore --repo <repo> -- <paths...>`；`remote qt run/stop/ps` 尚未实现，SDK 不提供 run/stop/ps
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -86,16 +86,15 @@ compilot <subcommand> <action> [options]
 | `--arch <arch>` | `x86` \| `x64` | 平台默认值 / 已保存值 | 目标架构；非 Windows 只支持 `x64` |
 | `--vs-dev-cmd <path>` | string | 自动检测 / 已保存值 | Windows `VsDevCmd.bat` 路径 |
 
-## 远程模式参数（设计稿，暂未实现）
+## 远程入口
 
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `--remote` | boolean | 启用远程编译部署 |
-| `--fast` | boolean | 跳过 preCheck + branchSync + baselineCheck |
-| `--from <stage>` | string | 从指定阶段开始（见阶段列表） |
-| `--force` | boolean | 忽略基线不一致等非致命错误 |
+当前远程能力使用独立一级命令 `compilot remote ...`，不支持 `compilot qt ... --remote` 或 `compilot sdk ... --remote`。
 
-远程阶段：`preCheck` → `branchSync` → `sync` → `baselineCheck` → `build` → `transfer` → `stop` → `launch`
+已实现远程 build 类动作进入固定阶段：
+
+```text
+targetReadiness -> baselinePrecheck -> acquireLock -> branchSync -> overlaySync -> baselineCheck -> remoteAction -> releaseLock
+```
 
 ---
 
@@ -390,64 +389,34 @@ interface SdkCliResult {
 
 ---
 
-## Remote build/run 输出结构（后续设计）
+## Remote prepared action 输出结构
 
-以下 build/run pipeline 协议尚未接入当前 CLI 入口，不能作为已发布命令调用。后续远程 build/run 计划返回 pipeline result：
+`remote qt build/clean/qmake` 和 `remote sdk build/rebuild/clean` 当前已接入 CLI。它们返回 remote pipeline result；Qt run/stop/ps 仍是后续设计。
+
+当前阶段顺序：
+
+```text
+targetReadiness -> baselinePrecheck -> acquireLock -> branchSync -> overlaySync -> baselineCheck -> remoteAction -> releaseLock
+```
+
+核心字段：
 
 ```typescript
-interface DeployResult {
+interface RemotePreparedActionResult {
   ok: boolean;
-  stages: StageResult[];
-  buildResult?: BuildResult;      // 编译阶段的详细结果
-  error?: string;                 // 失败原因
-}
-
-interface StageResult {
-  stage: DeployStage;             // 阶段名
-  ok: boolean;
-  message: string;
-  durationMs: number;
-}
-
-type DeployStage = "preCheck" | "branchSync" | "sync" | "baselineCheck" | "build" | "transfer" | "stop" | "launch";
-```
-
-### 成功
-
-```jsonc
-{
-  "ok": true,
-  "stages": [
-    { "stage": "preCheck", "ok": true, "message": "所有仓库 HEAD 已 push", "durationMs": 120 },
-    { "stage": "branchSync", "ok": true, "message": "分支同步完成", "durationMs": 3400 },
-    { "stage": "sync", "ok": true, "message": "同步 12 个文件", "durationMs": 5600 },
-    { "stage": "baselineCheck", "ok": true, "message": "基线一致", "durationMs": 800 },
-    { "stage": "build", "ok": true, "message": "编译成功", "durationMs": 45000 },
-    { "stage": "transfer", "ok": true, "message": "传输完成", "durationMs": 2100 },
-    { "stage": "stop", "ok": true, "message": "已停止旧进程", "durationMs": 500 },
-    { "stage": "launch", "ok": true, "message": "启动成功", "durationMs": 1200 }
-  ]
+  action: 'preparedAction';
+  target: 'qt' | 'sdk';
+  remoteAction: 'build' | 'clean' | 'qmake' | 'rebuild';
+  mode: 'remote';
+  stages: Array<{ stage: string; ok: boolean; message?: string; nextActions?: string[] }>;
+  failedStage?: string;
+  diagnostics: Array<{ level: 'error' | 'warning' | 'info'; message: string }>;
+  nextActions?: string[];
+  remote?: unknown;
 }
 ```
 
-### 失败
-
-```jsonc
-{
-  "ok": false,
-  "stages": [
-    { "stage": "preCheck", "ok": true, "message": "...", "durationMs": 100 },
-    { "stage": "branchSync", "ok": true, "message": "...", "durationMs": 3000 },
-    { "stage": "sync", "ok": true, "message": "...", "durationMs": 4000 },
-    { "stage": "baselineCheck", "ok": true, "message": "...", "durationMs": 600 },
-    { "stage": "build", "ok": false, "message": "编译失败 (.): main.cpp:42 error", "durationMs": 12000 }
-  ],
-  "buildResult": { "ok": false, "errors": ["main.cpp:42: error: ..."], "exitCode": 2 },
-  "error": "编译失败 (.): main.cpp:42 error"
-}
-```
-
----
+完整 readiness、status/test 和 smoke runbook 见 `docs/remote-deploy-status.md`。
 
 ## `compilot remote qt|sdk restore`
 
@@ -584,7 +553,7 @@ interface RemoteCheck {
 
 ### `.compilot/sync-state.json`
 
-同步运行状态写入项目目录下的 `.compilot/sync-state.json`。远程部署、branchSync 和 buildOrder 仍属于设计稿，当前实现不读取独立 deploy 配置文件。
+同步运行状态写入项目目录下的 `.compilot/sync-state.json`。remote 当前复用 sync 配置并已实现 branchSync/overlaySync/baselineCheck 的 build 类流水线；buildOrder 仍属于后续设计，当前实现不读取独立 deploy 配置文件。
 
 ---
 
