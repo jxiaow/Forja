@@ -2,7 +2,7 @@
 
 命令行工具用于 C++ 项目的构建、运行和环境管理。
 
-当前 CLI 已实现子命令：`qt`、`sdk`、`cleanup`。`remote` 相关流程仍是设计稿，尚未接入 CLI dispatcher。
+当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`cleanup`。`remote` 已接入基础命令 `test/status/bootstrap/unlock`，以及远端 Qt/SDK 配置桥接 `qt|sdk status/init/use`；远程 build/run 仍在设计文档中。
 
 ## 安装
 
@@ -266,15 +266,28 @@ compilot sdk clean
 compilot cleanup --json
 ```
 
-## Remote 命令（设计稿，暂未实现）
+## Remote 命令（Phase 1）
 
-`compilot remote ...`、`qt build --remote`、`sdk build --remote`、远程部署和分阶段远程流水线目前只存在于设计文档中，当前 CLI 入口不会路由这些命令。
+当前已实现远程基础命令和配置桥接：
 
-已实现的远程相关能力仅限：
+```bash
+compilot remote status --json
+compilot remote test --json
+compilot remote bootstrap --json
+compilot remote unlock --lock-id <id> --force --json
+compilot remote qt status --json
+compilot remote qt init --json
+compilot remote qt use --mode release --json
+compilot remote sdk status --json
+compilot remote sdk init --json
+compilot remote sdk use --json
+compilot remote qt restore --repo qt-app -- src/main.cpp --json
+compilot remote sdk restore --repo sdk-lib -- include/version.h --json
+```
 
-- VSCode 配置面板维护服务器列表
-- `compilot qt sync` 按本地配置执行文件同步
-- 同步状态写入 `.compilot/sync-state.json`
+Phase 1 只负责远程配置/连通性/CLI bootstrap/lock 清理、远端 Qt/SDK 的 status/init/use 配置桥接，以及路径级 tracked 文件 restore。`compilot remote qt build/run`、`compilot remote sdk build`、`qt build --remote`、`sdk build --remote` 尚未实现。
+
+remote 复用当前 sync 的服务器和 remotePath 配置；缺少配置时 `remote test/status --json` 会返回诊断和下一步建议。
 
 ## 本地状态
 

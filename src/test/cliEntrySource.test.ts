@@ -8,23 +8,38 @@ test('package exposes compilot bin entry', () => {
     assert.equal(pkg.bin['compilot'], './out/cli/index.js');
 });
 
-test('cli dispatcher routes to qt and sdk subcommands', () => {
+test('cli dispatcher routes to qt sdk and remote subcommands', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'index.ts'), 'utf8');
     assert.match(source, /runQtCli/);
     assert.match(source, /runSdkCli/);
+    assert.match(source, /runRemoteCli/);
     assert.match(source, /process\.exitCode = 1/);
+});
+
+test('remote cli wires test bootstrap to artifact upload path', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'cli', 'index.ts'), 'utf8');
+    assert.match(source, /options.bootstrap/);
+    assert.match(source, /findBootstrapArtifact/);
+    assert.match(source, /createScpUploader/);
+    assert.match(source, /executeRemoteRestore/);
+    assert.match(source, /buildRemoteTest\(\{\s*workspace: options\.workspace,\s*bootstrap:/);
 });
 
 test('cli interface spec lists only implemented subcommands as available', () => {
     const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
-    assert.match(spec, /当前已实现子命令：`qt` \| `sdk` \| `cleanup`/);
-    assert.match(spec, /Remote 模式输出结构（设计稿，暂未实现）/);
+    assert.match(spec, /当前已实现子命令：`qt` \| `sdk` \| `remote` \| `cleanup`/);
+    assert.match(spec, /`compilot remote test` 输出结构（Phase 1）/);
+    assert.match(spec, /`compilot remote qt\|sdk status\/init\/use`/);
+    assert.match(spec, /`compilot remote qt\|sdk restore`/);
 });
-
-test('cli user guide does not document draft remote commands as implemented', () => {
+test('cli user guide documents remote phase 1 without claiming build run support', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
-    assert.match(guide, /Remote 命令（设计稿，暂未实现）/);
-    assert.doesNotMatch(guide, /compilot remote test --json/);
+    assert.match(guide, /Remote 命令（Phase 1）/);
+    assert.match(guide, /compilot remote test --json/);
+    assert.match(guide, /compilot remote qt status --json/);
+    assert.match(guide, /compilot remote sdk use --json/);
+    assert.match(guide, /compilot remote qt restore --repo qt-app/);
+    assert.match(guide, /远程 build\/run 仍在设计文档中/);
     assert.doesNotMatch(guide, /sync-config\.json/);
     assert.doesNotMatch(guide, /\uFFFD/);
 });

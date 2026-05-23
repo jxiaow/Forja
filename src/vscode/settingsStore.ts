@@ -7,7 +7,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { createLogger } from './logger';
-import { CompilotSettings, QtSettings, SdkSettings, SyncSettings, DEFAULT_SETTINGS, loadQtSettings, loadSdkSettings, loadSyncSettings, saveQtSettings, saveSdkSettings, saveSyncSettings, projectsDir } from '../core/settingsIO';
+import { CompilotSettings, QtSettings, SdkSettings, SyncSettings, DEFAULT_SETTINGS, loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings, saveQtSettings, saveSdkSettings, saveSyncSettings, projectsDir } from '../core/settingsIO';
 import { resolveProjectRoot } from './workspaceResolver';
 
 export type { CompilotSettings, QtSettings, SdkSettings, SyncSettings } from '../core/settingsIO';
@@ -20,7 +20,7 @@ type SdkKey = keyof SdkSettings;
 type SyncKey = keyof SyncSettings;
 type SettingsListener = (section: 'qt' | 'sdk' | 'sync', key: string, settings: CompilotSettings) => void;
 
-let _settings: CompilotSettings = { ...DEFAULT_SETTINGS, qt: { ...DEFAULT_SETTINGS.qt }, sdk: { ...DEFAULT_SETTINGS.sdk }, sync: { ...DEFAULT_SETTINGS.sync } };
+let _settings: CompilotSettings = { ...DEFAULT_SETTINGS, qt: { ...DEFAULT_SETTINGS.qt }, sdk: { ...DEFAULT_SETTINGS.sdk }, sync: { ...DEFAULT_SETTINGS.sync }, remote: { ...DEFAULT_SETTINGS.remote } };
 let _loaded = false;
 let _watcher: vscode.FileSystemWatcher | null = null;
 const _listeners: SettingsListener[] = [];
@@ -38,7 +38,8 @@ function _load(): CompilotSettings {
     return {
         qt: qtWs ? loadQtSettings(qtWs) : { ...DEFAULT_SETTINGS.qt },
         sdk: sdkWs ? loadSdkSettings(sdkWs) : { ...DEFAULT_SETTINGS.sdk },
-        sync: syncWs ? loadSyncSettings(syncWs) : { ...DEFAULT_SETTINGS.sync }
+        sync: syncWs ? loadSyncSettings(syncWs) : { ...DEFAULT_SETTINGS.sync },
+        remote: syncWs ? loadRemoteSettings(syncWs) : { ...DEFAULT_SETTINGS.remote }
     };
 }
 

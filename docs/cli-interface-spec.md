@@ -8,8 +8,8 @@
 compilot <subcommand> <action> [options]
 ```
 
-- 当前已实现子命令：`qt` | `sdk` | `cleanup`
-- `remote` 相关内容是远程部署设计稿，当前 CLI dispatcher 尚未实现 `compilot remote ...`
+- 当前已实现子命令：`qt` | `sdk` | `remote` | `cleanup`
+- `remote` 当前实现基础命令：`test`、`status`、`bootstrap`、`unlock`，配置桥接：`qt|sdk status/init/use`，以及路径级 restore：`qt|sdk restore --repo <repo> -- <paths...>`；远程 build/run 尚未实现
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -390,9 +390,9 @@ interface SdkCliResult {
 
 ---
 
-## Remote 模式输出结构（设计稿，暂未实现）
+## Remote build/run 输出结构（后续设计）
 
-以下协议尚未接入当前 CLI 入口，不能作为已发布命令调用。`--remote` 模式计划返回 `DeployResult`：
+以下 build/run pipeline 协议尚未接入当前 CLI 入口，不能作为已发布命令调用。后续远程 build/run 计划返回 pipeline result：
 
 ```typescript
 interface DeployResult {
@@ -449,7 +449,43 @@ type DeployStage = "preCheck" | "branchSync" | "sync" | "baselineCheck" | "build
 
 ---
 
-## `compilot remote test` 输出结构（设计稿，暂未实现）
+## `compilot remote qt|sdk restore`
+
+路径级 restore 用于清理远端指定 tracked 文件，不执行大范围 reset，也不清理 untracked 文件：
+
+```bash
+compilot remote qt restore --repo qt-app -- src/main.cpp generated/version.h --json
+compilot remote sdk restore --repo sdk-lib -- include/version.h --json
+```
+
+规则：
+
+- 必须提供 `--repo <repo>`
+- `--` 后必须提供至少一个 repo 内相对路径
+- 拒绝 absolute path、`..` 逃逸、空路径
+- 远端执行 `git ls-files --error-unmatch` 后再 `git restore -- <paths>`
+- 不触发 build/run，不影响本地文件
+
+---
+
+## `compilot remote qt|sdk status/init/use`
+
+配置桥接命令会解析本地 sync server/remotePath，并在远端工作区下执行远端 compilot：
+
+```bash
+compilot remote qt status --json
+compilot remote qt init --json
+compilot remote qt use --mode release --json
+compilot remote sdk status --json
+compilot remote sdk init --json
+compilot remote sdk use --json
+```
+
+不支持 `remote sdk run/stop/ps`，也不支持 `remote qt|sdk build`。build/run 仍属于后续远程流水线。
+
+---
+
+## `compilot remote test` 输出结构（Phase 1）
 
 ```typescript
 interface RemoteTestResult {
