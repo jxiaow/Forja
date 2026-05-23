@@ -130,6 +130,8 @@ test('vscode extension contributes and registers remote phase 1 commands', () =>
     assert.match(remoteCommandsSource, /createTerminal\(\{/);
     assert.match(remoteCommandsSource, /shellPath:\s*process\.execPath/);
     assert.match(remoteCommandsSource, /'remote', 'qt', 'run'/);
+    assert.match(remoteCommandsSource, /createDiagnosticCollection\('compilot\.remote'\)/);
+    assert.match(remoteCommandsSource, /publishRemoteProblems/);
     assert.match(remoteCommandsSource, /kind:\s*'bridgeAction'.*remoteAction:\s*'ps'/s);
     assert.doesNotMatch(remoteCommandsSource, /runRemoteCli/);
 });
@@ -153,6 +155,7 @@ test('remote vscode design documents phase 1 command palette scope', () => {
     assert.match(readme, /Compilot Remote Qt: Run Detached \/ Stop \/ PS/);
     assert.match(readme, /当前 VSCode 侧已实现执行位置切换/);
     assert.match(readme, /Qt foreground run 通过 Terminal 启动本地 CLI/);
+    assert.match(readme, /编译错误发布到 Problems/);
     assert.doesNotMatch(readme, /Run Deploy/);
     assert.doesNotMatch(readme, /完整远程编译部署流程.*仍是设计稿/);
 });
@@ -171,7 +174,8 @@ test('remote deploy v3 action policy keeps clean in prepared pipeline', () => {
     assert.match(doc, /当前实现状态/);
     assert.match(doc, /已实现 Phase 1：.*remote qt build\/clean\/qmake\/run\/stop\/ps/);
     assert.match(doc, /VSCode 执行位置切换和状态栏\/统一操作菜单远程分流/);
-    assert.match(doc, /后续设计：Problems 诊断映射/);
+    assert.match(doc, /Problems 诊断映射/);
+    assert.match(doc, /后续：\s*\n\s*1\. 真实远端 SSH smoke/);
     assert.match(doc, /remote qt build\/clean\/qmake/);
     assert.match(doc, /remote sdk build\/rebuild\/clean/);
     assert.match(doc, /当前 Phase 1 不做/);

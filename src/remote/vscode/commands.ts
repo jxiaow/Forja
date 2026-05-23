@@ -8,8 +8,10 @@ import { buildRemoteStatus, buildRemoteTest } from '../core/status';
 import { RemoteDiagnostic } from '../core/types';
 import { createLogger } from '../../vscode/logger';
 import { getExecutionLocation, initExecutionLocation, setExecutionLocation } from '../../vscode/executionLocation';
+import { publishRemoteProblems } from './diagnostics';
 
 const logger = createLogger('RemoteCommands');
+let remoteDiagnostics: vscode.DiagnosticCollection | null = null;
 
 type RemoteVscodeCommandKind = 'status' | 'test' | 'preparedAction' | 'bridgeAction' | 'foregroundTerminal' | 'executionLocation';
 
@@ -43,6 +45,8 @@ export const REMOTE_VSCODE_COMMANDS: readonly RemoteVscodeCommandDefinition[] = 
 
 export function registerRemoteCommands(context: vscode.ExtensionContext): void {
     initExecutionLocation(context);
+    remoteDiagnostics = vscode.languages.createDiagnosticCollection('compilot.remote');
+    context.subscriptions.push(remoteDiagnostics);
     for (const command of REMOTE_VSCODE_COMMANDS) {
         context.subscriptions.push(vscode.commands.registerCommand(command.id, () => executeRemoteVscodeCommand(context, command)));
     }
@@ -71,6 +75,7 @@ async function executeRemoteVscodeCommand(context: vscode.ExtensionContext, comm
     }, async () => {
         try {
             const result = await executeCommand(workspace, command);
+            publishProblemsIfApplicable(command, result);
             reportResult(command, result);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -108,7 +113,7 @@ function startForegroundRemoteQtRun(context: vscode.ExtensionContext, workspace:
     logger.info('compilot.remote.qt.run: started foreground terminal for ' + workspace);
 }
 
-async function executeCommand(workspace: string, command: RemoteVscodeCommandDefinition): Promise<{ ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; stdout?: string; stderr?: string; remote?: { stdout?: string; stderr?: string } }> {
+async function executeCommand(workspace: string, command: RemoteVscodeCommandDefinition): Promise<{ ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; workspace?: string; remotePath?: string; stdout?: string; stderr?: string; remote?: { result?: unknown; stdout?: string; stderr?: string } }> {
     if (command.kind === 'status') {
         return buildRemoteStatus({ workspace });
     }
@@ -131,7 +136,7 @@ async function executeCommand(workspace: string, command: RemoteVscodeCommandDef
     }
 
     if (command.kind === 'bridgeAction') {
-        return executeRemoteBridge({
+        const bridge = await executeRemoteBridge({
             target: command.target!,
             action: command.remoteAction!,
             args: command.args || [],
@@ -139,9 +144,10 @@ async function executeCommand(workspace: string, command: RemoteVscodeCommandDef
             remotePath: resolved.config.remotePath,
             runner
         });
+        return { ...bridge, workspace: resolved.config.workspace, remotePath: resolved.config.remotePath };
     }
 
-    return executePreparedRemoteAction({
+    const result = await executePreparedRemoteAction({
         workspace: resolved.config.workspace,
         remotePath: resolved.config.remotePath,
         ignore: resolved.config.ignore,
@@ -153,6 +159,15 @@ async function executeCommand(workspace: string, command: RemoteVscodeCommandDef
         runner,
         uploader: uploader!
     });
+    return { ...result, workspace: resolved.config.workspace, remotePath: resolved.config.remotePath };
+}
+
+function publishProblemsIfApplicable(command: RemoteVscodeCommandDefinition, result: { workspace?: string; remotePath?: string; remote?: { result?: unknown; stdout?: string; stderr?: string } }): void {
+    if (!remoteDiagnostics || command.kind !== 'preparedAction' || !result.workspace || !result.remotePath) { return; }
+    const count = publishRemoteProblems(remoteDiagnostics, result.workspace, result.remotePath, result);
+    if (count > 0) {
+        logger.info(command.id + ': published ' + count + ' remote problem(s)');
+    }
 }
 
 function reportResult(command: RemoteVscodeCommandDefinition, result: { ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; stdout?: string; stderr?: string; remote?: { stdout?: string; stderr?: string } }): void {

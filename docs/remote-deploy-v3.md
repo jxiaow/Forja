@@ -6,9 +6,9 @@
 
 ## 当前实现状态
 
-已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore`、VSCode 命令面板中的 remote status/test/build/run/run-detach/stop/ps 类动作，以及 VSCode 执行位置切换和状态栏/统一操作菜单远程分流。
+已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore`、VSCode 命令面板中的 remote status/test/build/run/run-detach/stop/ps 类动作、VSCode 执行位置切换和状态栏/统一操作菜单远程分流，以及保守的 Problems 诊断映射。
 
-后续设计：Problems 诊断映射。SDK 是库，不提供 run/stop/ps。
+当前剩余外部验证：真实远端 SSH smoke。SDK 是库，不提供 run/stop/ps。
 
 ## 目标
 
@@ -481,10 +481,11 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 7. remote Qt detach run/stop/ps
 8. remote Qt foreground run
 9. VSCode 执行位置切换、状态栏/统一操作菜单远程分流、Qt foreground Terminal run
-10. CLI/VSCode spec、README 和测试补齐
+10. VSCode Problems diagnostics adapter
+11. CLI/VSCode spec、README 和测试补齐
 
 后续：
 
-1. VSCode Problems diagnostics adapter
+1. 真实远端 SSH smoke
 
 每个阶段都需要单独 Scope/Solution gate；涉及公开命令、JSON、持久化格式时必须明确兼容影响。

@@ -97,7 +97,7 @@ Terminal 启动失败时不会进入远程 pipeline，不修改远端 checkout�
 - build 目录中的 generated 文件只有能映射回本地 workspace 时才进入 Problems
 - 无法安全映射的诊断只写入 `Compilot` Output Channel，不创建虚假的 Problems
 
-映射失败不能让 build/run 失败，只影响 IDE 展示。
+当前实现解析远端 JSON `errors`、stdout 和 stderr 中的 GCC/Clang/MSVC 常见诊断行。映射失败不能让 build/run 失败，只影响 IDE 展示；成功映射的诊断写入 `compilot.remote` DiagnosticCollection。
 
 ## Commands
 
