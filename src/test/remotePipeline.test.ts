@@ -205,6 +205,56 @@ test('executePreparedRemoteAction runs remote qt build after prepare succeeds', 
     assert.ok(releaseIndex > actionIndex);
 });
 
+test('executePreparedRemoteAction runs configured build order after one prepare', async () => {
+    const commands: string[] = [];
+    const result = await executePreparedRemoteAction({
+        workspace: workspace(),
+        remotePath: '/remote/ws',
+        ignore: [],
+        owner: 'cli',
+        target: 'qt',
+        action: 'build',
+        args: [],
+        json: true,
+        buildOrder: [
+            { target: 'sdk', action: 'build', args: [] },
+            { target: 'qt', action: 'qmake', args: [] },
+            { target: 'qt', action: 'build', args: [] }
+        ],
+        runner: {
+            async run(command: string) {
+                commands.push(command);
+                if (command.includes('pwd -P')) { return { exitCode: 0, stdout: '/canonical/ws\n', stderr: '' }; }
+                if (command.includes('mkdir "$lock_dir"')) { return { exitCode: 0, stdout: 'acquired\n{"lockId":"lock-a","targetId":"target-a","owner":"cli","stage":"prepare","remotePath":"/remote/ws","repos":["qt-app"],"startedAt":"2026-05-23T00:00:00.000Z"}\n', stderr: '' }; }
+                if (command.includes('lock-id mismatch')) { return { exitCode: 0, stdout: 'removed\n', stderr: '' }; }
+                if (command.includes('$HOME/.compilot/bin/compilot') && command.includes("'sdk' 'status'")) { return { exitCode: 0, stdout: '{"ok":true,"action":"status"}\n', stderr: '' }; }
+                if (command.includes('$HOME/.compilot/bin/compilot') && command.includes("'qt' 'status'")) { return { exitCode: 0, stdout: '{"ok":true,"action":"status"}\n', stderr: '' }; }
+                if (command.includes('$HOME/.compilot/bin/compilot') && command.includes("'sdk' 'build'")) { return { exitCode: 0, stdout: '{"ok":true,"action":"build"}\n', stderr: '' }; }
+                if (command.includes('$HOME/.compilot/bin/compilot') && command.includes("'qt' 'qmake'")) { return { exitCode: 0, stdout: '{"ok":true,"action":"qmake"}\n', stderr: '' }; }
+                if (command.includes('$HOME/.compilot/bin/compilot') && command.includes("'qt' 'build'")) { return { exitCode: 0, stdout: '{"ok":true,"action":"build"}\n', stderr: '' }; }
+                if (command.includes("'qt-app'")) { return { exitCode: 0, stdout: 'mode:git\ncommit:abc123\nstatus:\n', stderr: '' }; }
+                return { exitCode: 0, stdout: '', stderr: '' };
+            }
+        },
+        uploader: { async upload() { /* no-op */ } },
+        git: fakeGit('')
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.remoteActions?.length, 3);
+    assert.deepEqual(result.remoteActions?.map(item => item.target + ':' + item.remoteAction), ['sdk:build', 'qt:qmake', 'qt:build']);
+    assert.equal(commands.filter(command => command.includes('mkdir "$lock_dir"')).length, 1);
+    const sdkBuild = commands.findIndex(command => command.includes("'sdk' 'build'"));
+    const qtQmake = commands.findIndex(command => command.includes("'qt' 'qmake'"));
+    const qtBuild = commands.findIndex(command => command.includes("'qt' 'build'"));
+    const release = commands.findIndex((command, index) => index > qtBuild && command.includes('lock-id mismatch'));
+    assert.ok(sdkBuild >= 0);
+    assert.ok(qtQmake > sdkBuild);
+    assert.ok(qtBuild > qtQmake);
+    assert.ok(release > qtBuild);
+    assert.deepEqual(result.stages.filter(stage => stage.stage === 'remoteAction').map(stage => stage.message), ['sdk:build', 'qt:qmake', 'qt:build']);
+});
+
 test('executePreparedRemoteAction does not run action when prepare fails', async () => {
     const commands: string[] = [];
     const result = await executePreparedRemoteAction({

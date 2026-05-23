@@ -6,7 +6,7 @@
 
 ## 当前实现状态
 
-已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore`、VSCode 命令面板中的 remote status/test/bootstrap/build/run/run-detach/stop/ps 类动作、VSCode 执行位置切换和状态栏/统一操作菜单远程分流，以及保守的 Problems 诊断映射。
+已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote build-order status/set/clear`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore/reset`、VSCode 命令面板中的 remote status/test/bootstrap/build/run/run-detach/stop/ps 类动作、VSCode 执行位置切换和状态栏/统一操作菜单远程分流，以及保守的 Problems 诊断映射。
 
 当前剩余外部验证：真实远端 SSH smoke。SDK 是库，不提供 run/stop/ps。
 
@@ -32,6 +32,9 @@ compilot remote test --bootstrap
 compilot remote bootstrap
 compilot remote status
 compilot remote unlock --lock-id <id> --force
+compilot remote build-order status
+compilot remote build-order set sdk:build qt:qmake qt:build
+compilot remote build-order clear
 
 compilot remote qt build
 compilot remote qt status
@@ -45,6 +48,7 @@ compilot remote qt ps
 compilot remote qt clean
 compilot remote qt qmake
 compilot remote qt restore --repo <repo> -- <paths...>
+compilot remote qt reset --repo <repo> -- <paths...>
 
 compilot remote sdk build
 compilot remote sdk status
@@ -53,6 +57,7 @@ compilot remote sdk use
 compilot remote sdk rebuild
 compilot remote sdk clean
 compilot remote sdk restore --repo <repo> -- <paths...>
+compilot remote sdk reset --repo <repo> -- <paths...>
 ```
 
 不把第一版远程能力挂到 `compilot qt ... --remote` 或 `compilot sdk ... --remote`。后续如果需要，可以作为别名再评估，但 canonical 入口是 `compilot remote <type> <action>`。
@@ -66,13 +71,14 @@ compilot remote sdk restore --repo <repo> -- <paths...>
 | `remote bootstrap` | 上传并安装当前 compilot CLI 到远端用户目录 |
 | `remote status` | 返回远程配置和能力状态，不修改远端 |
 | `remote unlock --lock-id <id> --force` | 显式清理匹配 lock-id 的远端 stale lock，不 kill 进程 |
+| `remote build-order status/set/clear` | 管理用户目录 remote settings 中的远程 buildOrder |
 | `remote qt/sdk status/init/use` | 桥接远端 compilot 的 Qt/SDK 用户目录配置，不做 sync/build |
 | `remote qt build/clean/qmake` | 远程 Qt 构建类动作 |
 | `remote qt run` | 远程 Qt 前台运行，人工终端使用 |
 | `remote qt run --detach` | 远程 Qt 后台运行 |
 | `remote qt stop/ps` | 管理远端 Qt 后台运行状态 |
 | `remote sdk build/rebuild/clean` | 远程 SDK 构建类动作 |
-| `remote <type> restore` | 恢复远端指定 tracked 路径到远端当前 git HEAD |
+| `remote <type> restore/reset` | 恢复远端指定 tracked 路径到远端当前 git HEAD |
 
 SDK 是库，第一版不提供 `remote sdk run`、`remote sdk stop`、`remote sdk ps`。
 
@@ -310,11 +316,13 @@ baselineCheck 校验 commit 对齐，不要求远端 clean。输出必须区分 
 
 ### Restore
 
-如果用户想清理远端某个或某几个文件，不提供大范围 reset，使用路径级 restore。
+如果用户想清理远端某个或某几个文件，不提供大范围 reset，使用路径级 restore/reset。`reset` 是同一安全语义下的命令别名。
 
 ```bash
 compilot remote qt restore --repo qt-app -- src/main.cpp generated/version.h
+compilot remote qt reset --repo qt-app -- src/main.cpp generated/version.h
 compilot remote sdk restore --repo sdk-lib -- include/version.h
+compilot remote sdk reset --repo sdk-lib -- include/version.h
 ```
 
 规则：
@@ -464,9 +472,8 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 - untracked 文件自动清理
 - VSCode 大型配置 UI
 - 跨机器 transfer
-- buildOrder
 
-`buildOrder` 后续可单独设计。baseline 是正确性前提，buildOrder 是多仓库编排能力，两者不绑定。
+buildOrder 已实现。baseline 是正确性前提，buildOrder 是多仓库编排能力，两者不绑定。
 
 ## 实现阶段状态
 
@@ -482,7 +489,8 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 8. remote Qt foreground run
 9. VSCode 执行位置切换、Bootstrap、状态栏/统一操作菜单远程分流、Qt foreground Terminal run
 10. VSCode Problems diagnostics adapter
-11. CLI/VSCode spec、README 和测试补齐
+11. buildOrder 和路径级 reset 别名
+12. CLI/VSCode spec、README 和测试补齐
 
 后续：
 

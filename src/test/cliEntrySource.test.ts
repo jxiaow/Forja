@@ -25,6 +25,9 @@ test('remote cli wires test bootstrap to artifact upload path', () => {
     assert.match(source, /findBootstrapArtifact/);
     assert.match(source, /createScpUploader/);
     assert.match(source, /executeRemoteRestore/);
+    assert.match(source, /loadRemoteSettings/);
+    assert.match(source, /buildOrder:\s*remoteSettings\.buildOrder/);
+    assert.match(source, /parseBuildOrderItems/);
     assert.match(source, /buildRemoteTest\(\{\s*workspace: options\.workspace,\s*bootstrap:/);
 });
 
@@ -41,7 +44,8 @@ test('cli interface spec lists only implemented subcommands as available', () =>
     assert.match(spec, /当前已实现子命令：`qt` \| `sdk` \| `remote` \| `cleanup`/);
     assert.match(spec, /`compilot remote test` 输出结构（Phase 1）/);
     assert.match(spec, /`compilot remote qt\|sdk status\/init\/use`/);
-    assert.match(spec, /`compilot remote qt\|sdk restore`/);
+    assert.match(spec, /`compilot remote qt\|sdk restore\|reset`/);
+    assert.match(spec, /`compilot remote build-order status\/set\/clear`/);
     assert.match(spec, /remote qt build\/clean\/qmake/);
     assert.match(spec, /remote sdk build\/rebuild\/clean/);
     assert.match(spec, /Remote prepared action 输出结构/);
@@ -58,6 +62,7 @@ test('cli user guide documents remote phase 1 prepared build support without run
     assert.match(guide, /compilot remote qt build --json/);
     assert.match(guide, /compilot remote sdk rebuild --json/);
     assert.match(guide, /compilot remote qt restore --repo qt-app/);
+    assert.match(guide, /compilot remote build-order set sdk:build qt:qmake qt:build/);
     assert.match(guide, /远程 Qt\/SDK build 类动作/);
     assert.match(guide, /remote qt build\/clean\/qmake\/run\/stop\/ps/);
     assert.doesNotMatch(guide, /远程 build\/run 仍在设计文档中/);
@@ -119,6 +124,8 @@ test('vscode extension contributes and registers remote phase 1 commands', () =>
     assert.equal(fs.existsSync(remoteCommandsPath), true);
     const remoteCommandsSource = fs.readFileSync(remoteCommandsPath, 'utf8');
     assert.match(remoteCommandsSource, /executePreparedRemoteAction/);
+    assert.match(remoteCommandsSource, /loadRemoteSettings/);
+    assert.match(remoteCommandsSource, /buildOrder:\s*remoteSettings\.buildOrder/);
     assert.match(remoteCommandsSource, /executeRemoteBootstrap/);
     assert.match(remoteCommandsSource, /findBootstrapArtifact\(context\.extensionPath\)/);
     assert.match(remoteCommandsSource, /buildRemoteStatus/);
@@ -189,6 +196,7 @@ test('remote deploy v3 action policy keeps clean in prepared pipeline', () => {
     assert.match(doc, /后续：\s*\n\s*1\. 真实远端 SSH smoke/);
     assert.match(doc, /remote qt build\/clean\/qmake/);
     assert.match(doc, /remote sdk build\/rebuild\/clean/);
+    assert.match(doc, /buildOrder 已实现/);
     assert.match(doc, /当前 Phase 1 不做/);
     assert.doesNotMatch(doc, /- Qt run\/stop\/ps/);
     assert.doesNotMatch(doc, /remote qt\/sdk clean` \| 必须 \| 必须 \| 否 \| 否 \| 否/);

@@ -9,7 +9,7 @@ compilot <subcommand> <action> [options]
 ```
 
 - 当前已实现子命令：`qt` | `sdk` | `remote` | `cleanup`
-- `remote` 当前实现基础命令：`test`、`status`、`bootstrap`、`unlock`，配置桥接：`qt|sdk status/init/use`，Qt 动作：`build/clean/qmake/run/stop/ps`，SDK build 类动作：`build/rebuild/clean`，以及路径级 restore：`qt|sdk restore --repo <repo> -- <paths...>`；SDK 不提供 run/stop/ps
+- `remote` 当前实现基础命令：`test`、`status`、`bootstrap`、`unlock`、`build-order status/set/clear`，配置桥接：`qt|sdk status/init/use`，Qt 动作：`build/clean/qmake/run/stop/ps`，SDK build 类动作：`build/rebuild/clean`，以及路径级 restore/reset：`qt|sdk restore|reset --repo <repo> -- <paths...>`；SDK 不提供 run/stop/ps
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -413,18 +413,42 @@ interface RemotePreparedActionResult {
   diagnostics: Array<{ level: 'error' | 'warning' | 'info'; message: string }>;
   nextActions?: string[];
   remote?: unknown;
+  remoteActions?: unknown[];
 }
 ```
 
+当用户目录 remote settings 配置了 `buildOrder` 时，`remote qt build`、`remote sdk build` 和 `remote sdk rebuild` 在一次 prepare/lock 周期内按顺序执行多个远端 action。未配置时保持单 action 行为。
+
 完整 readiness、status/test 和 smoke runbook 见 `docs/remote-deploy-status.md`。
 
-## `compilot remote qt|sdk restore`
+## `compilot remote build-order status/set/clear`
 
-路径级 restore 用于清理远端指定 tracked 文件，不执行大范围 reset，也不清理 untracked 文件：
+buildOrder 存在用户目录 remote settings，不写项目内配置文件：
+
+```bash
+compilot remote build-order status --json
+compilot remote build-order set sdk:build qt:qmake qt:build --json
+compilot remote build-order clear --json
+```
+
+规则：
+
+- 支持 `qt:build`、`qt:qmake`、`qt:clean`
+- 支持 `sdk:build`、`sdk:rebuild`、`sdk:clean`
+- 不支持 Qt run/stop/ps 或 SDK run/stop/ps
+- `remote qt build`、`remote sdk build`、`remote sdk rebuild` 会读取 buildOrder；其他动作不受影响
+
+---
+
+## `compilot remote qt|sdk restore|reset`
+
+路径级 restore/reset 用于清理远端指定 tracked 文件，不执行大范围 reset，也不清理 untracked 文件。`reset` 是同一安全语义下的命令别名：
 
 ```bash
 compilot remote qt restore --repo qt-app -- src/main.cpp generated/version.h --json
+compilot remote qt reset --repo qt-app -- src/main.cpp generated/version.h --json
 compilot remote sdk restore --repo sdk-lib -- include/version.h --json
+compilot remote sdk reset --repo sdk-lib -- include/version.h --json
 ```
 
 规则：
@@ -557,7 +581,7 @@ interface RemoteCheck {
 
 ### `.compilot/sync-state.json`
 
-同步运行状态写入项目目录下的 `.compilot/sync-state.json`。remote 当前复用 sync 配置并已实现 branchSync/overlaySync/baselineCheck 的 build 类流水线；buildOrder 仍属于后续设计，当前实现不读取独立 deploy 配置文件。
+同步运行状态写入项目目录下的 `.compilot/sync-state.json`。remote 当前复用 sync 配置并已实现 branchSync/overlaySync/baselineCheck 的 build 类流水线；buildOrder 读取用户目录 remote settings，当前实现不读取项目内 deploy 配置文件。
 
 ---
 

@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { loadRemoteSettings, RemoteBuildOrderItem, saveRemoteSettings } from '../../core/settingsIO';
 import { executeRemoteBootstrap, findBootstrapArtifact } from '../core/bootstrap';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { resolveRemoteConfig } from '../core/config';
@@ -10,10 +11,11 @@ import { buildRemoteStatus, buildRemoteTest } from '../core/status';
 import { RemoteDiagnostic } from '../core/types';
 
 interface RemoteCliOptions {
-    action: 'test' | 'status' | 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'preparedAction';
+    action: 'test' | 'status' | 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'preparedAction' | 'buildOrder';
     workspace: string;
     json: boolean;
     bootstrap: boolean;
+    buildOrderAction: 'status' | 'set' | 'clear';
     lockId: string;
     force: boolean;
     target?: RemoteBridgeTarget;
@@ -75,6 +77,18 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             writeOutput(result, options.json);
             return;
         }
+        if (options.action === 'buildOrder') {
+            const settings = loadRemoteSettings(options.workspace);
+            if (options.buildOrderAction === 'set') {
+                settings.buildOrder = parseBuildOrderItems(options.passthrough);
+                saveRemoteSettings(options.workspace, settings);
+            } else if (options.buildOrderAction === 'clear') {
+                settings.buildOrder = [];
+                saveRemoteSettings(options.workspace, settings);
+            }
+            writeOutput({ ok: true, action: 'buildOrder', mode: 'remote', buildOrder: settings.buildOrder, diagnostics: [], nextActions: [] }, options.json);
+            return;
+        }
         if (options.action === 'bridge') {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
@@ -119,6 +133,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 return;
             }
             const streamRemoteRun = options.target === 'qt' && options.remoteAction === 'run' && !options.passthrough.includes('--detach') && !options.json;
+            const remoteSettings = loadRemoteSettings(resolved.config.workspace);
             const result = await executePreparedRemoteAction({
                 workspace: resolved.config.workspace,
                 remotePath: resolved.config.remotePath,
@@ -129,6 +144,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 args: options.passthrough,
                 json: options.json,
                 stream: streamRemoteRun,
+                buildOrder: remoteSettings.buildOrder,
                 runner,
                 uploader
             });
@@ -143,11 +159,11 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             return;
         }
 
-        if (options.action === 'restore') {
+        if (options.action === 'restore' || options.action === 'reset') {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
                 process.exitCode = 1;
-                writeOutput({ ...blockedResult('restore', resolved.diagnostics, resolved.nextActions), target: options.target }, options.json);
+                writeOutput({ ...blockedResult(options.action, resolved.diagnostics, resolved.nextActions), target: options.target }, options.json);
                 return;
             }
             const runner = createSshRunner(resolved.config.server, resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null);
@@ -159,7 +175,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             }
             const result = await executeRemoteRestore({ remotePath: resolved.config.remotePath, repo: options.repo, paths: options.passthrough, runner });
             if (!result.ok) { process.exitCode = 1; }
-            writeOutput(result, options.json);
+            writeOutput({ ...result, action: options.action }, options.json);
             return;
         }
 
@@ -191,6 +207,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
         workspace: process.cwd(),
         json: false,
         bootstrap: false,
+        buildOrderAction: 'status',
         lockId: '',
         force: false,
         passthrough: [],
@@ -200,8 +217,8 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
     let start = first === argv[0] ? 1 : 0;
     if (first === 'qt' || first === 'sdk') {
         const remoteAction = argv[1];
-        if (remoteAction === 'restore') {
-            options.action = 'restore';
+        if (remoteAction === 'restore' || remoteAction === 'reset') {
+            options.action = remoteAction;
             options.target = first;
             start = 2;
         } else if (isBridgeAction(first, remoteAction)) {
@@ -218,10 +235,19 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
             throw new Error(remoteSupportMessage(first));
         }
     } else {
-        if (first !== 'test' && first !== 'status' && first !== 'bootstrap' && first !== 'unlock') {
+        if (first === 'build-order') {
+            options.action = 'buildOrder';
+            const subcommand = argv[1] && !argv[1].startsWith('--') ? argv[1] : 'status';
+            if (subcommand !== 'status' && subcommand !== 'set' && subcommand !== 'clear') {
+                throw new Error('remote build-order 仅支持 status/set/clear');
+            }
+            options.buildOrderAction = subcommand;
+            start = subcommand === argv[1] ? 2 : 1;
+        } else if (first !== 'test' && first !== 'status' && first !== 'bootstrap' && first !== 'unlock') {
             throw new Error('未知 remote 命令: ' + first);
+        } else {
+            options.action = first;
         }
-        options.action = first;
     }
 
     for (let i = start; i < argv.length; i++) {
@@ -238,7 +264,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 options.json = true;
                 break;
             case '--':
-                if (options.action === 'bridge' || options.action === 'restore' || options.action === 'preparedAction') {
+                if (options.action === 'bridge' || options.action === 'restore' || options.action === 'reset' || options.action === 'preparedAction') {
                     options.passthrough.push(...argv.slice(i + 1));
                     i = argv.length;
                     break;
@@ -249,7 +275,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 options.bootstrap = true;
                 break;
             case '--repo': {
-                if (options.action !== 'restore') { throw new Error('--repo 只能用于 remote restore'); }
+                if (options.action !== 'restore' && options.action !== 'reset') { throw new Error('--repo 只能用于 remote restore/reset'); }
                 const value = argv[i + 1];
                 if (!value || value.startsWith('--')) { throw new Error('--repo 需要一个值'); }
                 options.repo = value;
@@ -273,12 +299,19 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                     options.passthrough.push(arg);
                     break;
                 }
+                if (options.action === 'buildOrder' && options.buildOrderAction === 'set') {
+                    options.passthrough.push(arg);
+                    break;
+                }
                 throw new Error('未知参数: ' + arg);
         }
     }
-    if (options.action === 'restore') {
-        if (!options.repo) { throw new Error('remote restore 需要 --repo <repo>'); }
-        if (options.passthrough.length === 0) { throw new Error('remote restore 需要 -- 后跟至少一个路径'); }
+    if (options.action === 'restore' || options.action === 'reset') {
+        if (!options.repo) { throw new Error('remote ' + options.action + ' 需要 --repo <repo>'); }
+        if (options.passthrough.length === 0) { throw new Error('remote ' + options.action + ' 需要 -- 后跟至少一个路径'); }
+    }
+    if (options.action === 'buildOrder' && options.buildOrderAction === 'set' && options.passthrough.length === 0) {
+        throw new Error('remote build-order set 需要至少一个 target:action');
     }
     if (options.target === 'qt' && options.remoteAction === 'run' && options.json && !options.passthrough.includes('--detach')) {
         throw new Error('remote qt run --json 仅支持 --detach 模式，请使用 remote qt run --detach --json');
@@ -300,13 +333,29 @@ function isPreparedAction(target: RemoteBridgeTarget, action: string | undefined
 
 function remoteSupportMessage(target: RemoteBridgeTarget): string {
     if (target === 'qt') {
-        return 'remote qt 仅支持 status/init/use/build/clean/qmake/run/stop/ps/restore';
+        return 'remote qt 仅支持 status/init/use/build/clean/qmake/run/stop/ps/restore/reset';
     }
-    return 'remote sdk 仅支持 status/init/use/build/rebuild/clean/restore';
+    return 'remote sdk 仅支持 status/init/use/build/rebuild/clean/restore/reset';
 }
 
-function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'preparedAction', diagnostics: RemoteDiagnostic[], nextActions: string[]): Record<string, unknown> {
+function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'preparedAction', diagnostics: RemoteDiagnostic[], nextActions: string[]): Record<string, unknown> {
     return { ok: false, action, mode: 'remote', diagnostics, nextActions };
+}
+
+function parseBuildOrderItems(items: string[]): RemoteBuildOrderItem[] {
+    return items.map(item => {
+        const [target, action, extra] = item.split(':');
+        if (extra !== undefined || (target !== 'qt' && target !== 'sdk')) {
+            throw new Error('非法 build-order 项: ' + item);
+        }
+        if (target === 'qt' && (action === 'build' || action === 'clean' || action === 'qmake')) {
+            return { target, action, args: [] };
+        }
+        if (target === 'sdk' && (action === 'build' || action === 'rebuild' || action === 'clean')) {
+            return { target, action, args: [] };
+        }
+        throw new Error('非法 build-order 项: ' + item);
+    });
 }
 
 function writeOutput(result: unknown, json: boolean): void {

@@ -1,3 +1,4 @@
+import { RemoteBuildOrderItem } from '../../core/settingsIO';
 import { GitRunner, buildRemoteBaselineStatus, RepoBaselineState } from './baseline';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from './bridge';
 import { RemoteUploader } from './bootstrap';
@@ -23,11 +24,13 @@ export interface ExecutePreparedRemoteActionOptions extends PrepareRemoteWorkspa
     args: string[];
     json: boolean;
     stream?: boolean;
+    buildOrder?: RemoteBuildOrderItem[];
 }
 
 export type ExecutePreparedRemoteActionResult = Omit<PrepareRemoteWorkspaceResult, 'action'> & {
     action: 'preparedAction';
     remote?: Awaited<ReturnType<typeof executeRemoteBridge>>;
+    remoteActions?: Array<Awaited<ReturnType<typeof executeRemoteBridge>>>;
 };
 
 export interface PrepareRemoteWorkspaceResult {
@@ -149,52 +152,61 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
 
 
 export async function executePreparedRemoteAction(options: ExecutePreparedRemoteActionOptions): Promise<ExecutePreparedRemoteActionResult> {
-    const readiness = await executeRemoteBridge({
-        target: options.target,
-        action: 'status',
-        args: [],
-        json: true,
-        remotePath: options.remotePath,
-        runner: options.runner
-    });
-    if (!readiness.ok) {
-        return {
-            ok: false,
-            action: 'preparedAction',
-            mode: 'remote',
-            failedStage: 'targetReadiness',
-            repos: [],
-            stages: [{ stage: 'targetReadiness', ok: false, message: options.target }],
-            diagnostics: readiness.diagnostics,
-            nextActions: readiness.nextActions.length > 0 ? readiness.nextActions : [`compilot remote ${options.target} status --json`],
-            remote: readiness
-        };
+    const actions = selectRemoteActions(options);
+    const readinessTargets = [...new Set(actions.map(item => item.target))];
+    for (const target of readinessTargets) {
+        const readiness = await executeRemoteBridge({
+            target,
+            action: 'status',
+            args: [],
+            json: true,
+            remotePath: options.remotePath,
+            runner: options.runner
+        });
+        if (!readiness.ok) {
+            return {
+                ok: false,
+                action: 'preparedAction',
+                mode: 'remote',
+                failedStage: 'targetReadiness',
+                repos: [],
+                stages: [{ stage: 'targetReadiness', ok: false, message: target }],
+                diagnostics: readiness.diagnostics,
+                nextActions: readiness.nextActions.length > 0 ? readiness.nextActions : [`compilot remote ${target} status --json`],
+                remote: readiness
+            };
+        }
     }
 
     const prepared = await prepareRemoteWorkspace({ ...options, releaseAfterPrepare: false });
     const base: ExecutePreparedRemoteActionResult = { ...prepared, action: 'preparedAction' };
-    base.stages.unshift({ stage: 'targetReadiness', ok: true, message: options.target });
+    base.stages.unshift({ stage: 'targetReadiness', ok: true, message: readinessTargets.join(',') });
     if (!prepared.ok) {
         return base;
     }
 
     try {
-        const remote = await executeRemoteBridge({
-            target: options.target,
-            action: options.action,
-            args: options.args,
-            json: options.json,
-            stream: options.stream,
-            remotePath: options.remotePath,
-            runner: options.runner
-        });
-        base.remote = remote;
-        base.stages.push({ stage: 'remoteAction', ok: remote.ok, message: remote.remoteAction });
-        base.diagnostics.push(...remote.diagnostics);
-        if (!remote.ok) {
-            base.ok = false;
-            base.failedStage = 'remoteAction';
-            base.nextActions = remote.nextActions;
+        base.remoteActions = [];
+        for (const action of actions) {
+            const remote = await executeRemoteBridge({
+                target: action.target,
+                action: action.action,
+                args: action.args,
+                json: options.json,
+                stream: actions.length === 1 ? options.stream : false,
+                remotePath: options.remotePath,
+                runner: options.runner
+            });
+            base.remote = remote;
+            base.remoteActions.push(remote);
+            base.stages.push({ stage: 'remoteAction', ok: remote.ok, message: action.target + ':' + action.action });
+            base.diagnostics.push(...remote.diagnostics);
+            if (!remote.ok) {
+                base.ok = false;
+                base.failedStage = 'remoteAction';
+                base.nextActions = remote.nextActions;
+                break;
+            }
         }
     } catch (error) {
         base.ok = false;
@@ -212,4 +224,16 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
         }
     }
     return base;
+}
+
+function selectRemoteActions(options: ExecutePreparedRemoteActionOptions): RemoteBuildOrderItem[] {
+    if (isBuildOrderEntryPoint(options) && options.buildOrder && options.buildOrder.length > 0) {
+        return options.buildOrder;
+    }
+    return [{ target: options.target, action: options.action as RemoteBuildOrderItem['action'], args: options.args }];
+}
+
+function isBuildOrderEntryPoint(options: ExecutePreparedRemoteActionOptions): boolean {
+    if (options.target === 'qt') { return options.action === 'build'; }
+    return options.action === 'build' || options.action === 'rebuild';
 }

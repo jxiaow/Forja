@@ -13,6 +13,8 @@ import {
     saveSdkSettings,
     loadSyncSettings,
     saveSyncSettings,
+    loadRemoteSettings,
+    saveRemoteSettings,
     projectConfigPath,
     listProjectConfigs,
 } from '../core/settingsIO';
@@ -229,6 +231,31 @@ test('loadSyncSettings prefers current directory over parent', () => {
     assert.equal(loaded.selectedServer, 'child-server');
 });
 
+// ── Remote ──
+
+test('saveRemoteSettings round-trips sanitized build order', () => {
+    const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'remote'));
+
+    saveRemoteSettings(workspace, {
+        remoteCompilotBin: '/opt/compilot/bin/compilot',
+        buildOrder: [
+            { target: 'sdk', action: 'build', args: [] },
+            { target: 'qt', action: 'qmake', args: [] },
+            { target: 'qt', action: 'build', args: ['--verbose'] }
+        ]
+    });
+
+    const loaded = loadRemoteSettings(workspace);
+
+    assert.equal(loaded.remoteCompilotBin, '/opt/compilot/bin/compilot');
+    assert.deepEqual(loaded.buildOrder, [
+        { target: 'sdk', action: 'build', args: [] },
+        { target: 'qt', action: 'qmake', args: [] },
+        { target: 'qt', action: 'build', args: ['--verbose'] }
+    ]);
+});
+
 // ── projectConfigPath ──
 
 test('projectConfigPath returns path under ~/.compilot/projects/', () => {
@@ -262,4 +289,3 @@ test('listProjectConfigs returns saved configs', () => {
     const found = configs.find(c => c.workspace === workspace && c.type === 'qt');
     assert.ok(found, 'should find the saved qt config');
 });
-

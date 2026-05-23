@@ -56,9 +56,15 @@ remote wrapper 负责追加 `--workspace <remotePath>` 和 JSON 模式下的 `--
 
 ## BuildOrder
 
-第一版不做 buildOrder。多 repo workspace 只保证 repo baseline/sync 正确，不负责跨 repo 构建编排。远端 build 只执行远端 Qt/SDK 当前 workspace settings 选中的项目。
+buildOrder 已实现为用户目录 remote settings，不写项目内配置。多 repo workspace 仍由 branchSync/baseline 保证仓库状态正确，buildOrder 只负责编排远端 Qt/SDK action 顺序。
 
-后续如果要加 buildOrder，单独设计，不阻塞第一版。
+规则：
+
+- CLI 管理入口：`compilot remote build-order status|set|clear`
+- 配置项格式：`qt:build`、`qt:qmake`、`qt:clean`、`sdk:build`、`sdk:rebuild`、`sdk:clean`
+- 仅 `remote qt build`、`remote sdk build`、`remote sdk rebuild` 读取 buildOrder
+- 编排时只执行一次 prepare/lock/release，在 lock 内按顺序桥接远端 compilot
+- 不支持 run/stop/ps 进入 buildOrder
 
 ## Submodule
 

@@ -49,8 +49,15 @@ export interface SyncSettings {
     ignore: string[];
 }
 
+export interface RemoteBuildOrderItem {
+    target: 'qt' | 'sdk';
+    action: 'build' | 'rebuild' | 'clean' | 'qmake';
+    args: string[];
+}
+
 export interface RemoteSettings {
     remoteCompilotBin: string;
+    buildOrder: RemoteBuildOrderItem[];
 }
 
 export interface CompilotSettings {
@@ -97,7 +104,8 @@ export const DEFAULT_SYNC: Readonly<SyncSettings> = {
 };
 
 export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
-    remoteCompilotBin: ''
+    remoteCompilotBin: '',
+    buildOrder: []
 };
 
 export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
@@ -360,9 +368,30 @@ function sanitizeSync(raw: Record<string, unknown>): SyncSettings {
 
 function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
     const d = DEFAULT_REMOTE;
+    const buildOrder: RemoteBuildOrderItem[] = [];
+    if (Array.isArray(raw.buildOrder)) {
+        for (const item of raw.buildOrder) {
+            if (!item || typeof item !== 'object') { continue; }
+            const entry = item as Record<string, unknown>;
+            const target = entry.target;
+            const action = entry.action;
+            if ((target !== 'qt' && target !== 'sdk') || !isRemoteBuildOrderAction(target, action)) { continue; }
+            buildOrder.push({
+                target,
+                action,
+                args: isStringArray(entry.args) ? entry.args : []
+            });
+        }
+    }
     return {
-        remoteCompilotBin: isString(raw.remoteCompilotBin) ? raw.remoteCompilotBin : d.remoteCompilotBin
+        remoteCompilotBin: isString(raw.remoteCompilotBin) ? raw.remoteCompilotBin : d.remoteCompilotBin,
+        buildOrder
     };
 }
 
-
+function isRemoteBuildOrderAction(target: 'qt' | 'sdk', action: unknown): action is RemoteBuildOrderItem['action'] {
+    if (target === 'qt') {
+        return action === 'build' || action === 'clean' || action === 'qmake';
+    }
+    return action === 'build' || action === 'rebuild' || action === 'clean';
+}

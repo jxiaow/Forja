@@ -9,6 +9,7 @@ import { executeRemoteBridge } from '../remote/core/bridge';
 import { buildRemoteStatus, buildRemoteTest } from '../remote/core/status';
 import { executeRemoteUnlock, unlockRemoteTarget } from '../remote/core/lock';
 import { executeRemoteRestore } from '../remote/core/restore';
+import { loadRemoteSettings } from '../core/settingsIO';
 import { VERSION } from '../version';
 
 
@@ -420,6 +421,38 @@ test('remote CLI rejects restore without repo', async () => {
     assert.equal(process.exitCode, 1);
     assert.equal(parsed.ok, false);
     assert.match(parsed.diagnostics[0].message, /remote restore 需要 --repo/);
+});
+
+test('remote CLI accepts reset as precise restore alias', async () => {
+    const workspace = tmpDir('compilot-remote-reset-missing-sync-');
+    const output = await captureStdout(() => runRemoteCli(['qt', 'reset', '--repo', 'qt-app', '--workspace', workspace, '--json', '--', 'src/main.cpp']));
+    const parsed = JSON.parse(output);
+
+    assert.equal(process.exitCode, 1);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.action, 'reset');
+    assert.equal(parsed.target, 'qt');
+    assert.match(parsed.diagnostics[0].message, /sync 未启用/);
+});
+
+test('remote CLI manages build order in user remote settings', async () => {
+    const workspace = tmpDir('compilot-remote-build-order-');
+    const setOutput = await captureStdout(() => runRemoteCli(['build-order', 'set', 'sdk:build', 'qt:qmake', 'qt:build', '--workspace', workspace, '--json']));
+    const setParsed = JSON.parse(setOutput);
+
+    assert.equal(setParsed.ok, true);
+    assert.equal(setParsed.action, 'buildOrder');
+    assert.deepEqual(setParsed.buildOrder.map((item: { target: string; action: string }) => item.target + ':' + item.action), ['sdk:build', 'qt:qmake', 'qt:build']);
+    assert.deepEqual(loadRemoteSettings(workspace).buildOrder.map(item => item.target + ':' + item.action), ['sdk:build', 'qt:qmake', 'qt:build']);
+
+    const statusOutput = await captureStdout(() => runRemoteCli(['build-order', 'status', '--workspace', workspace, '--json']));
+    const statusParsed = JSON.parse(statusOutput);
+    assert.deepEqual(statusParsed.buildOrder.map((item: { target: string; action: string }) => item.target + ':' + item.action), ['sdk:build', 'qt:qmake', 'qt:build']);
+
+    const clearOutput = await captureStdout(() => runRemoteCli(['build-order', 'clear', '--workspace', workspace, '--json']));
+    const clearParsed = JSON.parse(clearOutput);
+    assert.equal(clearParsed.ok, true);
+    assert.deepEqual(loadRemoteSettings(workspace).buildOrder, []);
 });
 
 test('executeRemoteUnlock removes matching remote lock by canonical remote path target id', async () => {

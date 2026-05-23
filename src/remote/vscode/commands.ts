@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { loadRemoteSettings } from '../../core/settingsIO';
 import { executeRemoteBootstrap, findBootstrapArtifact } from '../core/bootstrap';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { resolveRemoteConfig } from '../core/config';
@@ -209,6 +210,7 @@ async function executeCommand(context: vscode.ExtensionContext, workspace: strin
 
     const password = resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null;
     const runner = createSshRunner(resolved.config.server, password);
+    const remoteSettings = loadRemoteSettings(resolved.config.workspace);
     if (command.kind === 'bootstrap') {
         const artifact = findBootstrapArtifact(context.extensionPath);
         const uploader = createScpUploader(resolved.config.server, password);
@@ -242,6 +244,7 @@ async function executeCommand(context: vscode.ExtensionContext, workspace: strin
         action: command.remoteAction!,
         args: command.args || [],
         json: true,
+        buildOrder: remoteSettings.buildOrder,
         runner,
         uploader: uploader!
     });
