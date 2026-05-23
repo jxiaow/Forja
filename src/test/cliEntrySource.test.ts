@@ -35,6 +35,7 @@ test('cli interface spec lists only implemented subcommands as available', () =>
     assert.match(spec, /`compilot remote qt\|sdk restore`/);
     assert.match(spec, /remote qt build\/clean\/qmake/);
     assert.match(spec, /remote sdk build\/rebuild\/clean/);
+    assert.match(spec, /targetReadiness/);
 });
 test('cli user guide documents remote phase 1 prepared build support without run support', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
