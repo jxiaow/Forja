@@ -127,7 +127,7 @@ test('executePreparedRemoteAction runs remote qt build after prepare succeeds', 
     assert.equal(result.remote?.target, 'qt');
     assert.equal(result.remote?.remoteAction, 'build');
     assert.ok(result.stages.some(stage => stage.stage === 'remoteAction' && stage.ok));
-    assert.deepEqual(result.stages.map(stage => stage.stage), ['baselinePrecheck', 'acquireLock', 'branchSync', 'overlaySync', 'baselineCheck', 'remoteAction', 'releaseLock']);
+    assert.deepEqual(result.stages.map(stage => stage.stage), ['targetReadiness', 'baselinePrecheck', 'acquireLock', 'branchSync', 'overlaySync', 'baselineCheck', 'remoteAction', 'releaseLock']);
     const actionIndex = commands.findIndex(command => command.includes("'qt' 'build'"));
     const releaseIndex = commands.findIndex((command, index) => index > actionIndex && command.includes('lock-id mismatch'));
     assert.ok(actionIndex >= 0);
@@ -159,4 +159,36 @@ test('executePreparedRemoteAction does not run action when prepare fails', async
     assert.equal(result.ok, false);
     assert.equal(result.failedStage, 'baselinePrecheck');
     assert.equal(commands.some(command => command.includes("'sdk' 'build'")), false);
+});
+
+
+test('executePreparedRemoteAction stops before prepare when target readiness fails', async () => {
+    const commands: string[] = [];
+    const result = await executePreparedRemoteAction({
+        workspace: workspace(),
+        remotePath: '/remote/ws',
+        ignore: [],
+        owner: 'cli',
+        target: 'qt',
+        action: 'build',
+        args: [],
+        json: true,
+        runner: {
+            async run(command: string) {
+                commands.push(command);
+                if (command.includes("'qt' 'status'")) {
+                    return { exitCode: 0, stdout: '{"ok":false,"action":"status","diagnostics":[{"level":"error","message":"qt 未初始化"}]}\n', stderr: '' };
+                }
+                return { exitCode: 0, stdout: '', stderr: '' };
+            }
+        },
+        uploader: { async upload() { throw new Error('not reached'); } },
+        git: fakeGit('')
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.failedStage, 'targetReadiness');
+    assert.deepEqual(result.stages.map(stage => stage.stage), ['targetReadiness']);
+    assert.equal(commands.some(command => command.includes('mkdir "$lock_dir"')), false);
+    assert.equal(commands.some(command => command.includes("'qt' 'build'")), false);
 });

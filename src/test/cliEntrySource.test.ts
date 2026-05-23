@@ -112,3 +112,11 @@ test('remote vscode design documents phase 1 command palette scope', () => {
     assert.match(doc, /Compilot Remote SDK: Rebuild/);
     assert.match(doc, /不贡献 Bootstrap、Qt run\/stop\/ps 或 SDK run\/stop\/ps/);
 });
+
+
+test('remote deploy v3 action policy keeps clean in prepared pipeline', () => {
+    const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-v3.md'), 'utf8');
+    assert.match(doc, /remote qt build\/clean\/qmake/);
+    assert.match(doc, /remote sdk build\/rebuild\/clean/);
+    assert.doesNotMatch(doc, /remote qt\/sdk clean` \| 必须 \| 必须 \| 否 \| 否 \| 否/);
+});

@@ -260,6 +260,24 @@ test('executeRemoteBridge runs qt status under remote workspace and parses JSON'
     assert.ok(commands[0].includes("'--json'"));
 });
 
+test('executeRemoteBridge treats parsed JSON ok false as failed', async () => {
+    const result = await executeRemoteBridge({
+        target: 'qt',
+        action: 'status',
+        args: [],
+        json: true,
+        remotePath: '/remote/ws',
+        runner: {
+            async run() {
+                return { exitCode: 0, stdout: '{"ok":false,"action":"status","diagnostics":[{"level":"error","message":"qt 未初始化"}]}\n', stderr: '' };
+            }
+        }
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(result.diagnostics.map(item => item.message).join('\n'), /qt 未初始化/);
+});
+
 test('remote CLI parses qt build prepared action and returns sync config diagnostic', async () => {
     const workspace = tmpDir('compilot-remote-build-missing-sync-');
     const output = await captureStdout(() => runRemoteCli(['qt', 'build', '--workspace', workspace, '--json']));

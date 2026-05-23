@@ -270,12 +270,11 @@ lock -> branchSync -> sync -> baselineCheck -> remote compilot qt run -> unlock 
 | `remote bootstrap` | 安装/更新 | 否 | 否 | 否 | 否 | 否 |
 | `remote unlock` | 否 | 否 | 否 | 否 | 否 | 清理匹配 lock |
 | `remote qt/sdk status/init/use` | 必须 | 动作自身处理 | 否 | 否 | 否 | 短锁 |
-| `remote qt build/qmake` | 必须 | 必须 | 是 | 是 | 是 | pipeline 全程 |
-| `remote sdk build/rebuild` | 必须 | 必须 | 是 | 是 | 是 | pipeline 全程 |
+| `remote qt build/clean/qmake` | 必须 | 必须 | 是 | 是 | 是 | pipeline 全程 |
+| `remote sdk build/rebuild/clean` | 必须 | 必须 | 是 | 是 | 是 | pipeline 全程 |
 | `remote qt run` | 必须 | 必须 | 是 | 是 | 是 | 前台会话退出后释放 |
 | `remote qt run --detach` | 必须 | 必须 | 是 | 是 | 是 | launch 完成后释放 |
 | `remote qt stop/ps` | 必须 | Qt run-state | 否 | 否 | 否 | 短锁或无锁 |
-| `remote qt/sdk clean` | 必须 | 必须 | 否 | 否 | 否 | action 全程 |
 | `remote <type> restore` | 必须 | 否 | 否 | 否 | 否 | action 全程 |
 
 ### Branch Sync

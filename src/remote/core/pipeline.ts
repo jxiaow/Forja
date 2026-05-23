@@ -148,8 +148,31 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
 
 
 export async function executePreparedRemoteAction(options: ExecutePreparedRemoteActionOptions): Promise<ExecutePreparedRemoteActionResult> {
+    const readiness = await executeRemoteBridge({
+        target: options.target,
+        action: 'status',
+        args: [],
+        json: true,
+        remotePath: options.remotePath,
+        runner: options.runner
+    });
+    if (!readiness.ok) {
+        return {
+            ok: false,
+            action: 'preparedAction',
+            mode: 'remote',
+            failedStage: 'targetReadiness',
+            repos: [],
+            stages: [{ stage: 'targetReadiness', ok: false, message: options.target }],
+            diagnostics: readiness.diagnostics,
+            nextActions: readiness.nextActions.length > 0 ? readiness.nextActions : [`compilot remote ${options.target} status --json`],
+            remote: readiness
+        };
+    }
+
     const prepared = await prepareRemoteWorkspace({ ...options, releaseAfterPrepare: false });
     const base: ExecutePreparedRemoteActionResult = { ...prepared, action: 'preparedAction' };
+    base.stages.unshift({ stage: 'targetReadiness', ok: true, message: options.target });
     if (!prepared.ok) {
         return base;
     }

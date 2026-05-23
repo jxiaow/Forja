@@ -43,6 +43,9 @@ export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): 
     if (options.json && executed.stdout.trim()) {
         try {
             parsed = JSON.parse(executed.stdout);
+            if (isFailedJsonResult(parsed)) {
+                diagnostics.push(...extractRemoteDiagnostics(parsed, `远端 ${options.target} ${options.action} 返回失败`));
+            }
         } catch (error) {
             diagnostics.push({ level: 'error', message: `远端 ${options.target} ${options.action} JSON 输出解析失败: ${error instanceof Error ? error.message : String(error)}` });
         }
@@ -69,4 +72,26 @@ export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): 
 
 function trim(value: string): string {
     return value.trim().split(/\r?\n/).slice(0, 3).join('\n');
+}
+
+function isFailedJsonResult(value: unknown): value is { ok: false; diagnostics?: unknown } {
+    return typeof value === 'object' && value !== null && (value as { ok?: unknown }).ok === false;
+}
+
+function extractRemoteDiagnostics(value: { diagnostics?: unknown }, fallback: string): RemoteDiagnostic[] {
+    if (Array.isArray(value.diagnostics)) {
+        const diagnostics = value.diagnostics
+            .map(item => normalizeDiagnostic(item))
+            .filter((item): item is RemoteDiagnostic => item !== null);
+        if (diagnostics.length > 0) { return diagnostics; }
+    }
+    return [{ level: 'error', message: fallback }];
+}
+
+function normalizeDiagnostic(value: unknown): RemoteDiagnostic | null {
+    if (typeof value !== 'object' || value === null) { return null; }
+    const raw = value as { level?: unknown; message?: unknown };
+    if (typeof raw.message !== 'string' || !raw.message) { return null; }
+    const level = raw.level === 'info' || raw.level === 'warning' || raw.level === 'error' ? raw.level : 'error';
+    return { level, message: raw.message };
 }
