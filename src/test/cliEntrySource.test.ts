@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'node:child_process';
 
 test('package exposes compilot bin entry', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
@@ -156,4 +157,23 @@ test('remote status doc defines real ssh smoke runbook', () => {
 
     const v3 = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-v3.md'), 'utf8');
     assert.match(v3, /真实远程 smoke 流程/);
+});
+
+
+test('remote smoke runner dry-run and execute guard do not require ssh', () => {
+    const dryRun = spawnSync(process.execPath, ['scripts/remote-smoke.js', '--target', 'qt', '--build'], {
+        cwd: process.cwd(),
+        encoding: 'utf8'
+    });
+    assert.equal(dryRun.status, 0);
+    assert.match(dryRun.stdout, /mode: dry-run/);
+    assert.match(dryRun.stdout, /qt-build \[mutates remote\]/);
+    assert.match(dryRun.stdout, /Dry-run only/);
+
+    const blocked = spawnSync(process.execPath, ['scripts/remote-smoke.js', '--target', 'qt', '--build', '--execute'], {
+        cwd: process.cwd(),
+        encoding: 'utf8'
+    });
+    assert.notEqual(blocked.status, 0);
+    assert.match(blocked.stderr, /--yes is required when executing --bootstrap or --build/);
 });
