@@ -43,6 +43,47 @@ readiness 按层级表达，后续动作按需选择需要的层。
 
 build/run/rebuild/qmake 的 pipeline 中需要显式 `targetReadiness` stage。readiness 失败时不进入 branchSync/sync。
 
+## Real Remote Smoke
+
+真实 SSH smoke 是发布前人工执行的 E2E 检查，不进入自动单测。仓库提供 runner：
+
+```bash
+npm run remote:smoke -- --target qt --build
+npm run remote:smoke -- --target qt --build --execute --yes
+```
+
+默认不执行 SSH，只打印计划。只有显式传入 `--execute` 时才调用本地已编译 CLI：
+
+- `compilot remote status --json`
+- `compilot remote test --json`
+- 可选 `compilot remote test --bootstrap --json`
+- `compilot remote qt|sdk status --json`
+- 可选 `compilot remote qt|sdk build --json`
+- 最后再次 `compilot remote status --json`，确认没有 stale lock
+
+执行前提：
+
+- 本地已执行 `npm run compile`，或通过 `--cli <path>` 指向可用 CLI
+- 当前 workspace 已配置 sync server、selectedServer、remotePath
+- 远端 workspace root 是多仓库根；本地分支/upstream 满足 baseline precheck
+- 远端已有兼容 compilot，或传入 `--bootstrap --yes` 并且本地已有 bootstrap artifact
+- Qt/SDK 远端配置已可由 `compilot remote qt|sdk status --json` 验证
+
+安全约束：
+
+- 执行 `--bootstrap` 或 `--build` 时必须同时传 `--yes`；dry-run 可省略
+- runner 不执行 `remote unlock --force`、`remote restore`、`git reset`、`git clean`
+- runner 不自动挑选 restore 路径，也不清理远端 preserved dirty 文件
+- 失败时停在当前 step，保留远端诊断和 lock nextAction，人工确认后再处理
+
+推荐记录：
+
+```bash
+npm run remote:smoke -- --target both --build --execute --yes --json-dir /tmp/compilot-remote-smoke
+```
+
+`--json-dir` 只保存每个 step 的 stdout/stderr 和退出码，便于对照 pipeline JSON；它不是远端状态源。
+
 ## Status JSON
 
 `compilot remote status --json` 返回快照结构：

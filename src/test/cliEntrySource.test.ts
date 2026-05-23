@@ -122,3 +122,38 @@ test('remote deploy v3 action policy keeps clean in prepared pipeline', () => {
     assert.match(doc, /remote sdk build\/rebuild\/clean/);
     assert.doesNotMatch(doc, /remote qt\/sdk clean` \| 必须 \| 必须 \| 否 \| 否 \| 否/);
 });
+
+
+test('remote smoke runner is opt-in and non destructive', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+    assert.equal(pkg.scripts['remote:smoke'], 'node scripts/remote-smoke.js');
+
+    const runner = fs.readFileSync(path.join(process.cwd(), 'scripts', 'remote-smoke.js'), 'utf8');
+    assert.match(runner, /Dry-run only/);
+    assert.match(runner, /--execute/);
+    assert.match(runner, /--yes is required when executing --bootstrap or --build/);
+    assert.match(runner, /remote', 'status'/);
+    assert.match(runner, /remote', 'test'/);
+    assert.match(runner, /remote', target, 'status'/);
+    assert.match(runner, /remote', target, 'build'/);
+    assert.doesNotMatch(runner, /git reset/);
+    assert.doesNotMatch(runner, /git clean/);
+    assert.doesNotMatch(runner, /unlock/);
+    assert.doesNotMatch(runner, /restore/);
+});
+
+test('remote status doc defines real ssh smoke runbook', () => {
+    const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-status.md'), 'utf8');
+    assert.match(doc, /Real Remote Smoke/);
+    assert.match(doc, /npm run remote:smoke -- --target qt --build/);
+    assert.match(doc, /--execute/);
+    assert.match(doc, /--bootstrap --yes/);
+    assert.match(doc, /--json-dir/);
+    assert.match(doc, /不执行 .*git reset/);
+    assert.match(doc, /不执行 .*git clean/);
+    assert.match(doc, /不执行 .*remote unlock --force/);
+    assert.match(doc, /失败时停在当前 step/);
+
+    const v3 = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-v3.md'), 'utf8');
+    assert.match(v3, /真实远程 smoke 流程/);
+});

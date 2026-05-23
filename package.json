@@ -176,6 +176,7 @@
     "test": "npm run compile && node --test --test-reporter=spec out/test",
     "lint": "eslint src/",
     "build:cli": "npm run compile && node scripts/build-cli.js",
+    "remote:smoke": "node scripts/remote-smoke.js",
     "package": "npm run compile && node scripts/package-vs.js",
     "package:cli": "npm run build:cli",
     "package:all": "node scripts/bump-version.js && npm run package && npm run package:cli",

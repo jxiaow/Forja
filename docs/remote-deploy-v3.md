@@ -70,7 +70,7 @@ compilot remote sdk restore --repo <repo> -- <paths...>
 
 SDK 是库，第一版不提供 `remote sdk run`、`remote sdk stop`、`remote sdk ps`。
 
-`remote test/status/unlock`、target readiness 和 Qt/SDK bridge command 的 JSON 规则见 `docs/remote-deploy-status.md`。bootstrap 细节见 `docs/remote-deploy-bootstrap.md`。SSH 执行、安全边界和日志脱敏规则见 `docs/remote-deploy-security.md`。
+`remote test/status/unlock`、target readiness、Qt/SDK bridge command、真实远程 smoke 流程的规则见 `docs/remote-deploy-status.md`。bootstrap 细节见 `docs/remote-deploy-bootstrap.md`。SSH 执行、安全边界和日志脱敏规则见 `docs/remote-deploy-security.md`。
 
 ## 配置模型
 
