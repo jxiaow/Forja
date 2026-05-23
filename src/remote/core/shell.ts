@@ -47,7 +47,7 @@ export function createScpUploader(server: ServerConfig, password: string | null 
 
 export function createSshRunner(server: ServerConfig, password: string | null = null): RemoteRunner {
     return {
-        run(command: string, timeoutMs: number = 10000): Promise<RemoteCommandResult> {
+        run(command: string, timeoutMs: number = 10000, stream: boolean = false): Promise<RemoteCommandResult> {
             return new Promise(resolve => {
                 const askpass = createAskpassEnv(server.authMode === 'password' ? password : null, `remote-${process.pid}`);
                 const child = cp.spawn('ssh', [...buildSshArgs(server), sshTarget(server), command], {
@@ -60,8 +60,16 @@ export function createSshRunner(server: ServerConfig, password: string | null = 
                 const timer = setTimeout(() => {
                     child.kill('SIGTERM');
                 }, timeoutMs);
-                child.stdout.on('data', chunk => { stdout += String(chunk); });
-                child.stderr.on('data', chunk => { stderr += String(chunk); });
+                child.stdout.on('data', chunk => {
+                    const text = String(chunk);
+                    stdout += text;
+                    if (stream) { process.stdout.write(text); }
+                });
+                child.stderr.on('data', chunk => {
+                    const text = String(chunk);
+                    stderr += text;
+                    if (stream) { process.stderr.write(text); }
+                });
                 child.on('error', error => {
                     clearTimeout(timer);
                     askpass?.cleanup();

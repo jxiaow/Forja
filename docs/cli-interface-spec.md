@@ -9,7 +9,7 @@ compilot <subcommand> <action> [options]
 ```
 
 - 当前已实现子命令：`qt` | `sdk` | `remote` | `cleanup`
-- `remote` 当前实现基础命令：`test`、`status`、`bootstrap`、`unlock`，配置桥接：`qt|sdk status/init/use`，build 类动作：`qt build/clean/qmake`、`sdk build/rebuild/clean`，以及路径级 restore：`qt|sdk restore --repo <repo> -- <paths...>`；`remote qt run/stop/ps` 尚未实现，SDK 不提供 run/stop/ps
+- `remote` 当前实现基础命令：`test`、`status`、`bootstrap`、`unlock`，配置桥接：`qt|sdk status/init/use`，Qt 动作：`build/clean/qmake/run/stop/ps`，SDK build 类动作：`build/rebuild/clean`，以及路径级 restore：`qt|sdk restore --repo <repo> -- <paths...>`；SDK 不提供 run/stop/ps
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -391,7 +391,7 @@ interface SdkCliResult {
 
 ## Remote prepared action 输出结构
 
-`remote qt build/clean/qmake` 和 `remote sdk build/rebuild/clean` 当前已接入 CLI。它们返回 remote pipeline result；Qt run/stop/ps 仍是后续设计。
+`remote qt build/clean/qmake/run` 和 `remote sdk build/rebuild/clean` 当前已接入 CLI。prepared action 返回 remote pipeline result；`remote qt stop/ps` 是直接 bridge 动作，不进入 branchSync/sync。SDK 不提供 run/stop/ps。
 
 当前阶段顺序：
 
@@ -406,7 +406,7 @@ interface RemotePreparedActionResult {
   ok: boolean;
   action: 'preparedAction';
   target: 'qt' | 'sdk';
-  remoteAction: 'build' | 'clean' | 'qmake' | 'rebuild';
+  remoteAction: 'build' | 'clean' | 'qmake' | 'rebuild' | 'run';
   mode: 'remote';
   stages: Array<{ stage: string; ok: boolean; message?: string; nextActions?: string[] }>;
   failedStage?: string;
@@ -448,6 +448,10 @@ compilot remote qt use --mode release --json
 compilot remote qt build --json
 compilot remote qt clean --json
 compilot remote qt qmake --json
+compilot remote qt run
+compilot remote qt run --detach --json
+compilot remote qt stop --json
+compilot remote qt ps --json
 compilot remote sdk status --json
 compilot remote sdk init --json
 compilot remote sdk use --json
@@ -456,9 +460,9 @@ compilot remote sdk rebuild --json
 compilot remote sdk clean --json
 ```
 
-`remote qt build/clean/qmake` 和 `remote sdk build/rebuild/clean` 会先执行 targetReadiness，再执行 baseline/lock/branchSync/overlaySync/baselineCheck，最后桥接远端 compilot 执行动作。
+`remote qt build/clean/qmake/run` 和 `remote sdk build/rebuild/clean` 会先执行 targetReadiness，再执行 baseline/lock/branchSync/overlaySync/baselineCheck，最后桥接远端 compilot 执行动作。`remote qt stop/ps` 只做 remote test 后桥接远端 compilot，不触发 branchSync/sync。
 
-不支持 `remote qt run/stop/ps`，也不支持 `remote sdk run/stop/ps`。run/stop/ps 仍属于后续远程流水线。
+`remote qt run --json` 不支持前台模式；需要 JSON 时使用 `remote qt run --detach --json`。不支持 `remote sdk run/stop/ps`。
 
 ---
 

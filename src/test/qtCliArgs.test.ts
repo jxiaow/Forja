@@ -12,6 +12,14 @@ test('parseCliArgs --detach sets detach flag', () => {
     assert.equal(opts.action, 'run');
 });
 
+test('parseCliArgs rejects foreground run json and accepts detach json', () => {
+    assert.throws(() => parseCliArgs(['run', '--json']), /run --json 仅支持 --detach 模式/);
+    const opts = parseCliArgs(['run', '--detach', '--json']);
+    assert.equal(opts.action, 'run');
+    assert.equal(opts.detach, true);
+    assert.equal(opts.json, true);
+});
+
 test('parseCliArgs accepts ps action', () => {
     const opts = parseCliArgs(['ps', '--workspace', '/tmp/app', '--json']);
 

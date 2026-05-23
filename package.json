@@ -129,6 +129,18 @@
         "title": "Compilot Remote Qt: QMake"
       },
       {
+        "command": "compilot.remote.qt.runDetached",
+        "title": "Compilot Remote Qt: Run Detached"
+      },
+      {
+        "command": "compilot.remote.qt.stop",
+        "title": "Compilot Remote Qt: Stop"
+      },
+      {
+        "command": "compilot.remote.qt.ps",
+        "title": "Compilot Remote Qt: PS"
+      },
+      {
         "command": "compilot.remote.sdk.build",
         "title": "Compilot Remote SDK: Build"
       },

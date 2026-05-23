@@ -14,7 +14,8 @@
 | `compilot remote unlock --lock-id <id> --force` | 删除匹配 lock-id 的远端 stale lock | 删除成功才 `ok=true` |
 | `compilot remote qt/sdk status` | 在远端 workspace 下运行远端 Qt/SDK status | 返回 bridge 结果 |
 | `compilot remote qt/sdk init/use` | 在远端初始化或选择 Qt/SDK 用户配置 | 返回 bridge 结果 |
-| `compilot remote qt build/clean/qmake` | prepare 远端 workspace 后执行远端 Qt 构建类动作 | prepare 和远端 action 都成功才 `ok=true` |
+| `compilot remote qt build/clean/qmake/run` | prepare 远端 workspace 后执行远端 Qt 动作 | prepare 和远端 action 都成功才 `ok=true` |
+| `compilot remote qt stop/ps` | 直接桥接远端 Qt 后台运行状态管理，不做 branchSync/sync | bridge 成功才 `ok=true` |
 | `compilot remote sdk build/rebuild/clean` | prepare 远端 workspace 后执行远端 SDK 构建类动作 | prepare 和远端 action 都成功才 `ok=true` |
 | `compilot remote qt/sdk restore --repo <repo> -- <paths...>` | 路径级恢复远端 tracked 文件到远端当前 git HEAD，并同步清理 overlay/underlay state | 成功恢复并清理状态才 `ok=true` |
 

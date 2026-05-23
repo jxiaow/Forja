@@ -80,7 +80,7 @@ test('bootstrap artifact lookup requires exact current version tgz', () => {
 
     const missing = findBootstrapArtifact(root);
     assert.equal(missing.ok, false);
-    assert.deepEqual(missing.nextActions, ['npm run package:all']);
+    assert.deepEqual(missing.nextActions, ['npm run build:cli', 'npm run package:all']);
 
     const expectedDir = path.join(root, 'dist', 'compilot-1.2.3', 'cli');
     fs.mkdirSync(expectedDir, { recursive: true });
@@ -287,6 +287,38 @@ test('remote CLI parses qt build prepared action and returns sync config diagnos
     assert.equal(parsed.ok, false);
     assert.equal(parsed.action, 'preparedAction');
     assert.match(parsed.diagnostics[0].message, /sync 未启用/);
+});
+
+test('remote CLI supports qt run detach and rejects foreground run json', async () => {
+    const workspace = tmpDir('compilot-remote-run-missing-sync-');
+    const detachOutput = await captureStdout(() => runRemoteCli(['qt', 'run', '--detach', '--workspace', workspace, '--json']));
+    const detachParsed = JSON.parse(detachOutput);
+
+    assert.equal(process.exitCode, 1);
+    assert.equal(detachParsed.ok, false);
+    assert.equal(detachParsed.action, 'preparedAction');
+    assert.equal(detachParsed.target, 'qt');
+    assert.equal(detachParsed.remoteAction, 'run');
+
+    process.exitCode = undefined;
+    const foregroundOutput = await captureStdout(() => runRemoteCli(['qt', 'run', '--workspace', workspace, '--json']));
+    const foregroundParsed = JSON.parse(foregroundOutput);
+
+    assert.equal(process.exitCode, 1);
+    assert.equal(foregroundParsed.ok, false);
+    assert.match(foregroundParsed.diagnostics[0].message, /remote qt run --json 仅支持 --detach 模式/);
+});
+
+test('remote CLI bridges qt stop and ps without prepared sync', async () => {
+    const workspace = tmpDir('compilot-remote-stop-missing-sync-');
+    const output = await captureStdout(() => runRemoteCli(['qt', 'ps', '--workspace', workspace, '--json']));
+    const parsed = JSON.parse(output);
+
+    assert.equal(process.exitCode, 1);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.action, 'bridge');
+    assert.equal(parsed.target, 'qt');
+    assert.equal(parsed.remoteAction, 'ps');
 });
 
 test('remote CLI rejects sdk run bridge action', async () => {

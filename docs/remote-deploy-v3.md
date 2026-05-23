@@ -6,9 +6,9 @@
 
 ## 当前实现状态
 
-已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore`、VSCode 命令面板中的 remote status/test/build 类动作。
+已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore`、VSCode 命令面板中的 remote status/test/build/run-detach/stop/ps 类动作。
 
-后续设计：`remote qt run/stop/ps`、VSCode 执行位置切换、Problems 诊断映射、Qt foreground/detach run 体验。SDK 是库，不提供 run/stop/ps。
+后续设计：VSCode 执行位置切换、Problems 诊断映射、Qt foreground Terminal 体验。SDK 是库，不提供 run/stop/ps。
 
 ## 目标
 
@@ -19,7 +19,7 @@
 - 远端仓库基线和本地分支/提交对齐
 - 本地未提交改动同步到远端
 - 远端 Qt/SDK 构建命令复用 compilot
-- Qt 远程前台运行和后台运行（后续）
+- Qt 远程前台运行和后台运行
 - AI/脚本可解析的远程 JSON pipeline 输出
 
 ## 命令入口
@@ -37,6 +37,11 @@ compilot remote qt build
 compilot remote qt status
 compilot remote qt init
 compilot remote qt use
+compilot remote qt run
+compilot remote qt run --detach
+compilot remote qt run --detach --json
+compilot remote qt stop
+compilot remote qt ps
 compilot remote qt clean
 compilot remote qt qmake
 compilot remote qt restore --repo <repo> -- <paths...>
@@ -63,9 +68,9 @@ compilot remote sdk restore --repo <repo> -- <paths...>
 | `remote unlock --lock-id <id> --force` | 显式清理匹配 lock-id 的远端 stale lock，不 kill 进程 |
 | `remote qt/sdk status/init/use` | 桥接远端 compilot 的 Qt/SDK 用户目录配置，不做 sync/build |
 | `remote qt build/clean/qmake` | 远程 Qt 构建类动作 |
-| `remote qt run` | 后续：远程 Qt 前台运行，人工终端使用 |
-| `remote qt run --detach` | 后续：远程 Qt 后台运行 |
-| `remote qt stop/ps` | 后续：管理远端 Qt 后台运行状态 |
+| `remote qt run` | 远程 Qt 前台运行，人工终端使用 |
+| `remote qt run --detach` | 远程 Qt 后台运行 |
+| `remote qt stop/ps` | 管理远端 Qt 后台运行状态 |
 | `remote sdk build/rebuild/clean` | 远程 SDK 构建类动作 |
 | `remote <type> restore` | 恢复远端指定 tracked 路径到远端当前 git HEAD |
 
@@ -175,7 +180,7 @@ bootstrap 是显式动作，不在 build/run 中静默安装。
 5. 写入或更新 `~/.compilot/bin/compilot`
 6. 执行 `~/.compilot/bin/compilot --version` 验证
 
-第一版本地输入是当前仓库通过 `npm run package:all` 已生成的 CLI package artifact；bootstrap 不隐式执行 package/version bump。缺少 artifact 时提示先打包。远端至少需要可用 node/npm；缺失时 bootstrap 失败并返回诊断，不退回 shell fallback。artifact、版本和清理策略见 `docs/remote-deploy-bootstrap.md`。
+第一版本地输入是当前 package version 对应的 CLI package artifact；开发验证可用 `npm run build:cli` 生成，正式发布用 `npm run package:all`。bootstrap 不隐式执行 package/version bump。缺少 artifact 时提示先打包。远端至少需要可用 node/npm；缺失时 bootstrap 失败并返回诊断，不退回 shell fallback。artifact、版本和清理策略见 `docs/remote-deploy-bootstrap.md`。
 
 推荐远端目录：
 
@@ -338,9 +343,9 @@ JSON 输出：
 }
 ```
 
-## Qt Run 协议（后续）
+## Qt Run 协议
 
-当前 CLI 尚未实现 `remote qt run/stop/ps`。后续实现时，前台 run 不支持 JSON，本地和远程应收紧为同一规则：
+当前 CLI 已实现 `remote qt run/stop/ps`。前台 run 不支持 JSON，本地和远程使用同一规则：
 
 ```bash
 compilot qt run
@@ -447,14 +452,13 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 
 ## VSCode 插件体验
 
-当前 Phase 1 已接入命令面板辅助入口：Remote Status/Test、Qt Build/Clean/QMake、SDK Build/Rebuild/Clean。后续主入口是“执行位置：本地 / 远程”，不是 CLI remote 命令菜单；切到远程后现有 Qt/SDK 操作映射到 remote core。完整规则见 `docs/remote-deploy-vscode.md`。
+当前 Phase 1 已接入命令面板辅助入口：Remote Status/Test、Qt Build/Clean/QMake/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。后续主入口是“执行位置：本地 / 远程”，不是 CLI remote 命令菜单；切到远程后现有 Qt/SDK 操作映射到 remote core。完整规则见 `docs/remote-deploy-vscode.md`。
 
 ## 当前 Phase 1 不做
 
 - `compilot qt ... --remote` / `compilot sdk ... --remote`
 - 项目内 remote 配置
 - shell fallback 构建
-- Qt run/stop/ps
 - SDK run/stop/ps
 - 大范围远端 reset
 - untracked 文件自动清理
@@ -464,7 +468,9 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 
 `buildOrder` 后续可单独设计。baseline 是正确性前提，buildOrder 是多仓库编排能力，两者不绑定。
 
-## 实现阶段建议
+## 实现阶段状态
+
+已完成：
 
 1. `remote test/status/bootstrap/unlock`
 2. remote 配置 IO 和 sync 配置解析
@@ -474,7 +480,10 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 6. remote Qt/SDK 构建动作
 7. remote Qt detach run/stop/ps
 8. remote Qt foreground run
-9. VSCode 执行位置、Progress、Output、Diagnostics adapter
-10. CLI/VSCode spec、README 和测试补齐
+9. CLI/VSCode spec、README 和测试补齐
+
+后续：
+
+1. VSCode 执行位置、Progress、Output、Diagnostics adapter
 
 每个阶段都需要单独 Scope/Solution gate；涉及公开命令、JSON、持久化格式时必须明确兼容影响。

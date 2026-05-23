@@ -2,7 +2,7 @@ import { remoteCommand } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
 export type RemoteBridgeTarget = 'qt' | 'sdk';
-export type RemoteBridgeAction = 'status' | 'init' | 'use' | 'build' | 'rebuild' | 'clean' | 'qmake';
+export type RemoteBridgeAction = 'status' | 'init' | 'use' | 'build' | 'rebuild' | 'clean' | 'qmake' | 'run' | 'stop' | 'ps';
 
 export interface ExecuteRemoteBridgeOptions {
     target: RemoteBridgeTarget;
@@ -12,6 +12,8 @@ export interface ExecuteRemoteBridgeOptions {
     remotePath: string;
     runner: RemoteRunner;
     remoteCompilotBin?: string;
+    timeoutMs?: number;
+    stream?: boolean;
 }
 
 export interface ExecuteRemoteBridgeResult {
@@ -36,7 +38,9 @@ export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): 
     }
     const remoteBin = options.remoteCompilotBin ? remoteCommand([options.remoteCompilotBin]) : '$HOME/.compilot/bin/compilot';
     const command = `cd ${remoteCommand([options.remotePath])} && ${remoteBin} ${remoteCommand(remoteArgs)}`;
-    const executed = await options.runner.run(command, 120000);
+    const timeoutMs = options.timeoutMs ?? (options.action === 'run' && !options.json ? 24 * 60 * 60 * 1000 : 120000);
+    const run = options.runner.run as (command: string, timeoutMs?: number, stream?: boolean) => Promise<{ exitCode: number; stdout: string; stderr: string }>;
+    const executed = await run(command, timeoutMs, options.stream);
     const diagnostics: RemoteDiagnostic[] = [];
     let parsed: unknown;
 

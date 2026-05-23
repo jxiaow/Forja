@@ -79,7 +79,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
                 process.exitCode = 1;
-                writeOutput(blockedResult('bridge', resolved.diagnostics, resolved.nextActions), options.json);
+                writeOutput({ ...blockedResult('bridge', resolved.diagnostics, resolved.nextActions), target: options.target, remoteAction: options.remoteAction }, options.json);
                 return;
             }
             const runner = createSshRunner(resolved.config.server, resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null);
@@ -106,7 +106,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
                 process.exitCode = 1;
-                writeOutput(blockedResult('preparedAction', resolved.diagnostics, resolved.nextActions), options.json);
+                writeOutput({ ...blockedResult('preparedAction', resolved.diagnostics, resolved.nextActions), target: options.target, remoteAction: options.remoteAction }, options.json);
                 return;
             }
             const password = resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null;
@@ -118,6 +118,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 writeOutput({ ...preflight, action: 'preparedAction', target: options.target, remoteAction: options.remoteAction }, options.json);
                 return;
             }
+            const streamRemoteRun = options.target === 'qt' && options.remoteAction === 'run' && !options.passthrough.includes('--detach') && !options.json;
             const result = await executePreparedRemoteAction({
                 workspace: resolved.config.workspace,
                 remotePath: resolved.config.remotePath,
@@ -127,10 +128,17 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 action: options.remoteAction!,
                 args: options.passthrough,
                 json: options.json,
+                stream: streamRemoteRun,
                 runner,
                 uploader
             });
             if (!result.ok) { process.exitCode = 1; }
+            if (streamRemoteRun && result.remote) {
+                if (!result.ok && result.diagnostics.length > 0) {
+                    console.error(result.diagnostics.map(item => item.message).join('\n'));
+                }
+                return;
+            }
             writeOutput(result, options.json);
             return;
         }
@@ -139,7 +147,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
                 process.exitCode = 1;
-                writeOutput(blockedResult('restore', resolved.diagnostics, resolved.nextActions), options.json);
+                writeOutput({ ...blockedResult('restore', resolved.diagnostics, resolved.nextActions), target: options.target }, options.json);
                 return;
             }
             const runner = createSshRunner(resolved.config.server, resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null);
@@ -196,7 +204,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
             options.action = 'restore';
             options.target = first;
             start = 2;
-        } else if (isBridgeAction(remoteAction)) {
+        } else if (isBridgeAction(first, remoteAction)) {
             options.action = 'bridge';
             options.target = first;
             options.remoteAction = remoteAction;
@@ -272,28 +280,32 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
         if (!options.repo) { throw new Error('remote restore 需要 --repo <repo>'); }
         if (options.passthrough.length === 0) { throw new Error('remote restore 需要 -- 后跟至少一个路径'); }
     }
+    if (options.target === 'qt' && options.remoteAction === 'run' && options.json && !options.passthrough.includes('--detach')) {
+        throw new Error('remote qt run --json 仅支持 --detach 模式，请使用 remote qt run --detach --json');
+    }
     return options;
 }
 
-function isBridgeAction(action: string | undefined): action is RemoteBridgeAction {
-    return action === 'status' || action === 'init' || action === 'use';
+function isBridgeAction(target: RemoteBridgeTarget, action: string | undefined): action is RemoteBridgeAction {
+    if (action === 'status' || action === 'init' || action === 'use') { return true; }
+    return target === 'qt' && (action === 'stop' || action === 'ps');
 }
 
 function isPreparedAction(target: RemoteBridgeTarget, action: string | undefined): action is RemoteBridgeAction {
     if (target === 'qt') {
-        return action === 'build' || action === 'clean' || action === 'qmake';
+        return action === 'build' || action === 'clean' || action === 'qmake' || action === 'run';
     }
     return action === 'build' || action === 'rebuild' || action === 'clean';
 }
 
 function remoteSupportMessage(target: RemoteBridgeTarget): string {
     if (target === 'qt') {
-        return 'remote qt 仅支持 status/init/use/build/clean/qmake/restore';
+        return 'remote qt 仅支持 status/init/use/build/clean/qmake/run/stop/ps/restore';
     }
     return 'remote sdk 仅支持 status/init/use/build/rebuild/clean/restore';
 }
 
-function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'preparedAction', diagnostics: RemoteDiagnostic[], nextActions: string[]): unknown {
+function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'preparedAction', diagnostics: RemoteDiagnostic[], nextActions: string[]): Record<string, unknown> {
     return { ok: false, action, mode: 'remote', diagnostics, nextActions };
 }
 

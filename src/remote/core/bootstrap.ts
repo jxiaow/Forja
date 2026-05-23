@@ -53,7 +53,7 @@ export function findBootstrapArtifact(root: string = process.cwd()): BootstrapAr
             version,
             artifactPath,
             diagnostics: [{ level: 'error', message: `缺少 bootstrap artifact: ${artifactPath}` }],
-            nextActions: ['npm run package:all']
+            nextActions: ['npm run build:cli', 'npm run package:all']
         };
     }
     const sha256 = crypto.createHash('sha256').update(fs.readFileSync(artifactPath)).digest('hex');
@@ -169,5 +169,5 @@ function trim(value: string): string {
 }
 
 function missing(message: string): BootstrapArtifactResult {
-    return { ok: false, diagnostics: [{ level: 'error', message }], nextActions: ['npm run package:all'] };
+    return { ok: false, diagnostics: [{ level: 'error', message }], nextActions: ['npm run build:cli', 'npm run package:all'] };
 }

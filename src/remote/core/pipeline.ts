@@ -22,6 +22,7 @@ export interface ExecutePreparedRemoteActionOptions extends PrepareRemoteWorkspa
     action: RemoteBridgeAction;
     args: string[];
     json: boolean;
+    stream?: boolean;
 }
 
 export type ExecutePreparedRemoteActionResult = Omit<PrepareRemoteWorkspaceResult, 'action'> & {
@@ -183,6 +184,7 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
             action: options.action,
             args: options.args,
             json: options.json,
+            stream: options.stream,
             remotePath: options.remotePath,
             runner: options.runner
         });

@@ -16,7 +16,7 @@ code --install-extension compilot-x.x.x.vsix
 - 自动检测 Visual Studio 和 Qt 环境
 - 配置面板可视化管理构建参数
 - 远程同步：基于 git diff 增量上传变更文件
-- 远程 Phase 1 命令面板入口：Status/Test、Qt Build/Clean/QMake、SDK Build/Rebuild/Clean
+- 远程 Phase 1 命令面板入口：Status/Test、Qt Build/Clean/QMake/Run Detached/Stop/PS、SDK Build/Rebuild/Clean
 - `.pri`/`.pro` 文件监听：删除源文件时提示从工程文件中移除
 - 自动生成 `c_cpp_properties.json` 用于 IntelliSense
 - SDK 模块：.sln / Makefile 项目的 Build / Rebuild / Clean
@@ -57,6 +57,7 @@ code --install-extension compilot-x.x.x.vsix
 | Compilot Remote: Status | 查看远程配置、连通性和 readiness |
 | Compilot Remote: Test | 测试远程通道和远端 compilot 版本 |
 | Compilot Remote Qt: Build / Clean / QMake | 执行远程 Qt build 类动作 |
+| Compilot Remote Qt: Run Detached / Stop / PS | 管理远端 Qt 后台运行 |
 | Compilot Remote SDK: Build / Rebuild / Clean | 执行远程 SDK build 类动作 |
 | Compilot SDK: Build | 编译 SDK 项目 |
 | Compilot SDK: Rebuild | 重新编译 |
@@ -73,9 +74,9 @@ code --install-extension compilot-x.x.x.vsix
 
 ## 远程编译部署（Phase 1）
 
-当前 VSCode 侧已实现命令面板辅助入口：Remote Status/Test、Qt Build/Clean/QMake、SDK Build/Rebuild/Clean。build 类动作复用 CLI remote core，执行 readiness、baseline、lock、branchSync、overlaySync、baselineCheck，再桥接远端 compilot。
+当前 VSCode 侧已实现命令面板辅助入口：Remote Status/Test、Qt Build/Clean/QMake/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。build/run-detach 类动作复用 CLI remote core，执行 readiness、baseline、lock、branchSync、overlaySync、baselineCheck，再桥接远端 compilot。
 
-尚未接入执行位置切换、Bootstrap、Qt run/stop/ps、Problems 诊断映射和完整 Terminal 前台运行体验。Bootstrap 仍通过 `compilot remote bootstrap` CLI 执行。
+尚未接入执行位置切换、Bootstrap、Qt foreground Terminal run、Problems 诊断映射。Bootstrap 仍通过 `compilot remote bootstrap` CLI 执行。
 
 ## 远程同步
 

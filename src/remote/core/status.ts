@@ -192,7 +192,7 @@ export async function buildRemoteTest(options: BuildRemoteTestOptions): Promise<
         return testResult(false, failed, [
             ...status.diagnostics,
             { level: 'error', message: 'remote test --bootstrap 需要 bootstrap artifact 和远端上传通道' }
-        ], options.artifact?.nextActions || ['npm run package:all']);
+        ], options.artifact?.nextActions || ['npm run build:cli', 'npm run package:all']);
     }
 
     const bootstrap = await executeRemoteBootstrap({ artifact: options.artifact, runner: options.runner, uploader: options.uploader });

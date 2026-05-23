@@ -2,7 +2,7 @@
 
 命令行工具用于 C++ 项目的构建、运行和环境管理。
 
-当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`cleanup`。`remote` 已接入基础命令 `test/status/bootstrap/unlock`、远端 Qt/SDK 配置桥接 `qt|sdk status/init/use`、远程 Qt/SDK build 类动作和路径级 restore；远程 Qt run/stop/ps 仍在后续设计中，SDK 不提供 run/stop/ps。
+当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`cleanup`。`remote` 已接入基础命令 `test/status/bootstrap/unlock`、远端 Qt/SDK 配置桥接 `qt|sdk status/init/use`、远程 Qt/SDK build 类动作、Qt run/stop/ps 和路径级 restore；SDK 不提供 run/stop/ps。
 
 ## 安装
 
@@ -137,7 +137,7 @@ compilot qt run --detach
 
 `--detach` 时，编译在前台执行；编译成功后后台启动程序，编译失败直接返回错误。
 
-`--json` 输出在成功解析 Makefile 目标时会包含 `executablePath`，表示最终启动的可执行文件绝对路径。`run --detach --json` 成功时还会返回 `pid` 和 `logFile`；`pid` 只表示目标可执行文件进程，不表示启动脚本进程。若后台启动后无法在超时时间内解析目标 PID，命令会返回失败诊断。
+`run --json` 只支持 `--detach` 模式；前台 run 直接接管终端输出。`--json` 输出在成功解析 Makefile 目标时会包含 `executablePath`，表示最终启动的可执行文件绝对路径。`run --detach --json` 成功时还会返回 `pid` 和 `logFile`；`pid` 只表示目标可执行文件进程，不表示启动脚本进程。若后台启动后无法在超时时间内解析目标 PID，命令会返回失败诊断。
 
 ### `compilot qt ps`
 
@@ -281,6 +281,10 @@ compilot remote qt use --mode release --json
 compilot remote qt build --json
 compilot remote qt clean --json
 compilot remote qt qmake --json
+compilot remote qt run
+compilot remote qt run --detach --json
+compilot remote qt stop --json
+compilot remote qt ps --json
 compilot remote sdk status --json
 compilot remote sdk init --json
 compilot remote sdk use --json
@@ -291,7 +295,7 @@ compilot remote qt restore --repo qt-app -- src/main.cpp --json
 compilot remote sdk restore --repo sdk-lib -- include/version.h --json
 ```
 
-Phase 1 负责远程配置/连通性/CLI bootstrap/lock 清理、远端 Qt/SDK 的 status/init/use 配置桥接、路径级 tracked 文件 restore，以及 `remote qt build/clean/qmake`、`remote sdk build/rebuild/clean` 的 prepare 后远端执行。`compilot remote qt run/stop/ps`、`compilot remote sdk run/stop/ps`、`qt build --remote`、`sdk build --remote` 尚未实现。
+Phase 1 负责远程配置/连通性/CLI bootstrap/lock 清理、远端 Qt/SDK 的 status/init/use 配置桥接、路径级 tracked 文件 restore，以及 `remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean` 的远端执行。`compilot remote sdk run/stop/ps`、`qt build --remote`、`sdk build --remote` 不支持。
 
 remote 复用当前 sync 的服务器和 remotePath 配置；缺少配置时 `remote test/status --json` 会返回诊断和下一步建议。
 

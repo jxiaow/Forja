@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
+import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { resolveRemoteConfig } from '../core/config';
 import { executePreparedRemoteAction } from '../core/pipeline';
 import { createScpUploader, createSshRunner } from '../core/shell';
@@ -9,7 +9,7 @@ import { createLogger } from '../../vscode/logger';
 
 const logger = createLogger('RemoteCommands');
 
-type RemoteVscodeCommandKind = 'status' | 'test' | 'preparedAction';
+type RemoteVscodeCommandKind = 'status' | 'test' | 'preparedAction' | 'bridgeAction';
 
 interface RemoteVscodeCommandDefinition {
     id: string;
@@ -17,6 +17,7 @@ interface RemoteVscodeCommandDefinition {
     kind: RemoteVscodeCommandKind;
     target?: RemoteBridgeTarget;
     remoteAction?: RemoteBridgeAction;
+    args?: string[];
 }
 
 export const REMOTE_VSCODE_COMMANDS: readonly RemoteVscodeCommandDefinition[] = [
@@ -25,6 +26,9 @@ export const REMOTE_VSCODE_COMMANDS: readonly RemoteVscodeCommandDefinition[] = 
     { id: 'compilot.remote.qt.build', title: 'Compilot Remote Qt: Build', kind: 'preparedAction', target: 'qt', remoteAction: 'build' },
     { id: 'compilot.remote.qt.clean', title: 'Compilot Remote Qt: Clean', kind: 'preparedAction', target: 'qt', remoteAction: 'clean' },
     { id: 'compilot.remote.qt.qmake', title: 'Compilot Remote Qt: QMake', kind: 'preparedAction', target: 'qt', remoteAction: 'qmake' },
+    { id: 'compilot.remote.qt.runDetached', title: 'Compilot Remote Qt: Run Detached', kind: 'preparedAction', target: 'qt', remoteAction: 'run', args: ['--detach'] },
+    { id: 'compilot.remote.qt.stop', title: 'Compilot Remote Qt: Stop', kind: 'bridgeAction', target: 'qt', remoteAction: 'stop' },
+    { id: 'compilot.remote.qt.ps', title: 'Compilot Remote Qt: PS', kind: 'bridgeAction', target: 'qt', remoteAction: 'ps' },
     { id: 'compilot.remote.sdk.build', title: 'Compilot Remote SDK: Build', kind: 'preparedAction', target: 'sdk', remoteAction: 'build' },
     { id: 'compilot.remote.sdk.rebuild', title: 'Compilot Remote SDK: Rebuild', kind: 'preparedAction', target: 'sdk', remoteAction: 'rebuild' },
     { id: 'compilot.remote.sdk.clean', title: 'Compilot Remote SDK: Clean', kind: 'preparedAction', target: 'sdk', remoteAction: 'clean' }
@@ -59,7 +63,7 @@ async function executeRemoteVscodeCommand(context: vscode.ExtensionContext, comm
     });
 }
 
-async function executeCommand(workspace: string, command: RemoteVscodeCommandDefinition): Promise<{ ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; remote?: { stdout?: string; stderr?: string } }> {
+async function executeCommand(workspace: string, command: RemoteVscodeCommandDefinition): Promise<{ ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; stdout?: string; stderr?: string; remote?: { stdout?: string; stderr?: string } }> {
     if (command.kind === 'status') {
         return buildRemoteStatus({ workspace });
     }
@@ -74,11 +78,22 @@ async function executeCommand(workspace: string, command: RemoteVscodeCommandDef
 
     const password = resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null;
     const runner = createSshRunner(resolved.config.server, password);
-    const uploader = createScpUploader(resolved.config.server, password);
+    const uploader = command.kind === 'preparedAction' ? createScpUploader(resolved.config.server, password) : null;
 
     const preflight = await buildRemoteTest({ workspace, config: resolved.config, runner });
     if (!preflight.ok) {
         return preflight;
+    }
+
+    if (command.kind === 'bridgeAction') {
+        return executeRemoteBridge({
+            target: command.target!,
+            action: command.remoteAction!,
+            args: command.args || [],
+            json: true,
+            remotePath: resolved.config.remotePath,
+            runner
+        });
     }
 
     return executePreparedRemoteAction({
@@ -88,14 +103,14 @@ async function executeCommand(workspace: string, command: RemoteVscodeCommandDef
         owner: 'vscode',
         target: command.target!,
         action: command.remoteAction!,
-        args: [],
+        args: command.args || [],
         json: true,
         runner,
-        uploader
+        uploader: uploader!
     });
 }
 
-function reportResult(command: RemoteVscodeCommandDefinition, result: { ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; remote?: { stdout?: string; stderr?: string } }): void {
+function reportResult(command: RemoteVscodeCommandDefinition, result: { ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; stdout?: string; stderr?: string; remote?: { stdout?: string; stderr?: string } }): void {
     const diagnostics = result.diagnostics || [];
     const detail = diagnostics.map(item => item.message).filter(Boolean).slice(0, 3).join('\n');
     const next = result.nextActions && result.nextActions.length > 0 ? '\n下一步: ' + result.nextActions.join('；') : '';
@@ -107,8 +122,9 @@ function reportResult(command: RemoteVscodeCommandDefinition, result: { ok?: boo
         return;
     }
 
-    if (result.remote?.stdout) {
-        logger.info(command.id + ': ' + result.remote.stdout.trim());
+    const stdout = result.remote?.stdout || result.stdout;
+    if (stdout) {
+        logger.info(command.id + ': ' + stdout.trim());
     }
     const summary = command.kind === 'status' && result.overall ? 'status: ' + result.overall : command.title + ' 完成';
     logger.info(command.id + ': ' + summary + next);

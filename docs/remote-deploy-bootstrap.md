@@ -14,13 +14,14 @@ dist/compilot-<version>/cli/compilot-cli-<version>.tgz
 
 规则：
 
-- bootstrap 不执行 `npm run package:all`
+- bootstrap 不执行 `npm run build:cli` 或 `npm run package:all`
 - 缺少 exact version artifact 时失败
-- 失败诊断给出 `npm run package:all`
+- 开发验证可先执行 `npm run build:cli` 生成 CLI tgz
+- 正式发布打包执行 `npm run package:all`
 - 如果 dist 下存在其他版本，不自动选择 latest
 - 上传前计算 sha256，远端安装前后都记录该摘要
 
-`npm run package:all` 会 bump version；bootstrap 只消费已经生成的包，不能在远程动作里隐式改变本地版本。
+`npm run package:all` 会 bump version；`npm run build:cli` 不 bump version，只按当前 package version 生成 CLI tgz。bootstrap 只消费已经生成的包，不能在远程动作里隐式改变本地版本。
 
 ## Version Compatibility
 

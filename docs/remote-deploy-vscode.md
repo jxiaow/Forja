@@ -114,6 +114,9 @@ Compilot Remote: Test
 Compilot Remote Qt: Build
 Compilot Remote Qt: Clean
 Compilot Remote Qt: QMake
+Compilot Remote Qt: Run Detached
+Compilot Remote Qt: Stop
+Compilot Remote Qt: PS
 Compilot Remote SDK: Build
 Compilot Remote SDK: Rebuild
 Compilot Remote SDK: Clean
@@ -121,7 +124,7 @@ Compilot Remote SDK: Clean
 
 这些命令复用 sync server、remotePath 和 ignore 配置。build 类动作先执行 remote readiness preflight，再通过 remote core 执行 baseline、lock、branchSync、overlaySync、baselineCheck，最后桥接远端 compilot。
 
-Phase 1 不贡献 Bootstrap、Qt run/stop/ps 或 SDK run/stop/ps。Bootstrap 仍通过 `compilot remote bootstrap` CLI 执行，因为 VSIX 不携带 `dist/**` CLI tgz。后续执行位置切换落地后，日常 Build/Run 使用现有入口在远程模式下分流，命令面板入口保留为辅助/诊断入口。
+Phase 1 不贡献 Bootstrap、Qt foreground run 或 SDK run/stop/ps。Bootstrap 仍通过 `compilot remote bootstrap` CLI 执行，因为 VSIX 不携带 `dist/**` CLI tgz。后续执行位置切换落地后，日常 Build/Run 使用现有入口在远程模式下分流，命令面板入口保留为辅助/诊断入口。
 
 新命令实现时必须同步 `package.json` contributes 和 `src/extension.ts` 注册，不修改 activate 导出签名。
 

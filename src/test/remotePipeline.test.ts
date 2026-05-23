@@ -96,6 +96,77 @@ test('prepareRemoteWorkspace releases lock when branchSync fails', async () => {
 });
 
 
+test('executePreparedRemoteAction streams foreground remote qt run while holding lock', async () => {
+    const commands: string[] = [];
+    const streamFlags: Array<boolean | undefined> = [];
+    const result = await executePreparedRemoteAction({
+        workspace: workspace(),
+        remotePath: '/remote/ws',
+        ignore: [],
+        owner: 'cli',
+        target: 'qt',
+        action: 'run',
+        args: [],
+        json: false,
+        stream: true,
+        runner: {
+            async run(command: string, _timeoutMs?: number, stream?: boolean) {
+                commands.push(command);
+                streamFlags.push(stream);
+                if (command.includes('pwd -P')) { return { exitCode: 0, stdout: '/canonical/ws\n', stderr: '' }; }
+                if (command.includes('mkdir "$lock_dir"')) { return { exitCode: 0, stdout: 'acquired\n{"lockId":"lock-a","targetId":"target-a","owner":"cli","stage":"prepare","remotePath":"/remote/ws","repos":["qt-app"],"startedAt":"2026-05-23T00:00:00.000Z"}\n', stderr: '' }; }
+                if (command.includes('lock-id mismatch')) { return { exitCode: 0, stdout: 'removed\n', stderr: '' }; }
+                if (command.includes('$HOME/.compilot/bin/compilot') && command.includes("'qt' 'run'")) { return { exitCode: 0, stdout: 'foreground done\n', stderr: '' }; }
+                if (command.includes("'qt-app'")) { return { exitCode: 0, stdout: 'mode:git\ncommit:abc123\nstatus:\n', stderr: '' }; }
+                return { exitCode: 0, stdout: '', stderr: '' };
+            }
+        },
+        uploader: { async upload() { /* no-op */ } },
+        git: fakeGit('')
+    });
+
+    assert.equal(result.ok, true);
+    const actionIndex = commands.findIndex(command => command.includes("'qt' 'run'"));
+    const releaseIndex = commands.findIndex((command, index) => index > actionIndex && command.includes('lock-id mismatch'));
+    assert.ok(actionIndex >= 0);
+    assert.equal(streamFlags[actionIndex], true);
+    assert.ok(releaseIndex > actionIndex);
+});
+
+test('executePreparedRemoteAction keeps lock while remote qt run detach executes', async () => {
+    const commands: string[] = [];
+    const result = await executePreparedRemoteAction({
+        workspace: workspace(),
+        remotePath: '/remote/ws',
+        ignore: [],
+        owner: 'cli',
+        target: 'qt',
+        action: 'run',
+        args: ['--detach'],
+        json: true,
+        runner: {
+            async run(command: string) {
+                commands.push(command);
+                if (command.includes('pwd -P')) { return { exitCode: 0, stdout: '/canonical/ws\n', stderr: '' }; }
+                if (command.includes('mkdir "$lock_dir"')) { return { exitCode: 0, stdout: 'acquired\n{"lockId":"lock-a","targetId":"target-a","owner":"cli","stage":"prepare","remotePath":"/remote/ws","repos":["qt-app"],"startedAt":"2026-05-23T00:00:00.000Z"}\n', stderr: '' }; }
+                if (command.includes('lock-id mismatch')) { return { exitCode: 0, stdout: 'removed\n', stderr: '' }; }
+                if (command.includes('$HOME/.compilot/bin/compilot') && command.includes("'qt' 'run'")) { return { exitCode: 0, stdout: '{"ok":true,"action":"run","pid":123,"logFile":"/tmp/run.log"}\n', stderr: '' }; }
+                if (command.includes("'qt-app'")) { return { exitCode: 0, stdout: 'mode:git\ncommit:abc123\nstatus:\n', stderr: '' }; }
+                return { exitCode: 0, stdout: '', stderr: '' };
+            }
+        },
+        uploader: { async upload() { /* no-op */ } },
+        git: fakeGit('')
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.remote?.remoteAction, 'run');
+    const actionIndex = commands.findIndex(command => command.includes("'qt' 'run'") && command.includes("'--detach'"));
+    const releaseIndex = commands.findIndex((command, index) => index > actionIndex && command.includes('lock-id mismatch'));
+    assert.ok(actionIndex >= 0);
+    assert.ok(releaseIndex > actionIndex);
+});
+
 test('executePreparedRemoteAction runs remote qt build after prepare succeeds', async () => {
     const commands: string[] = [];
     const result = await executePreparedRemoteAction({
