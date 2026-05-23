@@ -18,6 +18,7 @@ import { initSettingsStore } from './vscode/settingsStore';
 import { registerWorkspaceWatcher } from './vscode/workspaceResolver';
 import { activateSdk } from './sdk/sdkExtension';
 import { registerQtCommands } from './qt/commands';
+import { registerRemoteCommands } from './remote/vscode/commands';
 import { TASK_SOURCE_QT } from './qt/constants';
 import { normalizeConfigPageId } from './ui/configPanel/pageIds';
 
@@ -141,6 +142,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Qt 命令注册（提取到 qt/commands.ts）
     registerQtCommands(context, pageManager);
+
+    // Remote 命令注册（VSCode 适配层，不进入 CLI/core）
+    registerRemoteCommands(context);
 
     // 激活 SDK 模块
     await activateSdk(context);

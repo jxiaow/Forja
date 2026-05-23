@@ -1,6 +1,6 @@
 # 远程部署 VSCode 设计
 
-本文补充 `docs/remote-deploy-v3.md` 中 VSCode 插件体验。CLI 使用显式 remote 命令；VSCode 以执行位置切换为主。
+本文补充 `docs/remote-deploy-v3.md` 中 VSCode 插件体验。CLI 使用显式 remote 命令；VSCode 目标体验以执行位置切换为主。Phase 1 先提供命令面板辅助入口，后续再把现有 Qt/SDK 操作按执行位置分流。
 
 ## 执行位置
 
@@ -66,7 +66,7 @@ VSCode 前台 Run 分两段：
 
 这样：
 
-- branchSync/sync/baseline 日志仍进入 `Compilot: Remote`
+- branchSync/sync/baseline 日志仍进入 `Compilot` Output Channel 的 remote scope
 - preflight 失败可以进入 Problems/notification，不创建无效 Terminal
 - Terminal 的 Ctrl+C 只管理前台 run 会话
 - foreground run 期间不承诺 JSON，不写 detached pid/logFile 状态
@@ -81,7 +81,7 @@ VSCode 前台 Run 分两段：
 | --- | --- |
 | Status bar | 执行位置、当前 remote 阶段 |
 | `window.withProgress` | preflight、build、detach run、bootstrap |
-| `Compilot: Remote` | SSH、git、sync、build 阶段日志 |
+| `Compilot` Output Channel (`[RemoteCommands]` scope) | SSH、git、sync、build 阶段日志 |
 | Problems | 可映射回本地路径的远程编译诊断 |
 | Terminal | foreground Qt run |
 
@@ -100,26 +100,28 @@ VSCode 前台 Run 分两段：
 - 远端绝对路径 `<remotePath>/<repoName>/<relativePath>` 映射到本地对应 repo 的 `<relativePath>`
 - 远端相对路径按远端 compilot action 的 cwd `<remotePath>` 解析
 - build 目录中的 generated 文件只有能映射回本地 workspace 时才进入 Problems
-- 无法安全映射的诊断只写入 `Compilot: Remote`，不创建虚假的 Problems
+- 无法安全映射的诊断只写入 `Compilot` Output Channel，不创建虚假的 Problems
 
 映射失败不能让 build/run 失败，只影响 IDE 展示。
 
 ## Commands
 
-日常 Build/Run 使用现有入口在远程模式下分流。辅助命令保留：
+Phase 1 先接入命令面板辅助入口，全部走 `src/remote/vscode/commands.ts` 适配层，不改普通 Qt/SDK 本地命令语义：
 
 ```text
-Compilot: Remote Test
-Compilot: Remote Bootstrap
-Compilot: Remote Status
-Compilot: Remote Unlock
-Compilot: Remote Qt Status
-Compilot: Remote Qt Init
-Compilot: Remote Qt Use
-Compilot: Remote SDK Status
-Compilot: Remote SDK Init
-Compilot: Remote SDK Use
+Compilot Remote: Status
+Compilot Remote: Test
+Compilot Remote Qt: Build
+Compilot Remote Qt: Clean
+Compilot Remote Qt: QMake
+Compilot Remote SDK: Build
+Compilot Remote SDK: Rebuild
+Compilot Remote SDK: Clean
 ```
+
+这些命令复用 sync server、remotePath 和 ignore 配置。build 类动作先执行 remote readiness preflight，再通过 remote core 执行 baseline、lock、branchSync、overlaySync、baselineCheck，最后桥接远端 compilot。
+
+Phase 1 不贡献 Bootstrap、Qt run/stop/ps 或 SDK run/stop/ps。Bootstrap 仍通过 `compilot remote bootstrap` CLI 执行，因为 VSIX 不携带 `dist/**` CLI tgz。后续执行位置切换落地后，日常 Build/Run 使用现有入口在远程模式下分流，命令面板入口保留为辅助/诊断入口。
 
 新命令实现时必须同步 `package.json` contributes 和 `src/extension.ts` 注册，不修改 activate 导出签名。
 

@@ -107,6 +107,38 @@
         "command": "compilot.sdk.showActions",
         "title": "Compilot SDK: Show Actions",
         "enablement": "compilot.sdk.activated"
+      },
+      {
+        "command": "compilot.remote.status",
+        "title": "Compilot Remote: Status"
+      },
+      {
+        "command": "compilot.remote.test",
+        "title": "Compilot Remote: Test"
+      },
+      {
+        "command": "compilot.remote.qt.build",
+        "title": "Compilot Remote Qt: Build"
+      },
+      {
+        "command": "compilot.remote.qt.clean",
+        "title": "Compilot Remote Qt: Clean"
+      },
+      {
+        "command": "compilot.remote.qt.qmake",
+        "title": "Compilot Remote Qt: QMake"
+      },
+      {
+        "command": "compilot.remote.sdk.build",
+        "title": "Compilot Remote SDK: Build"
+      },
+      {
+        "command": "compilot.remote.sdk.rebuild",
+        "title": "Compilot Remote SDK: Rebuild"
+      },
+      {
+        "command": "compilot.remote.sdk.clean",
+        "title": "Compilot Remote SDK: Clean"
       }
     ],
     "menus": {

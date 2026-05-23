@@ -13,6 +13,7 @@ test('cli dispatcher routes to qt sdk and remote subcommands', () => {
     assert.match(source, /runQtCli/);
     assert.match(source, /runSdkCli/);
     assert.match(source, /runRemoteCli/);
+    assert.match(source, /remote   远程命令 .*build/);
     assert.match(source, /process\.exitCode = 1/);
 });
 
@@ -65,4 +66,49 @@ test('qt cli entry handles parse errors as json when requested', () => {
     assert.match(source, /parseCliArgs/);
     assert.match(source, /JSON\.stringify/);
     assert.match(source, /process\.exitCode = 1/);
+});
+
+
+test('vscode extension contributes and registers remote phase 1 commands', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+    const commands = pkg.contributes.commands.map((item: { command: string }) => item.command);
+    const expected = [
+        'compilot.remote.status',
+        'compilot.remote.test',
+        'compilot.remote.qt.build',
+        'compilot.remote.qt.clean',
+        'compilot.remote.qt.qmake',
+        'compilot.remote.sdk.build',
+        'compilot.remote.sdk.rebuild',
+        'compilot.remote.sdk.clean'
+    ];
+
+    for (const id of expected) {
+        assert.ok(commands.includes(id), id + ' should be contributed');
+    }
+    assert.equal(commands.includes('compilot.remote.qt.run'), false);
+    assert.equal(commands.includes('compilot.remote.sdk.run'), false);
+
+    const extensionSource = fs.readFileSync(path.join(process.cwd(), 'src', 'extension.ts'), 'utf8');
+    assert.match(extensionSource, /registerRemoteCommands\(context\)/);
+
+    const remoteCommandsPath = path.join(process.cwd(), 'src', 'remote', 'vscode', 'commands.ts');
+    assert.equal(fs.existsSync(remoteCommandsPath), true);
+    const remoteCommandsSource = fs.readFileSync(remoteCommandsPath, 'utf8');
+    assert.match(remoteCommandsSource, /executePreparedRemoteAction/);
+    assert.doesNotMatch(remoteCommandsSource, /findBootstrapArtifact/);
+    assert.match(remoteCommandsSource, /buildRemoteStatus/);
+    assert.match(remoteCommandsSource, /buildRemoteTest/);
+    assert.match(remoteCommandsSource, /const preflight = await buildRemoteTest/);
+    assert.doesNotMatch(remoteCommandsSource, /remoteAction:\s*'run'/);
+    assert.doesNotMatch(remoteCommandsSource, /runRemoteCli/);
+});
+
+
+test('remote vscode design documents phase 1 command palette scope', () => {
+    const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-vscode.md'), 'utf8');
+    assert.match(doc, /Phase 1 先接入命令面板辅助入口/);
+    assert.match(doc, /Compilot Remote Qt: Build/);
+    assert.match(doc, /Compilot Remote SDK: Rebuild/);
+    assert.match(doc, /不贡献 Bootstrap、Qt run\/stop\/ps 或 SDK run\/stop\/ps/);
 });
