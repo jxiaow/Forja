@@ -1,3 +1,4 @@
+import * as cp from 'child_process';
 import * as crypto from 'crypto';
 import * as path from 'path';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
@@ -31,7 +32,7 @@ export interface LocalOverlayPlan {
 export interface BuildLocalOverlayPlanOptions {
     workspace: string;
     ignore: string[];
-    git: GitRunner;
+    git?: GitRunner;
 }
 
 export interface ExecuteRemoteOverlaySyncOptions {
@@ -68,8 +69,9 @@ export async function buildLocalOverlayPlan(options: BuildLocalOverlayPlanOption
         return { ok: false, action: 'overlayPlan', repos, diagnostics };
     }
 
+    const git = options.git || defaultGitRunner();
     for (const root of roots) {
-        const status = await options.git.exec(root.dir, ['status', '--porcelain', '-uall']);
+        const status = await git.exec(root.dir, ['status', '--porcelain', '-uall']);
         const repoPlan: LocalOverlayRepoPlan = { name: root.name, dir: root.dir, trackedUploads: [], untrackedUploads: [], deletedTracked: [], skipped: [] };
         if (status.exitCode !== 0) {
             diagnostics.push({ level: 'error', message: root.name + ' git status 失败: ' + trim(status.stderr) });
@@ -172,6 +174,18 @@ export async function executeRemoteOverlaySync(options: ExecuteRemoteOverlaySync
     }
 
     return { ok: diagnostics.every(item => item.level !== 'error'), action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: [] };
+}
+
+function defaultGitRunner(): GitRunner {
+    return {
+        exec(cwd: string, args: string[]) {
+            return new Promise(resolve => {
+                cp.execFile('git', args, { cwd, windowsHide: true }, (error, stdout, stderr) => {
+                    resolve({ exitCode: error ? 1 : 0, stdout, stderr });
+                });
+            });
+        }
+    };
 }
 
 function parseStatusLine(line: string): { kind: 'tracked' | 'untracked' | 'deleted'; path: string } | null {
