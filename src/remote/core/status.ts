@@ -3,6 +3,7 @@ import { buildRemoteBaselineStatus, GitRunner } from './baseline';
 import { BootstrapArtifactResult, executeRemoteBootstrap, RemoteUploader } from './bootstrap';
 import { VERSION } from '../../version';
 import { resolveRemoteConfig } from './config';
+import { executeRemoteReadLock } from './lock';
 import { createSshRunner, remoteCommand } from './shell';
 import { RemoteConfig, RemoteLayer, RemoteRunner, RemoteStage, RemoteStatusResult, RemoteTestResult } from './types';
 
@@ -14,6 +15,7 @@ export interface BuildRemoteStatusOptions {
     remoteCompilotBin?: string;
     git?: GitRunner;
     baseline?: boolean;
+    lock?: boolean;
 }
 
 export interface BuildRemoteTestOptions extends BuildRemoteStatusOptions {
@@ -113,6 +115,29 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         return finishBlocked(options.workspace, server.name || server.id, remotePath, layers, diagnostics, 'remoteCompilot', ['compilot remote bootstrap']);
     }
 
+    let lock = { locked: false } as RemoteStatusResult['lock'];
+    if (options.lock !== false) {
+        const lockStatus = await executeRemoteReadLock({ remotePath, runner });
+        lock = lockStatus.lock;
+        diagnostics.push(...lockStatus.diagnostics);
+        layers.push({ name: 'targetLock', ok: lockStatus.ok && !lockStatus.lock.locked, message: lockStatus.lock.locked ? 'locked' : lockStatus.ok ? 'unlocked' : 'unknown', nextActions: lockStatus.lock.locked && lockStatus.lock.lockId ? ['compilot remote unlock --lock-id ' + lockStatus.lock.lockId + ' --force'] : undefined });
+        if (lockStatus.lock.locked) {
+            return {
+                ok: true,
+                action: 'status',
+                mode: 'remote',
+                overall: 'blocked',
+                workspace: resolved.config.workspace,
+                server: server.name || server.id,
+                remotePath,
+                layers,
+                lock,
+                diagnostics,
+                nextActions: lockStatus.lock.lockId ? ['compilot remote unlock --lock-id ' + lockStatus.lock.lockId + ' --force'] : []
+            };
+        }
+    }
+
     if (options.baseline !== false) {
         const baseline = await buildRemoteBaselineStatus({
             workspace: resolved.config.workspace,
@@ -134,7 +159,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
             server: server.name || server.id,
             remotePath,
             layers,
-            lock: { locked: false },
+            lock,
             repos: baseline.repos,
             diagnostics,
             nextActions: baseline.nextActions
@@ -150,14 +175,14 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         server: server.name || server.id,
         remotePath,
         layers,
-        lock: { locked: false },
+        lock,
         diagnostics,
         nextActions: []
     };
 }
 
 export async function buildRemoteTest(options: BuildRemoteTestOptions): Promise<RemoteTestResult> {
-    const status = await buildRemoteStatus({ ...options, probe: options.probe ?? true, baseline: false });
+    const status = await buildRemoteStatus({ ...options, probe: options.probe ?? true, baseline: false, lock: false });
     const failed = status.layers.find(layer => layer.ok === false);
     if (!failed || !options.bootstrap || failed.name !== 'remoteCompilot') {
         return testResult(!failed, failed, status.diagnostics, failed?.nextActions || status.nextActions);
@@ -178,7 +203,7 @@ export async function buildRemoteTest(options: BuildRemoteTestOptions): Promise<
         return testResult(false, failed, [...status.diagnostics, ...bootstrap.diagnostics], bootstrap.nextActions, stages);
     }
 
-    const retest = await buildRemoteStatus({ ...options, probe: true, baseline: false });
+    const retest = await buildRemoteStatus({ ...options, probe: true, baseline: false, lock: false });
     const retestFailed = retest.layers.find(layer => layer.ok === false);
     stages.push({ stage: 'remoteCompilot', ok: !retestFailed || retestFailed.name !== 'remoteCompilot', message: retestFailed?.message });
     return testResult(!retestFailed, retestFailed, retest.diagnostics, retestFailed?.nextActions || retest.nextActions, stages);

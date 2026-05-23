@@ -90,6 +90,27 @@ export interface ExecuteRemoteReleaseLockOptions {
     runner: RemoteRunner;
 }
 
+export interface ExecuteRemoteReadLockOptions {
+    remotePath: string;
+    runner: RemoteRunner;
+}
+
+export interface ExecuteRemoteReadLockResult {
+    ok: boolean;
+    action: 'readLock';
+    mode: 'remote';
+    targetId: string;
+    lock: {
+        locked: boolean;
+        lockId?: string;
+        owner?: string;
+        stage?: string;
+        startedAt?: string;
+    };
+    diagnostics: RemoteDiagnostic[];
+    canonicalPath?: string;
+}
+
 export interface ExecuteRemoteReleaseLockResult extends ReleaseRemoteTargetResult {
     canonicalPath?: string;
 }
@@ -209,6 +230,31 @@ export async function executeRemoteAcquireLock(options: ExecuteRemoteAcquireLock
         return { ok: false, action: 'lock', mode: 'remote', targetId: target.targetId, acquired: false, lock: parsed, diagnostics, canonicalPath: target.canonicalPath };
     }
     return { ok: true, action: 'lock', mode: 'remote', targetId: target.targetId, acquired: true, lock: parsed, diagnostics, canonicalPath: target.canonicalPath };
+}
+
+export async function executeRemoteReadLock(options: ExecuteRemoteReadLockOptions): Promise<ExecuteRemoteReadLockResult> {
+    const target = await resolveRemoteTarget(options.remotePath, options.runner, 'lock');
+    if (!target.ok) {
+        return { ok: false, action: 'readLock', mode: 'remote', targetId: '', lock: { locked: false }, diagnostics: target.diagnostics };
+    }
+    const lockFile = homePath('.compilot', 'locks', target.targetId, 'lock.json');
+    const read = await options.runner.run('lock_file=' + lockFile + '; if [ -f "$lock_file" ]; then cat "$lock_file"; else printf "absent\n"; fi', 10000);
+    if (read.exitCode !== 0) {
+        return { ok: false, action: 'readLock', mode: 'remote', targetId: target.targetId, lock: { locked: false }, diagnostics: [{ level: 'error', message: trim(read.stderr) || '远端 lock 读取失败' }], canonicalPath: target.canonicalPath };
+    }
+    const parsed = parseLockFromOutput(read.stdout);
+    if (!parsed) {
+        return { ok: true, action: 'readLock', mode: 'remote', targetId: target.targetId, lock: { locked: false }, diagnostics: [], canonicalPath: target.canonicalPath };
+    }
+    return {
+        ok: true,
+        action: 'readLock',
+        mode: 'remote',
+        targetId: target.targetId,
+        lock: { locked: true, lockId: parsed.lockId, owner: parsed.owner, stage: parsed.stage, startedAt: parsed.startedAt },
+        diagnostics: [],
+        canonicalPath: target.canonicalPath
+    };
 }
 
 export async function executeRemoteReleaseLock(options: ExecuteRemoteReleaseLockOptions): Promise<ExecuteRemoteReleaseLockResult> {

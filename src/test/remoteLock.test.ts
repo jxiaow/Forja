@@ -6,6 +6,7 @@ import * as path from 'path';
 import {
     acquireRemoteTarget,
     executeRemoteAcquireLock,
+    executeRemoteReadLock,
     executeRemoteReleaseLock,
     releaseRemoteTarget
 } from '../remote/core/lock';
@@ -117,4 +118,25 @@ test('executeRemoteReleaseLock refuses to remove a mismatched remote lock', asyn
     assert.equal(result.removed, false);
     assert.match(result.diagnostics[0].message, /lock-id mismatch/);
     assert.ok(commands.some(command => command.includes('rm -rf')));
+});
+
+
+test('executeRemoteReadLock returns existing remote lock metadata', async () => {
+    const result = await executeRemoteReadLock({
+        remotePath: '/remote/ws',
+        runner: {
+            async run(command: string) {
+                if (command.includes('pwd -P')) { return { exitCode: 0, stdout: '/canonical/ws\n', stderr: '' }; }
+                if (command.includes('lock.json')) {
+                    return { exitCode: 0, stdout: '{"lockId":"abc","targetId":"target-a","owner":"cli","stage":"sync","remotePath":"/remote/ws","repos":["qt-app"],"startedAt":"2026-05-23T00:00:00.000Z"}\n', stderr: '' };
+                }
+                return { exitCode: 1, stdout: '', stderr: 'unexpected command' };
+            }
+        }
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.lock.locked, true);
+    assert.equal(result.lock.lockId, 'abc');
+    assert.equal(result.lock.stage, 'sync');
 });

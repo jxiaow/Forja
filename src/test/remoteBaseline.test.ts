@@ -169,6 +169,7 @@ test('remote status includes repo baseline snapshot after readiness probes', asy
                 if (command.includes('uname -s')) { return { exitCode: 0, stdout: 'Linux\n', stderr: '' }; }
                 if (command.includes('pwd -P')) { return { exitCode: 0, stdout: '/remote/ws\n', stderr: '' }; }
                 if (command.includes('$HOME/.compilot/bin/compilot --version')) { return { exitCode: 0, stdout: '0.7.41\n', stderr: '' }; }
+                if (command.includes('lock.json')) { return { exitCode: 0, stdout: 'absent\n', stderr: '' }; }
                 if (command.includes("'qt-app'")) { return { exitCode: 0, stdout: 'mode:git\ncommit:abc123\nstatus:\n M generated/version.h\n', stderr: '' }; }
                 return { exitCode: 1, stdout: '', stderr: 'unexpected command' };
             }
@@ -177,6 +178,7 @@ test('remote status includes repo baseline snapshot after readiness probes', asy
 
     assert.equal(result.overall, 'ready');
     assert.ok(result.layers.some(layer => layer.name === 'repoDiscovery' && layer.ok === true));
+    assert.ok(result.layers.some(layer => layer.name === 'targetLock' && layer.ok === true));
     assert.ok(result.layers.some(layer => layer.name === 'baselinePrecheck' && layer.ok === true));
     assert.equal(result.repos?.[0].name, 'qt-app');
     assert.equal(result.repos?.[0].commitAligned, true);
