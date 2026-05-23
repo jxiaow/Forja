@@ -39,8 +39,7 @@ export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): 
     const remoteBin = options.remoteCompilotBin ? remoteCommand([options.remoteCompilotBin]) : '$HOME/.compilot/bin/compilot';
     const command = `cd ${remoteCommand([options.remotePath])} && ${remoteBin} ${remoteCommand(remoteArgs)}`;
     const timeoutMs = options.timeoutMs ?? (options.action === 'run' && !options.json ? 24 * 60 * 60 * 1000 : 120000);
-    const run = options.runner.run as (command: string, timeoutMs?: number, stream?: boolean) => Promise<{ exitCode: number; stdout: string; stderr: string }>;
-    const executed = await run(command, timeoutMs, options.stream);
+    const executed = await options.runner.run(command, timeoutMs, options.stream);
     const diagnostics: RemoteDiagnostic[] = [];
     let parsed: unknown;
 

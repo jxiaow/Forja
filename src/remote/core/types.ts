@@ -44,7 +44,7 @@ export interface RemoteCommandResult {
 }
 
 export interface RemoteRunner {
-    run(command: string, timeoutMs?: number): Promise<RemoteCommandResult>;
+    run(command: string, timeoutMs?: number, stream?: boolean): Promise<RemoteCommandResult>;
 }
 
 export interface RemoteStatusResult {

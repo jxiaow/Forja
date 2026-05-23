@@ -113,6 +113,18 @@
         "title": "Compilot Remote: Status"
       },
       {
+        "command": "compilot.remote.execution.pick",
+        "title": "Compilot: Select Execution Location"
+      },
+      {
+        "command": "compilot.remote.execution.local",
+        "title": "Compilot: Use Local Execution"
+      },
+      {
+        "command": "compilot.remote.execution.remote",
+        "title": "Compilot: Use Remote Execution"
+      },
+      {
         "command": "compilot.remote.test",
         "title": "Compilot Remote: Test"
       },
@@ -127,6 +139,10 @@
       {
         "command": "compilot.remote.qt.qmake",
         "title": "Compilot Remote Qt: QMake"
+      },
+      {
+        "command": "compilot.remote.qt.run",
+        "title": "Compilot Remote Qt: Run"
       },
       {
         "command": "compilot.remote.qt.runDetached",

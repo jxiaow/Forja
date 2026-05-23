@@ -6,9 +6,9 @@
 
 ## 当前实现状态
 
-已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore`、VSCode 命令面板中的 remote status/test/build/run-detach/stop/ps 类动作。
+已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore`、VSCode 命令面板中的 remote status/test/build/run/run-detach/stop/ps 类动作，以及 VSCode 执行位置切换和状态栏/统一操作菜单远程分流。
 
-后续设计：VSCode 执行位置切换、Problems 诊断映射、Qt foreground Terminal 体验。SDK 是库，不提供 run/stop/ps。
+后续设计：Problems 诊断映射。SDK 是库，不提供 run/stop/ps。
 
 ## 目标
 
@@ -452,7 +452,7 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 
 ## VSCode 插件体验
 
-当前 Phase 1 已接入命令面板辅助入口：Remote Status/Test、Qt Build/Clean/QMake/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。后续主入口是“执行位置：本地 / 远程”，不是 CLI remote 命令菜单；切到远程后现有 Qt/SDK 操作映射到 remote core。完整规则见 `docs/remote-deploy-vscode.md`。
+当前 Phase 1 已接入命令面板辅助入口：Remote Status/Test、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。VSCode 主入口是“执行位置：本地 / 远程”，不是 CLI remote 命令菜单；状态栏和统一操作菜单在远程执行位置下映射到 remote core。完整规则见 `docs/remote-deploy-vscode.md`。
 
 ## 当前 Phase 1 不做
 
@@ -480,10 +480,11 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 6. remote Qt/SDK 构建动作
 7. remote Qt detach run/stop/ps
 8. remote Qt foreground run
-9. CLI/VSCode spec、README 和测试补齐
+9. VSCode 执行位置切换、状态栏/统一操作菜单远程分流、Qt foreground Terminal run
+10. CLI/VSCode spec、README 和测试补齐
 
 后续：
 
-1. VSCode 执行位置、Progress、Output、Diagnostics adapter
+1. VSCode Problems diagnostics adapter
 
 每个阶段都需要单独 Scope/Solution gate；涉及公开命令、JSON、持久化格式时必须明确兼容影响。

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { resolveRemoteConfig } from '../core/config';
 import { executePreparedRemoteAction } from '../core/pipeline';
@@ -6,10 +7,11 @@ import { createScpUploader, createSshRunner } from '../core/shell';
 import { buildRemoteStatus, buildRemoteTest } from '../core/status';
 import { RemoteDiagnostic } from '../core/types';
 import { createLogger } from '../../vscode/logger';
+import { getExecutionLocation, initExecutionLocation, setExecutionLocation } from '../../vscode/executionLocation';
 
 const logger = createLogger('RemoteCommands');
 
-type RemoteVscodeCommandKind = 'status' | 'test' | 'preparedAction' | 'bridgeAction';
+type RemoteVscodeCommandKind = 'status' | 'test' | 'preparedAction' | 'bridgeAction' | 'foregroundTerminal' | 'executionLocation';
 
 interface RemoteVscodeCommandDefinition {
     id: string;
@@ -18,14 +20,19 @@ interface RemoteVscodeCommandDefinition {
     target?: RemoteBridgeTarget;
     remoteAction?: RemoteBridgeAction;
     args?: string[];
+    executionLocation?: 'local' | 'remote' | 'pick';
 }
 
 export const REMOTE_VSCODE_COMMANDS: readonly RemoteVscodeCommandDefinition[] = [
+    { id: 'compilot.remote.execution.pick', title: 'Compilot: Select Execution Location', kind: 'executionLocation', executionLocation: 'pick' },
+    { id: 'compilot.remote.execution.local', title: 'Compilot: Use Local Execution', kind: 'executionLocation', executionLocation: 'local' },
+    { id: 'compilot.remote.execution.remote', title: 'Compilot: Use Remote Execution', kind: 'executionLocation', executionLocation: 'remote' },
     { id: 'compilot.remote.status', title: 'Compilot Remote: Status', kind: 'status' },
     { id: 'compilot.remote.test', title: 'Compilot Remote: Test', kind: 'test' },
     { id: 'compilot.remote.qt.build', title: 'Compilot Remote Qt: Build', kind: 'preparedAction', target: 'qt', remoteAction: 'build' },
     { id: 'compilot.remote.qt.clean', title: 'Compilot Remote Qt: Clean', kind: 'preparedAction', target: 'qt', remoteAction: 'clean' },
     { id: 'compilot.remote.qt.qmake', title: 'Compilot Remote Qt: QMake', kind: 'preparedAction', target: 'qt', remoteAction: 'qmake' },
+    { id: 'compilot.remote.qt.run', title: 'Compilot Remote Qt: Run', kind: 'foregroundTerminal', target: 'qt', remoteAction: 'run' },
     { id: 'compilot.remote.qt.runDetached', title: 'Compilot Remote Qt: Run Detached', kind: 'preparedAction', target: 'qt', remoteAction: 'run', args: ['--detach'] },
     { id: 'compilot.remote.qt.stop', title: 'Compilot Remote Qt: Stop', kind: 'bridgeAction', target: 'qt', remoteAction: 'stop' },
     { id: 'compilot.remote.qt.ps', title: 'Compilot Remote Qt: PS', kind: 'bridgeAction', target: 'qt', remoteAction: 'ps' },
@@ -35,15 +42,25 @@ export const REMOTE_VSCODE_COMMANDS: readonly RemoteVscodeCommandDefinition[] = 
 ];
 
 export function registerRemoteCommands(context: vscode.ExtensionContext): void {
+    initExecutionLocation(context);
     for (const command of REMOTE_VSCODE_COMMANDS) {
         context.subscriptions.push(vscode.commands.registerCommand(command.id, () => executeRemoteVscodeCommand(context, command)));
     }
 }
 
 async function executeRemoteVscodeCommand(context: vscode.ExtensionContext, command: RemoteVscodeCommandDefinition): Promise<void> {
+    if (command.kind === 'executionLocation') {
+        await executeExecutionLocationCommand(command);
+        return;
+    }
     const workspace = resolveWorkspaceRoot();
     if (!workspace) {
         vscode.window.showWarningMessage('Compilot Remote: 请先打开工作区');
+        return;
+    }
+
+    if (command.kind === 'foregroundTerminal') {
+        startForegroundRemoteQtRun(context, workspace);
         return;
     }
 
@@ -61,6 +78,34 @@ async function executeRemoteVscodeCommand(context: vscode.ExtensionContext, comm
             vscode.window.showErrorMessage('Compilot Remote: ' + message);
         }
     });
+}
+
+async function executeExecutionLocationCommand(command: RemoteVscodeCommandDefinition): Promise<void> {
+    if (command.executionLocation === 'pick') {
+        const current = getExecutionLocation();
+        const picked = await vscode.window.showQuickPick([
+            { label: '$(home) Local', description: current === 'local' ? '当前' : '', value: 'local' as const },
+            { label: '$(cloud) Remote', description: current === 'remote' ? '当前' : '', value: 'remote' as const }
+        ], { placeHolder: '选择 Compilot 执行位置' });
+        if (!picked) { return; }
+        await setExecutionLocation(picked.value);
+        vscode.window.showInformationMessage('Compilot: 执行位置已切换到 ' + (picked.value === 'remote' ? 'Remote' : 'Local'));
+        return;
+    }
+    const location = command.executionLocation === 'remote' ? 'remote' : 'local';
+    await setExecutionLocation(location);
+    vscode.window.showInformationMessage('Compilot: 执行位置已切换到 ' + (location === 'remote' ? 'Remote' : 'Local'));
+}
+
+function startForegroundRemoteQtRun(context: vscode.ExtensionContext, workspace: string): void {
+    const cliPath = path.join(context.extensionPath, 'out', 'cli', 'index.js');
+    const terminal = vscode.window.createTerminal({
+        name: 'Compilot Remote Qt Run',
+        shellPath: process.execPath,
+        shellArgs: [cliPath, 'remote', 'qt', 'run', '--workspace', workspace]
+    });
+    terminal.show();
+    logger.info('compilot.remote.qt.run: started foreground terminal for ' + workspace);
 }
 
 async function executeCommand(workspace: string, command: RemoteVscodeCommandDefinition): Promise<{ ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; stdout?: string; stderr?: string; remote?: { stdout?: string; stderr?: string } }> {

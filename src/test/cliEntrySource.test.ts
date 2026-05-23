@@ -89,11 +89,15 @@ test('vscode extension contributes and registers remote phase 1 commands', () =>
     const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
     const commands = pkg.contributes.commands.map((item: { command: string }) => item.command);
     const expected = [
+        'compilot.remote.execution.pick',
+        'compilot.remote.execution.local',
+        'compilot.remote.execution.remote',
         'compilot.remote.status',
         'compilot.remote.test',
         'compilot.remote.qt.build',
         'compilot.remote.qt.clean',
         'compilot.remote.qt.qmake',
+        'compilot.remote.qt.run',
         'compilot.remote.qt.runDetached',
         'compilot.remote.qt.stop',
         'compilot.remote.qt.ps',
@@ -105,7 +109,6 @@ test('vscode extension contributes and registers remote phase 1 commands', () =>
     for (const id of expected) {
         assert.ok(commands.includes(id), id + ' should be contributed');
     }
-    assert.equal(commands.includes('compilot.remote.qt.run'), false);
     assert.equal(commands.includes('compilot.remote.sdk.run'), false);
 
     const extensionSource = fs.readFileSync(path.join(process.cwd(), 'src', 'extension.ts'), 'utf8');
@@ -118,9 +121,15 @@ test('vscode extension contributes and registers remote phase 1 commands', () =>
     assert.doesNotMatch(remoteCommandsSource, /findBootstrapArtifact/);
     assert.match(remoteCommandsSource, /buildRemoteStatus/);
     assert.match(remoteCommandsSource, /buildRemoteTest/);
+    assert.match(remoteCommandsSource, /initExecutionLocation\(context\)/);
+    assert.match(remoteCommandsSource, /setExecutionLocation/);
     assert.match(remoteCommandsSource, /const preflight = await buildRemoteTest/);
     assert.match(remoteCommandsSource, /remoteAction:\s*'run'/);
     assert.match(remoteCommandsSource, /args:\s*\['--detach'\]/);
+    assert.match(remoteCommandsSource, /kind:\s*'foregroundTerminal'/);
+    assert.match(remoteCommandsSource, /createTerminal\(\{/);
+    assert.match(remoteCommandsSource, /shellPath:\s*process\.execPath/);
+    assert.match(remoteCommandsSource, /'remote', 'qt', 'run'/);
     assert.match(remoteCommandsSource, /kind:\s*'bridgeAction'.*remoteAction:\s*'ps'/s);
     assert.doesNotMatch(remoteCommandsSource, /runRemoteCli/);
 });
@@ -129,18 +138,21 @@ test('vscode extension contributes and registers remote phase 1 commands', () =>
 test('remote vscode design documents phase 1 command palette scope', () => {
     const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-vscode.md'), 'utf8');
     assert.match(doc, /当前 Phase 1 已提供命令面板辅助入口/);
-    assert.match(doc, /执行位置（后续）/);
+    assert.match(doc, /## 执行位置/);
+    assert.match(doc, /执行位置切换已在当前 Phase 1 接入/);
     assert.match(doc, /Phase 1 先接入命令面板辅助入口/);
     assert.match(doc, /Compilot Remote Qt: Build/);
+    assert.match(doc, /Compilot Remote Qt: Run/);
     assert.match(doc, /Compilot Remote SDK: Rebuild/);
-    assert.match(doc, /不贡献 Bootstrap、Qt foreground run 或 SDK run\/stop\/ps/);
+    assert.match(doc, /不贡献 Bootstrap 或 SDK run\/stop\/ps/);
 
     const readme = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-vscode.md'), 'utf8');
     assert.match(readme, /远程编译部署（Phase 1）/);
     assert.match(readme, /Compilot Remote: Status/);
-    assert.match(readme, /Compilot Remote Qt: Build \/ Clean \/ QMake/);
+    assert.match(readme, /Compilot Remote Qt: Build \/ Clean \/ QMake \/ Run/);
     assert.match(readme, /Compilot Remote Qt: Run Detached \/ Stop \/ PS/);
-    assert.match(readme, /尚未接入执行位置切换、Bootstrap、Qt foreground Terminal run/);
+    assert.match(readme, /当前 VSCode 侧已实现执行位置切换/);
+    assert.match(readme, /Qt foreground run 通过 Terminal 启动本地 CLI/);
     assert.doesNotMatch(readme, /Run Deploy/);
     assert.doesNotMatch(readme, /完整远程编译部署流程.*仍是设计稿/);
 });
@@ -158,7 +170,8 @@ test('remote deploy v3 action policy keeps clean in prepared pipeline', () => {
     const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-v3.md'), 'utf8');
     assert.match(doc, /当前实现状态/);
     assert.match(doc, /已实现 Phase 1：.*remote qt build\/clean\/qmake\/run\/stop\/ps/);
-    assert.match(doc, /后续设计：.*VSCode 执行位置切换/);
+    assert.match(doc, /VSCode 执行位置切换和状态栏\/统一操作菜单远程分流/);
+    assert.match(doc, /后续设计：Problems 诊断映射/);
     assert.match(doc, /remote qt build\/clean\/qmake/);
     assert.match(doc, /remote sdk build\/rebuild\/clean/);
     assert.match(doc, /当前 Phase 1 不做/);
