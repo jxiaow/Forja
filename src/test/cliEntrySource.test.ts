@@ -14,6 +14,7 @@ test('cli dispatcher routes to qt sdk and remote subcommands', () => {
     assert.match(source, /runSdkCli/);
     assert.match(source, /runRemoteCli/);
     assert.match(source, /remote   远程命令 .*build/);
+    assert.match(source, /remote   远程命令 .*restore/);
     assert.match(source, /process\.exitCode = 1/);
 });
 
