@@ -1,4 +1,5 @@
 import { loadRemoteSettings } from '../../core/settingsIO';
+import { buildRemoteBaselineStatus, GitRunner } from './baseline';
 import { BootstrapArtifactResult, executeRemoteBootstrap, RemoteUploader } from './bootstrap';
 import { VERSION } from '../../version';
 import { resolveRemoteConfig } from './config';
@@ -11,6 +12,8 @@ export interface BuildRemoteStatusOptions {
     runner?: RemoteRunner;
     config?: RemoteConfig;
     remoteCompilotBin?: string;
+    git?: GitRunner;
+    baseline?: boolean;
 }
 
 export interface BuildRemoteTestOptions extends BuildRemoteStatusOptions {
@@ -110,6 +113,34 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         return finishBlocked(options.workspace, server.name || server.id, remotePath, layers, diagnostics, 'remoteCompilot', ['compilot remote bootstrap']);
     }
 
+    if (options.baseline !== false) {
+        const baseline = await buildRemoteBaselineStatus({
+            workspace: resolved.config.workspace,
+            remotePath,
+            runner,
+            git: options.git
+        });
+        layers.push(
+            { name: 'repoDiscovery', ok: baseline.repos.length > 0, message: baseline.repos.length > 0 ? baseline.repos.map(repo => repo.name).join(', ') : 'no local git repos' },
+            { name: 'baselinePrecheck', ok: baseline.ok, message: baseline.overall }
+        );
+        diagnostics.push(...baseline.diagnostics);
+        return {
+            ok: true,
+            action: 'status',
+            mode: 'remote',
+            overall: baseline.overall,
+            workspace: resolved.config.workspace,
+            server: server.name || server.id,
+            remotePath,
+            layers,
+            lock: { locked: false },
+            repos: baseline.repos,
+            diagnostics,
+            nextActions: baseline.nextActions
+        };
+    }
+
     return {
         ok: true,
         action: 'status',
@@ -126,7 +157,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
 }
 
 export async function buildRemoteTest(options: BuildRemoteTestOptions): Promise<RemoteTestResult> {
-    const status = await buildRemoteStatus({ ...options, probe: options.probe ?? true });
+    const status = await buildRemoteStatus({ ...options, probe: options.probe ?? true, baseline: false });
     const failed = status.layers.find(layer => layer.ok === false);
     if (!failed || !options.bootstrap || failed.name !== 'remoteCompilot') {
         return testResult(!failed, failed, status.diagnostics, failed?.nextActions || status.nextActions);
@@ -147,7 +178,7 @@ export async function buildRemoteTest(options: BuildRemoteTestOptions): Promise<
         return testResult(false, failed, [...status.diagnostics, ...bootstrap.diagnostics], bootstrap.nextActions, stages);
     }
 
-    const retest = await buildRemoteStatus({ ...options, probe: true });
+    const retest = await buildRemoteStatus({ ...options, probe: true, baseline: false });
     const retestFailed = retest.layers.find(layer => layer.ok === false);
     stages.push({ stage: 'remoteCompilot', ok: !retestFailed || retestFailed.name !== 'remoteCompilot', message: retestFailed?.message });
     return testResult(!retestFailed, retestFailed, retest.diagnostics, retestFailed?.nextActions || retest.nextActions, stages);

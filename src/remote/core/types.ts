@@ -1,4 +1,5 @@
 import { ServerConfig } from '../../core/serverStore';
+import type { RepoBaselineState } from './baseline';
 
 export type RemoteLayerName =
     | 'syncConfig'
@@ -6,6 +7,8 @@ export type RemoteLayerName =
     | 'remotePlatform'
     | 'remotePath'
     | 'remoteCompilot'
+    | 'repoDiscovery'
+    | 'baselinePrecheck'
     | 'targetLock';
 
 export interface RemoteDiagnostic {
@@ -59,6 +62,7 @@ export interface RemoteStatusResult {
         stage?: string;
         startedAt?: string;
     };
+    repos?: RepoBaselineState[];
     diagnostics: RemoteDiagnostic[];
     nextActions: string[];
 }

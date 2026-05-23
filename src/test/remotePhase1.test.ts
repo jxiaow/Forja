@@ -118,6 +118,7 @@ test('remote status uses configured remote compilot bin during probe', async () 
     const result = await buildRemoteStatus({
         workspace,
         remoteCompilotBin: '/opt/compilot/bin/compilot',
+        baseline: false,
         config: { workspace, server: testServer(), remotePath: '/remote/ws' },
         runner: {
             async run(command: string) {
@@ -140,6 +141,7 @@ test('remote status includes configured server and remote path without probing w
     const result = await buildRemoteStatus({
         workspace,
         probe: false,
+        baseline: false,
         config: { workspace, server: testServer(), remotePath: '/remote/ws' }
     });
 
