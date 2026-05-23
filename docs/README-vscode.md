@@ -75,7 +75,7 @@ code --install-extension compilot-x.x.x.vsix
 
 ## 远程编译部署（Phase 1）
 
-当前 VSCode 侧已实现执行位置切换和命令面板辅助入口：Remote Status/Test、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。状态栏和统一操作菜单在远程执行位置下会分流到 remote 命令；build/run-detach 类动作复用 CLI remote core，执行 readiness、baseline、lock、branchSync、overlaySync、baselineCheck，再桥接远端 compilot。Qt foreground run 通过 Terminal 启动本地 CLI 的 `compilot remote qt run`，由 CLI 持有远端 lock。远程 build 类动作会把可安全映射回本地文件的编译错误发布到 Problems。
+当前 VSCode 侧已实现执行位置切换和命令面板辅助入口：Remote Status/Test、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。状态栏和统一操作菜单在远程执行位置下会分流到 remote 命令；build/run-detach 类动作复用 remote core，执行 readiness、baseline、lock、branchSync、overlaySync、baselineCheck，再桥接远端 compilot。Qt foreground run 通过 VSCode Pseudoterminal 直接调用 remote core，由 pipeline 持有远端 lock，不依赖 CLI 入口。远程 build 类动作会把可安全映射回本地文件的编译错误发布到 Problems。
 
 尚未接入 VSCode Bootstrap。Bootstrap 仍通过 `compilot remote bootstrap` CLI 执行。
 

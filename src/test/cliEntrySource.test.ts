@@ -128,12 +128,15 @@ test('vscode extension contributes and registers remote phase 1 commands', () =>
     assert.match(remoteCommandsSource, /args:\s*\['--detach'\]/);
     assert.match(remoteCommandsSource, /kind:\s*'foregroundTerminal'/);
     assert.match(remoteCommandsSource, /createTerminal\(\{/);
-    assert.match(remoteCommandsSource, /shellPath:\s*process\.execPath/);
-    assert.match(remoteCommandsSource, /'remote', 'qt', 'run'/);
+    assert.match(remoteCommandsSource, /vscode\.Pseudoterminal/);
+    assert.match(remoteCommandsSource, /executePreparedRemoteAction\(\{/);
+    assert.match(remoteCommandsSource, /stream:\s*true/);
     assert.match(remoteCommandsSource, /createDiagnosticCollection\('compilot\.remote'\)/);
     assert.match(remoteCommandsSource, /publishRemoteProblems/);
     assert.match(remoteCommandsSource, /kind:\s*'bridgeAction'.*remoteAction:\s*'ps'/s);
     assert.doesNotMatch(remoteCommandsSource, /runRemoteCli/);
+    assert.doesNotMatch(remoteCommandsSource, /out['"`], ['"`]cli['"`], ['"`]index\.js/);
+    assert.doesNotMatch(remoteCommandsSource, /shellPath:\s*process\.execPath/);
 });
 
 
@@ -154,7 +157,7 @@ test('remote vscode design documents phase 1 command palette scope', () => {
     assert.match(readme, /Compilot Remote Qt: Build \/ Clean \/ QMake \/ Run/);
     assert.match(readme, /Compilot Remote Qt: Run Detached \/ Stop \/ PS/);
     assert.match(readme, /当前 VSCode 侧已实现执行位置切换/);
-    assert.match(readme, /Qt foreground run 通过 Terminal 启动本地 CLI/);
+    assert.match(readme, /Qt foreground run 通过 VSCode Pseudoterminal 直接调用 remote core/);
     assert.match(readme, /编译错误发布到 Problems/);
     assert.doesNotMatch(readme, /Run Deploy/);
     assert.doesNotMatch(readme, /完整远程编译部署流程.*仍是设计稿/);

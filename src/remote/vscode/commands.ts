@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { resolveRemoteConfig } from '../core/config';
-import { executePreparedRemoteAction } from '../core/pipeline';
+import { executePreparedRemoteAction, ExecutePreparedRemoteActionResult } from '../core/pipeline';
 import { createScpUploader, createSshRunner } from '../core/shell';
 import { buildRemoteStatus, buildRemoteTest } from '../core/status';
 import { RemoteDiagnostic } from '../core/types';
@@ -103,14 +102,94 @@ async function executeExecutionLocationCommand(command: RemoteVscodeCommandDefin
 }
 
 function startForegroundRemoteQtRun(context: vscode.ExtensionContext, workspace: string): void {
-    const cliPath = path.join(context.extensionPath, 'out', 'cli', 'index.js');
+    let activeChild: { kill(signal?: NodeJS.Signals): boolean } | null = null;
+    let closed = false;
+    const writeEmitter = new vscode.EventEmitter<string>();
+    const closeEmitter = new vscode.EventEmitter<number>();
+    const pty: vscode.Pseudoterminal = {
+        onDidWrite: writeEmitter.event,
+        onDidClose: closeEmitter.event,
+        open: () => {
+            void runForegroundRemoteQtRun(workspace, {
+                write: text => writeEmitter.fire(toTerminalText(text)),
+                onSpawn: child => { activeChild = child; }
+            }).then(code => {
+                if (!closed) { closeEmitter.fire(code); }
+            });
+        },
+        close: () => {
+            closed = true;
+            try { activeChild?.kill('SIGTERM'); } catch { /* child may already be closed */ }
+        }
+    };
     const terminal = vscode.window.createTerminal({
         name: 'Compilot Remote Qt Run',
-        shellPath: process.execPath,
-        shellArgs: [cliPath, 'remote', 'qt', 'run', '--workspace', workspace]
+        pty
     });
     terminal.show();
-    logger.info('compilot.remote.qt.run: started foreground terminal for ' + workspace);
+    context.subscriptions.push(writeEmitter, closeEmitter);
+    logger.info('compilot.remote.qt.run: started foreground pty for ' + workspace);
+}
+
+async function runForegroundRemoteQtRun(
+    workspace: string,
+    terminal: { write(text: string): void; onSpawn(child: { kill(signal?: NodeJS.Signals): boolean }): void }
+): Promise<number> {
+    terminal.write('Compilot Remote Qt Run\r\n');
+    const resolved = resolveRemoteConfig(workspace);
+    if (!resolved.config) {
+        writeDiagnostics(terminal, resolved.diagnostics, resolved.nextActions);
+        return 1;
+    }
+
+    const password = resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null;
+    const runner = createSshRunner(resolved.config.server, password, {
+        onStdout: terminal.write,
+        onStderr: terminal.write,
+        onSpawn: terminal.onSpawn
+    });
+    const uploader = createScpUploader(resolved.config.server, password);
+
+    terminal.write('Preparing remote workspace...\r\n');
+    const preflight = await buildRemoteTest({ workspace, config: resolved.config, runner });
+    if (!preflight.ok) {
+        writeDiagnostics(terminal, preflight.diagnostics, preflight.nextActions);
+        return 1;
+    }
+
+    const result = await executePreparedRemoteAction({
+        workspace: resolved.config.workspace,
+        remotePath: resolved.config.remotePath,
+        ignore: resolved.config.ignore,
+        owner: 'vscode',
+        target: 'qt',
+        action: 'run',
+        args: [],
+        json: false,
+        stream: true,
+        runner,
+        uploader
+    });
+    publishProblemsIfApplicable(REMOTE_VSCODE_COMMANDS.find(item => item.id === 'compilot.remote.qt.run')!, { ...result, workspace: resolved.config.workspace, remotePath: resolved.config.remotePath });
+    if (!result.ok) {
+        writeDiagnostics(terminal, result.diagnostics, result.nextActions);
+        return 1;
+    }
+    terminal.write('\r\nCompilot Remote Qt Run exited.\r\n');
+    return 0;
+}
+
+function writeDiagnostics(terminal: { write(text: string): void }, diagnostics: RemoteDiagnostic[], nextActions: string[]): void {
+    for (const diagnostic of diagnostics) {
+        terminal.write(`${diagnostic.level}: ${diagnostic.message}\r\n`);
+    }
+    if (nextActions.length > 0) {
+        terminal.write('Next: ' + nextActions.join('；') + '\r\n');
+    }
+}
+
+function toTerminalText(text: string): string {
+    return text.replace(/\r?\n/g, '\r\n');
 }
 
 async function executeCommand(workspace: string, command: RemoteVscodeCommandDefinition): Promise<{ ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; workspace?: string; remotePath?: string; stdout?: string; stderr?: string; remote?: { result?: unknown; stdout?: string; stderr?: string } }> {
@@ -162,8 +241,8 @@ async function executeCommand(workspace: string, command: RemoteVscodeCommandDef
     return { ...result, workspace: resolved.config.workspace, remotePath: resolved.config.remotePath };
 }
 
-function publishProblemsIfApplicable(command: RemoteVscodeCommandDefinition, result: { workspace?: string; remotePath?: string; remote?: { result?: unknown; stdout?: string; stderr?: string } }): void {
-    if (!remoteDiagnostics || command.kind !== 'preparedAction' || !result.workspace || !result.remotePath) { return; }
+function publishProblemsIfApplicable(command: RemoteVscodeCommandDefinition, result: { workspace?: string; remotePath?: string; remote?: { result?: unknown; stdout?: string; stderr?: string } } | ExecutePreparedRemoteActionResult & { workspace?: string; remotePath?: string }): void {
+    if (!remoteDiagnostics || (command.kind !== 'preparedAction' && command.kind !== 'foregroundTerminal') || !result.workspace || !result.remotePath) { return; }
     const count = publishRemoteProblems(remoteDiagnostics, result.workspace, result.remotePath, result);
     if (count > 0) {
         logger.info(command.id + ': published ' + count + ' remote problem(s)');

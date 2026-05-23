@@ -55,16 +55,16 @@ SDK 不提供 run/stop/ps。
 
 ## Foreground Run
 
-VSCode 前台 Run 使用 Terminal 启动完整本地 CLI：
+VSCode 前台 Run 使用 Pseudoterminal 直接调用 remote core：
 
 ```text
-node <extensionPath>/out/cli/index.js remote qt run --workspace <workspace>
+Pseudoterminal -> executePreparedRemoteAction({ target: "qt", action: "run", stream: true })
 ```
 
 这样：
 
-- branchSync/sync/baseline 日志和远端前台输出都在同一个 Terminal 中，和人工 CLI 行为一致
-- CLI 持有 remote target lock，直到远端 foreground run 退出或 Terminal 被终止
+- branchSync/sync/baseline 日志和远端前台输出都在同一个 Terminal 中
+- remote core pipeline 持有 remote target lock，直到远端 foreground run 退出或 Terminal 被终止
 - Terminal 的 Ctrl+C 只管理前台 run 会话
 - foreground run 期间不承诺 JSON，不写 detached pid/logFile 状态
 

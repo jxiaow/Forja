@@ -4,6 +4,12 @@ import { buildScpArgs, buildSshArgs, createAskpassEnv, sshTarget } from '../../c
 import type { RemoteUploader } from './bootstrap';
 import { RemoteCommandResult, RemoteRunner } from './types';
 
+export interface SshRunnerHooks {
+    onStdout?: (text: string) => void;
+    onStderr?: (text: string) => void;
+    onSpawn?: (child: cp.ChildProcess) => void;
+}
+
 export function quoteRemoteArg(value: string): string {
     if (value.includes('\0')) {
         throw new Error('remote argv contains NUL');
@@ -45,7 +51,7 @@ export function createScpUploader(server: ServerConfig, password: string | null 
     };
 }
 
-export function createSshRunner(server: ServerConfig, password: string | null = null): RemoteRunner {
+export function createSshRunner(server: ServerConfig, password: string | null = null, hooks: SshRunnerHooks = {}): RemoteRunner {
     return {
         run(command: string, timeoutMs: number = 10000, stream: boolean = false): Promise<RemoteCommandResult> {
             return new Promise(resolve => {
@@ -55,6 +61,7 @@ export function createSshRunner(server: ServerConfig, password: string | null = 
                     stdio: ['ignore', 'pipe', 'pipe'],
                     env: askpass?.env
                 });
+                hooks.onSpawn?.(child);
                 let stdout = '';
                 let stderr = '';
                 const timer = setTimeout(() => {
@@ -63,12 +70,18 @@ export function createSshRunner(server: ServerConfig, password: string | null = 
                 child.stdout.on('data', chunk => {
                     const text = String(chunk);
                     stdout += text;
-                    if (stream) { process.stdout.write(text); }
+                    if (stream) {
+                        if (hooks.onStdout) { hooks.onStdout(text); }
+                        else { process.stdout.write(text); }
+                    }
                 });
                 child.stderr.on('data', chunk => {
                     const text = String(chunk);
                     stderr += text;
-                    if (stream) { process.stderr.write(text); }
+                    if (stream) {
+                        if (hooks.onStderr) { hooks.onStderr(text); }
+                        else { process.stderr.write(text); }
+                    }
                 });
                 child.on('error', error => {
                     clearTimeout(timer);
