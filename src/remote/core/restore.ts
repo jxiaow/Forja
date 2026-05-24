@@ -95,7 +95,7 @@ function buildOverlayCleanupCommand(targetId: string, repo: string, paths: strin
         "const selected=new Set(paths);",
         "for(const key of ['tracked','deletedTracked']){if(Array.isArray(repoState[key])){repoState[key]=repoState[key].filter(p=>!selected.has(p));}}",
         "const underlayRoot=path.resolve(stateDir,'underlay');",
-        "if(repoState.underlayTracked){for(const p of paths){const entry=repoState.underlayTracked[p];if(entry&&entry.backupRef){const backupPath=path.resolve(underlayRoot,entry.backupRef);if(backupPath===underlayRoot||backupPath.startsWith(underlayRoot+path.sep)){fs.rmSync(backupPath,{force:true});}}delete repoState.underlayTracked[p];}}",
+        "if(repoState.underlayTracked){for(const p of paths){const entry=repoState.underlayTracked[p];if(entry&&entry.backupRef){const backupPath=path.resolve(underlayRoot,entry.backupRef);if(backupPath!==underlayRoot&&backupPath.startsWith(underlayRoot+path.sep)){fs.rmSync(backupPath,{force:true});}}delete repoState.underlayTracked[p];}}",
         "fs.writeFileSync(manifestPath,JSON.stringify(manifest,null,2));"
     ].join('');
     return 'node -e ' + quoteRemoteArg(script) + ' -- ' + stateDir + ' ' + remoteCommand([repo, ...paths]);

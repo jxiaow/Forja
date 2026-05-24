@@ -410,6 +410,7 @@ test('executeRemoteRestore cleans overlay manifest and underlay backup after git
     assert.ok(commands.some(command => command.includes('overlay.json')));
     assert.ok(commands.some(command => command.includes('underlay')));
     assert.ok(commands.some(command => command.includes('src/main.cpp')));
+    assert.ok(commands.some(command => command.includes('backupPath!==underlayRoot&&backupPath.startsWith')));
 });
 
 test('executeRemoteRestore fails when overlay state cleanup fails after restore', async () => {
