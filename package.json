@@ -113,6 +113,10 @@
         "title": "Compilot Remote: Status"
       },
       {
+        "command": "compilot.remote.doctor",
+        "title": "Compilot Remote: Doctor"
+      },
+      {
         "command": "compilot.remote.execution.pick",
         "title": "Compilot: Select Execution Location"
       },

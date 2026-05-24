@@ -6,7 +6,7 @@
 
 ## 当前实现状态
 
-已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote build-order status/set/clear`、`remote transfer status/set/clear/run`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore/reset`、`remote qt|sdk clean-untracked`、VSCode 命令面板中的 remote status/test/bootstrap/build/run/run-detach/stop/ps 类动作、VSCode 执行位置切换和状态栏/统一操作菜单远程分流，以及保守的 Problems 诊断映射。
+已实现 Phase 1：`remote doctor/test/status/bootstrap/unlock`、`remote build-order status/set/clear`、`remote transfer status/set/clear/run`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore/reset`、`remote qt|sdk clean-untracked`、VSCode 命令面板中的 remote doctor/status/test/bootstrap/build/run/run-detach/stop/ps 类动作、VSCode 执行位置切换和状态栏/统一操作菜单远程分流，以及保守的 Problems 诊断映射。
 
 当前剩余外部验证：真实远端 SSH smoke。SDK 是库，不提供 run/stop/ps。
 
@@ -30,6 +30,8 @@
 ```bash
 compilot remote test
 compilot remote test --bootstrap
+compilot remote doctor
+compilot remote doctor --bootstrap
 compilot remote bootstrap
 compilot remote status
 compilot remote unlock --lock-id <id> --force
@@ -533,7 +535,7 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 
 ## VSCode 插件体验
 
-当前 Phase 1 已接入命令面板辅助入口：Remote Status/Test/Bootstrap、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。VSCode 主入口是“执行位置：本地 / 远程”，不是 CLI remote 命令菜单；状态栏和统一操作菜单在远程执行位置下映射到 remote core。完整规则见 `docs/remote-deploy-vscode.md`。
+当前 Phase 1 已接入命令面板辅助入口：Remote Status/Doctor/Test/Bootstrap、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。VSCode 主入口是“执行位置：本地 / 远程”，不是 CLI remote 命令菜单；状态栏和统一操作菜单在远程执行位置下映射到 remote core。完整规则见 `docs/remote-deploy-vscode.md`。
 
 ## 当前 Phase 1 不做
 

@@ -6,6 +6,7 @@ import * as path from 'path';
 import { runRemoteCli } from '../remote/cli';
 import { executeRemoteBootstrap, findBootstrapArtifact } from '../remote/core/bootstrap';
 import { executeRemoteBridge } from '../remote/core/bridge';
+import { buildRemoteDoctor } from '../remote/core/doctor';
 import { buildRemoteStatus, buildRemoteTest } from '../remote/core/status';
 import { executeRemoteUnlock, unlockRemoteTarget } from '../remote/core/lock';
 import { executeRemoteRestore } from '../remote/core/restore';
@@ -65,6 +66,18 @@ test('remote status reports missing sync configuration without SSH', async () =>
     assert.deepEqual(result.nextActions, ['配置 sync server 和 remotePath']);
 });
 
+test('remote doctor summarizes blocked readiness with actionable next steps', async () => {
+    const workspace = tmpDir('compilot-remote-doctor-');
+    const result = await buildRemoteDoctor({ workspace });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.action, 'doctor');
+    assert.equal(result.overall, 'blocked');
+    assert.ok(result.checks.some(check => check.name === 'syncConfig' && check.ok === false));
+    assert.deepEqual(result.nextActions, ['配置 sync server 和 remotePath']);
+    assert.ok(result.autoFixes.some(fix => fix.name === 'bootstrap' && fix.available === false));
+});
+
 test('remote test CLI returns JSON error when sync is disabled', async () => {
     const workspace = tmpDir('compilot-remote-cli-');
     const output = await captureStdout(() => runRemoteCli(['test', '--workspace', workspace, '--json']));
@@ -74,6 +87,65 @@ test('remote test CLI returns JSON error when sync is disabled', async () => {
     assert.equal(parsed.ok, false);
     assert.equal(parsed.action, 'test');
     assert.equal(parsed.failedLayer, 'syncConfig');
+});
+
+test('remote doctor CLI returns JSON and human readiness guidance', async () => {
+    const workspace = tmpDir('compilot-remote-doctor-cli-');
+    const jsonOutput = await captureStdout(() => runRemoteCli(['doctor', '--workspace', workspace, '--json']));
+    const parsed = JSON.parse(jsonOutput);
+
+    assert.equal(process.exitCode, 1);
+    assert.equal(parsed.action, 'doctor');
+    assert.equal(parsed.overall, 'blocked');
+    assert.ok(parsed.checks.some((check: { name: string; ok: boolean }) => check.name === 'syncConfig' && check.ok === false));
+
+    process.exitCode = undefined;
+    const textOutput = await captureStdout(() => runRemoteCli(['doctor', '--workspace', workspace]));
+    assert.match(textOutput, /Remote doctor: blocked/);
+    assert.match(textOutput, /blocked: syncConfig/);
+    assert.match(textOutput, /next: 配置 sync server 和 remotePath/);
+});
+
+test('remote doctor bootstrap refreshes readiness after autofix succeeds', async () => {
+    const workspace = tmpDir('compilot-remote-doctor-bootstrap-');
+    const root = tmpDir('compilot-remote-doctor-artifact-');
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: VERSION }), 'utf8');
+    const artifactDir = path.join(root, 'dist', `compilot-${VERSION}`, 'cli');
+    fs.mkdirSync(artifactDir, { recursive: true });
+    fs.writeFileSync(path.join(artifactDir, `compilot-cli-${VERSION}.tgz`), 'current', 'utf8');
+    const artifact = findBootstrapArtifact(root);
+    assert.equal(artifact.ok, true);
+
+    let publicVersionChecks = 0;
+    const result = await buildRemoteDoctor({
+        workspace,
+        bootstrap: true,
+        artifact,
+        baseline: false,
+        lock: false,
+        config: { workspace, server: testServer(), remotePath: '/remote/ws', ignore: [] },
+        runner: {
+            async run(command: string) {
+                if (command.includes('printf compilot-remote-ok')) { return { exitCode: 0, stdout: 'compilot-remote-ok', stderr: '' }; }
+                if (command.includes('uname -s')) { return { exitCode: 0, stdout: 'Linux\n', stderr: '' }; }
+                if (command.includes('pwd -P')) { return { exitCode: 0, stdout: '/remote/ws\n', stderr: '' }; }
+                if (command.includes('$HOME/.compilot/bin/compilot --version')) {
+                    publicVersionChecks++;
+                    return publicVersionChecks === 1
+                        ? { exitCode: 127, stdout: '', stderr: 'not found' }
+                        : { exitCode: 0, stdout: VERSION + '\n', stderr: '' };
+                }
+                if (command.includes('--version')) { return { exitCode: 0, stdout: VERSION + '\n', stderr: '' }; }
+                return { exitCode: 0, stdout: '', stderr: '' };
+            }
+        },
+        uploader: { async upload() { /* test double */ } }
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.overall, 'ready');
+    assert.ok(result.checks.some(check => check.name === 'bootstrap' && check.ok === true));
+    assert.deepEqual(result.nextActions, []);
 });
 
 test('bootstrap artifact lookup requires exact current version tgz', () => {
@@ -619,6 +691,7 @@ test('remote cli human status prints actionable local summary', async () => {
 test('remote cli help documents remote utility commands', async () => {
     const output = await captureStdout(() => runRemoteCli(['--help']));
 
+    assert.match(output, /compilot remote doctor/);
     assert.match(output, /compilot remote transfer status/);
     assert.match(output, /compilot remote build-order status/);
     assert.match(output, /compilot remote qt clean-untracked/);

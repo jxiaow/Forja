@@ -3,6 +3,7 @@ import { loadRemoteSettings } from '../../core/settingsIO';
 import { executeRemoteBootstrap, findBootstrapArtifact } from '../core/bootstrap';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { resolveRemoteConfig } from '../core/config';
+import { buildRemoteDoctor } from '../core/doctor';
 import { executePreparedRemoteAction, ExecutePreparedRemoteActionResult } from '../core/pipeline';
 import { createScpUploader, createSshRunner } from '../core/shell';
 import { buildRemoteStatus, buildRemoteTest } from '../core/status';
@@ -14,7 +15,7 @@ import { publishRemoteProblems } from './diagnostics';
 const logger = createLogger('RemoteCommands');
 let remoteDiagnostics: vscode.DiagnosticCollection | null = null;
 
-type RemoteVscodeCommandKind = 'status' | 'test' | 'bootstrap' | 'preparedAction' | 'bridgeAction' | 'foregroundTerminal' | 'executionLocation';
+type RemoteVscodeCommandKind = 'status' | 'doctor' | 'test' | 'bootstrap' | 'preparedAction' | 'bridgeAction' | 'foregroundTerminal' | 'executionLocation';
 
 interface RemoteVscodeCommandDefinition {
     id: string;
@@ -31,6 +32,7 @@ export const REMOTE_VSCODE_COMMANDS: readonly RemoteVscodeCommandDefinition[] = 
     { id: 'compilot.remote.execution.local', title: 'Compilot: Use Local Execution', kind: 'executionLocation', executionLocation: 'local' },
     { id: 'compilot.remote.execution.remote', title: 'Compilot: Use Remote Execution', kind: 'executionLocation', executionLocation: 'remote' },
     { id: 'compilot.remote.status', title: 'Compilot Remote: Status', kind: 'status' },
+    { id: 'compilot.remote.doctor', title: 'Compilot Remote: Doctor', kind: 'doctor' },
     { id: 'compilot.remote.test', title: 'Compilot Remote: Test', kind: 'test' },
     { id: 'compilot.remote.bootstrap', title: 'Compilot Remote: Bootstrap', kind: 'bootstrap' },
     { id: 'compilot.remote.qt.build', title: 'Compilot Remote Qt: Build', kind: 'preparedAction', target: 'qt', remoteAction: 'build' },
@@ -198,6 +200,9 @@ function toTerminalText(text: string): string {
 async function executeCommand(context: vscode.ExtensionContext, workspace: string, command: RemoteVscodeCommandDefinition): Promise<{ ok?: boolean; overall?: string; diagnostics?: RemoteDiagnostic[]; nextActions?: string[]; workspace?: string; remotePath?: string; stdout?: string; stderr?: string; remote?: { result?: unknown; stdout?: string; stderr?: string } }> {
     if (command.kind === 'status') {
         return buildRemoteStatus({ workspace });
+    }
+    if (command.kind === 'doctor') {
+        return buildRemoteDoctor({ workspace });
     }
     if (command.kind === 'test') {
         return buildRemoteTest({ workspace });

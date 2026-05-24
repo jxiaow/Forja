@@ -5,6 +5,7 @@ import { executeRemoteBootstrap, findBootstrapArtifact } from '../core/bootstrap
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { executeRemoteCleanUntracked } from '../core/cleanUntracked';
 import { resolveRemoteConfig } from '../core/config';
+import { buildRemoteDoctor } from '../core/doctor';
 import { executeRemoteUnlock } from '../core/lock';
 import { executePreparedRemoteAction } from '../core/pipeline';
 import { executeRemoteRestore } from '../core/restore';
@@ -14,7 +15,7 @@ import { buildRemoteTransferStatus, executeRemoteTransfer } from '../core/transf
 import { RemoteDiagnostic } from '../core/types';
 
 interface RemoteCliOptions {
-    action: 'test' | 'status' | 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'cleanUntracked' | 'preparedAction' | 'buildOrder' | 'transfer';
+    action: 'test' | 'status' | 'doctor' | 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'cleanUntracked' | 'preparedAction' | 'buildOrder' | 'transfer';
     workspace: string;
     json: boolean;
     bootstrap: boolean;
@@ -42,6 +43,29 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
         const options = parseRemoteArgs(argv);
         if (options.action === 'status') {
             const result = await buildRemoteStatus({ workspace: options.workspace });
+            writeOutput(result, options.json);
+            return;
+        }
+        if (options.action === 'doctor') {
+            if (!options.bootstrap) {
+                const result = await buildRemoteDoctor({ workspace: options.workspace });
+                if (!result.ok) { process.exitCode = 1; }
+                writeOutput(result, options.json);
+                return;
+            }
+            const resolved = resolveRemoteConfig(options.workspace);
+            if (!resolved.config) {
+                const result = await buildRemoteDoctor({ workspace: options.workspace, bootstrap: true });
+                if (!result.ok) { process.exitCode = 1; }
+                writeOutput(result, options.json);
+                return;
+            }
+            const artifact = findBootstrapArtifact(process.cwd());
+            const password = resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null;
+            const runner = createSshRunner(resolved.config.server, password);
+            const uploader = createScpUploader(resolved.config.server, password);
+            const result = await buildRemoteDoctor({ workspace: options.workspace, bootstrap: true, artifact, config: resolved.config, runner, uploader });
+            if (!result.ok) { process.exitCode = 1; }
             writeOutput(result, options.json);
             return;
         }
@@ -321,7 +345,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
             }
             options.transferAction = subcommand;
             start = subcommand === argv[1] ? 2 : 1;
-        } else if (first !== 'test' && first !== 'status' && first !== 'bootstrap' && first !== 'unlock') {
+        } else if (first !== 'test' && first !== 'status' && first !== 'doctor' && first !== 'bootstrap' && first !== 'unlock') {
             throw new Error('未知 remote 命令: ' + first);
         } else {
             options.action = first;
@@ -349,7 +373,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 }
                 throw new Error('未知参数: --');
             case '--bootstrap':
-                if (options.action !== 'test') { throw new Error('--bootstrap 只能用于 remote test'); }
+                if (options.action !== 'test' && options.action !== 'doctor') { throw new Error('--bootstrap 只能用于 remote test/doctor'); }
                 options.bootstrap = true;
                 break;
             case '--repo': {
@@ -499,9 +523,15 @@ function writeOutput(result: unknown, json: boolean): void {
             configured: boolean;
             plan: Array<{ source: string; destination: string }>;
         };
+        checks?: Array<{ name: string; ok: boolean | null; message?: string; nextActions?: string[] }>;
+        autoFixes?: Array<{ name: string; available: boolean; command: string; reason?: string }>;
     };
     if (out.action === 'status') {
         console.log(formatRemoteStatus(out));
+        return;
+    }
+    if (out.action === 'doctor') {
+        console.log(formatRemoteDoctor(out));
         return;
     }
     if (out.action === 'transfer' && out.status) {
@@ -521,6 +551,35 @@ function writeOutput(result: unknown, json: boolean): void {
         return;
     }
     console.log('Remote ' + (out.action || 'command') + ': ' + (out.ok === false ? 'failed' : 'ok'));
+}
+
+function formatRemoteDoctor(out: {
+    ok?: boolean;
+    overall?: string;
+    server?: string;
+    remotePath?: string;
+    checks?: Array<{ name: string; ok: boolean | null; message?: string; nextActions?: string[] }>;
+    diagnostics?: Array<{ message: string }>;
+    nextActions?: string[];
+    autoFixes?: Array<{ name: string; available: boolean; command: string; reason?: string }>;
+}): string {
+    const lines = ['Remote doctor: ' + (out.overall || 'unknown')];
+    if (out.server) { lines.push('server: ' + out.server); }
+    if (out.remotePath) { lines.push('remotePath: ' + out.remotePath); }
+    for (const check of out.checks || []) {
+        const mark = check.ok === true ? 'ok' : check.ok === false ? 'blocked' : 'unknown';
+        lines.push(`${mark}: ${check.name}${check.message ? ' - ' + check.message : ''}`);
+    }
+    for (const fix of out.autoFixes || []) {
+        if (fix.available) { lines.push('autofix: ' + fix.command); }
+    }
+    if (out.diagnostics && out.diagnostics.length > 0) {
+        for (const item of out.diagnostics) { lines.push('diagnostic: ' + item.message); }
+    }
+    if (out.nextActions && out.nextActions.length > 0) {
+        for (const item of out.nextActions) { lines.push('next: ' + item); }
+    }
+    return lines.join('\n');
 }
 
 function formatRemoteStatus(out: {
@@ -571,6 +630,7 @@ function helpText(): string {
         '',
         'Commands:',
         '  compilot remote status [--json]',
+        '  compilot remote doctor [--bootstrap] [--json]',
         '  compilot remote test [--bootstrap] [--json]',
         '  compilot remote bootstrap [--json]',
         '  compilot remote unlock --lock-id <id> --force [--json]',

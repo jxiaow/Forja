@@ -9,7 +9,7 @@ compilot <subcommand> <action> [options]
 ```
 
 - 当前已实现子命令：`qt` | `sdk` | `remote` | `cleanup`
-- `remote` 当前实现基础命令：`test`、`status`、`bootstrap`、`unlock`、`build-order status/set/clear`、`transfer status/set/clear/run`，配置桥接：`qt|sdk status/init/use`，Qt 动作：`build/clean/qmake/run/stop/ps`，SDK build 类动作：`build/rebuild/clean`，路径级 restore/reset：`qt|sdk restore|reset --repo <repo> -- <paths...>`，以及显式 untracked 清理：`qt|sdk clean-untracked --repo <repo> -- <paths...>`；SDK 不提供 run/stop/ps
+- `remote` 当前实现基础命令：`doctor`、`test`、`status`、`bootstrap`、`unlock`、`build-order status/set/clear`、`transfer status/set/clear/run`，配置桥接：`qt|sdk status/init/use`，Qt 动作：`build/clean/qmake/run/stop/ps`，SDK build 类动作：`build/rebuild/clean`，路径级 restore/reset：`qt|sdk restore|reset --repo <repo> -- <paths...>`，以及显式 untracked 清理：`qt|sdk clean-untracked --repo <repo> -- <paths...>`；SDK 不提供 run/stop/ps
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -608,6 +608,35 @@ interface RemoteCheck {
     { "name": "compilot 已安装", "ok": true, "detail": "v0.6.28" },
     { "name": "版本兼容", "ok": true, "detail": "远程 v0.6.28" }
   ]
+}
+```
+
+---
+
+## `compilot remote doctor` 输出结构
+
+`doctor` 是面向人工排障的远程环境体检入口。它复用 `status` 的分层 readiness 检查，并把检查项、可用自动修复和下一步动作聚合到一个结果中。`--bootstrap` 只在 `remoteCompilot` 检查失败时尝试安装远端 CLI。
+
+```typescript
+interface RemoteDoctorResult {
+  ok: boolean;
+  action: "doctor";
+  mode: "remote";
+  overall: "ready" | "degraded" | "blocked" | "unknown";
+  checks: Array<{
+    name: string;
+    ok: boolean | null;
+    message?: string;
+    nextActions: string[];
+  }>;
+  diagnostics: Diagnostic[];
+  nextActions: string[];
+  autoFixes: Array<{
+    name: "bootstrap";
+    available: boolean;
+    command: "compilot remote test --bootstrap";
+    reason?: string;
+  }>;
 }
 ```
 
