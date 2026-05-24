@@ -243,7 +243,12 @@ test('saveRemoteSettings round-trips sanitized build order', () => {
             { target: 'sdk', action: 'build', args: [] },
             { target: 'qt', action: 'qmake', args: [] },
             { target: 'qt', action: 'build', args: ['--verbose'] }
-        ]
+        ],
+        transfer: {
+            deployServer: 'deploy-1',
+            deployPath: '/opt/app',
+            artifacts: ['qt-app/build/app', 'qt-app/conf/app.ini']
+        }
     });
 
     const loaded = loadRemoteSettings(workspace);
@@ -254,6 +259,11 @@ test('saveRemoteSettings round-trips sanitized build order', () => {
         { target: 'qt', action: 'qmake', args: [] },
         { target: 'qt', action: 'build', args: ['--verbose'] }
     ]);
+    assert.deepEqual(loaded.transfer, {
+        deployServer: 'deploy-1',
+        deployPath: '/opt/app',
+        artifacts: ['qt-app/build/app', 'qt-app/conf/app.ini']
+    });
 });
 
 // ── projectConfigPath ──

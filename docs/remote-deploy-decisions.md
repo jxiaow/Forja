@@ -66,6 +66,36 @@ buildOrder 已实现为用户目录 remote settings，不写项目内配置。�
 - 编排时只执行一次 prepare/lock/release，在 lock 内按顺序桥接远端 compilot
 - 不支持 run/stop/ps 进入 buildOrder
 
+## Transfer
+
+transfer 已实现为显式 artifact 配置，不自动推断构建产物，不进入 build pipeline。
+
+规则：
+
+- CLI 管理入口：`compilot remote transfer status|set|clear|run`
+- 配置写入用户目录 remote settings，不写项目内配置
+- 编译机仍来自 sync 的 `selectedServer` 和 `remotePath`
+- 部署机通过 `~/.compilot/servers.json` 中的 server id 引用
+- artifact 路径必须相对编译机 `remotePath`，拒绝 absolute、`..` 逃逸和空路径
+- deployPath 必须是部署机绝对路径
+- 当前只支持 build host 直接 SSH/SCP 到 deploy host
+- direct 模式拒绝部署机 password auth，避免把密码拼进远端 shell 命令
+
+## Explicit Untracked Cleanup
+
+untracked 清理只提供显式路径级命令，不提供自动扫描清理。
+
+规则：
+
+- CLI 管理入口：`compilot remote qt|sdk clean-untracked --repo <repo> -- <paths...>`
+- 必须显式指定 repo 和路径
+- 路径必须是 repo 内相对路径，拒绝 absolute、`..` 逃逸和空路径
+- 远端先通过 `git ls-files --others --exclude-standard -- <paths>` 确认目标是 untracked
+- 只删除被 git 确认为 untracked 的显式路径
+- 目录删除必须显式传 `--recursive`
+- 不执行 `git clean`
+- 不触碰 tracked 文件，不触发 build/run，不影响本地文件
+
 ## Submodule
 
 第一版不把 submodule 当普通文件 overlay。

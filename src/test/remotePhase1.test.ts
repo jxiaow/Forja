@@ -10,6 +10,8 @@ import { buildRemoteStatus, buildRemoteTest } from '../remote/core/status';
 import { executeRemoteUnlock, unlockRemoteTarget } from '../remote/core/lock';
 import { executeRemoteRestore } from '../remote/core/restore';
 import { loadRemoteSettings } from '../core/settingsIO';
+import { executeRemoteTransfer } from '../remote/core/transfer';
+import { executeRemoteCleanUntracked } from '../remote/core/cleanUntracked';
 import { VERSION } from '../version';
 
 
@@ -453,6 +455,95 @@ test('remote CLI manages build order in user remote settings', async () => {
     const clearParsed = JSON.parse(clearOutput);
     assert.equal(clearParsed.ok, true);
     assert.deepEqual(loadRemoteSettings(workspace).buildOrder, []);
+});
+
+test('executeRemoteTransfer copies configured artifacts from build host to deploy host', async () => {
+    const commands: string[] = [];
+    const result = await executeRemoteTransfer({
+        remotePath: '/remote/ws',
+        transfer: {
+            deployServer: 'deploy-1',
+            deployPath: '/opt/app',
+            artifacts: ['qt-app/build/app', 'qt-app/conf/app.ini']
+        },
+        deployServer: {
+            ...testServer(),
+            id: 'deploy-1',
+            name: 'deploy-01',
+            host: '10.0.0.8',
+            port: 2222,
+            username: 'deploy'
+        },
+        runner: {
+            async run(command: string) {
+                commands.push(command);
+                return { exitCode: 0, stdout: '', stderr: '' };
+            }
+        }
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.transferred.length, 2);
+    assert.ok(commands[0].includes('ssh'));
+    assert.ok(commands[0].includes('mkdir -p'));
+    assert.ok(commands.some(command => command.includes('scp') && command.includes('/remote/ws/qt-app/build/app') && command.includes('deploy@10.0.0.8:/opt/app/app')));
+    assert.ok(commands.some(command => command.includes('-P') && command.includes('2222')));
+});
+
+test('remote CLI manages transfer settings in user remote settings', async () => {
+    const workspace = tmpDir('compilot-remote-transfer-settings-');
+    const setOutput = await captureStdout(() => runRemoteCli(['transfer', 'set', '--server', 'deploy-1', '--path', '/opt/app', '--artifact', 'qt-app/build/app', '--artifact', 'qt-app/conf/app.ini', '--workspace', workspace, '--json']));
+    const setParsed = JSON.parse(setOutput);
+
+    assert.equal(setParsed.ok, true);
+    assert.equal(setParsed.action, 'transfer');
+    assert.deepEqual(loadRemoteSettings(workspace).transfer, {
+        deployServer: 'deploy-1',
+        deployPath: '/opt/app',
+        artifacts: ['qt-app/build/app', 'qt-app/conf/app.ini']
+    });
+
+    const clearOutput = await captureStdout(() => runRemoteCli(['transfer', 'clear', '--workspace', workspace, '--json']));
+    const clearParsed = JSON.parse(clearOutput);
+    assert.equal(clearParsed.ok, true);
+    assert.equal(loadRemoteSettings(workspace).transfer, null);
+});
+
+test('executeRemoteCleanUntracked removes only explicit untracked paths', async () => {
+    const commands: string[] = [];
+    const result = await executeRemoteCleanUntracked({
+        remotePath: '/remote/ws',
+        repo: 'qt-app',
+        paths: ['tmp/generated.txt'],
+        recursive: false,
+        runner: {
+            async run(command: string) {
+                commands.push(command);
+                return { exitCode: 0, stdout: '', stderr: '' };
+            }
+        }
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.cleaned, ['tmp/generated.txt']);
+    assert.equal(result.recursive, false);
+    assert.ok(commands[0].includes("cd '/remote/ws'/'qt-app'"));
+    assert.ok(commands[0].includes('ls-files'));
+    assert.ok(commands[0].includes('rmSync'));
+    assert.ok(commands[0].includes('tmp/generated.txt'));
+    assert.doesNotMatch(commands[0], /git clean/);
+});
+
+test('remote CLI accepts clean-untracked with explicit repo and paths', async () => {
+    const workspace = tmpDir('compilot-remote-clean-untracked-missing-sync-');
+    const output = await captureStdout(() => runRemoteCli(['qt', 'clean-untracked', '--repo', 'qt-app', '--workspace', workspace, '--json', '--', 'tmp/generated.txt']));
+    const parsed = JSON.parse(output);
+
+    assert.equal(process.exitCode, 1);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.action, 'cleanUntracked');
+    assert.equal(parsed.target, 'qt');
+    assert.match(parsed.diagnostics[0].message, /sync 未启用/);
 });
 
 test('executeRemoteUnlock removes matching remote lock by canonical remote path target id', async () => {

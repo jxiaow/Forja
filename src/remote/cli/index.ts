@@ -1,23 +1,31 @@
 import * as path from 'path';
+import { getServerById } from '../../core/serverStore';
 import { loadRemoteSettings, RemoteBuildOrderItem, saveRemoteSettings } from '../../core/settingsIO';
 import { executeRemoteBootstrap, findBootstrapArtifact } from '../core/bootstrap';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
+import { executeRemoteCleanUntracked } from '../core/cleanUntracked';
 import { resolveRemoteConfig } from '../core/config';
 import { executeRemoteUnlock } from '../core/lock';
 import { executePreparedRemoteAction } from '../core/pipeline';
 import { executeRemoteRestore } from '../core/restore';
 import { createScpUploader, createSshRunner } from '../core/shell';
 import { buildRemoteStatus, buildRemoteTest } from '../core/status';
+import { executeRemoteTransfer } from '../core/transfer';
 import { RemoteDiagnostic } from '../core/types';
 
 interface RemoteCliOptions {
-    action: 'test' | 'status' | 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'preparedAction' | 'buildOrder';
+    action: 'test' | 'status' | 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'cleanUntracked' | 'preparedAction' | 'buildOrder' | 'transfer';
     workspace: string;
     json: boolean;
     bootstrap: boolean;
     buildOrderAction: 'status' | 'set' | 'clear';
+    transferAction: 'status' | 'set' | 'clear' | 'run';
+    transferServer: string;
+    transferPath: string;
+    transferArtifacts: string[];
     lockId: string;
     force: boolean;
+    recursive: boolean;
     target?: RemoteBridgeTarget;
     remoteAction?: RemoteBridgeAction;
     passthrough: string[];
@@ -87,6 +95,46 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 saveRemoteSettings(options.workspace, settings);
             }
             writeOutput({ ok: true, action: 'buildOrder', mode: 'remote', buildOrder: settings.buildOrder, diagnostics: [], nextActions: [] }, options.json);
+            return;
+        }
+        if (options.action === 'transfer') {
+            const settings = loadRemoteSettings(options.workspace);
+            if (options.transferAction === 'set') {
+                settings.transfer = {
+                    deployServer: options.transferServer,
+                    deployPath: options.transferPath,
+                    artifacts: options.transferArtifacts
+                };
+                saveRemoteSettings(options.workspace, settings);
+            } else if (options.transferAction === 'clear') {
+                settings.transfer = null;
+                saveRemoteSettings(options.workspace, settings);
+            } else if (options.transferAction === 'run') {
+                const transfer = settings.transfer;
+                if (!transfer) {
+                    process.exitCode = 1;
+                    writeOutput({ ok: false, action: 'transfer', mode: 'remote', diagnostics: [{ level: 'error', message: 'remote transfer 尚未配置' }], nextActions: ['compilot remote transfer set --server <id> --path <deployPath> --artifact <path>'] }, options.json);
+                    return;
+                }
+                const resolved = resolveRemoteConfig(options.workspace);
+                if (!resolved.config) {
+                    process.exitCode = 1;
+                    writeOutput({ ...blockedResult('transfer', resolved.diagnostics, resolved.nextActions) }, options.json);
+                    return;
+                }
+                const deployServer = getServerById(transfer.deployServer);
+                if (!deployServer) {
+                    process.exitCode = 1;
+                    writeOutput({ ok: false, action: 'transfer', mode: 'remote', diagnostics: [{ level: 'error', message: '部署服务器不存在: ' + transfer.deployServer }], nextActions: ['检查 ~/.compilot/servers.json'] }, options.json);
+                    return;
+                }
+                const runner = createSshRunner(resolved.config.server, resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null);
+                const transferResult = await executeRemoteTransfer({ remotePath: resolved.config.remotePath, transfer, deployServer, runner });
+                if (!transferResult.ok) { process.exitCode = 1; }
+                writeOutput(transferResult, options.json);
+                return;
+            }
+            writeOutput({ ok: true, action: 'transfer', mode: 'remote', transfer: settings.transfer, diagnostics: [], nextActions: [] }, options.json);
             return;
         }
         if (options.action === 'bridge') {
@@ -159,7 +207,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             return;
         }
 
-        if (options.action === 'restore' || options.action === 'reset') {
+        if (options.action === 'restore' || options.action === 'reset' || options.action === 'cleanUntracked') {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
                 process.exitCode = 1;
@@ -170,7 +218,13 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const preflight = await buildRemoteTest({ workspace: options.workspace, config: resolved.config, runner });
             if (!preflight.ok) {
                 process.exitCode = 1;
-                writeOutput({ ...preflight, action: 'restore', target: options.target }, options.json);
+                writeOutput({ ...preflight, action: options.action, target: options.target }, options.json);
+                return;
+            }
+            if (options.action === 'cleanUntracked') {
+                const clean = await executeRemoteCleanUntracked({ remotePath: resolved.config.remotePath, repo: options.repo, paths: options.passthrough, recursive: options.recursive, runner });
+                if (!clean.ok) { process.exitCode = 1; }
+                writeOutput({ ...clean, target: options.target }, options.json);
                 return;
             }
             const result = await executeRemoteRestore({ remotePath: resolved.config.remotePath, repo: options.repo, paths: options.passthrough, runner });
@@ -208,8 +262,13 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
         json: false,
         bootstrap: false,
         buildOrderAction: 'status',
+        transferAction: 'status',
+        transferServer: '',
+        transferPath: '',
+        transferArtifacts: [],
         lockId: '',
         force: false,
+        recursive: false,
         passthrough: [],
         repo: ''
     };
@@ -217,8 +276,8 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
     let start = first === argv[0] ? 1 : 0;
     if (first === 'qt' || first === 'sdk') {
         const remoteAction = argv[1];
-        if (remoteAction === 'restore' || remoteAction === 'reset') {
-            options.action = remoteAction;
+        if (remoteAction === 'restore' || remoteAction === 'reset' || remoteAction === 'clean-untracked') {
+            options.action = remoteAction === 'clean-untracked' ? 'cleanUntracked' : remoteAction;
             options.target = first;
             start = 2;
         } else if (isBridgeAction(first, remoteAction)) {
@@ -243,6 +302,14 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
             }
             options.buildOrderAction = subcommand;
             start = subcommand === argv[1] ? 2 : 1;
+        } else if (first === 'transfer') {
+            options.action = 'transfer';
+            const subcommand = argv[1] && !argv[1].startsWith('--') ? argv[1] : 'status';
+            if (subcommand !== 'status' && subcommand !== 'set' && subcommand !== 'clear' && subcommand !== 'run') {
+                throw new Error('remote transfer 仅支持 status/set/clear/run');
+            }
+            options.transferAction = subcommand;
+            start = subcommand === argv[1] ? 2 : 1;
         } else if (first !== 'test' && first !== 'status' && first !== 'bootstrap' && first !== 'unlock') {
             throw new Error('未知 remote 命令: ' + first);
         } else {
@@ -264,7 +331,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 options.json = true;
                 break;
             case '--':
-                if (options.action === 'bridge' || options.action === 'restore' || options.action === 'reset' || options.action === 'preparedAction') {
+                if (options.action === 'bridge' || options.action === 'restore' || options.action === 'reset' || options.action === 'cleanUntracked' || options.action === 'preparedAction') {
                     options.passthrough.push(...argv.slice(i + 1));
                     i = argv.length;
                     break;
@@ -275,7 +342,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 options.bootstrap = true;
                 break;
             case '--repo': {
-                if (options.action !== 'restore' && options.action !== 'reset') { throw new Error('--repo 只能用于 remote restore/reset'); }
+                if (options.action !== 'restore' && options.action !== 'reset' && options.action !== 'cleanUntracked') { throw new Error('--repo 只能用于 remote restore/reset/clean-untracked'); }
                 const value = argv[i + 1];
                 if (!value || value.startsWith('--')) { throw new Error('--repo 需要一个值'); }
                 options.repo = value;
@@ -294,6 +361,34 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 if (options.action !== 'unlock') { throw new Error('--force 只能用于 remote unlock'); }
                 options.force = true;
                 break;
+            case '--recursive':
+                if (options.action !== 'cleanUntracked') { throw new Error('--recursive 只能用于 remote clean-untracked'); }
+                options.recursive = true;
+                break;
+            case '--server': {
+                if (options.action !== 'transfer' || options.transferAction !== 'set') { throw new Error('--server 只能用于 remote transfer set'); }
+                const value = argv[i + 1];
+                if (!value || value.startsWith('--')) { throw new Error('--server 需要一个值'); }
+                options.transferServer = value;
+                i++;
+                break;
+            }
+            case '--path': {
+                if (options.action !== 'transfer' || options.transferAction !== 'set') { throw new Error('--path 只能用于 remote transfer set'); }
+                const value = argv[i + 1];
+                if (!value || value.startsWith('--')) { throw new Error('--path 需要一个值'); }
+                options.transferPath = value;
+                i++;
+                break;
+            }
+            case '--artifact': {
+                if (options.action !== 'transfer' || options.transferAction !== 'set') { throw new Error('--artifact 只能用于 remote transfer set'); }
+                const value = argv[i + 1];
+                if (!value || value.startsWith('--')) { throw new Error('--artifact 需要一个值'); }
+                options.transferArtifacts.push(value);
+                i++;
+                break;
+            }
             default:
                 if (options.action === 'bridge' || options.action === 'preparedAction') {
                     options.passthrough.push(arg);
@@ -306,12 +401,18 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 throw new Error('未知参数: ' + arg);
         }
     }
-    if (options.action === 'restore' || options.action === 'reset') {
-        if (!options.repo) { throw new Error('remote ' + options.action + ' 需要 --repo <repo>'); }
-        if (options.passthrough.length === 0) { throw new Error('remote ' + options.action + ' 需要 -- 后跟至少一个路径'); }
+    if (options.action === 'restore' || options.action === 'reset' || options.action === 'cleanUntracked') {
+        const actionName = options.action === 'cleanUntracked' ? 'clean-untracked' : options.action;
+        if (!options.repo) { throw new Error('remote ' + actionName + ' 需要 --repo <repo>'); }
+        if (options.passthrough.length === 0) { throw new Error('remote ' + actionName + ' 需要 -- 后跟至少一个路径'); }
     }
     if (options.action === 'buildOrder' && options.buildOrderAction === 'set' && options.passthrough.length === 0) {
         throw new Error('remote build-order set 需要至少一个 target:action');
+    }
+    if (options.action === 'transfer' && options.transferAction === 'set') {
+        if (!options.transferServer) { throw new Error('remote transfer set 需要 --server <id>'); }
+        if (!options.transferPath) { throw new Error('remote transfer set 需要 --path <deployPath>'); }
+        if (options.transferArtifacts.length === 0) { throw new Error('remote transfer set 需要至少一个 --artifact <path>'); }
     }
     if (options.target === 'qt' && options.remoteAction === 'run' && options.json && !options.passthrough.includes('--detach')) {
         throw new Error('remote qt run --json 仅支持 --detach 模式，请使用 remote qt run --detach --json');
@@ -333,12 +434,12 @@ function isPreparedAction(target: RemoteBridgeTarget, action: string | undefined
 
 function remoteSupportMessage(target: RemoteBridgeTarget): string {
     if (target === 'qt') {
-        return 'remote qt 仅支持 status/init/use/build/clean/qmake/run/stop/ps/restore/reset';
+        return 'remote qt 仅支持 status/init/use/build/clean/qmake/run/stop/ps/restore/reset/clean-untracked';
     }
-    return 'remote sdk 仅支持 status/init/use/build/rebuild/clean/restore/reset';
+    return 'remote sdk 仅支持 status/init/use/build/rebuild/clean/restore/reset/clean-untracked';
 }
 
-function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'preparedAction', diagnostics: RemoteDiagnostic[], nextActions: string[]): Record<string, unknown> {
+function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'cleanUntracked' | 'preparedAction' | 'transfer', diagnostics: RemoteDiagnostic[], nextActions: string[]): Record<string, unknown> {
     return { ok: false, action, mode: 'remote', diagnostics, nextActions };
 }
 

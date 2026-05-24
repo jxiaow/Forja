@@ -25,8 +25,12 @@ test('remote cli wires test bootstrap to artifact upload path', () => {
     assert.match(source, /findBootstrapArtifact/);
     assert.match(source, /createScpUploader/);
     assert.match(source, /executeRemoteRestore/);
+    assert.match(source, /executeRemoteTransfer/);
+    assert.match(source, /executeRemoteCleanUntracked/);
     assert.match(source, /loadRemoteSettings/);
     assert.match(source, /buildOrder:\s*remoteSettings\.buildOrder/);
+    assert.match(source, /transferAction/);
+    assert.match(source, /options\.action === 'cleanUntracked'/);
     assert.match(source, /parseBuildOrderItems/);
     assert.match(source, /buildRemoteTest\(\{\s*workspace: options\.workspace,\s*bootstrap:/);
 });
@@ -46,8 +50,12 @@ test('cli interface spec lists only implemented subcommands as available', () =>
     assert.match(spec, /`compilot remote qt\|sdk status\/init\/use`/);
     assert.match(spec, /`compilot remote qt\|sdk restore\|reset`/);
     assert.match(spec, /`compilot remote build-order status\/set\/clear`/);
+    assert.match(spec, /`compilot remote transfer status\/set\/clear\/run`/);
+    assert.match(spec, /`compilot remote qt\|sdk clean-untracked`/);
     assert.match(spec, /remote qt build\/clean\/qmake/);
     assert.match(spec, /remote sdk build\/rebuild\/clean/);
+    assert.match(spec, /direct build-host-to-deploy-host/);
+    assert.match(spec, /不执行 `git clean`/);
     assert.match(spec, /Remote prepared action 输出结构/);
     assert.match(spec, /targetReadiness -> baselinePrecheck -> acquireLock -> branchSync -> overlaySync -> baselineCheck -> remoteAction -> releaseLock/);
     assert.doesNotMatch(spec, /远程 build\/run 尚未实现/);
@@ -62,8 +70,12 @@ test('cli user guide documents remote phase 1 prepared build support without run
     assert.match(guide, /compilot remote qt build --json/);
     assert.match(guide, /compilot remote sdk rebuild --json/);
     assert.match(guide, /compilot remote qt restore --repo qt-app/);
+    assert.match(guide, /compilot remote transfer set --server deploy-1 --path \/opt\/app --artifact qt-app\/build\/app --json/);
+    assert.match(guide, /compilot remote transfer run --json/);
+    assert.match(guide, /compilot remote qt clean-untracked --repo qt-app -- tmp\/generated\.txt --json/);
     assert.match(guide, /compilot remote build-order set sdk:build qt:qmake qt:build/);
     assert.match(guide, /远程 Qt\/SDK build 类动作/);
+    assert.match(guide, /显式 untracked 清理/);
     assert.match(guide, /remote qt build\/clean\/qmake\/run\/stop\/ps/);
     assert.doesNotMatch(guide, /远程 build\/run 仍在设计文档中/);
     assert.doesNotMatch(guide, /sync-config\.json/);
@@ -196,9 +208,14 @@ test('remote deploy v3 action policy keeps clean in prepared pipeline', () => {
     assert.match(doc, /后续：\s*\n\s*1\. 真实远端 SSH smoke/);
     assert.match(doc, /remote qt build\/clean\/qmake/);
     assert.match(doc, /remote sdk build\/rebuild\/clean/);
+    assert.match(doc, /remote transfer status\/set\/clear\/run/);
+    assert.match(doc, /remote qt\/sdk clean-untracked/);
     assert.match(doc, /buildOrder 已实现/);
+    assert.match(doc, /transfer 和显式 clean-untracked 已实现/);
     assert.match(doc, /当前 Phase 1 不做/);
     assert.doesNotMatch(doc, /- Qt run\/stop\/ps/);
+    assert.doesNotMatch(doc, /- 跨机器 transfer/);
+    assert.doesNotMatch(doc, /- untracked 文件自动清理/);
     assert.doesNotMatch(doc, /remote qt\/sdk clean` \| 必须 \| 必须 \| 否 \| 否 \| 否/);
 });
 
@@ -217,6 +234,7 @@ test('remote smoke runner is opt-in and non destructive', () => {
     assert.match(runner, /remote', target, 'build'/);
     assert.doesNotMatch(runner, /git reset/);
     assert.doesNotMatch(runner, /git clean/);
+    assert.doesNotMatch(runner, /clean-untracked/);
     assert.doesNotMatch(runner, /unlock/);
     assert.doesNotMatch(runner, /restore/);
 });

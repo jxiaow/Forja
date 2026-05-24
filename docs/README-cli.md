@@ -2,7 +2,7 @@
 
 命令行工具用于 C++ 项目的构建、运行和环境管理。
 
-当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`cleanup`。`remote` 已接入基础命令 `test/status/bootstrap/unlock`、远端 Qt/SDK 配置桥接 `qt|sdk status/init/use`、远程 Qt/SDK build 类动作、Qt run/stop/ps 和路径级 restore；SDK 不提供 run/stop/ps。
+当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`cleanup`。`remote` 已接入基础命令 `test/status/bootstrap/unlock`、远端 Qt/SDK 配置桥接 `qt|sdk status/init/use`、远程 Qt/SDK build 类动作、Qt run/stop/ps、buildOrder、跨机器 transfer、路径级 restore/reset 和显式 untracked 清理；SDK 不提供 run/stop/ps。
 
 ## 安装
 
@@ -294,13 +294,23 @@ compilot remote sdk clean --json
 compilot remote build-order set sdk:build qt:qmake qt:build --json
 compilot remote build-order status --json
 compilot remote build-order clear --json
+compilot remote transfer set --server deploy-1 --path /opt/app --artifact qt-app/build/app --json
+compilot remote transfer status --json
+compilot remote transfer run --json
+compilot remote transfer clear --json
 compilot remote qt restore --repo qt-app -- src/main.cpp --json
 compilot remote qt reset --repo qt-app -- src/main.cpp --json
+compilot remote qt clean-untracked --repo qt-app -- tmp/generated.txt --json
 compilot remote sdk restore --repo sdk-lib -- include/version.h --json
 compilot remote sdk reset --repo sdk-lib -- include/version.h --json
+compilot remote sdk clean-untracked --repo sdk-lib -- generated/cache.bin --json
 ```
 
-Phase 1 负责远程配置/连通性/CLI bootstrap/lock 清理、远端 Qt/SDK 的 status/init/use 配置桥接、buildOrder、路径级 tracked 文件 restore/reset，以及 `remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean` 的远端执行。`compilot remote sdk run/stop/ps`、`qt build --remote`、`sdk build --remote` 不支持。
+Phase 1 负责远程配置/连通性/CLI bootstrap/lock 清理、远端 Qt/SDK 的 status/init/use 配置桥接、buildOrder、跨机器 transfer、路径级 tracked 文件 restore/reset、显式 untracked 清理，以及 `remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean` 的远端执行。`compilot remote sdk run/stop/ps`、`qt build --remote`、`sdk build --remote` 不支持。
+
+`remote transfer` 从编译机把显式 artifact 复制到部署机：`--server` 使用 `~/.compilot/servers.json` 中的部署服务器 id，`--path` 必须是部署机绝对路径，`--artifact` 是编译机 `remotePath` 下的相对路径。当前只支持 build host 直接 SSH/SCP 到 deploy host，不自动发现产物。
+
+`remote qt|sdk clean-untracked` 只清理 `--` 后显式传入的 repo 内相对路径。命令会先在远端用 git 确认这些路径是 untracked；目录必须加 `--recursive`；不会执行 `git clean`，也不会触碰 tracked 文件。
 
 remote 复用当前 sync 的服务器和 remotePath 配置；缺少配置时 `remote test/status --json` 会返回诊断和下一步建议。
 

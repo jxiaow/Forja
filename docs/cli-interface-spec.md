@@ -9,7 +9,7 @@ compilot <subcommand> <action> [options]
 ```
 
 - 当前已实现子命令：`qt` | `sdk` | `remote` | `cleanup`
-- `remote` 当前实现基础命令：`test`、`status`、`bootstrap`、`unlock`、`build-order status/set/clear`，配置桥接：`qt|sdk status/init/use`，Qt 动作：`build/clean/qmake/run/stop/ps`，SDK build 类动作：`build/rebuild/clean`，以及路径级 restore/reset：`qt|sdk restore|reset --repo <repo> -- <paths...>`；SDK 不提供 run/stop/ps
+- `remote` 当前实现基础命令：`test`、`status`、`bootstrap`、`unlock`、`build-order status/set/clear`、`transfer status/set/clear/run`，配置桥接：`qt|sdk status/init/use`，Qt 动作：`build/clean/qmake/run/stop/ps`，SDK build 类动作：`build/rebuild/clean`，路径级 restore/reset：`qt|sdk restore|reset --repo <repo> -- <paths...>`，以及显式 untracked 清理：`qt|sdk clean-untracked --repo <repo> -- <paths...>`；SDK 不提供 run/stop/ps
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -440,6 +440,43 @@ compilot remote build-order clear --json
 
 ---
 
+## `compilot remote transfer status/set/clear/run`
+
+transfer 用于把编译机上的显式产物复制到部署机，不自动发现产物，也不进入 build pipeline：
+
+```bash
+compilot remote transfer status --json
+compilot remote transfer set --server deploy-1 --path /opt/app --artifact qt-app/build/app --json
+compilot remote transfer run --json
+compilot remote transfer clear --json
+```
+
+规则：
+
+- transfer 配置写入用户目录 remote settings，不写项目内配置
+- `--server <id>` 是 `~/.compilot/servers.json` 中的部署服务器 id
+- `--path <deployPath>` 必须是部署机绝对路径
+- `--artifact <path>` 可重复，路径相对编译机 `remotePath`
+- artifact 拒绝 absolute path、`..` 逃逸、空路径
+- 当前只支持 direct build-host-to-deploy-host SSH/SCP；编译机必须能免密访问部署机
+- direct 模式拒绝部署机 password auth，不在编译机命令中暴露密码
+
+`run` 输出摘要：
+
+```jsonc
+{
+  "ok": true,
+  "action": "transfer",
+  "mode": "remote",
+  "deployPath": "/opt/app",
+  "artifacts": ["qt-app/build/app"],
+  "transferred": ["qt-app/build/app"],
+  "diagnostics": []
+}
+```
+
+---
+
 ## `compilot remote qt|sdk restore|reset`
 
 路径级 restore/reset 用于清理远端指定 tracked 文件，不执行大范围 reset，也不清理 untracked 文件。`reset` 是同一安全语义下的命令别名：
@@ -457,6 +494,29 @@ compilot remote sdk reset --repo sdk-lib -- include/version.h --json
 - `--` 后必须提供至少一个 repo 内相对路径
 - 拒绝 absolute path、`..` 逃逸、空路径
 - 远端执行 `git ls-files --error-unmatch` 后再 `git restore -- <paths>`
+- 不触发 build/run，不影响本地文件
+
+---
+
+## `compilot remote qt|sdk clean-untracked`
+
+显式 untracked 清理用于删除远端某个或某几个 untracked 路径，不提供自动扫描清理：
+
+```bash
+compilot remote qt clean-untracked --repo qt-app -- tmp/generated.txt --json
+compilot remote qt clean-untracked --repo qt-app --recursive -- tmp/generated-dir --json
+compilot remote sdk clean-untracked --repo sdk-lib -- generated/cache.bin --json
+```
+
+规则：
+
+- 必须提供 `--repo <repo>`
+- `--` 后必须提供至少一个 repo 内相对路径
+- 拒绝 absolute path、`..` 逃逸、空路径
+- 远端先执行 `git ls-files --others --exclude-standard -- <paths>` 确认目标是 untracked
+- 只删除被 git 确认为 untracked 的显式路径
+- 目录必须加 `--recursive`
+- 不执行 `git clean`
 - 不触发 build/run，不影响本地文件
 
 ---
@@ -581,7 +641,7 @@ interface RemoteCheck {
 
 ### `.compilot/sync-state.json`
 
-同步运行状态写入项目目录下的 `.compilot/sync-state.json`。remote 当前复用 sync 配置并已实现 branchSync/overlaySync/baselineCheck 的 build 类流水线；buildOrder 读取用户目录 remote settings，当前实现不读取项目内 deploy 配置文件。
+同步运行状态写入项目目录下的 `.compilot/sync-state.json`。remote 当前复用 sync 配置并已实现 branchSync/overlaySync/baselineCheck 的 build 类流水线；buildOrder 和 transfer 读取用户目录 remote settings，当前实现不读取项目内 deploy 配置文件。
 
 ---
 

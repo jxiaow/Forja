@@ -6,7 +6,7 @@
 
 ## 当前实现状态
 
-已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote build-order status/set/clear`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore/reset`、VSCode 命令面板中的 remote status/test/bootstrap/build/run/run-detach/stop/ps 类动作、VSCode 执行位置切换和状态栏/统一操作菜单远程分流，以及保守的 Problems 诊断映射。
+已实现 Phase 1：`remote test/status/bootstrap/unlock`、`remote build-order status/set/clear`、`remote transfer status/set/clear/run`、`remote qt|sdk status/init/use`、`remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean`、`remote qt|sdk restore/reset`、`remote qt|sdk clean-untracked`、VSCode 命令面板中的 remote status/test/bootstrap/build/run/run-detach/stop/ps 类动作、VSCode 执行位置切换和状态栏/统一操作菜单远程分流，以及保守的 Problems 诊断映射。
 
 当前剩余外部验证：真实远端 SSH smoke。SDK 是库，不提供 run/stop/ps。
 
@@ -20,6 +20,7 @@
 - 本地未提交改动同步到远端
 - 远端 Qt/SDK 构建命令复用 compilot
 - Qt 远程前台运行和后台运行
+- 显式产物从编译机 transfer 到部署机
 - AI/脚本可解析的远程 JSON pipeline 输出
 
 ## 命令入口
@@ -35,6 +36,10 @@ compilot remote unlock --lock-id <id> --force
 compilot remote build-order status
 compilot remote build-order set sdk:build qt:qmake qt:build
 compilot remote build-order clear
+compilot remote transfer status
+compilot remote transfer set --server <deployServerId> --path <deployPath> --artifact <path>
+compilot remote transfer run
+compilot remote transfer clear
 
 compilot remote qt build
 compilot remote qt status
@@ -49,6 +54,7 @@ compilot remote qt clean
 compilot remote qt qmake
 compilot remote qt restore --repo <repo> -- <paths...>
 compilot remote qt reset --repo <repo> -- <paths...>
+compilot remote qt clean-untracked --repo <repo> -- <paths...>
 
 compilot remote sdk build
 compilot remote sdk status
@@ -58,6 +64,7 @@ compilot remote sdk rebuild
 compilot remote sdk clean
 compilot remote sdk restore --repo <repo> -- <paths...>
 compilot remote sdk reset --repo <repo> -- <paths...>
+compilot remote sdk clean-untracked --repo <repo> -- <paths...>
 ```
 
 不把第一版远程能力挂到 `compilot qt ... --remote` 或 `compilot sdk ... --remote`。后续如果需要，可以作为别名再评估，但 canonical 入口是 `compilot remote <type> <action>`。
@@ -72,6 +79,7 @@ compilot remote sdk reset --repo <repo> -- <paths...>
 | `remote status` | 返回远程配置和能力状态，不修改远端 |
 | `remote unlock --lock-id <id> --force` | 显式清理匹配 lock-id 的远端 stale lock，不 kill 进程 |
 | `remote build-order status/set/clear` | 管理用户目录 remote settings 中的远程 buildOrder |
+| `remote transfer status/set/clear/run` | 管理并执行编译机到部署机的显式 artifact transfer |
 | `remote qt/sdk status/init/use` | 桥接远端 compilot 的 Qt/SDK 用户目录配置，不做 sync/build |
 | `remote qt build/clean/qmake` | 远程 Qt 构建类动作 |
 | `remote qt run` | 远程 Qt 前台运行，人工终端使用 |
@@ -79,6 +87,7 @@ compilot remote sdk reset --repo <repo> -- <paths...>
 | `remote qt stop/ps` | 管理远端 Qt 后台运行状态 |
 | `remote sdk build/rebuild/clean` | 远程 SDK 构建类动作 |
 | `remote <type> restore/reset` | 恢复远端指定 tracked 路径到远端当前 git HEAD |
+| `remote <type> clean-untracked` | 清理远端指定 untracked 路径，先由 git 确认；即 remote qt/sdk clean-untracked |
 
 SDK 是库，第一版不提供 `remote sdk run`、`remote sdk stop`、`remote sdk ps`。
 
@@ -121,6 +130,12 @@ remote sync 复用这些配置。mtime state 可继续作为普通 sync 的记�
 ```ts
 interface RemoteSettings {
   remoteCompilotBin?: string;
+  buildOrder?: Array<{ target: "qt" | "sdk"; action: string; args: string[] }>;
+  transfer?: {
+    deployServer: string;
+    deployPath: string;
+    artifacts: string[];
+  } | null;
 }
 ```
 
@@ -281,6 +296,7 @@ lock -> branchSync -> sync -> baselineCheck -> remote compilot qt run -> unlock 
 | `remote test/status` | 检查 | 可选摘要 | 否 | 否 | 否 | 否 |
 | `remote bootstrap` | 安装/更新 | 否 | 否 | 否 | 否 | 否 |
 | `remote unlock` | 否 | 否 | 否 | 否 | 否 | 清理匹配 lock |
+| `remote transfer status/set/clear/run` | 否 | 否 | 否 | 否 | 否 | 否 |
 | `remote qt/sdk status/init/use` | 必须 | 动作自身处理 | 否 | 否 | 否 | 短锁 |
 | `remote qt build/clean/qmake` | 必须 | 必须 | 是 | 是 | 是 | pipeline 全程 |
 | `remote sdk build/rebuild/clean` | 必须 | 必须 | 是 | 是 | 是 | pipeline 全程 |
@@ -288,6 +304,7 @@ lock -> branchSync -> sync -> baselineCheck -> remote compilot qt run -> unlock 
 | `remote qt run --detach` | 必须 | 必须 | 是 | 是 | 是 | launch 完成后释放 |
 | `remote qt stop/ps` | 必须 | Qt run-state | 否 | 否 | 否 | 短锁或无锁 |
 | `remote <type> restore` | 必须 | 否 | 否 | 否 | 否 | action 全程 |
+| `remote <type> clean-untracked` | 必须 | 否 | 否 | 否 | 否 | action 全程 |
 
 ### Branch Sync
 
@@ -314,9 +331,9 @@ git clean -fd
 
 baselineCheck 校验 commit 对齐，不要求远端 clean。输出必须区分 preserved tracked dirty、remote sync overlay、unknown untracked 和 files-only 降级状态。commit 不一致才阻塞。
 
-### Restore
+### Restore / Clean Untracked
 
-如果用户想清理远端某个或某几个文件，不提供大范围 reset，使用路径级 restore/reset。`reset` 是同一安全语义下的命令别名。
+如果用户想清理远端某个或某几个 tracked 文件，不提供大范围 reset，使用路径级 restore/reset。`reset` 是同一安全语义下的命令别名。
 
 ```bash
 compilot remote qt restore --repo qt-app -- src/main.cpp generated/version.h
@@ -335,6 +352,26 @@ compilot remote sdk reset --repo sdk-lib -- include/version.h
 - 不影响本地文件
 - 不触发 build/run
 
+如果用户想清理远端某个或某几个 untracked 文件，使用显式 clean-untracked：
+
+```bash
+compilot remote qt clean-untracked --repo qt-app -- tmp/generated.txt
+compilot remote qt clean-untracked --repo qt-app --recursive -- tmp/generated-dir
+compilot remote sdk clean-untracked --repo sdk-lib -- generated/cache.bin
+```
+
+规则：
+
+- 必须显式提供路径
+- 多仓库 workspace 必须指定 `--repo`
+- 路径是 repo 内相对路径，拒绝 absolute、`..` 逃逸和空路径
+- 先通过 `git ls-files --others --exclude-standard -- <paths>` 确认目标是 untracked
+- 只删除被 git 确认为 untracked 的显式路径
+- 目录必须加 `--recursive`
+- 不执行 `git clean`
+- 不影响本地文件
+- 不触发 build/run
+
 JSON 输出：
 
 ```json
@@ -348,6 +385,41 @@ JSON 输出：
   "failed": [],
   "discardedOverlay": [],
   "discardedUnderlay": []
+}
+```
+
+## Transfer
+
+transfer 用于把编译机上的显式产物复制到部署机。它不自动发现产物，不进入 build pipeline，也不修改远端仓库状态。
+
+```bash
+compilot remote transfer status
+compilot remote transfer set --server deploy-1 --path /opt/app --artifact qt-app/build/app
+compilot remote transfer run
+compilot remote transfer clear
+```
+
+规则：
+
+- 配置保存在用户目录 remote settings，不写项目内配置
+- `--server` 是 `~/.compilot/servers.json` 中的部署服务器 id
+- `--path` 必须是部署机绝对路径
+- `--artifact` 可重复，路径相对编译机 `remotePath`
+- artifact 拒绝 absolute、`..` 逃逸和空路径
+- 当前只支持 build host 直接 SSH/SCP 到 deploy host
+- 部署机当前必须支持 key auth；password auth 不在 direct 模式中透传
+
+JSON 输出：
+
+```json
+{
+  "ok": true,
+  "action": "transfer",
+  "mode": "remote",
+  "deployPath": "/opt/app",
+  "artifacts": ["qt-app/build/app"],
+  "transferred": ["qt-app/build/app"],
+  "diagnostics": []
 }
 ```
 
@@ -469,11 +541,10 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 - shell fallback 构建
 - SDK run/stop/ps
 - 大范围远端 reset
-- untracked 文件自动清理
+- 自动扫描 untracked 并批量清理
 - VSCode 大型配置 UI
-- 跨机器 transfer
 
-buildOrder 已实现。baseline 是正确性前提，buildOrder 是多仓库编排能力，两者不绑定。
+buildOrder 已实现。transfer 和显式 clean-untracked 已实现。baseline 是正确性前提，buildOrder 是多仓库编排能力，两者不绑定。
 
 ## 实现阶段状态
 
@@ -490,7 +561,8 @@ buildOrder 已实现。baseline 是正确性前提，buildOrder 是多仓库编�
 9. VSCode 执行位置切换、Bootstrap、状态栏/统一操作菜单远程分流、Qt foreground Terminal run
 10. VSCode Problems diagnostics adapter
 11. buildOrder 和路径级 reset 别名
-12. CLI/VSCode spec、README 和测试补齐
+12. transfer 和显式 clean-untracked
+13. CLI/VSCode spec、README 和测试补齐
 
 后续：
 

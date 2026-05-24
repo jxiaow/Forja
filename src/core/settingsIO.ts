@@ -55,9 +55,16 @@ export interface RemoteBuildOrderItem {
     args: string[];
 }
 
+export interface RemoteTransferSettings {
+    deployServer: string;
+    deployPath: string;
+    artifacts: string[];
+}
+
 export interface RemoteSettings {
     remoteCompilotBin: string;
     buildOrder: RemoteBuildOrderItem[];
+    transfer: RemoteTransferSettings | null;
 }
 
 export interface CompilotSettings {
@@ -105,7 +112,8 @@ export const DEFAULT_SYNC: Readonly<SyncSettings> = {
 
 export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
     remoteCompilotBin: '',
-    buildOrder: []
+    buildOrder: [],
+    transfer: null
 };
 
 export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
@@ -383,9 +391,21 @@ function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
             });
         }
     }
+    let transfer: RemoteTransferSettings | null = null;
+    if (raw.transfer && typeof raw.transfer === 'object' && !Array.isArray(raw.transfer)) {
+        const rawTransfer = raw.transfer as Record<string, unknown>;
+        if (isString(rawTransfer.deployServer) && isString(rawTransfer.deployPath) && isStringArray(rawTransfer.artifacts)) {
+            transfer = {
+                deployServer: rawTransfer.deployServer,
+                deployPath: rawTransfer.deployPath,
+                artifacts: rawTransfer.artifacts
+            };
+        }
+    }
     return {
         remoteCompilotBin: isString(raw.remoteCompilotBin) ? raw.remoteCompilotBin : d.remoteCompilotBin,
-        buildOrder
+        buildOrder,
+        transfer
     };
 }
 
