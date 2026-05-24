@@ -59,6 +59,8 @@ npm run remote:smoke -- --target qt --build --execute --yes
 
 - `compilot remote status --json`
 - `compilot remote test --json`
+- `compilot remote build-order status --json`
+- `compilot remote transfer status --json`
 - 可选 `compilot remote test --bootstrap --json`
 - `compilot remote qt|sdk status --json`
 - 可选 `compilot remote qt|sdk build --json`
@@ -86,6 +88,8 @@ npm run remote:smoke -- --target both --build --execute --yes --json-dir /tmp/co
 ```
 
 `--json-dir` 只保存每个 step 的 stdout/stderr 和退出码，便于对照 pipeline JSON；它不是远端状态源。
+
+手工排查时，`compilot remote status` 的普通文本输出会给出 server、remotePath、remoteCompilotBin、buildOrder、transfer 和 next action 摘要。JSON 模式仍是 AI/脚本集成的稳定入口。
 
 ## Status JSON
 

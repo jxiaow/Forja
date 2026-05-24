@@ -35,6 +35,10 @@ interface RemoteCliOptions {
 export async function runRemoteCli(argv: string[]): Promise<void> {
     const wantsJson = argv.includes('--json');
     try {
+        if (argv.includes('--help') || argv.includes('-h')) {
+            console.log(helpText());
+            return;
+        }
         const options = parseRemoteArgs(argv);
         if (options.action === 'status') {
             const result = await buildRemoteStatus({ workspace: options.workspace });
@@ -475,9 +479,33 @@ function writeOutput(result: unknown, json: boolean): void {
         console.log(JSON.stringify(result, null, 2));
         return;
     }
-    const out = result as { ok?: boolean; action?: string; overall?: string; stdout?: string; remote?: { stdout?: string }; diagnostics?: Array<{ message: string }> };
+    const out = result as {
+        ok?: boolean;
+        action?: string;
+        overall?: string;
+        stdout?: string;
+        remote?: { stdout?: string };
+        diagnostics?: Array<{ message: string }>;
+        nextActions?: string[];
+        server?: string;
+        remotePath?: string;
+        remoteSettings?: {
+            remoteCompilotBin: string;
+            buildOrder: { configured: boolean; items: string[] };
+            transfer: { configured: boolean; deployServer: string | null; deployPath: string | null; artifactCount: number };
+        };
+        status?: {
+            ready: boolean;
+            configured: boolean;
+            plan: Array<{ source: string; destination: string }>;
+        };
+    };
     if (out.action === 'status') {
-        console.log('Remote status: ' + (out.overall || 'unknown'));
+        console.log(formatRemoteStatus(out));
+        return;
+    }
+    if (out.action === 'transfer' && out.status) {
+        console.log(formatTransferStatus(out.status));
         return;
     }
     if (out.action === 'bridge' && out.stdout) {
@@ -493,4 +521,66 @@ function writeOutput(result: unknown, json: boolean): void {
         return;
     }
     console.log('Remote ' + (out.action || 'command') + ': ' + (out.ok === false ? 'failed' : 'ok'));
+}
+
+function formatRemoteStatus(out: {
+    overall?: string;
+    server?: string;
+    remotePath?: string;
+    remoteSettings?: {
+        remoteCompilotBin: string;
+        buildOrder: { configured: boolean; items: string[] };
+        transfer: { configured: boolean; deployServer: string | null; deployPath: string | null; artifactCount: number };
+    };
+    diagnostics?: Array<{ message: string }>;
+    nextActions?: string[];
+}): string {
+    const lines = ['Remote status: ' + (out.overall || 'unknown')];
+    if (out.server) { lines.push('server: ' + out.server); }
+    if (out.remotePath) { lines.push('remotePath: ' + out.remotePath); }
+    if (out.remoteSettings) {
+        lines.push('remoteCompilotBin: ' + (out.remoteSettings.remoteCompilotBin || '$HOME/.compilot/bin/compilot'));
+        lines.push('buildOrder: ' + (out.remoteSettings.buildOrder.configured ? out.remoteSettings.buildOrder.items.join(', ') : 'not configured'));
+        const transfer = out.remoteSettings.transfer;
+        lines.push('transfer: ' + (transfer.configured ? `${transfer.deployServer} -> ${transfer.deployPath} (${transfer.artifactCount} artifact${transfer.artifactCount === 1 ? '' : 's'})` : 'not configured'));
+    }
+    if (out.diagnostics && out.diagnostics.length > 0) {
+        for (const item of out.diagnostics) { lines.push('diagnostic: ' + item.message); }
+    }
+    if (out.nextActions && out.nextActions.length > 0) {
+        for (const item of out.nextActions) { lines.push('next: ' + item); }
+    }
+    return lines.join('\n');
+}
+
+function formatTransferStatus(status: {
+    ready: boolean;
+    configured: boolean;
+    plan: Array<{ source: string; destination: string }>;
+}): string {
+    const lines = ['Remote transfer: ' + (status.ready ? 'ready' : status.configured ? 'blocked' : 'not configured')];
+    for (const item of status.plan) {
+        lines.push(item.source + ' -> ' + item.destination);
+    }
+    return lines.join('\n');
+}
+
+function helpText(): string {
+    return [
+        'Usage: compilot remote <command> [options]',
+        '',
+        'Commands:',
+        '  compilot remote status [--json]',
+        '  compilot remote test [--bootstrap] [--json]',
+        '  compilot remote bootstrap [--json]',
+        '  compilot remote unlock --lock-id <id> --force [--json]',
+        '  compilot remote build-order status|set|clear [items...] [--json]',
+        '  compilot remote transfer status|set|clear|run [--json]',
+        '  compilot remote qt status|init|use|build|clean|qmake|run|stop|ps [--json]',
+        '  compilot remote qt restore|reset --repo <repo> -- <paths...> [--json]',
+        '  compilot remote qt clean-untracked --repo <repo> [--recursive] -- <paths...> [--json]',
+        '  compilot remote sdk status|init|use|build|rebuild|clean [--json]',
+        '  compilot remote sdk restore|reset --repo <repo> -- <paths...> [--json]',
+        '  compilot remote sdk clean-untracked --repo <repo> [--recursive] -- <paths...> [--json]'
+    ].join('\n');
 }

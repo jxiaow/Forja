@@ -9,7 +9,8 @@ import { executeRemoteBridge } from '../remote/core/bridge';
 import { buildRemoteStatus, buildRemoteTest } from '../remote/core/status';
 import { executeRemoteUnlock, unlockRemoteTarget } from '../remote/core/lock';
 import { executeRemoteRestore } from '../remote/core/restore';
-import { loadRemoteSettings, saveRemoteSettings } from '../core/settingsIO';
+import { loadRemoteSettings, saveRemoteSettings, saveSyncSettings, DEFAULT_SYNC } from '../core/settingsIO';
+import { writeServers } from '../core/serverStore';
 import { executeRemoteTransfer } from '../remote/core/transfer';
 import { executeRemoteCleanUntracked } from '../remote/core/cleanUntracked';
 import { VERSION } from '../version';
@@ -555,6 +556,71 @@ test('remote transfer status validates local plan without SSH', async () => {
     assert.equal(parsed.status.deployServer.exists, false);
     assert.ok(parsed.diagnostics.some((item: { message: string }) => /部署服务器不存在/.test(item.message)));
     assert.ok(parsed.nextActions.includes('检查 ~/.compilot/servers.json'));
+});
+
+test('remote transfer status reports ready local plan without SSH', async () => {
+    const workspace = tmpDir('compilot-remote-transfer-ready-');
+    writeServers([
+        {
+            ...testServer(),
+            id: 'build-1',
+            name: 'build-01'
+        },
+        {
+            ...testServer(),
+            id: 'deploy-1',
+            name: 'deploy-01',
+            host: '10.0.0.8',
+            username: 'deploy'
+        }
+    ]);
+    saveSyncSettings(workspace, { ...DEFAULT_SYNC, enabled: true, selectedServer: 'build-1', remotePaths: { 'build-1': '/remote/ws' } });
+    saveRemoteSettings(workspace, {
+        remoteCompilotBin: '',
+        buildOrder: [],
+        transfer: {
+            deployServer: 'deploy-1',
+            deployPath: '/opt/app',
+            artifacts: ['qt-app/build/app']
+        }
+    });
+
+    const output = await captureStdout(() => runRemoteCli(['transfer', 'status', '--workspace', workspace, '--json']));
+    const parsed = JSON.parse(output);
+
+    assert.equal(parsed.status.ready, true);
+    assert.equal(parsed.status.deployServer.name, 'deploy-01');
+    assert.deepEqual(parsed.status.plan, [{ source: '/remote/ws/qt-app/build/app', destination: '/opt/app/app' }]);
+    assert.deepEqual(parsed.diagnostics, []);
+});
+
+test('remote cli human status prints actionable local summary', async () => {
+    const workspace = tmpDir('compilot-remote-human-status-');
+    saveRemoteSettings(workspace, {
+        remoteCompilotBin: '/opt/compilot/bin/compilot',
+        buildOrder: [{ target: 'qt', action: 'build', args: [] }],
+        transfer: {
+            deployServer: 'deploy-1',
+            deployPath: '/opt/app',
+            artifacts: ['qt-app/build/app']
+        }
+    });
+
+    const output = await captureStdout(() => runRemoteCli(['status', '--workspace', workspace]));
+
+    assert.match(output, /Remote status: blocked/);
+    assert.match(output, /remoteCompilotBin: \/opt\/compilot\/bin\/compilot/);
+    assert.match(output, /buildOrder: qt:build/);
+    assert.match(output, /transfer: deploy-1 -> \/opt\/app \(1 artifact\)/);
+    assert.match(output, /next: 配置 sync server 和 remotePath/);
+});
+
+test('remote cli help documents remote utility commands', async () => {
+    const output = await captureStdout(() => runRemoteCli(['--help']));
+
+    assert.match(output, /compilot remote transfer status/);
+    assert.match(output, /compilot remote build-order status/);
+    assert.match(output, /compilot remote qt clean-untracked/);
 });
 
 test('executeRemoteCleanUntracked removes only explicit untracked paths', async () => {

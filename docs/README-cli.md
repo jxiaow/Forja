@@ -313,6 +313,7 @@ Phase 1 负责远程配置/连通性/CLI bootstrap/lock 清理、远端 Qt/SDK �
 `remote qt|sdk clean-untracked` 只清理 `--` 后显式传入的 repo 内相对路径。命令会先在远端用 git 确认这些路径是 untracked；目录必须加 `--recursive`；不会执行 `git clean`，也不会触碰 tracked 文件。
 
 remote 复用当前 sync 的服务器和 remotePath 配置；缺少配置时 `remote test/status --json` 会返回诊断和下一步建议。
+手工查看时可以直接运行 `compilot remote status`，普通文本输出会显示 server、remotePath、remoteCompilotBin、buildOrder、transfer 和 next action 摘要；AI/脚本继续使用 `--json`。
 
 ## 本地状态
 

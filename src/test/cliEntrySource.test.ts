@@ -233,6 +233,8 @@ test('remote smoke runner is opt-in and non destructive', () => {
     assert.match(runner, /--yes is required when executing --bootstrap or --build/);
     assert.match(runner, /remote', 'status'/);
     assert.match(runner, /remote', 'test'/);
+    assert.match(runner, /remote', 'build-order', 'status'/);
+    assert.match(runner, /remote', 'transfer', 'status'/);
     assert.match(runner, /remote', target, 'status'/);
     assert.match(runner, /remote', target, 'build'/);
     assert.doesNotMatch(runner, /git reset/);

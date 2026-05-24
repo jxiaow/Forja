@@ -93,7 +93,9 @@ function buildPlan(options) {
     const targets = options.target === 'both' ? ['qt', 'sdk'] : [options.target];
     const steps = [
         step('remote-status', ['remote', 'status', '--workspace', options.workspace, '--json']),
-        step('remote-test', ['remote', 'test', '--workspace', options.workspace, '--json'])
+        step('remote-test', ['remote', 'test', '--workspace', options.workspace, '--json']),
+        step('remote-build-order-status', ['remote', 'build-order', 'status', '--workspace', options.workspace, '--json']),
+        step('remote-transfer-status', ['remote', 'transfer', 'status', '--workspace', options.workspace, '--json'])
     ];
 
     if (options.bootstrap) {
