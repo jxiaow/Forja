@@ -116,10 +116,12 @@ test('vscode extension contributes and registers remote phase 1 commands', () =>
         'compilot.remote.execution.pick',
         'compilot.remote.execution.local',
         'compilot.remote.execution.remote',
+        'compilot.remote.workbench',
         'compilot.remote.status',
         'compilot.remote.doctor',
         'compilot.remote.test',
         'compilot.remote.bootstrap',
+        'compilot.remote.transfer.status',
         'compilot.remote.qt.build',
         'compilot.remote.qt.clean',
         'compilot.remote.qt.qmake',
@@ -147,6 +149,11 @@ test('vscode extension contributes and registers remote phase 1 commands', () =>
     assert.match(remoteCommandsSource, /loadRemoteSettings/);
     assert.match(remoteCommandsSource, /buildOrder:\s*remoteSettings\.buildOrder/);
     assert.match(remoteCommandsSource, /executeRemoteBootstrap/);
+    assert.match(remoteCommandsSource, /kind:\s*'workbench'/);
+    assert.match(remoteCommandsSource, /executeRemoteWorkbench/);
+    assert.match(remoteCommandsSource, /showQuickPick/);
+    assert.match(remoteCommandsSource, /compilot\.remote\.transfer\.status/);
+    assert.match(remoteCommandsSource, /executeCommand\(selected\.command\)/);
     assert.match(remoteCommandsSource, /buildRemoteDoctor/);
     assert.match(remoteCommandsSource, /findBootstrapArtifact\(context\.extensionPath\)/);
     assert.match(remoteCommandsSource, /buildRemoteStatus/);
@@ -183,12 +190,14 @@ test('remote vscode design documents phase 1 command palette scope', () => {
     assert.match(doc, /Compilot Remote SDK: Rebuild/);
     assert.match(doc, /Compilot Remote: Bootstrap/);
     assert.match(doc, /Compilot Remote: Doctor/);
+    assert.match(doc, /Compilot Remote: Workbench/);
     assert.match(doc, /不贡献 SDK run\/stop\/ps/);
 
     const readme = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-vscode.md'), 'utf8');
     assert.match(readme, /远程编译部署（Phase 1）/);
     assert.match(readme, /Compilot Remote: Status/);
     assert.match(readme, /Compilot Remote: Doctor/);
+    assert.match(readme, /Compilot Remote: Workbench/);
     assert.match(readme, /Compilot Remote Qt: Build \/ Clean \/ QMake \/ Run/);
     assert.match(readme, /Compilot Remote Qt: Run Detached \/ Stop \/ PS/);
     assert.match(readme, /当前 VSCode 侧已实现执行位置切换/);

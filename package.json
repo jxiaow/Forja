@@ -117,6 +117,10 @@
         "title": "Compilot Remote: Doctor"
       },
       {
+        "command": "compilot.remote.workbench",
+        "title": "Compilot Remote: Workbench"
+      },
+      {
         "command": "compilot.remote.execution.pick",
         "title": "Compilot: Select Execution Location"
       },
@@ -135,6 +139,10 @@
       {
         "command": "compilot.remote.bootstrap",
         "title": "Compilot Remote: Bootstrap"
+      },
+      {
+        "command": "compilot.remote.transfer.status",
+        "title": "Compilot Remote: Transfer Status"
       },
       {
         "command": "compilot.remote.qt.build",

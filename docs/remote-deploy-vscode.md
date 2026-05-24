@@ -104,10 +104,12 @@ Terminal 启动失败时不会进入远程 pipeline，不修改远端 checkout�
 Phase 1 先接入命令面板辅助入口，全部走 `src/remote/vscode/commands.ts` 适配层，不改普通 Qt/SDK 本地命令语义：
 
 ```text
+Compilot Remote: Workbench
 Compilot Remote: Status
 Compilot Remote: Doctor
 Compilot Remote: Test
 Compilot Remote: Bootstrap
+Compilot Remote: Transfer Status
 Compilot: Select Execution Location
 Compilot: Use Local Execution
 Compilot: Use Remote Execution
@@ -123,7 +125,7 @@ Compilot Remote SDK: Rebuild
 Compilot Remote SDK: Clean
 ```
 
-这些命令复用 sync server、remotePath、ignore 和用户目录 remote settings。Doctor 复用 remote core 汇总 readiness 检查、阻塞项、autofix 和 next actions，作为命令面板里的第一排障入口。bootstrap 直接通过 remote core 上传并安装当前扩展目录下的 CLI artifact；缺少 artifact 时只返回 diagnostics 和 `npm run build:cli` / `npm run package:all` next actions，不在 VSCode 内自动构建。build 类动作先执行 remote readiness preflight，再通过 remote core 执行 baseline、lock、branchSync、overlaySync、baselineCheck，最后桥接远端 compilot；如果配置了 buildOrder，VSCode Build 与 CLI 使用同一套编排。
+这些命令复用 sync server、remotePath、ignore 和用户目录 remote settings。Doctor 复用 remote core 汇总 readiness 检查、阻塞项、autofix 和 next actions，作为命令面板里的第一排障入口。Workbench 是 QuickPick 聚合入口，先显示 Doctor 摘要，再触发已有 VSCode remote 命令；它不调用 CLI，也不写配置。bootstrap 直接通过 remote core 上传并安装当前扩展目录下的 CLI artifact；缺少 artifact 时只返回 diagnostics 和 `npm run build:cli` / `npm run package:all` next actions，不在 VSCode 内自动构建。build 类动作先执行 remote readiness preflight，再通过 remote core 执行 baseline、lock、branchSync、overlaySync、baselineCheck，最后桥接远端 compilot；如果配置了 buildOrder，VSCode Build 与 CLI 使用同一套编排。
 
 Phase 1 不贡献 SDK run/stop/ps。日常 Build/Run 可通过状态栏和统一操作菜单在远程执行位置下分流，命令面板入口保留为辅助/诊断入口。
 

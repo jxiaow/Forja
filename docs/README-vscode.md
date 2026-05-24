@@ -56,6 +56,7 @@ code --install-extension compilot-x.x.x.vsix
 | Compilot Qt: 测试远程连接 | 测试 SSH 连接 |
 | Compilot Remote: Status | 查看远程配置、连通性和 readiness |
 | Compilot Remote: Doctor | 运行远程环境体检并显示阻塞项和下一步 |
+| Compilot Remote: Workbench | 打开远程工作台 QuickPick，查看摘要并触发常用动作 |
 | Compilot Remote: Test | 测试远程通道和远端 compilot 版本 |
 | Compilot Remote: Bootstrap | 上传当前 CLI artifact 并安装远端 compilot |
 | Compilot: Select Execution Location | 切换 VSCode 状态栏和操作菜单的本地/远程执行位置 |
@@ -77,7 +78,7 @@ code --install-extension compilot-x.x.x.vsix
 
 ## 远程编译部署（Phase 1）
 
-当前 VSCode 侧已实现执行位置切换和命令面板辅助入口：Remote Status/Doctor/Test/Bootstrap、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。Doctor 用于体检远程配置、连通性、远端 compilot、lock 和 baseline，并给出下一步动作。状态栏和统一操作菜单在远程执行位置下会分流到 remote 命令；build/run-detach 类动作复用 remote core，执行 readiness、baseline、lock、branchSync、overlaySync、baselineCheck，再桥接远端 compilot。配置了 buildOrder 时，VSCode Build 与 CLI 使用同一套用户目录 remote settings 编排。Qt foreground run 通过 VSCode Pseudoterminal 直接调用 remote core，由 pipeline 持有远端 lock，不依赖 CLI 入口。远程 build 类动作会把可安全映射回本地文件的编译错误发布到 Problems。
+当前 VSCode 侧已实现执行位置切换、Remote Workbench 和命令面板辅助入口：Remote Status/Doctor/Test/Bootstrap、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。Doctor 用于体检远程配置、连通性、远端 compilot、lock 和 baseline，并给出下一步动作。Workbench 先显示 Doctor 摘要，再提供 Status/Test/Bootstrap/Transfer Status/Qt Build/Qt Run/Qt Stop/SDK Build 等常用入口。状态栏和统一操作菜单在远程执行位置下会分流到 remote 命令；build/run-detach 类动作复用 remote core，执行 readiness、baseline、lock、branchSync、overlaySync、baselineCheck，再桥接远端 compilot。配置了 buildOrder 时，VSCode Build 与 CLI 使用同一套用户目录 remote settings 编排。Qt foreground run 通过 VSCode Pseudoterminal 直接调用 remote core，由 pipeline 持有远端 lock，不依赖 CLI 入口。远程 build 类动作会把可安全映射回本地文件的编译错误发布到 Problems。
 
 `Compilot Remote: Bootstrap` 直接复用 remote core 上传并安装当前扩展目录下的 CLI artifact；如果缺少 `dist/compilot-<version>/cli/compilot-cli-<version>.tgz`，命令会失败并提示先执行 `npm run build:cli` / `npm run package:all`，不会在 VSCode 内自动构建。
 

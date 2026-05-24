@@ -535,7 +535,7 @@ remote JSON 使用 pipeline 结构，不复用普通 `CliResult` 的平铺结构
 
 ## VSCode 插件体验
 
-当前 Phase 1 已接入命令面板辅助入口：Remote Status/Doctor/Test/Bootstrap、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。VSCode 主入口是“执行位置：本地 / 远程”，不是 CLI remote 命令菜单；状态栏和统一操作菜单在远程执行位置下映射到 remote core。完整规则见 `docs/remote-deploy-vscode.md`。
+当前 Phase 1 已接入 Remote Workbench 和命令面板辅助入口：Remote Status/Doctor/Test/Bootstrap、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。VSCode 主入口是“执行位置：本地 / 远程”和 Remote Workbench，不是 CLI remote 命令菜单；状态栏和统一操作菜单在远程执行位置下映射到 remote core。完整规则见 `docs/remote-deploy-vscode.md`。
 
 ## 当前 Phase 1 不做
 

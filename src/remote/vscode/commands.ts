@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { getServerById } from '../../core/serverStore';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { executeRemoteBootstrap, findBootstrapArtifact } from '../core/bootstrap';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
@@ -7,6 +8,7 @@ import { buildRemoteDoctor } from '../core/doctor';
 import { executePreparedRemoteAction, ExecutePreparedRemoteActionResult } from '../core/pipeline';
 import { createScpUploader, createSshRunner } from '../core/shell';
 import { buildRemoteStatus, buildRemoteTest } from '../core/status';
+import { buildRemoteTransferStatus } from '../core/transfer';
 import { RemoteDiagnostic } from '../core/types';
 import { createLogger } from '../../vscode/logger';
 import { getExecutionLocation, initExecutionLocation, setExecutionLocation } from '../../vscode/executionLocation';
@@ -15,7 +17,7 @@ import { publishRemoteProblems } from './diagnostics';
 const logger = createLogger('RemoteCommands');
 let remoteDiagnostics: vscode.DiagnosticCollection | null = null;
 
-type RemoteVscodeCommandKind = 'status' | 'doctor' | 'test' | 'bootstrap' | 'preparedAction' | 'bridgeAction' | 'foregroundTerminal' | 'executionLocation';
+type RemoteVscodeCommandKind = 'workbench' | 'status' | 'doctor' | 'test' | 'bootstrap' | 'transferStatus' | 'preparedAction' | 'bridgeAction' | 'foregroundTerminal' | 'executionLocation';
 
 interface RemoteVscodeCommandDefinition {
     id: string;
@@ -31,10 +33,12 @@ export const REMOTE_VSCODE_COMMANDS: readonly RemoteVscodeCommandDefinition[] = 
     { id: 'compilot.remote.execution.pick', title: 'Compilot: Select Execution Location', kind: 'executionLocation', executionLocation: 'pick' },
     { id: 'compilot.remote.execution.local', title: 'Compilot: Use Local Execution', kind: 'executionLocation', executionLocation: 'local' },
     { id: 'compilot.remote.execution.remote', title: 'Compilot: Use Remote Execution', kind: 'executionLocation', executionLocation: 'remote' },
+    { id: 'compilot.remote.workbench', title: 'Compilot Remote: Workbench', kind: 'workbench' },
     { id: 'compilot.remote.status', title: 'Compilot Remote: Status', kind: 'status' },
     { id: 'compilot.remote.doctor', title: 'Compilot Remote: Doctor', kind: 'doctor' },
     { id: 'compilot.remote.test', title: 'Compilot Remote: Test', kind: 'test' },
     { id: 'compilot.remote.bootstrap', title: 'Compilot Remote: Bootstrap', kind: 'bootstrap' },
+    { id: 'compilot.remote.transfer.status', title: 'Compilot Remote: Transfer Status', kind: 'transferStatus' },
     { id: 'compilot.remote.qt.build', title: 'Compilot Remote Qt: Build', kind: 'preparedAction', target: 'qt', remoteAction: 'build' },
     { id: 'compilot.remote.qt.clean', title: 'Compilot Remote Qt: Clean', kind: 'preparedAction', target: 'qt', remoteAction: 'clean' },
     { id: 'compilot.remote.qt.qmake', title: 'Compilot Remote Qt: QMake', kind: 'preparedAction', target: 'qt', remoteAction: 'qmake' },
@@ -64,6 +68,11 @@ async function executeRemoteVscodeCommand(context: vscode.ExtensionContext, comm
     const workspace = resolveWorkspaceRoot();
     if (!workspace) {
         vscode.window.showWarningMessage('Compilot Remote: 请先打开工作区');
+        return;
+    }
+
+    if (command.kind === 'workbench') {
+        await executeRemoteWorkbench(workspace);
         return;
     }
 
@@ -104,6 +113,62 @@ async function executeExecutionLocationCommand(command: RemoteVscodeCommandDefin
     const location = command.executionLocation === 'remote' ? 'remote' : 'local';
     await setExecutionLocation(location);
     vscode.window.showInformationMessage('Compilot: 执行位置已切换到 ' + (location === 'remote' ? 'Remote' : 'Local'));
+}
+
+async function executeRemoteWorkbench(workspace: string): Promise<void> {
+    const doctor = await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: 'Compilot Remote: Workbench',
+        cancellable: false
+    }, () => buildRemoteDoctor({ workspace }));
+
+    type WorkbenchItem = vscode.QuickPickItem & { command?: string };
+    const sep = (label: string): WorkbenchItem => ({ label, kind: vscode.QuickPickItemKind.Separator });
+    const items: WorkbenchItem[] = [
+        {
+            label: '$(pulse) Doctor',
+            description: doctor.overall,
+            detail: formatWorkbenchDetail(doctor.server, doctor.remotePath),
+            command: 'compilot.remote.doctor'
+        },
+        {
+            label: '$(info) Status',
+            description: '配置和 readiness 摘要',
+            command: 'compilot.remote.status'
+        },
+        {
+            label: '$(beaker) Test',
+            description: '远程通道和版本检查',
+            command: 'compilot.remote.test'
+        },
+        {
+            label: '$(cloud-upload) Bootstrap',
+            description: '安装或更新远端 compilot',
+            command: 'compilot.remote.bootstrap'
+        },
+        {
+            label: '$(arrow-swap) Transfer Status',
+            description: '本地校验 transfer plan',
+            command: 'compilot.remote.transfer.status'
+        },
+        sep('Qt'),
+        { label: '$(tools) Qt Build', description: 'Remote', command: 'compilot.remote.qt.build' },
+        { label: '$(play) Qt Run', description: 'Remote foreground Terminal', command: 'compilot.remote.qt.run' },
+        { label: '$(debug-stop) Qt Stop', description: 'Remote detached run', command: 'compilot.remote.qt.stop' },
+        sep('SDK'),
+        { label: '$(tools) SDK Build', description: 'Remote', command: 'compilot.remote.sdk.build' }
+    ];
+
+    const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: `Remote ${doctor.overall}: ${doctor.server || 'no server'} ${doctor.remotePath || ''}`.trim()
+    });
+    if (selected?.command) {
+        await vscode.commands.executeCommand(selected.command);
+    }
+}
+
+function formatWorkbenchDetail(server?: string, remotePath?: string): string {
+    return [server ? 'server: ' + server : '', remotePath ? 'remotePath: ' + remotePath : ''].filter(Boolean).join(' · ');
 }
 
 function startForegroundRemoteQtRun(context: vscode.ExtensionContext, workspace: string): void {
@@ -206,6 +271,21 @@ async function executeCommand(context: vscode.ExtensionContext, workspace: strin
     }
     if (command.kind === 'test') {
         return buildRemoteTest({ workspace });
+    }
+    if (command.kind === 'transferStatus') {
+        const settings = loadRemoteSettings(workspace);
+        const resolved = resolveRemoteConfig(workspace);
+        const deployServer = settings.transfer ? getServerById(settings.transfer.deployServer) : null;
+        const status = buildRemoteTransferStatus({
+            remotePath: resolved.config?.remotePath ?? null,
+            transfer: settings.transfer,
+            deployServer
+        });
+        return {
+            ok: status.ready,
+            diagnostics: [...resolved.diagnostics, ...status.diagnostics],
+            nextActions: Array.from(new Set([...resolved.nextActions, ...status.nextActions]))
+        };
     }
 
     const resolved = resolveRemoteConfig(workspace);
