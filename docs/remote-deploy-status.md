@@ -48,7 +48,7 @@ build/run/rebuild/qmake 的 pipeline 中需要显式 `targetReadiness` stage。r
 
 真实 SSH smoke 是发布前人工执行的 E2E 检查，不进入自动单测。仓库提供 runner：
 
-当前状态（2026-05-23）：本地 compile、全量单测和 `build:cli` 已通过；由于当前没有可用真实远端环境，真实 SSH smoke 记录为后续环境自测项。拿到远端环境后必须执行本节推荐命令，并保留 `--json-dir` 产物用于回溯。
+当前状态（2026-05-24）：本地 compile、全量单测和 `build:cli` 已通过；`remote status` 已包含 remoteSettings 摘要，`remote transfer status` 已支持本地配置校验和 plan 输出。由于当前没有可用真实远端环境，真实 SSH smoke 记录为后续环境自测项。拿到远端环境后必须执行本节推荐命令，并保留 `--json-dir` 产物用于回溯。
 
 ```bash
 npm run remote:smoke -- --target qt --build
@@ -136,6 +136,20 @@ npm run remote:smoke -- --target both --build --execute --yes --json-dir /tmp/co
     "owner": "cli",
     "stage": "sync",
     "startedAt": "2026-05-23T10:00:00.000Z"
+  },
+  "remoteSettings": {
+    "remoteCompilotBin": "/opt/compilot/bin/compilot",
+    "buildOrder": {
+      "configured": true,
+      "count": 2,
+      "items": ["sdk:build", "qt:build"]
+    },
+    "transfer": {
+      "configured": true,
+      "deployServer": "deploy-1",
+      "deployPath": "/opt/app",
+      "artifactCount": 1
+    }
   },
   "diagnostics": [],
   "nextActions": ["compilot remote qt init"]

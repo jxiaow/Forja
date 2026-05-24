@@ -461,6 +461,36 @@ compilot remote transfer clear --json
 - 当前只支持 direct build-host-to-deploy-host SSH/SCP；编译机必须能免密访问部署机
 - direct 模式拒绝部署机 password auth，不在编译机命令中暴露密码
 
+transfer status 只做本地校验，不连接 SSH。它会检查 sync remotePath 是否可用于生成 source、部署服务器 id 是否存在、deployPath/artifact 路径是否合法、部署服务器 auth 是否满足 direct 模式要求，并返回 plan：
+
+```jsonc
+{
+  "ok": true,
+  "action": "transfer",
+  "mode": "remote",
+  "status": {
+    "ready": true,
+    "configured": true,
+    "deployServer": {
+      "id": "deploy-1",
+      "name": "deploy-01",
+      "exists": true,
+      "authMode": "key"
+    },
+    "deployPath": "/opt/app",
+    "artifacts": ["qt-app/build/app"],
+    "plan": [
+      {
+        "source": "/remote/workspace/qt-app/build/app",
+        "destination": "/opt/app/app"
+      }
+    ],
+    "diagnostics": [],
+    "nextActions": []
+  }
+}
+```
+
 `run` 输出摘要：
 
 ```jsonc

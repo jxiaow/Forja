@@ -9,7 +9,7 @@ import { executeRemoteBridge } from '../remote/core/bridge';
 import { buildRemoteStatus, buildRemoteTest } from '../remote/core/status';
 import { executeRemoteUnlock, unlockRemoteTarget } from '../remote/core/lock';
 import { executeRemoteRestore } from '../remote/core/restore';
-import { loadRemoteSettings } from '../core/settingsIO';
+import { loadRemoteSettings, saveRemoteSettings } from '../core/settingsIO';
 import { executeRemoteTransfer } from '../remote/core/transfer';
 import { executeRemoteCleanUntracked } from '../remote/core/cleanUntracked';
 import { VERSION } from '../version';
@@ -155,6 +155,36 @@ test('remote status includes configured server and remote path without probing w
     assert.equal(result.remotePath, '/remote/ws');
     assert.equal(result.overall, 'unknown');
     assert.ok(result.layers.some(layer => layer.name === 'remoteCompilot' && layer.ok === null));
+});
+
+test('remote status includes local remote settings summary without SSH', async () => {
+    const workspace = tmpDir('compilot-remote-settings-summary-');
+    saveRemoteSettings(workspace, {
+        remoteCompilotBin: '/opt/compilot/bin/compilot',
+        buildOrder: [
+            { target: 'sdk', action: 'build', args: [] },
+            { target: 'qt', action: 'build', args: [] }
+        ],
+        transfer: {
+            deployServer: 'deploy-1',
+            deployPath: '/opt/app',
+            artifacts: ['qt-app/build/app']
+        }
+    });
+
+    const result = await buildRemoteStatus({
+        workspace,
+        probe: false,
+        baseline: false,
+        lock: false,
+        config: { workspace, server: testServer(), remotePath: '/remote/ws', ignore: [] }
+    });
+
+    assert.equal(result.remoteSettings?.remoteCompilotBin, '/opt/compilot/bin/compilot');
+    assert.equal(result.remoteSettings?.buildOrder.configured, true);
+    assert.equal(result.remoteSettings?.buildOrder.count, 2);
+    assert.equal(result.remoteSettings?.transfer.configured, true);
+    assert.equal(result.remoteSettings?.transfer.artifactCount, 1);
 });
 
 
@@ -507,6 +537,24 @@ test('remote CLI manages transfer settings in user remote settings', async () =>
     const clearParsed = JSON.parse(clearOutput);
     assert.equal(clearParsed.ok, true);
     assert.equal(loadRemoteSettings(workspace).transfer, null);
+});
+
+test('remote transfer status validates local plan without SSH', async () => {
+    const workspace = tmpDir('compilot-remote-transfer-status-');
+    await captureStdout(() => runRemoteCli(['transfer', 'set', '--server', 'missing-deploy', '--path', '/opt/app', '--artifact', 'qt-app/build/app', '--workspace', workspace, '--json']));
+    process.exitCode = undefined;
+
+    const output = await captureStdout(() => runRemoteCli(['transfer', 'status', '--workspace', workspace, '--json']));
+    const parsed = JSON.parse(output);
+
+    assert.equal(process.exitCode, undefined);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.action, 'transfer');
+    assert.equal(parsed.status.configured, true);
+    assert.equal(parsed.status.ready, false);
+    assert.equal(parsed.status.deployServer.exists, false);
+    assert.ok(parsed.diagnostics.some((item: { message: string }) => /部署服务器不存在/.test(item.message)));
+    assert.ok(parsed.nextActions.includes('检查 ~/.compilot/servers.json'));
 });
 
 test('executeRemoteCleanUntracked removes only explicit untracked paths', async () => {

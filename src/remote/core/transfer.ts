@@ -22,6 +22,87 @@ export interface ExecuteRemoteTransferResult {
     nextActions: string[];
 }
 
+export interface RemoteTransferStatusResult {
+    ready: boolean;
+    configured: boolean;
+    deployServer: {
+        id: string | null;
+        name: string | null;
+        exists: boolean;
+        authMode: ServerConfig['authMode'] | null;
+    };
+    deployPath: string | null;
+    artifacts: string[];
+    plan: Array<{ source: string; destination: string }>;
+    diagnostics: RemoteDiagnostic[];
+    nextActions: string[];
+}
+
+export function buildRemoteTransferStatus(options: {
+    remotePath: string | null;
+    transfer: RemoteTransferSettings | null;
+    deployServer: ServerConfig | null;
+}): RemoteTransferStatusResult {
+    const diagnostics: RemoteDiagnostic[] = [];
+    const nextActions: string[] = [];
+    if (!options.transfer) {
+        return {
+            ready: false,
+            configured: false,
+            deployServer: { id: null, name: null, exists: false, authMode: null },
+            deployPath: null,
+            artifacts: [],
+            plan: [],
+            diagnostics: [{ level: 'warning', message: 'remote transfer 尚未配置' }],
+            nextActions: ['compilot remote transfer set --server <id> --path <deployPath> --artifact <path>']
+        };
+    }
+
+    const deployPathError = validateDeployPath(options.transfer.deployPath);
+    if (deployPathError) { diagnostics.push({ level: 'error', message: deployPathError }); }
+    for (const artifact of options.transfer.artifacts) {
+        const artifactError = validateRelativePath(artifact, 'artifact');
+        if (artifactError) { diagnostics.push({ level: 'error', message: artifactError }); }
+    }
+    if (options.transfer.artifacts.length === 0) {
+        diagnostics.push({ level: 'error', message: 'remote transfer 需要至少一个 artifact' });
+    }
+    if (!options.remotePath) {
+        diagnostics.push({ level: 'error', message: 'sync remotePath 未配置，无法生成 transfer plan' });
+        nextActions.push('配置 sync server 和 remotePath');
+    }
+    if (!options.deployServer) {
+        diagnostics.push({ level: 'error', message: '部署服务器不存在: ' + options.transfer.deployServer });
+        nextActions.push('检查 ~/.compilot/servers.json');
+    } else if (options.deployServer.authMode === 'password') {
+        diagnostics.push({ level: 'error', message: 'remote transfer direct 模式不支持部署机 password auth，请在编译机到部署机之间配置 SSH key' });
+        nextActions.push('在编译机配置到部署机的 SSH key');
+    }
+
+    const plan = options.remotePath && diagnostics.length === 0
+        ? options.transfer.artifacts.map(artifact => ({
+            source: joinRemotePath(options.remotePath!, artifact),
+            destination: joinRemotePath(options.transfer!.deployPath, basename(artifact))
+        }))
+        : [];
+
+    return {
+        ready: diagnostics.every(item => item.level !== 'error'),
+        configured: true,
+        deployServer: {
+            id: options.transfer.deployServer,
+            name: options.deployServer?.name ?? null,
+            exists: options.deployServer !== null,
+            authMode: options.deployServer?.authMode ?? null
+        },
+        deployPath: options.transfer.deployPath,
+        artifacts: options.transfer.artifacts,
+        plan,
+        diagnostics,
+        nextActions: unique(nextActions)
+    };
+}
+
 export async function executeRemoteTransfer(options: ExecuteRemoteTransferOptions): Promise<ExecuteRemoteTransferResult> {
     const diagnostics: RemoteDiagnostic[] = [];
     const transferred: ExecuteRemoteTransferResult['transferred'] = [];
@@ -132,4 +213,8 @@ function result(
 
 function trim(value: string): string {
     return value.trim().split(/\r?\n/).slice(0, 3).join('\n');
+}
+
+function unique(values: string[]): string[] {
+    return Array.from(new Set(values));
 }

@@ -10,7 +10,7 @@ import { executePreparedRemoteAction } from '../core/pipeline';
 import { executeRemoteRestore } from '../core/restore';
 import { createScpUploader, createSshRunner } from '../core/shell';
 import { buildRemoteStatus, buildRemoteTest } from '../core/status';
-import { executeRemoteTransfer } from '../core/transfer';
+import { buildRemoteTransferStatus, executeRemoteTransfer } from '../core/transfer';
 import { RemoteDiagnostic } from '../core/types';
 
 interface RemoteCliOptions {
@@ -134,7 +134,14 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 writeOutput(transferResult, options.json);
                 return;
             }
-            writeOutput({ ok: true, action: 'transfer', mode: 'remote', transfer: settings.transfer, diagnostics: [], nextActions: [] }, options.json);
+            const resolved = resolveRemoteConfig(options.workspace);
+            const deployServer = settings.transfer ? getServerById(settings.transfer.deployServer) : null;
+            const status = buildRemoteTransferStatus({
+                remotePath: resolved.config?.remotePath ?? null,
+                transfer: settings.transfer,
+                deployServer
+            });
+            writeOutput({ ok: true, action: 'transfer', mode: 'remote', status, transfer: settings.transfer, diagnostics: [...resolved.diagnostics, ...status.diagnostics], nextActions: unique([...resolved.nextActions, ...status.nextActions]) }, options.json);
             return;
         }
         if (options.action === 'bridge') {
@@ -457,6 +464,10 @@ function parseBuildOrderItems(items: string[]): RemoteBuildOrderItem[] {
         }
         throw new Error('非法 build-order 项: ' + item);
     });
+}
+
+function unique(values: string[]): string[] {
+    return Array.from(new Set(values));
 }
 
 function writeOutput(result: unknown, json: boolean): void {

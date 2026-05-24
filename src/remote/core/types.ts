@@ -63,6 +63,20 @@ export interface RemoteStatusResult {
         stage?: string;
         startedAt?: string;
     };
+    remoteSettings?: {
+        remoteCompilotBin: string;
+        buildOrder: {
+            configured: boolean;
+            count: number;
+            items: string[];
+        };
+        transfer: {
+            configured: boolean;
+            deployServer: string | null;
+            deployPath: string | null;
+            artifactCount: number;
+        };
+    };
     repos?: RepoBaselineState[];
     diagnostics: RemoteDiagnostic[];
     nextActions: string[];

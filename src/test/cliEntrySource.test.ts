@@ -55,6 +55,7 @@ test('cli interface spec lists only implemented subcommands as available', () =>
     assert.match(spec, /remote qt build\/clean\/qmake/);
     assert.match(spec, /remote sdk build\/rebuild\/clean/);
     assert.match(spec, /direct build-host-to-deploy-host/);
+    assert.match(spec, /transfer status 只做本地校验/);
     assert.match(spec, /不执行 `git clean`/);
     assert.match(spec, /Remote prepared action 输出结构/);
     assert.match(spec, /targetReadiness -> baselinePrecheck -> acquireLock -> branchSync -> overlaySync -> baselineCheck -> remoteAction -> releaseLock/);
@@ -72,6 +73,8 @@ test('cli user guide documents remote phase 1 prepared build support without run
     assert.match(guide, /compilot remote qt restore --repo qt-app/);
     assert.match(guide, /compilot remote transfer set --server deploy-1 --path \/opt\/app --artifact qt-app\/build\/app --json/);
     assert.match(guide, /compilot remote transfer run --json/);
+    assert.match(guide, /remote transfer status --json/);
+    assert.match(guide, /本地校验/);
     assert.match(guide, /compilot remote qt clean-untracked --repo qt-app -- tmp\/generated\.txt --json/);
     assert.match(guide, /compilot remote build-order set sdk:build qt:qmake qt:build/);
     assert.match(guide, /远程 Qt\/SDK build 类动作/);
@@ -246,6 +249,8 @@ test('remote status doc defines real ssh smoke runbook', () => {
     assert.match(doc, /--execute/);
     assert.match(doc, /--bootstrap --yes/);
     assert.match(doc, /--json-dir/);
+    assert.match(doc, /当前状态（2026-05-24）/);
+    assert.match(doc, /remoteSettings/);
     assert.match(doc, /不执行 .*git reset/);
     assert.match(doc, /不执行 .*git clean/);
     assert.match(doc, /不执行 .*remote unlock --force/);

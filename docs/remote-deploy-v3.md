@@ -406,6 +406,7 @@ compilot remote transfer clear
 - `--path` 必须是部署机绝对路径
 - `--artifact` 可重复，路径相对编译机 `remotePath`
 - artifact 拒绝 absolute、`..` 逃逸和空路径
+- `transfer status` 只做本地校验并输出 source/destination plan，不连接 SSH
 - 当前只支持 build host 直接 SSH/SCP 到 deploy host
 - 部署机当前必须支持 key auth；password auth 不在 direct 模式中透传
 

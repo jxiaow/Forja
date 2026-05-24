@@ -1,4 +1,4 @@
-import { loadRemoteSettings } from '../../core/settingsIO';
+import { loadRemoteSettings, RemoteSettings } from '../../core/settingsIO';
 import { buildRemoteBaselineStatus, GitRunner } from './baseline';
 import { BootstrapArtifactResult, executeRemoteBootstrap, RemoteUploader } from './bootstrap';
 import { VERSION } from '../../version';
@@ -25,6 +25,8 @@ export interface BuildRemoteTestOptions extends BuildRemoteStatusOptions {
 }
 
 export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Promise<RemoteStatusResult> {
+    const localRemoteSettings = loadRemoteSettings(options.workspace);
+    const remoteSettingsSummary = summarizeRemoteSettings(localRemoteSettings);
     const resolved = options.config
         ? {
             config: options.config,
@@ -42,6 +44,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
             overall: 'blocked',
             workspace: options.workspace,
             layers,
+            remoteSettings: remoteSettingsSummary,
             diagnostics: resolved.diagnostics,
             nextActions: resolved.nextActions
         };
@@ -66,6 +69,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
             remotePath,
             layers,
             lock: { locked: false },
+            remoteSettings: remoteSettingsSummary,
             diagnostics: [],
             nextActions: []
         };
@@ -98,7 +102,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         return finishBlocked(options.workspace, server.name || server.id, remotePath, layers, diagnostics, 'remotePath');
     }
 
-    const remoteSettings = options.remoteCompilotBin === undefined ? loadRemoteSettings(resolved.config.workspace) : undefined;
+    const remoteSettings = options.remoteCompilotBin === undefined ? localRemoteSettings : undefined;
     const remoteCompilotBin = options.remoteCompilotBin ?? remoteSettings?.remoteCompilotBin ?? '';
     const versionResult = await runner.run(buildRemoteCompilotVersionCommand(remoteCompilotBin), 10000);
     const remoteVersion = versionResult.stdout.trim();
@@ -132,6 +136,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
                 remotePath,
                 layers,
                 lock,
+                remoteSettings: remoteSettingsSummary,
                 diagnostics,
                 nextActions: lockStatus.lock.lockId ? ['compilot remote unlock --lock-id ' + lockStatus.lock.lockId + ' --force'] : []
             };
@@ -160,6 +165,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
             remotePath,
             layers,
             lock,
+            remoteSettings: remoteSettingsSummary,
             repos: baseline.repos,
             diagnostics,
             nextActions: baseline.nextActions
@@ -176,6 +182,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         remotePath,
         layers,
         lock,
+        remoteSettings: remoteSettingsSummary,
         diagnostics,
         nextActions: []
     };
@@ -247,8 +254,26 @@ function finishBlocked(
         remotePath,
         layers,
         lock: { locked: false },
+        remoteSettings: summarizeRemoteSettings(loadRemoteSettings(workspace)),
         diagnostics,
         nextActions: nextActions || layer?.nextActions || []
+    };
+}
+
+function summarizeRemoteSettings(settings: RemoteSettings): NonNullable<RemoteStatusResult['remoteSettings']> {
+    return {
+        remoteCompilotBin: settings.remoteCompilotBin,
+        buildOrder: {
+            configured: settings.buildOrder.length > 0,
+            count: settings.buildOrder.length,
+            items: settings.buildOrder.map(item => `${item.target}:${item.action}`)
+        },
+        transfer: {
+            configured: settings.transfer !== null,
+            deployServer: settings.transfer?.deployServer ?? null,
+            deployPath: settings.transfer?.deployPath ?? null,
+            artifactCount: settings.transfer?.artifacts.length ?? 0
+        }
     };
 }
 

@@ -308,7 +308,7 @@ compilot remote sdk clean-untracked --repo sdk-lib -- generated/cache.bin --json
 
 Phase 1 负责远程配置/连通性/CLI bootstrap/lock 清理、远端 Qt/SDK 的 status/init/use 配置桥接、buildOrder、跨机器 transfer、路径级 tracked 文件 restore/reset、显式 untracked 清理，以及 `remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean` 的远端执行。`compilot remote sdk run/stop/ps`、`qt build --remote`、`sdk build --remote` 不支持。
 
-`remote transfer` 从编译机把显式 artifact 复制到部署机：`--server` 使用 `~/.compilot/servers.json` 中的部署服务器 id，`--path` 必须是部署机绝对路径，`--artifact` 是编译机 `remotePath` 下的相对路径。当前只支持 build host 直接 SSH/SCP 到 deploy host，不自动发现产物。
+`remote transfer` 从编译机把显式 artifact 复制到部署机：`--server` 使用 `~/.compilot/servers.json` 中的部署服务器 id，`--path` 必须是部署机绝对路径，`--artifact` 是编译机 `remotePath` 下的相对路径。`remote transfer status --json` 只做本地校验并输出 source/destination plan，不连接 SSH；`remote transfer run --json` 才会通过 build host 直接 SSH/SCP 到 deploy host。当前不自动发现产物。
 
 `remote qt|sdk clean-untracked` 只清理 `--` 后显式传入的 repo 内相对路径。命令会先在远端用 git 确认这些路径是 untracked；目录必须加 `--recursive`；不会执行 `git clean`，也不会触碰 tracked 文件。
 
