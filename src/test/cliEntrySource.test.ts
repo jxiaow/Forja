@@ -247,13 +247,18 @@ test('remote smoke runner is opt-in and non destructive', () => {
     const runner = fs.readFileSync(path.join(process.cwd(), 'scripts', 'remote-smoke.js'), 'utf8');
     assert.match(runner, /Dry-run only/);
     assert.match(runner, /--execute/);
-    assert.match(runner, /--yes is required when executing --bootstrap or --build/);
+    assert.match(runner, /--yes is required when executing mutating remote smoke steps/);
+    assert.match(runner, /remote', 'doctor'/);
     assert.match(runner, /remote', 'status'/);
     assert.match(runner, /remote', 'test'/);
     assert.match(runner, /remote', 'build-order', 'status'/);
     assert.match(runner, /remote', 'transfer', 'status'/);
     assert.match(runner, /remote', target, 'status'/);
     assert.match(runner, /remote', target, 'build'/);
+    assert.match(runner, /remote', 'qt', 'run', '--detach'/);
+    assert.match(runner, /remote', 'qt', 'ps'/);
+    assert.match(runner, /remote', 'qt', 'stop'/);
+    assert.match(runner, /Remote smoke summary/);
     assert.doesNotMatch(runner, /git reset/);
     assert.doesNotMatch(runner, /git clean/);
     assert.doesNotMatch(runner, /clean-untracked/);
@@ -264,12 +269,15 @@ test('remote smoke runner is opt-in and non destructive', () => {
 test('remote status doc defines real ssh smoke runbook', () => {
     const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-status.md'), 'utf8');
     assert.match(doc, /Real Remote Smoke/);
-    assert.match(doc, /npm run remote:smoke -- --target qt --build/);
+    assert.match(doc, /npm run remote:smoke -- --target qt --build --run-detach --stop/);
     assert.match(doc, /--execute/);
     assert.match(doc, /--bootstrap --yes/);
     assert.match(doc, /--json-dir/);
-    assert.match(doc, /当前状态（2026-05-24）/);
+    assert.match(doc, /当前状态（2026-05-25）/);
     assert.match(doc, /remoteSettings/);
+    assert.match(doc, /compilot remote doctor --json/);
+    assert.match(doc, /compilot remote qt run --detach --json/);
+    assert.match(doc, /compilot remote qt stop --json/);
     assert.match(doc, /不执行 .*git reset/);
     assert.match(doc, /不执行 .*git clean/);
     assert.match(doc, /不执行 .*remote unlock --force/);
@@ -281,19 +289,23 @@ test('remote status doc defines real ssh smoke runbook', () => {
 
 
 test('remote smoke runner dry-run and execute guard do not require ssh', () => {
-    const dryRun = spawnSync(process.execPath, ['scripts/remote-smoke.js', '--target', 'qt', '--build'], {
+    const dryRun = spawnSync(process.execPath, ['scripts/remote-smoke.js', '--target', 'qt', '--build', '--run-detach', '--stop'], {
         cwd: process.cwd(),
         encoding: 'utf8'
     });
     assert.equal(dryRun.status, 0);
     assert.match(dryRun.stdout, /mode: dry-run/);
+    assert.match(dryRun.stdout, /remote-doctor/);
     assert.match(dryRun.stdout, /qt-build \[mutates remote\]/);
+    assert.match(dryRun.stdout, /qt-run-detach \[mutates remote\]/);
+    assert.match(dryRun.stdout, /qt-stop \[mutates remote\]/);
+    assert.match(dryRun.stdout, /remote-doctor-final/);
     assert.match(dryRun.stdout, /Dry-run only/);
 
-    const blocked = spawnSync(process.execPath, ['scripts/remote-smoke.js', '--target', 'qt', '--build', '--execute'], {
+    const blocked = spawnSync(process.execPath, ['scripts/remote-smoke.js', '--target', 'qt', '--run-detach', '--execute'], {
         cwd: process.cwd(),
         encoding: 'utf8'
     });
     assert.notEqual(blocked.status, 0);
-    assert.match(blocked.stderr, /--yes is required when executing --bootstrap or --build/);
+    assert.match(blocked.stderr, /--yes is required when executing mutating remote smoke steps/);
 });

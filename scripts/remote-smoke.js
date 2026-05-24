@@ -15,9 +15,11 @@ function usage() {
         '  --workspace <path>  Local workspace root. Defaults to cwd.',
         '  --target <target>   qt, sdk, or both. Defaults to both.',
         '  --build             Include remote build actions.',
+        '  --run-detach        Include remote Qt run --detach and ps.',
+        '  --stop              Include remote Qt stop after --run-detach.',
         '  --bootstrap         Allow remote test --bootstrap before target checks.',
         '  --execute           Run commands. Without this flag the script prints a dry-run plan.',
-        '  --yes               Required when executing --bootstrap or --build.',
+        '  --yes               Required when executing mutating remote smoke steps.',
         '  --cli <path>        Compiled CLI entry. Defaults to out/cli/index.js.',
         '  --json-dir <path>   Save stdout/stderr for each executed step.',
         '  --help              Show this help.'
@@ -29,6 +31,8 @@ function parseArgs(argv) {
         workspace: process.cwd(),
         target: 'both',
         build: false,
+        runDetach: false,
+        stop: false,
         bootstrap: false,
         execute: false,
         yes: false,
@@ -47,6 +51,12 @@ function parseArgs(argv) {
                 break;
             case '--build':
                 options.build = true;
+                break;
+            case '--run-detach':
+                options.runDetach = true;
+                break;
+            case '--stop':
+                options.stop = true;
                 break;
             case '--bootstrap':
                 options.bootstrap = true;
@@ -75,10 +85,20 @@ function parseArgs(argv) {
     if (!['qt', 'sdk', 'both'].includes(options.target)) {
         throw new Error('--target must be qt, sdk, or both');
     }
-    if (options.execute && (options.bootstrap || options.build) && !options.yes) {
-        throw new Error('--yes is required when executing --bootstrap or --build');
+    if (options.stop && !options.runDetach) {
+        throw new Error('--stop requires --run-detach');
+    }
+    if (options.target === 'sdk' && (options.runDetach || options.stop)) {
+        throw new Error('--run-detach/--stop require --target qt or both');
+    }
+    if (options.execute && hasRequiredYesStep(options) && !options.yes) {
+        throw new Error('--yes is required when executing mutating remote smoke steps');
     }
     return options;
+}
+
+function hasRequiredYesStep(options) {
+    return options.bootstrap || options.build || options.runDetach || options.stop;
 }
 
 function readValue(argv, index, option) {
@@ -92,6 +112,7 @@ function readValue(argv, index, option) {
 function buildPlan(options) {
     const targets = options.target === 'both' ? ['qt', 'sdk'] : [options.target];
     const steps = [
+        step('remote-doctor', ['remote', 'doctor', '--workspace', options.workspace, '--json']),
         step('remote-status', ['remote', 'status', '--workspace', options.workspace, '--json']),
         step('remote-test', ['remote', 'test', '--workspace', options.workspace, '--json']),
         step('remote-build-order-status', ['remote', 'build-order', 'status', '--workspace', options.workspace, '--json']),
@@ -108,8 +129,16 @@ function buildPlan(options) {
             steps.push(step(target + '-build', ['remote', target, 'build', '--workspace', options.workspace, '--json'], true));
         }
     }
+    if (targets.includes('qt') && options.runDetach) {
+        steps.push(step('qt-run-detach', ['remote', 'qt', 'run', '--detach', '--workspace', options.workspace, '--json'], true));
+        steps.push(step('qt-ps', ['remote', 'qt', 'ps', '--workspace', options.workspace, '--json']));
+        if (options.stop) {
+            steps.push(step('qt-stop', ['remote', 'qt', 'stop', '--workspace', options.workspace, '--json'], true));
+            steps.push(step('qt-ps-after-stop', ['remote', 'qt', 'ps', '--workspace', options.workspace, '--json']));
+        }
+    }
 
-    steps.push(step('remote-status-final', ['remote', 'status', '--workspace', options.workspace, '--json']));
+    steps.push(step('remote-doctor-final', ['remote', 'doctor', '--workspace', options.workspace, '--json']));
     return steps;
 }
 
@@ -122,6 +151,7 @@ function printPlan(options, steps) {
     console.log('workspace: ' + options.workspace);
     console.log('target: ' + options.target);
     console.log('mode: ' + (options.execute ? 'execute' : 'dry-run'));
+    console.log('options: ' + formatEnabledOptions(options));
     for (const item of steps) {
         const marker = item.mutatesRemote ? ' [mutates remote]' : '';
         console.log('- ' + item.name + marker + ': node ' + path.relative(process.cwd(), options.cli) + ' ' + item.args.join(' '));
@@ -129,6 +159,15 @@ function printPlan(options, steps) {
     if (!options.execute) {
         console.log('Dry-run only. Add --execute to run SSH-backed remote commands.');
     }
+}
+
+function formatEnabledOptions(options) {
+    const enabled = [];
+    if (options.bootstrap) { enabled.push('bootstrap'); }
+    if (options.build) { enabled.push('build'); }
+    if (options.runDetach) { enabled.push('run-detach'); }
+    if (options.stop) { enabled.push('stop'); }
+    return enabled.length > 0 ? enabled.join(', ') : 'read-only';
 }
 
 function runPlan(options, steps) {
@@ -139,6 +178,7 @@ function runPlan(options, steps) {
         fs.mkdirSync(options.jsonDir, { recursive: true });
     }
 
+    const summary = [];
     for (const item of steps) {
         const result = spawnSync(process.execPath, [options.cli, ...item.args], {
             cwd: repoRoot,
@@ -146,6 +186,7 @@ function runPlan(options, steps) {
             env: process.env
         });
         writeStepOutput(options, item, result);
+        summary.push({ name: item.name, status: result.status, signal: result.signal });
         if (result.stdout) {
             process.stdout.write(result.stdout);
             if (!result.stdout.endsWith('\n')) {
@@ -164,8 +205,19 @@ function runPlan(options, steps) {
         if (result.status !== 0) {
             process.exitCode = result.status || 1;
             console.error('Remote smoke stopped at step: ' + item.name);
+            printSummary(summary);
             return;
         }
+    }
+    printSummary(summary);
+}
+
+function printSummary(summary) {
+    console.log('Remote smoke summary');
+    for (const item of summary) {
+        const status = item.status === 0 ? 'ok' : 'failed';
+        const detail = item.signal ? ' signal=' + item.signal : ' status=' + item.status;
+        console.log('- ' + item.name + ': ' + status + detail);
     }
 }
 

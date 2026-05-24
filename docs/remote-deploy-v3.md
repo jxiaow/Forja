@@ -569,6 +569,6 @@ buildOrder 已实现。transfer 和显式 clean-untracked 已实现。baseline �
 
 后续：
 
-1. 真实远端 SSH smoke
+1. 真实远端 SSH smoke：执行 `remote:smoke -- --target both --build --run-detach --stop --execute --yes --json-dir <dir>`
 
 每个阶段都需要单独 Scope/Solution gate；涉及公开命令、JSON、持久化格式时必须明确兼容影响。

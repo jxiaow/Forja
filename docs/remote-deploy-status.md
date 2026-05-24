@@ -48,15 +48,16 @@ build/run/rebuild/qmake 的 pipeline 中需要显式 `targetReadiness` stage。r
 
 真实 SSH smoke 是发布前人工执行的 E2E 检查，不进入自动单测。仓库提供 runner：
 
-当前状态（2026-05-24）：本地 compile、全量单测和 `build:cli` 已通过；`remote status` 已包含 remoteSettings 摘要，`remote transfer status` 已支持本地配置校验和 plan 输出。由于当前没有可用真实远端环境，真实 SSH smoke 记录为后续环境自测项。拿到远端环境后必须执行本节推荐命令，并保留 `--json-dir` 产物用于回溯。
+当前状态（2026-05-25）：本地 compile、全量单测和 `build:cli` 已通过；`remote doctor` 已提供 readiness 体检摘要，`remote transfer status` 已支持本地配置校验和 plan 输出。由于当前没有可用真实远端环境，真实 SSH smoke 记录为后续环境自测项。拿到远端环境后必须执行本节推荐命令，并保留 `--json-dir` 产物用于回溯。
 
 ```bash
-npm run remote:smoke -- --target qt --build
-npm run remote:smoke -- --target qt --build --execute --yes
+npm run remote:smoke -- --target qt --build --run-detach --stop
+npm run remote:smoke -- --target qt --build --run-detach --stop --execute --yes
 ```
 
 默认不执行 SSH，只打印计划。只有显式传入 `--execute` 时才调用本地已编译 CLI：
 
+- `compilot remote doctor --json`
 - `compilot remote status --json`
 - `compilot remote test --json`
 - `compilot remote build-order status --json`
@@ -64,7 +65,10 @@ npm run remote:smoke -- --target qt --build --execute --yes
 - 可选 `compilot remote test --bootstrap --json`
 - `compilot remote qt|sdk status --json`
 - 可选 `compilot remote qt|sdk build --json`
-- 最后再次 `compilot remote status --json`，确认没有 stale lock
+- 可选 `compilot remote qt run --detach --json`
+- 可选 `compilot remote qt ps --json`
+- 可选 `compilot remote qt stop --json`
+- 最后再次 `compilot remote doctor --json`，确认没有 stale lock 或 readiness 退化
 
 执行前提：
 
@@ -76,7 +80,7 @@ npm run remote:smoke -- --target qt --build --execute --yes
 
 安全约束：
 
-- 执行 `--bootstrap` 或 `--build` 时必须同时传 `--yes`；dry-run 可省略
+- 执行 `--bootstrap`、`--build`、`--run-detach` 或 `--stop` 时必须同时传 `--yes`；dry-run 可省略
 - runner 不执行 `remote unlock --force`、`remote restore`、`git reset`、`git clean`
 - runner 不自动挑选 restore 路径，也不清理远端 preserved dirty 文件
 - 失败时停在当前 step，保留远端诊断和 lock nextAction，人工确认后再处理
@@ -84,7 +88,7 @@ npm run remote:smoke -- --target qt --build --execute --yes
 推荐记录：
 
 ```bash
-npm run remote:smoke -- --target both --build --execute --yes --json-dir /tmp/compilot-remote-smoke
+npm run remote:smoke -- --target both --build --run-detach --stop --execute --yes --json-dir /tmp/compilot-remote-smoke
 ```
 
 `--json-dir` 只保存每个 step 的 stdout/stderr 和退出码，便于对照 pipeline JSON；它不是远端状态源。
