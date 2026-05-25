@@ -103,23 +103,13 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
 }
 
 
-function _isProcessNotFoundError(err: cp.ExecException): boolean {
-    if (!isWin && err.code === 1) { return true; }
-    return err.message.includes('not found')
-        || err.message.includes('找不到')
-        || err.message.includes('没有找到');
-}
-
 // 静默 kill（不开新 terminal）
 function _killApp(exeName: string): Promise<void> {
-    const escapedName = exeName.replace(/"/g, '\\"');
-    const cmd = isWin
-        ? `taskkill /F /IM "${escapedName}.exe"`
-        : `pkill -x "${escapedName}"`;
+    const cmd = builder.killApp(exeName);
     logger.info(`Kill app: ${cmd}`);
     return new Promise((resolve, reject) => {
         cp.exec(cmd, (err) => {
-            if (!err || _isProcessNotFoundError(err)) {
+            if (!err) {
                 resolve();
                 return;
             }

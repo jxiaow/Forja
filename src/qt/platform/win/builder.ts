@@ -38,7 +38,11 @@ export const winConfig: PlatformConfig = {
     },
 
     killCommand(exeName: string): string {
-        return `(taskkill /F /IM "${exeName}.exe" >nul 2>nul || ver >nul)`;
+        const imageName = `${exeName}.exe`;
+        return `(taskkill /F /IM "${imageName}" >nul 2>nul || ver >nul) && `
+            + `(tasklist /FI "IMAGENAME eq ${imageName}" /NH | findstr /I /C:"${imageName}" >nul `
+            + `&& set "COMPILOT_STILL_RUNNING=1" || set "COMPILOT_STILL_RUNNING=") && `
+            + `if defined COMPILOT_STILL_RUNNING (echo Failed to stop ${imageName} & exit /b 1)`;
     },
 
     stopCommands(exeName: string): string[] {

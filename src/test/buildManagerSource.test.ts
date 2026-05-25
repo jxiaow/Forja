@@ -16,3 +16,15 @@ test('vscode qt run stops the previous executable before building', () => {
     assert.notEqual(buildIndex, -1);
     assert.ok(killIndex < buildIndex, 'run must stop the old executable before the build starts');
 });
+
+test('vscode qt pre-run kill tolerates a missing executable process', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'build', 'buildManager.ts'), 'utf8');
+    const killStart = source.indexOf('function _killApp(');
+    const resolveStart = source.indexOf('function _resolveMakefileInfo()', killStart);
+    const killSource = source.slice(killStart, resolveStart);
+
+    assert.notEqual(killStart, -1);
+    assert.match(killSource, /builder\.killApp\(exeName\)/);
+    assert.doesNotMatch(killSource, /taskkill \/F \/IM/);
+    assert.doesNotMatch(killSource, /pkill -x/);
+});
