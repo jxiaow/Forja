@@ -134,3 +134,13 @@ test('environment page is rerendered after async environment detection', () => {
     assert.match(messageSource, /case 'saveVsPath':[\s\S]*setState\('envInfo', env\);[\s\S]*updateHtml\(\);/);
     assert.match(messageSource, /case 'saveQtPath':[\s\S]*setState\('envInfo', env2\);[\s\S]*updateHtml\(\);/);
 });
+
+test('environment page restores expanded panels after rerender', () => {
+    const html = getPageHtml('env', createTemplateData());
+
+    assert.match(html, /function rememberOpenPanels\(\)/);
+    assert.match(html, /vscode\.setState/);
+    assert.match(html, /function restoreOpenPanels\(\)/);
+    assert.match(html, /restoreOpenPanels\(\);/);
+    assert.match(html, /rememberOpenPanels\(\);vscode\.postMessage\(\{command:"saveQtPath"/);
+});
