@@ -129,6 +129,10 @@ test('environment page is rerendered after async environment detection', () => {
     const managerSource = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'configPagePanel.ts'), 'utf8');
     const messageSource = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'messageHandler.ts'), 'utf8');
 
+    assert.match(managerSource, /detectEnv\(getQtPath\(\) \|\| undefined, getVsDevShellPath\(\) \|\| undefined\)/);
+    assert.match(messageSource, /detectEnv\(getQtPath\(\) \|\| undefined, getVsDevShellPath\(\) \|\| undefined\)/);
+    assert.doesNotMatch(managerSource, /detectEnv\(\)/);
+    assert.doesNotMatch(messageSource, /detectEnv\(\)/);
     assert.match(managerSource, /setState\('envInfo', env\);\s*this\._updatePageHtml\(pageId\);/);
     assert.match(messageSource, /case 'refreshEnv':[\s\S]*setState\('envInfo', env\);[\s\S]*updateHtml\(\);/);
     assert.match(messageSource, /case 'saveVsPath':[\s\S]*setState\('envInfo', env\);[\s\S]*updateHtml\(\);/);

@@ -7,6 +7,7 @@ import { ConfigPageId } from './configNavTree';
 import { handleMessage } from './messageHandler';
 import { getState, setState } from '../../vscode/qtState';
 import { detectEnv } from '../../qt/env/envDetector';
+import { getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { getPageHtml } from './pageTemplate';
 import { buildTemplateData } from './templateData';
 import { createLogger } from '../../vscode/logger';
@@ -87,7 +88,7 @@ export class ConfigPageManager {
 
         // 环境页打开时触发检测
         if (pageId === 'env') {
-            detectEnv().then(env => {
+            detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined).then(env => {
                 setState('envInfo', env);
                 this._updatePageHtml(pageId);
                 this._pushEnvUpdate(panel.webview);
