@@ -16,6 +16,7 @@ function createTemplateData(): TemplateData {
         cppStandard: 'c++17',
         scanExcludeDirs: '',
         target: '',
+        runtimeProcessName: '',
         isWin: true,
         autoDevShell: '',
         autoQtPath: '',
@@ -56,6 +57,17 @@ test('qmake target input saves after editing is committed', () => {
         /<input id="target"[^>]*oninput="saveTarget\(\)"/,
         'target input should not write configuration for each typed character'
     );
+});
+
+test('config panel exposes runtime process name override', () => {
+    const html = getHtml({
+        ...createTemplateData(),
+        runtimeProcessName: 'XYWinQTPri'
+    });
+
+    assert.match(html, /id="runtimeProcessName"/);
+    assert.match(html, /value="XYWinQTPri"/);
+    assert.match(html, /saveRuntimeProcessName/);
 });
 
 test('qmake target input falls back to current project target when override is empty', () => {

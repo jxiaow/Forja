@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 import { setState, getState } from '../../vscode/qtState';
-import { getBuildConfig, getRccProjectPath } from '../services/configService';
+import { getBuildConfig, getRccProjectPath, getRuntimeProcessName } from '../services/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
 import { winConfig, getVsDevCmd } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
@@ -219,7 +219,7 @@ export async function run(): Promise<void> {
     }
 
     try {
-        await _killApp(mfInfo.target);
+        await _killApp(getRuntimeProcessName() || mfInfo.target);
     } catch (e) {
         setState('isBuilding', false);
         setState('buildAction', null);
@@ -374,7 +374,7 @@ export function runCustomCommand(name: string, command: string): Thenable<vscode
 export function stop(): void {
     const cfg = getBuildConfig();
     const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
-    const exeName = mfInfo?.target || 'app';
+    const exeName = getRuntimeProcessName() || mfInfo?.target || 'app';
     logger.info(`Stop current target: ${exeName}`);
     _killApp(exeName).catch((e: Error) => vscode.window.showErrorMessage(e.message));
     setState('isRunning', false);

@@ -683,6 +683,36 @@ test('run with Makefile generates full command chain including executable', asyn
     assert.ok(!result.diagnostics.some(d => /Makefile/.test(d.message)));
 });
 
+test('run uses configured runtime process name only for pre-run stop', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'XYWinQTPri' }));
+    const projectDir = workspace;
+    if (process.platform === 'win32') {
+        fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
+        fs.writeFileSync(path.join(projectDir, 'Makefile.Debug'), 'DESTDIR_TARGET = debug\\demo.exe\n', 'utf8');
+    } else {
+        fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake" demo.pro -spec linux-g++ CONFIG+=debug CONFIG+=console\nTARGET = debug/demo\n', 'utf8');
+    }
+
+    const result = await createActionPlan({
+        action: 'run',
+        executionMode: 'dryRun',
+        workspace,
+        project: path.join(workspace, 'demo.pro'),
+        mode: 'debug',
+        arch: 'x86',
+        qtPath: 'D:/Qt',
+        vsDevShell: 'C:/VS/Launch-VsDevShell.ps1',
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(result.commands[0], /XYWinQTPri/);
+    assert.equal(result.executablePath, path.join(workspace, process.platform === 'win32' ? 'debug\\demo.exe' : 'debug/demo'));
+});
+
 test('stop uses runtime executable name when Makefile is available', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, readyQtSettings(workspace));
@@ -710,6 +740,35 @@ test('stop uses runtime executable name when Makefile is available', async () =>
     assert.equal(result.ok, true);
     assert.ok(result.commands.some(c => /realapp/.test(c)));
     assert.ok(!result.commands.some(c => /demo/.test(c)));
+});
+
+test('stop prefers configured runtime process name over Makefile target', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'XYWinQTPri' }));
+    if (process.platform === 'win32') {
+        fs.writeFileSync(path.join(workspace, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
+        fs.writeFileSync(path.join(workspace, 'Makefile.Debug'), 'DESTDIR_TARGET = debug\\realapp.exe\n', 'utf8');
+    } else {
+        fs.writeFileSync(path.join(workspace, 'Makefile'), '# Command: "D:/Qt/bin/qmake" demo.pro -spec linux-g++ CONFIG+=debug CONFIG+=console\nTARGET = debug/realapp\n', 'utf8');
+    }
+
+    const result = await createActionPlan({
+        action: 'stop',
+        executionMode: 'dryRun',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.ok(result.commands.some(c => /XYWinQTPri/.test(c)));
+    assert.ok(!result.commands.some(c => /realapp/.test(c)));
 });
 
 test('workspace not exist returns error diagnostic', async () => {

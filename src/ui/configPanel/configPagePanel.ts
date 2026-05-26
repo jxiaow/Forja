@@ -126,7 +126,7 @@ export class ConfigPageManager {
                 qt: env?.qt ? `Qt ${env.qt.version} (${env.qt.compiler})` : null,
                 jom: env?.jom || null
             },
-            vsCandidates: (env?.vsCandidates ?? []).map(c => ({ label: `VS ${c.version} ${c.edition}`, value: c.devShellPath })),
+            vsCandidates: (env?.vsCandidates ?? []).map(c => ({ label: `VS ${c.version} ${c.edition}`, value: c.devShellPath, installPath: c.installPath })),
             qtCandidates: (env?.qtCandidates ?? []).map(c => ({ label: `Qt ${c.version} (${c.compiler})`, value: c.path }))
         });
     }

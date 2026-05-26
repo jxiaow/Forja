@@ -573,6 +573,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
     const target = settings.target || '';
     const jomPath = settings.jomPath || '';
+    const runtimeProcessName = settings.runtimeProcessName || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
 
     if (options.action === 'init') {
@@ -730,13 +731,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             if (runCmd) {
                 // Kill existing process before build (use actual exe name from Makefile)
                 const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
-                const exeName = runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro');
+                const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro'));
                 const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
                 commands = [killCmd, ...rccCmds, ...buildCmds, runCmd];
                 result.executablePath = runtimeTarget?.exePath;
             } else {
                 // Makefile not yet generated or mismatched — return build commands with hint to run status
-                const fallbackExeName = path.basename(project, '.pro');
+                const fallbackExeName = runtimeProcessName || path.basename(project, '.pro');
                 const fallbackKillCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(fallbackExeName);
                 const fallbackCmds = [fallbackKillCmd, ...buildCmds];
                 return {
@@ -757,9 +758,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         commands = shellBuilder.cleanCommands(buildConfig).commands;
     } else if (options.action === 'stop') {
         const runtimeTarget = project ? resolveRuntimeTarget(path.dirname(project), mode, arch) : null;
-        const processName = runtimeTarget
+        const processName = runtimeProcessName || (runtimeTarget
             ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath))
-            : (target || path.basename(project || 'app', '.pro'));
+            : (target || path.basename(project || 'app', '.pro')));
         commands = shellBuilder.stopCommands(processName);
     } else if (options.action === 'rcc') {
         const rccPath = resolveRccProjectPath(settings.rccProjectPath || '', workspace);

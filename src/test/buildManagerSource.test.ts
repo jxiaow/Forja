@@ -28,3 +28,11 @@ test('vscode qt pre-run kill tolerates a missing executable process', () => {
     assert.doesNotMatch(killSource, /taskkill \/F \/IM/);
     assert.doesNotMatch(killSource, /pkill -x/);
 });
+
+test('vscode qt run and stop honor configured runtime process name', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'build', 'buildManager.ts'), 'utf8');
+
+    assert.match(source, /getRuntimeProcessName/);
+    assert.match(source, /await _killApp\(getRuntimeProcessName\(\) \|\| mfInfo\.target\)/);
+    assert.match(source, /const exeName = getRuntimeProcessName\(\) \|\| mfInfo\?\.target \|\| 'app'/);
+});

@@ -16,6 +16,7 @@ export interface TemplateData {
     cppStandard: string;
     scanExcludeDirs: string;
     target: string;
+    runtimeProcessName: string;
     isWin: boolean;
     autoDevShell: string;
     autoQtPath: string;
@@ -73,7 +74,7 @@ function _escapeHtml(value: string): string {
 
 export function getHtml(data: TemplateData): string {
     const { env, project, vsDevShellPath, pinnedProject, cStandard, cppStandard,
-            scanExcludeDirs, target, isWin, autoDevShell, autoQtPath, qtPath } = data;
+            scanExcludeDirs, target, runtimeProcessName, isWin, autoDevShell, autoQtPath, qtPath } = data;
 
     const projectName = getEffectiveProjectName(project, target, pinnedProject || '未选择');
     const defaultTarget = project?.target || '';
@@ -132,6 +133,7 @@ export function getHtml(data: TemplateData): string {
         effectiveTarget: _escapeHtml(effectiveTarget),
         defaultTarget: _escapeHtml(defaultTarget),
         savedTarget: _escapeHtml(target),
+        runtimeProcessName: _escapeHtml(runtimeProcessName),
         dotVsBlockClass: effectiveDevShell ? 'dot-ok' : 'dot-warn',
         vsBadgeClass: effectiveDevShell ? 'badge-ok' : 'badge-warn',
         devShellSource: _escapeHtml(devShellSource),
