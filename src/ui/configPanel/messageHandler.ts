@@ -66,6 +66,7 @@ export async function handleMessage(
             break;
         }
         case 'refreshEnv': {
+            webview.postMessage({ command: 'envDetecting', scope: 'all' });
             const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env);
             updateHtml();

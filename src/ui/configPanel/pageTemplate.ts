@@ -38,6 +38,7 @@ const CSEL_JS = [
     'if(!trigger||!list)return;',
     'trigger.addEventListener("click",function(ev){',
     'ev.stopPropagation();',
+    'if(el.classList.contains("disabled")||el.getAttribute("aria-disabled")==="true")return;',
     'document.querySelectorAll(".csel.open").forEach(function(o){if(o!==el)o.classList.remove("open")});',
     'el.classList.toggle("open")});',
     'list.addEventListener("click",function(ev){',

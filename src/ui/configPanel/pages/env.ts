@@ -15,8 +15,8 @@ export function buildEnvPage(data: TemplateData): string {
     if (data.isWin) { h += buildSdkEnvSection(data); }
 
     // 刷新按钮
-    h += '<div style="margin-top:12px"><button class="btn"';
-    h += " onclick=\"vscode.postMessage({command:'refreshEnv'})\">";
+    h += '<div style="margin-top:12px"><button id="refreshEnvBtn" class="btn"';
+    h += ' onclick="refreshEnv()">';
     h += '重新扫描工具链</button>';
     h += '<div style="margin-top:6px;font-size:12px;color:var(--vscode-descriptionForeground)">';
     h += '重新检测系统上可用的 VS、Qt、jom 版本</div></div>';
@@ -48,11 +48,12 @@ function buildQtEnvSection(data: TemplateData): string {
         const dss = data.vsDevShellPath ? '手动配置'
             : (data.autoDevShell ? '自动检测' : '未配置');
         h += '<div class="cs"><div class="cst">Visual Studio</div>';
-        h += '<div class="env-card"><div class="ech">';
+        h += '<div class="env-card" id="vsEnvCard"><div class="ech">';
         h += `<span class="sd ${eds ? 'dok' : 'dwn'}"></span>`;
         h += '<span class="ect" id="vsTitle">';
         h += env?.vs ? esc('VS ' + env.vs.version + ' ' + env.vs.edition) : '未检测到';
         h += '</span>';
+        h += '<span class="env-spinner" aria-hidden="true"></span>';
         h += `<span class="ecb ${eds ? 'bok' : 'bwn'}" id="vsBadge">${esc(dss)}</span>`;
         h += '</div>';
         h += `<div class="ecp" id="vsPath">${esc(eds || '未配置')}</div>`;
@@ -77,11 +78,12 @@ function buildQtEnvSection(data: TemplateData): string {
     const qts = data.qtPath ? '手动配置'
         : (data.autoQtPath ? '自动检测' : '未配置');
     h += '<div class="cs"><div class="cst">Qt</div>';
-    h += '<div class="env-card"><div class="ech">';
+    h += '<div class="env-card" id="qtEnvCard"><div class="ech">';
     h += `<span class="sd ${eqp ? 'dok' : 'dwn'}"></span>`;
     h += '<span class="ect" id="qtTitle">';
     h += env?.qt ? esc('Qt ' + env.qt.version + ' (' + env.qt.compiler + ')') : '未检测到';
     h += '</span>';
+    h += '<span class="env-spinner" aria-hidden="true"></span>';
     h += `<span class="ecb ${eqp ? 'bok' : 'bwn'}" id="qtBadge">${esc(qts)}</span></div>`;
     h += `<div class="ecp" id="qtPathDisplay">${esc(eqp || '未配置')}</div>`;
     h += '<div class="eca"><button class="btn btn-sm env-toggle-btn"';
@@ -151,9 +153,10 @@ function buildSdkEnvSection(data: TemplateData): string {
     const sdkVsTitle = detectedVs || (data.sdkVsInstall ? 'Visual Studio' : '未检测到');
 
     h += '<div class="cs"><div class="cst">Visual Studio (SDK)</div>';
-    h += '<div class="env-card"><div class="ech">';
+    h += '<div class="env-card" id="sdkVsEnvCard"><div class="ech">';
     h += `<span class="sd ${sdkVsEffective ? 'dok' : 'dwn'}"></span>`;
     h += `<span class="ect" id="sdkVsTitle">${esc(sdkVsTitle)}</span>`;
+    h += '<span class="env-spinner" aria-hidden="true"></span>';
     h += `<span class="ecb ${sdkVsEffective ? 'bok' : 'bwn'}" id="sdkVsBadge">${esc(sdkVsBadge)}</span>`;
     h += '</div>';
     h += `<div class="ecp" id="sdkVsPath">${esc(sdkVsEffective || '未配置')}</div>`;
@@ -257,6 +260,13 @@ function buildEnvScript(data: TemplateData): string {
     h += 'var el=document.getElementById(id);if(!el){return}el.classList.add("open");';
     h += 'var btn=document.querySelector("button[onclick*=\'"+id+"\']");if(btn){btn.classList.add("active");';
     h += 'var arrow=btn.querySelector(".env-toggle-arrow");if(arrow){arrow.textContent="▴"}}})}';
+    h += 'function loadingCards(scope){var ids=scope==="qt"?["qtEnvCard"]:scope==="vs"?["vsEnvCard"]:scope==="sdkVs"?["sdkVsEnvCard"]:["vsEnvCard","qtEnvCard","sdkVsEnvCard"];';
+    h += 'return ids.map(function(id){return document.getElementById(id)}).filter(Boolean)}';
+    h += 'function setToolchainLoading(scope,on){loadingCards(scope).forEach(function(card){card.classList.toggle("loading",on);';
+    h += 'card.querySelectorAll("input,button").forEach(function(el){el.disabled=on});';
+    h += 'card.querySelectorAll(".csel").forEach(function(el){el.classList.toggle("disabled",on);el.setAttribute("aria-disabled",on?"true":"false");if(on){el.classList.remove("open")}})});';
+    h += 'var any=document.querySelector(".env-card.loading");var btn=document.getElementById("refreshEnvBtn");if(btn){btn.disabled=!!any;btn.textContent=any?"检测中...":"重新扫描工具链"}}';
+    h += 'window.refreshEnv=function(){setToolchainLoading("all",true);vscode.postMessage({command:"refreshEnv"})};';
     h += 'function updateVsDisplayFromPath(path,label){';
     h += 'label=vsCandidateLabels[path]||label;';
     h += 'var input=document.getElementById("vsDevShellPath");if(input){input.value=path||""}';
@@ -295,6 +305,7 @@ function buildEnvScript(data: TemplateData): string {
     h += 'if(vsS)vsS.addEventListener("csel-change",function(e){';
     h += 'updateVsDisplayFromPath(e.detail.value);';
     h += 'rememberOpenPanels();';
+    h += 'setToolchainLoading("vs",true);';
     h += 'vscode.postMessage({command:"saveVsPath",value:e.detail.value})});';
     h += 'var sdkVsS=document.getElementById("sdkVsSelect");';
     h += 'if(sdkVsS)sdkVsS.addEventListener("csel-change",function(e){';
@@ -305,14 +316,20 @@ function buildEnvScript(data: TemplateData): string {
     h += 'if(qtS)qtS.addEventListener("csel-change",function(e){';
     h += 'updateQtDisplayFromPath(e.detail.value);';
     h += 'rememberOpenPanels();';
+    h += 'setToolchainLoading("qt",true);';
     h += 'vscode.postMessage({command:"saveQtPath",value:e.detail.value})});';
+    if (!data.env) {
+        h += 'setToolchainLoading("all",true);';
+    }
     h += 'restoreOpenPanels();';
     h += 'window.addEventListener("message",function(e){var d=e.data;';
     h += 'if(d.command==="setPath"){var el=document.getElementById(d.targetId);';
     h += 'if(el){el.value=d.value;el.dispatchEvent(new Event("blur"))}}';
     h += 'else if(d.command==="devShellUpdated"){updateVsDisplayFromPath(d.effective,d.label)}';
     h += 'else if(d.command==="qtPathUpdated"){updateQtDisplayFromPath(d.effective,d.label)}';
+    h += 'else if(d.command==="envDetecting"){setToolchainLoading(d.scope||"all",true)}';
     h += 'else if(d.command==="envUpdated"){';
+    h += 'setToolchainLoading("all",false);';
     h += 'if(d.vsCandidates){vsCandidateLabels={};vsCandidateInstalls={};d.vsCandidates.forEach(function(c){var install=c.installPath||c.value;vsCandidateLabels[c.value]=c.label;vsCandidateLabels[install]=c.label;vsCandidateInstalls[c.value]=install;vsCandidateInstalls[install]=install})}';
     h += 'if(d.qtCandidates){qtCandidateLabels={};d.qtCandidates.forEach(function(c){qtCandidateLabels[c.value]=c.label})}';
     h += 'updateVsDisplayFromPath(currentValue("vsDevShellPath"),d.env.vs);';

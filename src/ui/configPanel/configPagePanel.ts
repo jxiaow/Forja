@@ -88,6 +88,7 @@ export class ConfigPageManager {
 
         // 环境页打开时触发检测
         if (pageId === 'env') {
+            panel.webview.postMessage({ command: 'envDetecting', scope: 'all' });
             detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined).then(env => {
                 setState('envInfo', env);
                 this._updatePageHtml(pageId);

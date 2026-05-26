@@ -150,5 +150,25 @@ test('environment page restores expanded panels after rerender', () => {
     assert.match(html, /vscode\.setState/);
     assert.match(html, /function restoreOpenPanels\(\)/);
     assert.match(html, /restoreOpenPanels\(\);/);
-    assert.match(html, /rememberOpenPanels\(\);vscode\.postMessage\(\{command:"saveQtPath"/);
+    assert.match(html, /rememberOpenPanels\(\);[\s\S]*vscode\.postMessage\(\{command:"saveQtPath"/);
+});
+
+test('environment page disables toolchain controls while detection is running', () => {
+    const html = getPageHtml('env', createTemplateData());
+    const loadingHtml = getPageHtml('env', { ...createTemplateData(), env: null });
+    const managerSource = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'configPagePanel.ts'), 'utf8');
+    const messageSource = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'messageHandler.ts'), 'utf8');
+    const templateSource = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'pageTemplate.ts'), 'utf8');
+
+    assert.match(html, /id="vsEnvCard"/);
+    assert.match(html, /id="qtEnvCard"/);
+    assert.match(html, /class="env-spinner"/);
+    assert.match(html, /function setToolchainLoading\(scope,on\)/);
+    assert.match(html, /card\.querySelectorAll\("input,button"\)\.forEach/);
+    assert.match(html, /d\.command==="envDetecting"/);
+    assert.match(html, /setToolchainLoading\("all",false\)/);
+    assert.match(loadingHtml, /setToolchainLoading\("all",true\);restoreOpenPanels/);
+    assert.match(managerSource, /postMessage\(\{ command: 'envDetecting', scope: 'all' \}\)/);
+    assert.match(messageSource, /case 'refreshEnv':[\s\S]*envDetecting', scope: 'all'/);
+    assert.match(templateSource, /aria-disabled/);
 });
