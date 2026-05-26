@@ -89,6 +89,7 @@ export class ConfigPageManager {
         if (pageId === 'env') {
             detectEnv().then(env => {
                 setState('envInfo', env);
+                this._updatePageHtml(pageId);
                 this._pushEnvUpdate(panel.webview);
             }).catch(e => logger.error(`环境检测失败: ${e}`));
         }

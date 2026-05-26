@@ -180,7 +180,7 @@ function buildSdkEnvSection(data: TemplateData): string {
 
 function buildVsCandidateSelect(env: EnvInfo | null, currentPath: string): string {
     const candidates = env?.vsCandidates ?? [];
-    if (candidates.length <= 1) { return ''; }
+    if (candidates.length === 0) { return ''; }
     const cur = candidates.find(c => c.devShellPath === currentPath);
     const curLabel = cur ? `VS ${cur.version} ${cur.edition}` : '选择版本';
     let h = '<div class="ef-row" id="vsCandidateRow"><span class="ef-label">快速选择</span>';
@@ -196,7 +196,7 @@ function buildVsCandidateSelect(env: EnvInfo | null, currentPath: string): strin
 
 function buildSdkVsCandidateSelect(env: EnvInfo | null, currentPath: string): string {
     const candidates = env?.vsCandidates ?? [];
-    if (candidates.length <= 1) { return ''; }
+    if (candidates.length === 0) { return ''; }
     const cur = candidates.find(c => c.installPath === currentPath || c.devShellPath === currentPath);
     const curLabel = cur ? `VS ${cur.version} ${cur.edition}` : '选择版本';
     let h = '<div class="ef-row" id="sdkVsCandidateRow"><span class="ef-label">快速选择</span>';
@@ -212,7 +212,7 @@ function buildSdkVsCandidateSelect(env: EnvInfo | null, currentPath: string): st
 
 function buildQtCandidateSelect(env: EnvInfo | null, currentPath: string): string {
     const candidates = env?.qtCandidates ?? [];
-    if (candidates.length <= 1) { return ''; }
+    if (candidates.length === 0) { return ''; }
     const cur = candidates.find(c => c.path === currentPath);
     const curLabel = cur ? `Qt ${cur.version} (${cur.compiler})` : '选择版本';
     let h = '<div class="ef-row" id="qtCandidateRow"><span class="ef-label">快速选择</span>';

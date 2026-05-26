@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'fs';
+import * as path from 'path';
 import { getPageHtml } from '../ui/configPanel/pageTemplate';
 import type { TemplateData } from '../ui/configPanel/template';
 
@@ -108,4 +110,27 @@ test('environment page keeps selected toolchain titles after env refresh', () =>
     assert.doesNotMatch(html, /vsT\)\{vsT\.textContent=d\.env\.vs/);
     assert.doesNotMatch(html, /sdkVsT\)\{sdkVsT\.textContent=d\.env\.vs/);
     assert.doesNotMatch(html, /qtT\)\{qtT\.textContent=d\.env\.qt/);
+});
+
+test('environment page shows toolchain selectors when one candidate is available', () => {
+    const data = createTemplateData();
+    data.sdkActive = true;
+    data.env!.vsCandidates = [data.env!.vsCandidates[0]];
+    data.env!.qtCandidates = [data.env!.qtCandidates[0]];
+    const html = getPageHtml('env', data);
+
+    assert.match(html, /id="vsSelect"/);
+    assert.match(html, /id="sdkVsSelect"/);
+    assert.match(html, /id="qtSelect"/);
+    assert.doesNotMatch(html, /candidates\.length <= 1/);
+});
+
+test('environment page is rerendered after async environment detection', () => {
+    const managerSource = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'configPagePanel.ts'), 'utf8');
+    const messageSource = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'messageHandler.ts'), 'utf8');
+
+    assert.match(managerSource, /setState\('envInfo', env\);\s*this\._updatePageHtml\(pageId\);/);
+    assert.match(messageSource, /case 'refreshEnv':[\s\S]*setState\('envInfo', env\);[\s\S]*updateHtml\(\);/);
+    assert.match(messageSource, /case 'saveVsPath':[\s\S]*setState\('envInfo', env\);[\s\S]*updateHtml\(\);/);
+    assert.match(messageSource, /case 'saveQtPath':[\s\S]*setState\('envInfo', env2\);[\s\S]*updateHtml\(\);/);
 });

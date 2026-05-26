@@ -68,6 +68,7 @@ export async function handleMessage(
         case 'refreshEnv': {
             const env = await detectEnv();
             setState('envInfo', env);
+            updateHtml();
             pushEnvUpdate();
             break;
         }
@@ -82,6 +83,7 @@ export async function handleMessage(
             webview.postMessage({ command: 'envDetecting', scope: 'vs' });
             const env = await detectEnv();
             setState('envInfo', env);
+            updateHtml();
             pushEnvUpdate();
             break;
         }
@@ -91,6 +93,7 @@ export async function handleMessage(
             webview.postMessage({ command: 'envDetecting', scope: 'qt' });
             const env2 = await detectEnv();
             setState('envInfo', env2);
+            updateHtml();
             pushEnvUpdate();
             break;
         }
