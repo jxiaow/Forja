@@ -93,3 +93,17 @@ test('environment page updates Visual Studio and SDK titles from detected candid
     assert.match(html, /id="sdkVsSelect"/);
     assert.match(html, /saveSdkVsInstall/);
 });
+
+test('environment page keeps selected toolchain titles after env refresh', () => {
+    const data = createTemplateData();
+    data.sdkActive = true;
+    const html = getPageHtml('env', data);
+
+    assert.match(html, /function currentValue\(id\)/);
+    assert.match(html, /updateVsDisplayFromPath\(currentValue\("vsDevShellPath"\),d\.env\.vs/);
+    assert.match(html, /updateSdkVsDisplayFromPath\(currentValue\("sdkVsInstall"\),d\.env\.vs/);
+    assert.match(html, /updateQtDisplayFromPath\(currentValue\("qtPath"\),d\.env\.qt/);
+    assert.doesNotMatch(html, /vsT\)\{vsT\.textContent=d\.env\.vs/);
+    assert.doesNotMatch(html, /sdkVsT\)\{sdkVsT\.textContent=d\.env\.vs/);
+    assert.doesNotMatch(html, /qtT\)\{qtT\.textContent=d\.env\.qt/);
+});
