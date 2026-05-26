@@ -6,6 +6,23 @@ export function getVsDevCmd(vsDevShell: string): string {
     return vsDevShell.replace(/Launch-VsDevShell\.ps1$/i, 'VsDevCmd.bat');
 }
 
+function psSingleQuoted(value: string): string {
+    return `'${value.replace(/'/g, "''")}'`;
+}
+
+function buildProcessKillCommand(exeName: string): string {
+    const processName = exeName.replace(/\.exe$/i, '');
+    const imageName = `${processName}.exe`;
+    const script = [
+        `$ErrorActionPreference='SilentlyContinue'`,
+        `$name=${psSingleQuoted(processName)}`,
+        '$procs=Get-Process -Name $name',
+        'if ($procs) { $procs | Stop-Process -Force; $procs | Wait-Process -Timeout 5 }',
+        `if (Get-Process -Name $name) { Write-Error ${psSingleQuoted(`Failed to stop ${imageName}`)}; exit 1 }`
+    ].join('; ');
+    return `powershell -NoProfile -ExecutionPolicy Bypass -Command "${script.replace(/"/g, '\\"')}"`;
+}
+
 export const winConfig: PlatformConfig = {
     shellExecutable: 'cmd.exe',
     shellArgs: ['/c'],
@@ -38,15 +55,11 @@ export const winConfig: PlatformConfig = {
     },
 
     killCommand(exeName: string): string {
-        const imageName = `${exeName}.exe`;
-        return `(taskkill /F /IM "${imageName}" >nul 2>nul || ver >nul) && `
-            + `(tasklist /FI "IMAGENAME eq ${imageName}" /NH | findstr /I /C:"${imageName}" >nul `
-            + `&& set "COMPILOT_STILL_RUNNING=1" || set "COMPILOT_STILL_RUNNING=") && `
-            + `if defined COMPILOT_STILL_RUNNING (echo Failed to stop ${imageName} & exit /b 1)`;
+        return buildProcessKillCommand(exeName);
     },
 
     stopCommands(exeName: string): string[] {
-        return [`taskkill /F /IM "${exeName}.exe"`];
+        return [buildProcessKillCommand(exeName)];
     },
 
     qmakeSpec: 'win32-msvc',
