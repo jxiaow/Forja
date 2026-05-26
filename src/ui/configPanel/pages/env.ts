@@ -251,7 +251,7 @@ function buildEnvScript(data: TemplateData): string {
     h += 'var map={vsDevShellPath:"vsPath",sdkVsInstall:"sdkVsPath",qtPath:"qtPathDisplay"};';
     h += 'var d=document.getElementById(map[id]);var t=d?d.textContent||"":"";return t==="未配置"?"":t}';
     h += 'function updateVsDisplayFromPath(path,label){';
-    h += 'label=label||vsCandidateLabels[path];';
+    h += 'label=vsCandidateLabels[path]||label;';
     h += 'var input=document.getElementById("vsDevShellPath");if(input){input.value=path||""}';
     h += 'var vsP=document.getElementById("vsPath");if(vsP){vsP.textContent=path||"未配置"}';
     h += 'var vsB=document.getElementById("vsBadge");if(vsB){vsB.textContent=path?"手动配置":"未配置";vsB.className="ecb "+(path?"bok":"bwn")}';
@@ -260,7 +260,7 @@ function buildEnvScript(data: TemplateData): string {
     h += 'var trigger=document.querySelector("#vsSelect .csel-trigger");if(trigger){trigger.dataset.value=path||"";if(label){trigger.textContent=label}}';
     h += '}';
     h += 'function updateSdkVsDisplayFromPath(path,label){';
-    h += 'label=label||vsCandidateLabels[path];';
+    h += 'label=vsCandidateLabels[path]||label;';
     h += 'var install=vsCandidateInstalls[path]||path||"";';
     h += 'var input=document.getElementById("sdkVsInstall");if(input){input.value=install}';
     h += 'var sdkVsP=document.getElementById("sdkVsPath");if(sdkVsP){sdkVsP.textContent=install||"未配置"}';
@@ -270,7 +270,7 @@ function buildEnvScript(data: TemplateData): string {
     h += 'var trigger=document.querySelector("#sdkVsSelect .csel-trigger");if(trigger){trigger.dataset.value=install;if(label){trigger.textContent=label}}';
     h += '}';
     h += 'function updateQtDisplayFromPath(path,label){';
-    h += 'label=label||qtCandidateLabels[path];';
+    h += 'label=qtCandidateLabels[path]||label;';
     h += 'var input=document.getElementById("qtPath");if(input){input.value=path||""}';
     h += 'var qtP=document.getElementById("qtPathDisplay");if(qtP){qtP.textContent=path||"未配置"}';
     h += 'var qtB=document.getElementById("qtBadge");if(qtB){qtB.textContent=path?"手动配置":"未配置";qtB.className="ecb "+(path?"bok":"bwn")}';

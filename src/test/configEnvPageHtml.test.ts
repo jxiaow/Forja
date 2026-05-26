@@ -103,6 +103,8 @@ test('environment page keeps selected toolchain titles after env refresh', () =>
     assert.match(html, /updateVsDisplayFromPath\(currentValue\("vsDevShellPath"\),d\.env\.vs/);
     assert.match(html, /updateSdkVsDisplayFromPath\(currentValue\("sdkVsInstall"\),d\.env\.vs/);
     assert.match(html, /updateQtDisplayFromPath\(currentValue\("qtPath"\),d\.env\.qt/);
+    assert.match(html, /label=vsCandidateLabels\[path\]\|\|label/);
+    assert.match(html, /label=qtCandidateLabels\[path\]\|\|label/);
     assert.doesNotMatch(html, /vsT\)\{vsT\.textContent=d\.env\.vs/);
     assert.doesNotMatch(html, /sdkVsT\)\{sdkVsT\.textContent=d\.env\.vs/);
     assert.doesNotMatch(html, /qtT\)\{qtT\.textContent=d\.env\.qt/);
