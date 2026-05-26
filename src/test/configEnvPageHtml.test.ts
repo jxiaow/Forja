@@ -138,6 +138,10 @@ test('environment page is rerendered after async environment detection', () => {
 test('environment page restores expanded panels after rerender', () => {
     const html = getPageHtml('env', createTemplateData());
 
+    assert.ok(
+        html.indexOf('const vscode=acquireVsCodeApi();') < html.indexOf('function rememberOpenPanels()'),
+        'VSCode API should be initialized before env page scripts use it'
+    );
     assert.match(html, /function rememberOpenPanels\(\)/);
     assert.match(html, /vscode\.setState/);
     assert.match(html, /function restoreOpenPanels\(\)/);

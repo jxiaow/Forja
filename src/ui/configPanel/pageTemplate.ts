@@ -12,8 +12,8 @@ import { buildAdvancedPage } from './pages/advanced';
 export function getPageHtml(pageId: ConfigPageId, data: TemplateData): string {
     const body = BUILDERS[pageId](data);
     return '<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">'
-        + '<style>' + PAGE_CSS + '</style></head><body>'
-        + body + '<script>const vscode=acquireVsCodeApi();' + CSEL_JS + '</script>'
+        + '<style>' + PAGE_CSS + '</style><script>const vscode=acquireVsCodeApi();</script></head><body>'
+        + body + '<script>' + CSEL_JS + '</script>'
         + '</body></html>';
 }
 
