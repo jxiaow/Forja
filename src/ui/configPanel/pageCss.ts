@@ -106,7 +106,7 @@ export const PAGE_CSS = [
     'border-top:1px solid rgba(255,255,255,.06)}',
     '.env-expand{max-height:0;overflow:hidden;transition:max-height .25s ease,padding .25s ease;',
     'padding:0 0;margin-top:0}',
-    '.env-expand.open{max-height:500px;padding:14px 0 0;margin-top:12px;',
+    '.env-expand.open{max-height:500px;overflow:visible;padding:14px 0 0;margin-top:12px;',
     'border-top:1px solid rgba(255,255,255,.06)}',
     '.env-toggle-btn{display:inline-flex;align-items:center;gap:4px}',
     '.env-toggle-arrow{display:inline-block;font-size:10px;transition:transform .2s}',

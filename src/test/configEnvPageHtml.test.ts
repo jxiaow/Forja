@@ -175,3 +175,11 @@ test('environment page disables toolchain controls while detection is running', 
     assert.match(html, /window\.refreshEnv=function\(\)\{vscode\.postMessage\(\{command:"refreshEnv"\}\)\}/);
     assert.match(templateSource, /aria-disabled/);
 });
+
+test('environment page allows reopened custom select lists to overflow expanded panels', () => {
+    const html = getPageHtml('env', createTemplateData());
+
+    assert.match(html, /\.env-expand\{[^}]*overflow:hidden/);
+    assert.match(html, /\.env-expand\.open\{[^}]*overflow:visible/);
+    assert.match(html, /\.csel-list\{[^}]*position:absolute/);
+});
