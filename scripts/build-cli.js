@@ -19,6 +19,8 @@ const tmpBuild = path.join(root, 'dist', '_cli-build');
 // Directories to copy (relative to out/)
 const dirs = [
     'cli',
+    'remote/cli',
+    'remote/core',
     'qt/cli',
     'qt/shared',
     'qt/env',
@@ -181,6 +183,7 @@ const cliPkg = {
         'cli/**',
         'qt/**',
         'sdk/**',
+        'remote/**',
         'core/**',
         'version.js'
     ],

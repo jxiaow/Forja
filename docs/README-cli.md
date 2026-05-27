@@ -2,7 +2,7 @@
 
 命令行工具用于 C++ 项目的构建、运行和环境管理。
 
-当前 CLI 已实现子命令：`qt`、`sdk`、`cleanup`。`remote` 相关流程仍是设计稿，尚未接入 CLI dispatcher。
+当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`cleanup`。`remote` 已接入基础命令 `test/status/bootstrap/unlock`、远端 Qt/SDK 配置桥接 `qt|sdk status/init/use`、远程 Qt/SDK build 类动作、Qt run/stop/ps、buildOrder、跨机器 transfer、路径级 restore/reset 和显式 untracked 清理；SDK 不提供 run/stop/ps。
 
 ## 安装
 
@@ -137,7 +137,7 @@ compilot qt run --detach
 
 `--detach` 时，编译在前台执行；编译成功后后台启动程序，编译失败直接返回错误。
 
-`--json` 输出在成功解析 Makefile 目标时会包含 `executablePath`，表示最终启动的可执行文件绝对路径。`run --detach --json` 成功时还会返回 `pid` 和 `logFile`；`pid` 只表示目标可执行文件进程，不表示启动脚本进程。若后台启动后无法在超时时间内解析目标 PID，命令会返回失败诊断。
+`run --json` 只支持 `--detach` 模式；前台 run 直接接管终端输出。`--json` 输出在成功解析 Makefile 目标时会包含 `executablePath`，表示最终启动的可执行文件绝对路径。`run --detach --json` 成功时还会返回 `pid` 和 `logFile`；`pid` 只表示目标可执行文件进程，不表示启动脚本进程。若后台启动后无法在超时时间内解析目标 PID，命令会返回失败诊断。
 
 ### `compilot qt ps`
 
@@ -266,15 +266,56 @@ compilot sdk clean
 compilot cleanup --json
 ```
 
-## Remote 命令（设计稿，暂未实现）
+## Remote 命令（Phase 1）
 
-`compilot remote ...`、`qt build --remote`、`sdk build --remote`、远程部署和分阶段远程流水线目前只存在于设计文档中，当前 CLI 入口不会路由这些命令。
+当前已实现远程基础命令和配置桥接：
 
-已实现的远程相关能力仅限：
+```bash
+compilot remote status --json
+compilot remote doctor --json
+compilot remote doctor --bootstrap --json
+compilot remote test --json
+compilot remote bootstrap --json
+compilot remote unlock --lock-id <id> --force --json
+compilot remote qt status --json
+compilot remote qt init --json
+compilot remote qt use --mode release --json
+compilot remote qt build --json
+compilot remote qt clean --json
+compilot remote qt qmake --json
+compilot remote qt run
+compilot remote qt run --detach --json
+compilot remote qt stop --json
+compilot remote qt ps --json
+compilot remote sdk status --json
+compilot remote sdk init --json
+compilot remote sdk use --json
+compilot remote sdk build --json
+compilot remote sdk rebuild --json
+compilot remote sdk clean --json
+compilot remote build-order set sdk:build qt:qmake qt:build --json
+compilot remote build-order status --json
+compilot remote build-order clear --json
+compilot remote transfer set --server deploy-1 --path /opt/app --artifact qt-app/build/app --json
+compilot remote transfer status --json
+compilot remote transfer run --json
+compilot remote transfer clear --json
+compilot remote qt restore --repo qt-app -- src/main.cpp --json
+compilot remote qt reset --repo qt-app -- src/main.cpp --json
+compilot remote qt clean-untracked --repo qt-app -- tmp/generated.txt --json
+compilot remote sdk restore --repo sdk-lib -- include/version.h --json
+compilot remote sdk reset --repo sdk-lib -- include/version.h --json
+compilot remote sdk clean-untracked --repo sdk-lib -- generated/cache.bin --json
+```
 
-- VSCode 配置面板维护服务器列表
-- `compilot qt sync` 按本地配置执行文件同步
-- 同步状态写入 `.compilot/sync-state.json`
+Phase 1 负责远程配置/连通性/环境体检/CLI bootstrap/lock 清理、远端 Qt/SDK 的 status/init/use 配置桥接、buildOrder、跨机器 transfer、路径级 tracked 文件 restore/reset、显式 untracked 清理，以及 `remote qt build/clean/qmake/run/stop/ps`、`remote sdk build/rebuild/clean` 的远端执行。`compilot remote sdk run/stop/ps`、`qt build --remote`、`sdk build --remote` 不支持。
+
+`remote transfer` 从编译机把显式 artifact 复制到部署机：`--server` 使用 `~/.compilot/servers.json` 中的部署服务器 id，`--path` 必须是部署机绝对路径，`--artifact` 是编译机 `remotePath` 下的相对路径。`remote transfer status --json` 只做本地校验并输出 source/destination plan，不连接 SSH；`remote transfer run --json` 才会通过 build host 直接 SSH/SCP 到 deploy host。当前不自动发现产物。
+
+`remote qt|sdk clean-untracked` 只清理 `--` 后显式传入的 repo 内相对路径。命令会先在远端用 git 确认这些路径是 untracked；目录必须加 `--recursive`；不会执行 `git clean`，也不会触碰 tracked 文件。
+
+remote 复用当前 sync 的服务器和 remotePath 配置；缺少配置时 `remote doctor/test/status --json` 会返回诊断和下一步建议。
+手工排查优先运行 `compilot remote doctor`，普通文本输出会按检查项显示 blocked/ok/unknown、可用 autofix 和 next action；只想查看配置摘要时运行 `compilot remote status`。AI/脚本继续使用 `--json`。
 
 ## 本地状态
 

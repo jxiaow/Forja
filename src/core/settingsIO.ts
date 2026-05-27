@@ -50,10 +50,29 @@ export interface SyncSettings {
     ignore: string[];
 }
 
+export interface RemoteBuildOrderItem {
+    target: 'qt' | 'sdk';
+    action: 'build' | 'rebuild' | 'clean' | 'qmake';
+    args: string[];
+}
+
+export interface RemoteTransferSettings {
+    deployServer: string;
+    deployPath: string;
+    artifacts: string[];
+}
+
+export interface RemoteSettings {
+    remoteCompilotBin: string;
+    buildOrder: RemoteBuildOrderItem[];
+    transfer: RemoteTransferSettings | null;
+}
+
 export interface CompilotSettings {
     qt: QtSettings;
     sdk: SdkSettings;
     sync: SyncSettings;
+    remote: RemoteSettings;
 }
 
 // ── 默认值 ──
@@ -93,10 +112,17 @@ export const DEFAULT_SYNC: Readonly<SyncSettings> = {
     ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release']
 };
 
+export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
+    remoteCompilotBin: '',
+    buildOrder: [],
+    transfer: null
+};
+
 export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
     qt: DEFAULT_QT,
     sdk: DEFAULT_SDK,
-    sync: DEFAULT_SYNC
+    sync: DEFAULT_SYNC,
+    remote: DEFAULT_REMOTE
 };
 
 // ── 路径 ──
@@ -107,7 +133,7 @@ export function projectsDir(): string {
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
-export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string {
+export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync' | 'remote'): string {
     const normalized = workspace.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     const hash = crypto.createHash('sha256').update(`${normalized}:${type}`).digest('hex').slice(0, 12);
     return path.join(projectsDir(), `${hash}.json`);
@@ -198,6 +224,30 @@ export function saveSyncSettings(workspace: string, settings: SyncSettings): voi
     const data: Record<string, unknown> = {
         workspace,
         type: 'sync',
+        ...settings
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+}
+
+// ── Remote 配置读写 ──
+
+export function loadRemoteSettings(workspace: string): RemoteSettings {
+    const filePath = projectConfigPath(workspace, 'remote');
+    try {
+        if (fs.existsSync(filePath)) {
+            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            return sanitizeRemote(raw);
+        }
+    } catch { /* file missing or malformed */ }
+    return { ...DEFAULT_REMOTE };
+}
+
+export function saveRemoteSettings(workspace: string, settings: RemoteSettings): void {
+    const filePath = projectConfigPath(workspace, 'remote');
+    _ensureDir(filePath);
+    const data: Record<string, unknown> = {
+        workspace,
+        type: 'remote',
         ...settings
     };
     fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
@@ -327,3 +377,44 @@ function sanitizeSync(raw: Record<string, unknown>): SyncSettings {
     };
 }
 
+function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
+    const d = DEFAULT_REMOTE;
+    const buildOrder: RemoteBuildOrderItem[] = [];
+    if (Array.isArray(raw.buildOrder)) {
+        for (const item of raw.buildOrder) {
+            if (!item || typeof item !== 'object') { continue; }
+            const entry = item as Record<string, unknown>;
+            const target = entry.target;
+            const action = entry.action;
+            if ((target !== 'qt' && target !== 'sdk') || !isRemoteBuildOrderAction(target, action)) { continue; }
+            buildOrder.push({
+                target,
+                action,
+                args: isStringArray(entry.args) ? entry.args : []
+            });
+        }
+    }
+    let transfer: RemoteTransferSettings | null = null;
+    if (raw.transfer && typeof raw.transfer === 'object' && !Array.isArray(raw.transfer)) {
+        const rawTransfer = raw.transfer as Record<string, unknown>;
+        if (isString(rawTransfer.deployServer) && isString(rawTransfer.deployPath) && isStringArray(rawTransfer.artifacts)) {
+            transfer = {
+                deployServer: rawTransfer.deployServer,
+                deployPath: rawTransfer.deployPath,
+                artifacts: rawTransfer.artifacts
+            };
+        }
+    }
+    return {
+        remoteCompilotBin: isString(raw.remoteCompilotBin) ? raw.remoteCompilotBin : d.remoteCompilotBin,
+        buildOrder,
+        transfer
+    };
+}
+
+function isRemoteBuildOrderAction(target: 'qt' | 'sdk', action: unknown): action is RemoteBuildOrderItem['action'] {
+    if (target === 'qt') {
+        return action === 'build' || action === 'clean' || action === 'qmake';
+    }
+    return action === 'build' || action === 'rebuild' || action === 'clean';
+}

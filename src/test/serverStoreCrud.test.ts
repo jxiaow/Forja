@@ -11,6 +11,24 @@ import {
 const SERVERS_PATH = path.join(os.homedir(), '.compilot', 'servers.json');
 let backup: string | null = null;
 
+function resetServers(): void {
+    fs.writeFileSync(SERVERS_PATH, '[]', 'utf-8');
+}
+
+function addTestServer(overrides: Partial<Parameters<typeof addServer>[0]> = {}) {
+    resetServers();
+    return addServer({
+        name: 'test-srv',
+        host: '10.0.0.1',
+        port: 22,
+        username: 'dev',
+        authMode: 'key',
+        privateKeyPath: '/key',
+        password: '',
+        ...overrides
+    });
+}
+
 before(() => {
     if (fs.existsSync(SERVERS_PATH)) {
         backup = fs.readFileSync(SERVERS_PATH, 'utf-8');
@@ -18,7 +36,7 @@ before(() => {
     // Start with empty
     const dir = path.dirname(SERVERS_PATH);
     if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
-    fs.writeFileSync(SERVERS_PATH, '[]', 'utf-8');
+    resetServers();
 });
 
 after(() => {
@@ -30,11 +48,13 @@ after(() => {
 });
 
 test('readServers returns empty array when file has []', () => {
+    resetServers();
     const servers = readServers();
     assert.deepEqual(servers, []);
 });
 
 test('addServer creates server with generated id', () => {
+    resetServers();
     const s = addServer({ name: 'test-srv', host: '10.0.0.1', port: 22, username: 'dev', authMode: 'key', privateKeyPath: '/key', password: '' });
     assert.ok(s.id, 'should have generated id');
     assert.equal(s.name, 'test-srv');
@@ -42,25 +62,24 @@ test('addServer creates server with generated id', () => {
 });
 
 test('getServerById finds added server', () => {
-    const servers = readServers();
-    const id = servers[0].id;
-    const found = getServerById(id);
+    const seeded = addTestServer();
+    const found = getServerById(seeded.id);
     assert.ok(found);
     assert.equal(found.name, 'test-srv');
 });
 
 test('getServerByName finds by name', () => {
+    addTestServer();
     const found = getServerByName('test-srv');
     assert.ok(found);
     assert.equal(found.host, '10.0.0.1');
 });
 
 test('updateServer modifies fields', () => {
-    const servers = readServers();
-    const id = servers[0].id;
-    const ok = updateServer(id, { host: '10.0.0.2', port: 2222 });
+    const seeded = addTestServer();
+    const ok = updateServer(seeded.id, { host: '10.0.0.2', port: 2222 });
     assert.equal(ok, true);
-    const updated = getServerById(id)!;
+    const updated = getServerById(seeded.id)!;
     assert.equal(updated.host, '10.0.0.2');
     assert.equal(updated.port, 2222);
     assert.equal(updated.name, 'test-srv'); // unchanged
@@ -71,11 +90,10 @@ test('updateServer returns false for non-existent id', () => {
 });
 
 test('removeServer deletes by id', () => {
-    const servers = readServers();
-    const id = servers[0].id;
-    removeServer(id);
-    assert.equal(getServerById(id), null);
-    assert.equal(readServers().length, 0);
+    const seeded = addTestServer();
+    removeServer(seeded.id);
+    assert.equal(getServerById(seeded.id), null);
+    assert.equal(readServers().some(server => server.id === seeded.id), false);
 });
 
 test('readServers handles malformed JSON gracefully', () => {

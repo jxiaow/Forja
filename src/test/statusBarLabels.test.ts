@@ -24,6 +24,21 @@ test('status bar uses full display label instead of short label text', () => {
     assert.match(source, /getEffectiveProjectName/);
 });
 
+test('status bar routes actions by execution location', () => {
+    const statusBarPath = path.join(process.cwd(), 'src', 'ui', 'unifiedStatusBar.ts');
+    const source = fs.readFileSync(statusBarPath, 'utf8');
+    const executionLocationSource = fs.readFileSync(path.join(process.cwd(), 'src', 'vscode', 'executionLocation.ts'), 'utf8');
+
+    assert.match(source, /getExecutionLocation/);
+    assert.match(source, /onExecutionLocationChange/);
+    assert.match(source, /\[Qt·\$\{locationLabel\}\]/);
+    assert.match(source, /compilot\.remote\.qt\.run/);
+    assert.match(source, /compilot\.remote\.sdk\.build/);
+    assert.match(source, /execution:remote/);
+    assert.match(executionLocationSource, /workspaceState/);
+    assert.match(executionLocationSource, /listeners\.forEach\(listener => listener\(current\)\)/);
+});
+
 test('project selection and logs use effective project display helpers', () => {
     const projectManagerPath = path.join(process.cwd(), 'src', 'qt', 'project', 'projectManager.ts');
     const projectManagerSource = fs.readFileSync(projectManagerPath, 'utf8');

@@ -13,6 +13,8 @@ import {
     saveSdkSettings,
     loadSyncSettings,
     saveSyncSettings,
+    loadRemoteSettings,
+    saveRemoteSettings,
     projectConfigPath,
     listProjectConfigs,
 } from '../core/settingsIO';
@@ -230,6 +232,41 @@ test('loadSyncSettings prefers current directory over parent', () => {
 
     const loaded = loadSyncSettings(child);
     assert.equal(loaded.selectedServer, 'child-server');
+});
+
+// ── Remote ──
+
+test('saveRemoteSettings round-trips sanitized build order', () => {
+    const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'remote'));
+
+    saveRemoteSettings(workspace, {
+        remoteCompilotBin: '/opt/compilot/bin/compilot',
+        buildOrder: [
+            { target: 'sdk', action: 'build', args: [] },
+            { target: 'qt', action: 'qmake', args: [] },
+            { target: 'qt', action: 'build', args: ['--verbose'] }
+        ],
+        transfer: {
+            deployServer: 'deploy-1',
+            deployPath: '/opt/app',
+            artifacts: ['qt-app/build/app', 'qt-app/conf/app.ini']
+        }
+    });
+
+    const loaded = loadRemoteSettings(workspace);
+
+    assert.equal(loaded.remoteCompilotBin, '/opt/compilot/bin/compilot');
+    assert.deepEqual(loaded.buildOrder, [
+        { target: 'sdk', action: 'build', args: [] },
+        { target: 'qt', action: 'qmake', args: [] },
+        { target: 'qt', action: 'build', args: ['--verbose'] }
+    ]);
+    assert.deepEqual(loaded.transfer, {
+        deployServer: 'deploy-1',
+        deployPath: '/opt/app',
+        artifacts: ['qt-app/build/app', 'qt-app/conf/app.ini']
+    });
 });
 
 // ── projectConfigPath ──
