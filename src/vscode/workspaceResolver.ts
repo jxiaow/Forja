@@ -10,7 +10,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { listProjectConfigs } from './settingsIO';
+import { listProjectConfigs, projectsDir } from '../core/settingsIO';
 
 export type ModuleType = 'qt' | 'sdk';
 
@@ -18,27 +18,30 @@ let _resolvedQt: string | null = null;
 let _resolvedSdk: string | null = null;
 let _watcherRegistered = false;
 
+function _resetResolvedRoots(): void {
+    _resolvedQt = null;
+    _resolvedSdk = null;
+}
+
 /** 注册 workspace folder 变化监听，自动重置缓存 */
 export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void {
     if (_watcherRegistered) { return; }
     _watcherRegistered = true;
     context.subscriptions.push(
-        vscode.workspace.onDidChangeWorkspaceFolders(() => {
-            _resolvedQt = null;
-            _resolvedSdk = null;
-        })
+        vscode.workspace.onDidChangeWorkspaceFolders(() => _resetResolvedRoots())
     );
 
     // 监听 ~/.compilot/projects/ 配置文件变化，重置缓存
-    const folders = vscode.workspace.workspaceFolders;
-    if (folders && folders.length > 1) {
-        for (const folder of folders) {
-            const p = new vscode.RelativePattern(folder.uri, '.compilot/settings.json');
-            const w = vscode.workspace.createFileSystemWatcher(p);
-            w.onDidCreate(() => { _resolvedQt = null; _resolvedSdk = null; });
-            context.subscriptions.push(w);
-        }
+    const configDir = projectsDir();
+    if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
     }
+    const pattern = new vscode.RelativePattern(vscode.Uri.file(configDir), '*.json');
+    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+    watcher.onDidCreate(() => _resetResolvedRoots());
+    watcher.onDidChange(() => _resetResolvedRoots());
+    watcher.onDidDelete(() => _resetResolvedRoots());
+    context.subscriptions.push(watcher);
 }
 
 /**
@@ -62,8 +65,7 @@ export function setSdkProjectRoot(root: string): void {
 
 /** 重置缓存（用于测试或 workspace 变化时） */
 export function resetProjectRoot(): void {
-    _resolvedQt = null;
-    _resolvedSdk = null;
+    _resetResolvedRoots();
 }
 
 // ── 从已有配置文件反查 workspace ──

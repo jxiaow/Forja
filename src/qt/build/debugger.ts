@@ -2,10 +2,10 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getBuildConfig, getQtSourcePath } from '../services/configService';
-import { setState } from '../../core/qtState';
+import { setState } from '../../vscode/qtState';
 import { getMakefileInfo } from '../project/projectManager';
 import { build, qmakeForDebug, stopCurrentTarget } from './buildManager';
-import { createLogger } from '../../core/logger';
+import { createLogger } from '../../vscode/logger';
 
 const isWin = process.platform === 'win32';
 const logger = createLogger('Debug');

@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
 import { detectEnv } from '../../qt/env/envDetector';
 import { generateCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
-import { getState, setState } from '../../core/qtState';
-import { updateConfig, getTarget, getWorkspaceRoot } from '../../qt/services/configService';
-import { createLogger } from '../../core/logger';
+import { getState, setState } from '../../vscode/qtState';
+import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
+import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { executeTestConnection, refreshSyncStatusBar } from '../../qt/sync/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
-import { setSdkSetting } from '../../core/settingsStore';
+import { setSdkSetting } from '../../vscode/settingsStore';
+import { getDefaultArch, isWindows } from '../../sdk/platform';
 
 const logger = createLogger('ConfigPanel');
 
@@ -65,8 +66,9 @@ export async function handleMessage(
             break;
         }
         case 'refreshEnv': {
-            const env = await detectEnv();
+            const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env);
+            updateHtml();
             pushEnvUpdate();
             break;
         }
@@ -78,18 +80,18 @@ export async function handleMessage(
         case 'saveVsPath': {
             logger.info(`保存 VS 路径: "${msg.value}"`);
             await updateConfig('vsInstall', inferVsInstall(String(msg.value || '')));
-            webview.postMessage({ command: 'envDetecting', scope: 'vs' });
-            const env = await detectEnv();
+            const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env);
+            updateHtml();
             pushEnvUpdate();
             break;
         }
         case 'saveQtPath': {
             logger.info(`保存 Qt 路径: "${msg.value}"`);
             await updateConfig('qtPath', String(msg.value || ''));
-            webview.postMessage({ command: 'envDetecting', scope: 'qt' });
-            const env2 = await detectEnv();
+            const env2 = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env2);
+            updateHtml();
             pushEnvUpdate();
             break;
         }
@@ -144,6 +146,12 @@ export async function handleMessage(
         case 'saveQmakeTarget': {
             logger.info(`保存 QMake TARGET: "${msg.value}"`);
             await updateConfig('target', String(msg.value || ''));
+            break;
+        }
+        case 'saveRuntimeProcessName': {
+            const value = String(msg.value || '').replace(/\.exe$/i, '');
+            logger.info(`保存运行前停止进程名: "${value}"`);
+            await updateConfig('runtimeProcessName', value);
             break;
         }
         case 'saveManualProPath': {
@@ -387,6 +395,10 @@ export async function handleMessage(
         }
         case 'saveSdkArch': {
             const val = String(msg.value || '');
+            if (!isWindows) {
+                setSdkSetting('arch', getDefaultArch());
+                break;
+            }
             if (val !== 'x86' && val !== 'x64') { break; }
             logger.info(`保存 SDK 目标架构: "${val}"`);
             setSdkSetting('arch', val);
@@ -394,7 +406,8 @@ export async function handleMessage(
         }
         case 'saveSdkVsInstall': {
             logger.info(`保存 SDK VS 路径: "${msg.value}"`);
-            setSdkSetting('vsInstall', String(msg.value || ''));
+            const sdkVsInstall = inferVsInstall(String(msg.value || '')) || String(msg.value || '');
+            setSdkSetting('vsInstall', sdkVsInstall);
             break;
         }
         case 'selectSdkProject': {

@@ -13,9 +13,18 @@ test('parseCliArgs defaults build to execute mode', () => {
     assert.equal(parsed.json, false);
 });
 
-test('parseCliArgs accepts json and typed options', () => {
+test('parseCliArgs rejects config options on init', () => {
+    for (const flag of ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target', '--save-local']) {
+        assert.throws(
+            () => parseCliArgs(['init', flag, 'value']),
+            flag === '--save-local' ? /未知参数: --save-local/ : new RegExp(`${flag} 不能用于 init`)
+        );
+    }
+});
+
+test('parseCliArgs accepts use config options', () => {
     const parsed = parseCliArgs([
-        'run',
+        'use',
         '--json',
         '--workspace',
         'D:/demo',
@@ -33,7 +42,7 @@ test('parseCliArgs accepts json and typed options', () => {
         'demo'
     ]);
 
-    assert.equal(parsed.action, 'run');
+    assert.equal(parsed.action, 'use');
     assert.equal(parsed.executionMode, 'execute');
     assert.equal(parsed.json, true);
     assert.equal(parsed.workspace, 'D:/demo');
@@ -43,6 +52,23 @@ test('parseCliArgs accepts json and typed options', () => {
     assert.equal(parsed.qtPath, 'D:/Qt');
     assert.equal(parsed.vsDevShell, 'C:/VS/Launch-VsDevShell.ps1');
     assert.equal(parsed.target, 'demo');
+});
+
+test('parseCliArgs rejects config options outside init and use', () => {
+    for (const action of ['build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'ps', 'stop', 'rcc']) {
+        assert.throws(
+            () => parseCliArgs([action, '--mode', 'release']),
+            new RegExp(`--mode 不能用于 ${action}`)
+        );
+        assert.throws(
+            () => parseCliArgs([action, '--project', 'demo.pro']),
+            new RegExp(`--project 不能用于 ${action}`)
+        );
+    }
+});
+
+test('parseCliArgs rejects removed logs action', () => {
+    assert.throws(() => parseCliArgs(['logs']), /未知命令/);
 });
 
 test('parseCliArgs --plan switches to dryRun mode', () => {

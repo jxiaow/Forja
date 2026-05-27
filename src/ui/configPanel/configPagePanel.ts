@@ -5,12 +5,13 @@
 import * as vscode from 'vscode';
 import { ConfigPageId } from './configNavTree';
 import { handleMessage } from './messageHandler';
-import { getState, setState } from '../../core/qtState';
+import { getState, setState } from '../../vscode/qtState';
 import { detectEnv } from '../../qt/env/envDetector';
+import { getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { getPageHtml } from './pageTemplate';
 import { buildTemplateData } from './templateData';
-import { createLogger } from '../../core/logger';
-import { onSettingsChange, getQtSetting, getSdkSetting } from '../../core/settingsStore';
+import { createLogger } from '../../vscode/logger';
+import { onSettingsChange, getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
 
 const logger = createLogger('ConfigPagePanel');
 
@@ -87,8 +88,10 @@ export class ConfigPageManager {
 
         // 环境页打开时触发检测
         if (pageId === 'env') {
-            detectEnv().then(env => {
+            panel.webview.postMessage({ command: 'envDetecting', scope: 'all' });
+            detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined).then(env => {
                 setState('envInfo', env);
+                this._updatePageHtml(pageId);
                 this._pushEnvUpdate(panel.webview);
             }).catch(e => logger.error(`环境检测失败: ${e}`));
         }
@@ -126,7 +129,7 @@ export class ConfigPageManager {
                 qt: env?.qt ? `Qt ${env.qt.version} (${env.qt.compiler})` : null,
                 jom: env?.jom || null
             },
-            vsCandidates: (env?.vsCandidates ?? []).map(c => ({ label: `VS ${c.version} ${c.edition}`, value: c.devShellPath })),
+            vsCandidates: (env?.vsCandidates ?? []).map(c => ({ label: `VS ${c.version} ${c.edition}`, value: c.devShellPath, installPath: c.installPath })),
             qtCandidates: (env?.qtCandidates ?? []).map(c => ({ label: `Qt ${c.version} (${c.compiler})`, value: c.path }))
         });
     }

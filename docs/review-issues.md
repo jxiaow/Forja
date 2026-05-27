@@ -21,10 +21,10 @@
 
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
-| C1 | 🟡 中 | SDK CLI 静默忽略未知参数，Qt CLI 会抛错 | src/sdk/cli/index.ts parseArgs | 待修 |
-| C2 | 🟡 中 | SDK CLI 不校验 `--mode`/`--arch` 值，无效值直接透传 | src/sdk/cli/index.ts parseArgs | 待修 |
-| C3 | 🟡 中 | SDK CLI help 文本缺少 `--remote`/`--fast`/`--from`/`--force` 文档 | src/sdk/cli/index.ts getHelpText | 待修 |
-| C4 | 🟢 低 | SDK CLI 中 `run`/`stop`/`restart` 的 deploy.json 检查是死代码（SDK 不支持这些 action） | src/sdk/cli/index.ts:193-205 | 待修 |
+| C1 | 🟡 中 | ~~SDK CLI 静默忽略未知参数，Qt CLI 会抛错~~ 已改为未知参数直接报错 | src/sdk/cli/index.ts parseArgs | ✅ 已修 |
+| C2 | 🟡 中 | ~~SDK CLI 不校验 `--mode`/`--arch` 值，无效值直接透传~~ 已校验 mode/arch，非 Windows 拒绝不支持架构 | src/sdk/cli/index.ts parseArgs | ✅ 已修 |
+| C3 | 🟡 中 | ~~SDK CLI help 文本缺少 `--remote`/`--fast`/`--from`/`--force` 文档~~ remote 尚未实现，不应作为已实现 SDK help 参数展示 | src/sdk/cli/index.ts getHelpText | ✅ 不再适用 |
+| C4 | 🟢 低 | ~~SDK CLI 中 `run`/`stop`/`restart` 的部署配置检查是死代码~~ 当前 SDK CLI 已不包含该检查 | — | ✅ 不再适用 |
 
 ## 错误处理
 
@@ -80,7 +80,7 @@
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
 | V1 | 🟡 中 | `core/syncCli.ts`、`core/ssh.ts`、`core/serverStore.ts` 无专属测试 | src/core/ | 待补 |
-| V2 | 🟡 中 | SDK 模块零测试覆盖（sdkBuilder、projectScanner、showActions 等） | src/sdk/ | 待补 |
+| V2 | 🟡 中 | SDK 模块测试覆盖不足；CLI、projectScanner source、settings watcher、stale project 已有覆盖，Extension Host 交互仍缺 | src/sdk/ | 部分已补 |
 | V3 | 🟡 中 | remote/core/index.ts（25KB 编排逻辑）无测试 | src/remote/core/index.ts | 待补 |
 | V4 | 🟢 低 | qt/build/、qt/sync/、cli/ 入口无测试 | src/qt/build/, src/qt/sync/, src/cli/ | 可选 |
 
@@ -140,3 +140,13 @@
 | 同步时无法选择仓库 | 扩展侧增加 QuickPick 选择，CLI 增加 --repo 参数 | ✅ 已修 |
 | git 仓库检测逻辑重复 | 提取到 core/gitRepoResolver.ts 共享 | ✅ 已修 |
 | syncWatcher.ts 重复 import | 合并为单条 import | ✅ 已修 |
+
+## 2026-05-22 CLI / SDK Review 修复记录
+
+| 问题 | 修复内容 | 状态 |
+|------|----------|------|
+| SDK CLI 参数模型和 Qt 不一致 | `init` 只自动初始化，新增/使用 `use` 承担显式配置，执行命令只读保存配置 | ✅ 已修 |
+| SDK CLI 非 Windows 架构默认值不一致 | 非 Windows 默认/保存/展示统一为 `x64`，拒绝不支持的 `--arch` | ✅ 已修 |
+| SDK CLI stale pinned project 会回退到候选项目 | 缺失或失效项目时返回 `status`/诊断，不静默选择其他项目 | ✅ 已修 |
+| SDK 扩展侧 stale project 状态 | 配置恢复和 build/rebuild/clean 前置检查会清理不存在的项目 | ✅ 已修 |
+| AI Skill 仍使用旧 CLI 参数流程 | `skills/compilot/SKILL.md` 改为 status → init/use → execution 流程 | ✅ 已修 |

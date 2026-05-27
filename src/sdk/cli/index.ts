@@ -9,18 +9,23 @@ import * as os from 'os';
 import * as cp from 'child_process';
 import { EXCLUDE_DIRS, EXCLUDE_PATH_SEGMENTS, DEFAULT_SCAN_DEPTH } from '../constants';
 import { getSdkDefaultArch, getSdkAvailableArch } from './requirements';
-import { loadSdkSettings, saveSdkSettings, SdkSettings, sdkSettingsFilePath } from './settings';
+import { loadSdkSettings, saveSdkSettings, sdkSettingsFilePath } from './settings';
 import { detectVsInstallations, detectMake } from './envDetector';
 
 interface SdkCliOptions {
     action: string;
     workspace: string;
     project: string | null;
-    mode: 'debug' | 'release';
-    arch: 'x86' | 'x64';
+    mode: 'debug' | 'release' | null;
+    arch: 'x86' | 'x64' | null;
     vsDevCmd: string | null;
     execute: boolean;
     json: boolean;
+}
+
+interface EffectiveSdkCliOptions extends Omit<SdkCliOptions, 'mode' | 'arch'> {
+    mode: 'debug' | 'release';
+    arch: 'x86' | 'x64';
 }
 
 interface SdkDiagnostic {
@@ -29,21 +34,49 @@ interface SdkDiagnostic {
 }
 
 function parseArgs(argv: string[]): SdkCliOptions {
-    const VALID_ACTIONS = ['init', 'env', 'projects', 'status', 'build', 'rebuild', 'clean'];
+    const VALID_ACTIONS = ['init', 'use', 'env', 'projects', 'status', 'build', 'rebuild', 'clean'];
+    const knownFlags = new Set(['--workspace', '--project', '--mode', '--arch', '--vs-dev-cmd', '--plan', '--dry-run', '--json']);
+    const commonFlags = ['--workspace', '--json'];
+    const configFlags = ['--project', '--mode', '--arch', '--vs-dev-cmd'];
+    const planFlags = ['--plan', '--dry-run'];
+    const allowedFlags: Record<string, Set<string>> = {
+        init: new Set(commonFlags),
+        use: new Set([...commonFlags, ...configFlags]),
+        env: new Set(commonFlags),
+        projects: new Set(commonFlags),
+        status: new Set(commonFlags),
+        build: new Set([...commonFlags, ...planFlags]),
+        rebuild: new Set([...commonFlags, ...planFlags]),
+        clean: new Set([...commonFlags, ...planFlags])
+    };
 
+    const action = argv[0] && !argv[0].startsWith('--') ? argv[0] : 'status';
     const options: SdkCliOptions = {
-        action: argv[0] || 'status',
+        action,
         workspace: process.cwd(),
         project: null,
-        mode: 'debug',
-        arch: getSdkDefaultArch(),
+        mode: null,
+        arch: null,
         vsDevCmd: null,
         execute: true,
         json: false
     };
 
-    for (let i = 1; i < argv.length; i++) {
+    if (!VALID_ACTIONS.includes(options.action)) {
+        throw new Error(`未知动作: ${options.action}。可用: ${VALID_ACTIONS.join(', ')}`);
+    }
+
+    const startIndex = action === argv[0] ? 1 : 0;
+    for (let i = startIndex; i < argv.length; i++) {
         const arg = argv[i];
+        if (arg.startsWith('--')) {
+            if (!knownFlags.has(arg)) {
+                throw new Error(`未知参数: ${arg}`);
+            }
+            if (!allowedFlags[options.action].has(arg)) {
+                throw new Error(`${arg} 不能用于 ${options.action}`);
+            }
+        }
         switch (arg) {
             case '--workspace': {
                 const val = argv[i + 1];
@@ -70,6 +103,7 @@ function parseArgs(argv: string[]): SdkCliOptions {
                 if (!val || val.startsWith('--')) { throw new Error('--arch 需要一个值'); }
                 const archVal = argv[++i];
                 if (archVal !== 'x86' && archVal !== 'x64') { throw new Error(`无效的 --arch 值: ${archVal}`); }
+                if (!getSdkAvailableArch().includes(archVal)) { throw new Error(`当前平台不支持 --arch 值: ${archVal}`); }
                 options.arch = archVal;
                 break;
             }
@@ -87,15 +121,8 @@ function parseArgs(argv: string[]): SdkCliOptions {
                 options.json = true;
                 break;
             default:
-                if (arg.startsWith('--')) {
-                    throw new Error(`未知参数: ${arg}`);
-                }
-                break;
+                throw new Error(`未知参数: ${arg}`);
         }
-    }
-
-    if (!VALID_ACTIONS.includes(options.action)) {
-        throw new Error(`未知动作: ${options.action}。可用: ${VALID_ACTIONS.join(', ')}`);
     }
 
     options.workspace = path.resolve(options.workspace);
@@ -103,6 +130,22 @@ function parseArgs(argv: string[]): SdkCliOptions {
         throw new Error(`工作区目录不存在: ${options.workspace}`);
     }
     return options;
+}
+
+function resolveProjectPath(workspace: string, project: string): string {
+    return path.isAbsolute(project) ? path.resolve(project) : path.resolve(workspace, project);
+}
+
+function projectDisplayPath(workspace: string, projectPath: string): string {
+    return path.relative(workspace, projectPath) || projectPath;
+}
+
+function requireExistingProjectPath(workspace: string, project: string): string {
+    const projectPath = resolveProjectPath(workspace, project);
+    if (!fs.existsSync(projectPath)) {
+        throw new Error(`项目文件不存在: ${projectDisplayPath(workspace, projectPath)}`);
+    }
+    return projectPath;
 }
 
 export function scanProjects(workspace: string, depth: number = DEFAULT_SCAN_DEPTH): string[] {
@@ -135,7 +178,7 @@ export function scanProjects(workspace: string, depth: number = DEFAULT_SCAN_DEP
     return results;
 }
 
-function buildCommand(options: SdkCliOptions, projectPath: string, vsDevCmdPath: string): string[] {
+function buildCommand(options: EffectiveSdkCliOptions, projectPath: string, vsDevCmdPath: string): string[] {
     const isWindows = os.platform() === 'win32';
     const commands: string[] = [];
 
@@ -188,7 +231,8 @@ Compilot SDK CLI
   compilot sdk <action> [options]
 
 动作:
-  init      初始化本地配置（检测 VS 环境、保存 .compilot/）
+  init      初始化本地配置（检测 VS 环境、保存可自动确定的配置）
+  use       确认/切换当前 workspace 使用的 SDK 项目和构建配置
   env       查看构建环境（VS 版本、make 等）
   projects  查看 workspace 下的项目文件
   status    显示项目就绪状态
@@ -198,18 +242,18 @@ Compilot SDK CLI
 
 选项:
   --workspace <path>     工作区路径（默认当前目录）
-  --project <path>       项目入口文件路径（.sln 或 Makefile）
-  --mode <mode>          编译模式: debug | release（默认 debug）
-  --arch <arch>          目标架构: ${getSdkAvailableArch().join(' | ')}（默认 ${getSdkDefaultArch()}）
-  --vs-dev-cmd <path>    VsDevCmd.bat 路径（Windows）
+  --project <path>       use: 项目入口文件路径（.sln 或 Makefile）
+  --mode <mode>          use: 编译模式: debug | release（默认 debug）
+  --arch <arch>          use: 目标架构: ${getSdkAvailableArch().join(' | ')}（默认 ${getSdkDefaultArch()}）
+  --vs-dev-cmd <path>    use: VsDevCmd.bat 路径（Windows）
   --plan                 仅输出命令计划，不执行
   --json                 JSON 格式输出
 
 示例:
   compilot sdk status --json
   compilot sdk init --json
+  compilot sdk use --project Makefile --mode release --json
   compilot sdk env --json
-  compilot sdk build --mode release --arch x64 --json
   compilot sdk build --plan --json
 `.trim();
 }
@@ -226,16 +270,25 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         const options = parseArgs(argv);
 
         const settings = loadSdkSettings(options.workspace);
+        const effectiveMode = options.mode || settings.mode || 'debug';
+        const settingsArch = getSdkAvailableArch().includes(settings.arch) ? settings.arch : getSdkDefaultArch();
+        const effectiveArch = options.arch || settingsArch;
+        const effectiveOptions: EffectiveSdkCliOptions = {
+            ...options,
+            mode: effectiveMode,
+            arch: effectiveArch
+        };
 
         // ── init ──
         if (options.action === 'init') {
             const vsInstallations = detectVsInstallations();
             const _makePath = detectMake();
 
-            const mode = options.mode;
-            const arch = options.arch;
+            const mode = effectiveMode;
+            const arch = effectiveArch;
             const vsDevCmd = options.vsDevCmd || (vsInstallations.length > 0 ? vsInstallations[0].vsDevCmdPath : '');
-            const project = options.project ? path.relative(options.workspace, path.resolve(options.project)) : settings.pinnedProject;
+            const candidates = scanProjects(options.workspace, settings.scanDepth || DEFAULT_SCAN_DEPTH);
+            const project = settings.pinnedProject || (candidates.length === 1 ? projectDisplayPath(options.workspace, candidates[0]) : null);
 
             const newSettings = { mode, arch, vsDevCmdPath: vsDevCmd, pinnedProject: project };
             saveSdkSettings(options.workspace, newSettings);
@@ -243,11 +296,11 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             const diagnostics: SdkDiagnostic[] = [];
             const autoSelected: string[] = [];
             if (!options.vsDevCmd && vsInstallations.length > 1) { autoSelected.push('vsDevCmd'); }
+            if (!settings.pinnedProject && project) { autoSelected.push('project'); }
             if (autoSelected.length > 0) {
-                diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 compilot sdk env --json 查看可选项` });
+                diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 compilot sdk status --json 查看当前配置` });
             }
             if (!project) {
-                const candidates = scanProjects(options.workspace, settings.scanDepth || DEFAULT_SCAN_DEPTH);
                 if (candidates.length > 1) {
                     diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，未自动选择，可用 compilot sdk projects --json 查看全部` });
                 } else if (candidates.length === 0) {
@@ -267,6 +320,30 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             return;
         }
 
+        // ── use ──
+        if (options.action === 'use') {
+            const project = options.project
+                ? projectDisplayPath(options.workspace, requireExistingProjectPath(options.workspace, options.project))
+                : settings.pinnedProject;
+            const mode = options.mode || effectiveMode;
+            const arch = options.arch || effectiveArch;
+            const vsDevCmd = options.vsDevCmd || settings.vsDevCmdPath || '';
+
+            const newSettings = { mode, arch, vsDevCmdPath: vsDevCmd, pinnedProject: project };
+            saveSdkSettings(options.workspace, newSettings);
+
+            const out: Record<string, unknown> = {
+                ok: true,
+                action: 'use',
+                resolved: { mode, arch, vsDevCmdPath: vsDevCmd || undefined, project: project || undefined },
+                nextActions: ['compilot sdk status --json']
+            };
+
+            if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
+            else { console.log('SDK 配置已更新，可执行 compilot sdk status 查看状态'); }
+            return;
+        }
+
         // ── env ──
         if (options.action === 'env') {
             const vsInstallations = detectVsInstallations();
@@ -277,8 +354,8 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 ok: true,
                 action: 'env',
                 current: {
-                    mode: settings.mode || 'debug',
-                    arch: settings.arch || getSdkDefaultArch(),
+                    mode: effectiveMode,
+                    arch: effectiveArch,
                     vsDevCmd: currentVsDevCmd || null,
                     make: makePath || null
                 },
@@ -291,7 +368,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                     ...(process.platform !== 'win32' ? { make: makePath ? [makePath] : [] } : {})
                 },
                 configHints: {
-                    usage: 'compilot sdk init [options] --json',
+                    usage: 'compilot sdk use [options] --json',
                     mode: '--mode debug|release',
                     ...(getSdkAvailableArch().length > 1 ? { arch: `--arch ${getSdkAvailableArch().join('|')}` } : {}),
                     ...(process.platform === 'win32' ? { vsDevCmd: '--vs-dev-cmd <path>' } : {})
@@ -301,8 +378,8 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
                 console.log('SDK 构建环境:');
-                console.log(`  mode: ${settings.mode || 'debug'}`);
-                console.log(`  arch: ${settings.arch || getSdkDefaultArch()}`);
+                console.log(`  mode: ${effectiveMode}`);
+                console.log(`  arch: ${effectiveArch}`);
                 if (process.platform === 'win32') {
                     console.log(`  VS: ${currentVsDevCmd || '未检测到'}`);
                     if (vsInstallations.length > 1) {
@@ -330,7 +407,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 action: 'projects',
                 current: currentProject,
                 available,
-                configHints: { usage: 'compilot sdk init --project <path> --json' }
+                configHints: { usage: 'compilot sdk use --project <path> --json' }
             };
             if (currentProject && !fs.existsSync(path.join(options.workspace, currentProject))) {
                 out.currentExists = false;
@@ -347,35 +424,21 @@ export async function runSdkCli(argv: string[]): Promise<void> {
 
         // ── 解析项目 ──
         const candidates = scanProjects(options.workspace, settings.scanDepth || DEFAULT_SCAN_DEPTH);
-        let projectPath = options.project ? path.resolve(options.project) : null;
-        if (!projectPath && settings.pinnedProject) {
-            const pinned = path.join(options.workspace, settings.pinnedProject);
-            if (fs.existsSync(pinned)) { projectPath = pinned; }
-        }
-        if (!projectPath) {
-            if (candidates.length === 1) { projectPath = candidates[0]; }
-            else if (candidates.length === 0) {
-                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未找到项目文件' }], nextActions: ['compilot sdk status --json'] };
-                if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-                else { console.error('未找到 .sln 或 Makefile 项目文件'); }
-                process.exitCode = 1;
-                return;
-            } else {
-                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: `发现 ${candidates.length} 个项目文件，请使用 --project 指定` }], nextActions: ['compilot sdk status --json'] };
-                if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-                else { console.error(`发现 ${candidates.length} 个项目文件，请使用 --project 指定`); }
-                process.exitCode = 1;
-                return;
-            }
-        }
-
-        const projectRel = path.relative(options.workspace, projectPath) || projectPath;
-        const vsDevCmdPath = options.vsDevCmd || settings.vsDevCmdPath || '';
 
         // ── status ──
         if (options.action === 'status') {
+            let statusProjectPath = options.project ? resolveProjectPath(options.workspace, options.project) : null;
+            if (!statusProjectPath && settings.pinnedProject) {
+                const pinned = path.join(options.workspace, settings.pinnedProject);
+                if (fs.existsSync(pinned)) { statusProjectPath = pinned; }
+            }
+            if (!statusProjectPath && candidates.length === 1) {
+                statusProjectPath = candidates[0];
+            }
+
             const hasSettings = fs.existsSync(sdkSettingsFilePath(options.workspace));
-            const projectExists = fs.existsSync(projectPath);
+            const projectExists = !!statusProjectPath && fs.existsSync(statusProjectPath);
+            const projectRel = statusProjectPath ? path.relative(options.workspace, statusProjectPath) || statusProjectPath : null;
             const checks: Record<string, boolean> = { settings: hasSettings, project: projectExists };
             const missing: string[] = [];
 
@@ -383,6 +446,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             if (!projectExists) { missing.push('project'); }
 
             if (process.platform === 'win32') {
+                const vsDevCmdPath = options.vsDevCmd || settings.vsDevCmdPath || '';
                 const hasVsDevCmd = !!vsDevCmdPath && fs.existsSync(vsDevCmdPath);
                 checks.vsDevCmd = hasVsDevCmd;
                 if (!hasVsDevCmd) { missing.push('vsDevCmd'); }
@@ -395,12 +459,21 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             const ready = Object.values(checks).every(v => v);
             let nextAction: string;
             if (!hasSettings || missing.includes('vsDevCmd') || missing.includes('make')) { nextAction = 'init'; }
+            else if (!projectExists && candidates.length > 1) { nextAction = 'projects'; }
             else if (!projectExists) { nextAction = 'init'; }
             else { nextAction = 'build'; }
 
             const diagnostics: SdkDiagnostic[] = [];
             if (!hasSettings) { diagnostics.push({ level: 'warning', message: '尚未初始化' }); }
-            if (!projectExists && hasSettings) { diagnostics.push({ level: 'warning', message: '项目文件不存在' }); }
+            if (!projectExists) {
+                if (candidates.length > 1) {
+                    diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，请使用 compilot sdk use --project <path> 指定` });
+                } else if (candidates.length === 0) {
+                    diagnostics.push({ level: 'warning', message: '未找到项目文件' });
+                } else if (hasSettings) {
+                    diagnostics.push({ level: 'warning', message: '项目文件不存在' });
+                }
+            }
 
             const out: Record<string, unknown> = {
                 ok: true,
@@ -410,7 +483,8 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 checks,
                 nextAction,
                 project: projectRel,
-                resolved: { mode: settings.mode || options.mode, arch: settings.arch || options.arch }
+                candidates: candidates.map(c => path.relative(options.workspace, c) || c),
+                resolved: { mode: effectiveMode, arch: effectiveArch }
             };
             if (missing.length > 0) { out.missing = missing; }
             if (diagnostics.length > 0) { out.diagnostics = diagnostics; }
@@ -418,23 +492,78 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
                 console.log(`SDK 项目状态: ${ready ? '就绪' : '未就绪'}`);
-                console.log(`  项目: ${projectRel}`);
-                console.log(`  模式: ${settings.mode || options.mode}/${settings.arch || options.arch}`);
+                console.log(`  项目: ${projectRel || '未选择'}`);
+                console.log(`  模式: ${effectiveMode}/${effectiveArch}`);
                 console.log('');
                 console.log('检查项:');
                 for (const [key, ok] of Object.entries(checks)) { console.log(`  ${ok ? '✓' : '✗'} ${key}`); }
+                if (diagnostics.length > 0) {
+                    console.log('');
+                    diagnostics.forEach(d => console.log(`${d.level}: ${d.message}`));
+                }
                 console.log('');
                 console.log(`下一步: compilot sdk ${nextAction}`);
             }
             return;
         }
 
+        const hasSettings = fs.existsSync(sdkSettingsFilePath(options.workspace));
+        if (!hasSettings) {
+            const out = {
+                ok: false,
+                action: options.action,
+                diagnostics: [{ level: 'error', message: '尚未初始化' }],
+                nextActions: ['compilot sdk status --json']
+            };
+            if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
+            else { console.error('SDK 尚未初始化，请先执行 compilot sdk status'); }
+            process.exitCode = 1;
+            return;
+        }
+
+        let projectPath: string | null = null;
+        if (settings.pinnedProject) {
+            const pinned = path.join(options.workspace, settings.pinnedProject);
+            if (fs.existsSync(pinned)) { projectPath = pinned; }
+            else {
+                const out = {
+                    ok: false,
+                    action: options.action,
+                    project: settings.pinnedProject,
+                    diagnostics: [{ level: 'error', message: `项目文件不存在: ${settings.pinnedProject}` }],
+                    nextActions: ['compilot sdk status --json']
+                };
+                if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
+                else { console.error(`项目文件不存在: ${settings.pinnedProject}`); }
+                process.exitCode = 1;
+                return;
+            }
+        }
+        if (!projectPath) {
+            if (candidates.length === 0) {
+                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未找到项目文件' }], nextActions: ['compilot sdk status --json'] };
+                if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
+                else { console.error('未找到 .sln 或 Makefile 项目文件'); }
+                process.exitCode = 1;
+                return;
+            } else {
+                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未选择 SDK 项目' }], nextActions: ['compilot sdk status --json'] };
+                if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
+                else { console.error('未选择 SDK 项目，请先执行 compilot sdk status'); }
+                process.exitCode = 1;
+                return;
+            }
+        }
+
+        const projectRel = path.relative(options.workspace, projectPath) || projectPath;
+        const vsDevCmdPath = options.vsDevCmd || settings.vsDevCmdPath || '';
+
         // ── build/rebuild/clean ──
-        const commands = buildCommand(options, projectPath, vsDevCmdPath);
+        const commands = buildCommand(effectiveOptions, projectPath, vsDevCmdPath);
         const shellCommand = commands.join(' && ');
 
         if (!options.execute) {
-            const out = { ok: true, action: options.action, project: projectRel, commands, shellCommand, resolved: { mode: options.mode, arch: options.arch } };
+            const out = { ok: true, action: options.action, project: projectRel, commands, shellCommand, resolved: { mode: effectiveMode, arch: effectiveArch } };
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
                 console.log(`SDK ${options.action} 命令:`);
@@ -454,7 +583,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             project: projectRel,
             exitCode: executed.exitCode,
             durationMs,
-            resolved: { mode: options.mode, arch: options.arch }
+            resolved: { mode: effectiveMode, arch: effectiveArch }
         };
         if (errors.length > 0) { out.errors = errors; }
         if (!out.ok) {

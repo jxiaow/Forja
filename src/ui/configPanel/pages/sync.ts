@@ -1,4 +1,5 @@
 import { TemplateData } from '../template';
+import { jsLiteral } from '../jsLiteral';
 
 function esc(v: string): string {
     return v.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -165,13 +166,13 @@ function buildSyncIgnore(_data: TemplateData): string {
 
 function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0] | undefined): string {
     // Serialize server data for edit mode
-    const srvJson = srv ? JSON.stringify({
+    const srvJson = srv ? jsLiteral({
         id: srv.id, name: srv.name, host: srv.host, port: srv.port,
         username: srv.username, authMode: srv.authMode,
         privateKeyPath: srv.privateKeyPath,
         password: srv.password || '',
         remotePath: data.syncRemotePath
-    }).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/<\//g, '<\\/') : 'null';
+    }) : 'null';
 
     let h = '<script>(function(){';
 
@@ -186,7 +187,7 @@ function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0]
     h += 'vscode.postMessage({command:"saveSyncSelectedServer",value:e.detail.value})});';
 
     // ── 忽略列表 tag input ──
-    h += `var d='${esc(data.syncIgnore)}'.split(', ').filter(function(s){return s.length>0});`;
+    h += `var d=${jsLiteral(data.syncIgnore)}.split(', ').filter(function(s){return s.length>0});`;
     h += 'var w=document.getElementById("siw");var i=w.querySelector("input");';
     h += 'd.forEach(aT);';
     h += 'function aT(v){var t=document.createElement("span");t.className="tag-item";';

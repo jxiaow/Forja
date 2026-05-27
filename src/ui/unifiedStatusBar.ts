@@ -5,8 +5,8 @@
  * play 按钮根据活跃模块执行 run（Qt）或 build（SDK）。
  */
 import * as vscode from 'vscode';
-import { getState, setState, onStateChange, BuildMode, Arch } from '../core/qtState';
-import { onSettingsChange } from '../core/settingsStore';
+import { getState, setState, onStateChange, BuildMode, Arch } from '../vscode/qtState';
+import { onSettingsChange } from '../vscode/settingsStore';
 import { getTarget, getCustomCommands } from '../qt/services/configService';
 import { getEffectiveProjectName } from '../qt/project/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';
@@ -23,12 +23,17 @@ let _sdkProjectName: string = '';
 let _sdkMode: string = 'debug';
 let _sdkArch: string = 'x86';
 let _sdkIsBuilding: boolean = false;
-let _sdkUpdateListeners: ((update: { mode: string; arch: string }) => void)[] = [];
+const _sdkUpdateListeners: ((update: { mode: string; arch: string }) => void)[] = [];
 
 export function getActiveModule(): ActiveModule { return _activeModule; }
 export function setActiveModule(m: ActiveModule): void {
     _activeModule = m;
     _updateDisplay();
+}
+
+export function activateSdkModuleIfNoQtProject(): void {
+    if (getState().currentProject) { return; }
+    setActiveModule('sdk');
 }
 
 export function getRunStatusBarItem(): vscode.StatusBarItem { return _runItem; }

@@ -4,8 +4,8 @@
  * CLI / 非 VSCode 环境：委托给 loggerBase（纯 console）。
  */
 import type * as vscode from 'vscode';
-import { createLoggerBase, log as baseLog, warn as baseWarn, error as baseError } from './loggerBase';
-import type { ScopedLogger } from './loggerBase';
+import { createLoggerBase, log as baseLog, warn as baseWarn, error as baseError } from '../core/loggerBase';
+import type { ScopedLogger } from '../core/loggerBase';
 
 export type { ScopedLogger };
 

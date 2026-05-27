@@ -1,4 +1,4 @@
-import { Arch, BuildMode } from '../core/qtState';
+import { Arch, BuildMode } from '../vscode/qtState';
 
 export function getModeDisplayLabel(mode: BuildMode, arch: Arch, isWin: boolean): string {
     const modeLabel = mode === 'debug' ? 'Debug' : 'Release';

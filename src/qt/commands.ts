@@ -6,14 +6,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as buildManager from './build/buildManager';
-import { setState } from '../core/qtState';
+import { setState } from '../vscode/qtState';
 import { getWorkspaceRoot, getManualProPath, getDesignerPath, getQtPath } from './services/configService';
 import { selectProject, parseProFile } from './project/projectManager';
 import { startDebug } from './build/debugger';
 import { showUnifiedActions } from '../ui/unifiedStatusBar';
 import { executeSyncChangedFiles, executeTestConnection } from './sync/syncWatcher';
 import { ensureLocalStateDir } from './shared/localState';
-import { createLogger } from '../core/logger';
+import { createLogger } from '../vscode/logger';
 import { ConfigPageManager } from '../ui/configPanel/configPagePanel';
 
 const logger = createLogger('QtCommands');

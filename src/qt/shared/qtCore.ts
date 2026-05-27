@@ -42,38 +42,74 @@ function resolveWorkspace(input: string | null): string {
     return path.resolve(input || process.cwd());
 }
 
+function withoutConfigOptions(options: CliOptions): CliOptions {
+    return {
+        ...options,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null
+    };
+}
+
 function insideWorkspace(workspace: string, filePath: string): boolean {
     const rel = path.relative(workspace, filePath);
     return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-function resolveProject(workspace: string, options: CliOptions, settings: QtSettings): { project: string | null; error: string | null } {
-    const explicitProject = options.project
-        ? (path.isAbsolute(options.project) ? path.resolve(options.project) : path.resolve(workspace, options.project))
-        : null;
-    if (explicitProject) {
-        if (!insideWorkspace(workspace, explicitProject)) {
-            return { project: null, error: '.pro 文件必须位于 workspace 内' };
-        }
-        return { project: explicitProject, error: null };
+function resolveExplicitProject(workspace: string, projectInput: string): { project: string | null; error: string | null } {
+    const explicitProject = path.isAbsolute(projectInput) ? path.resolve(projectInput) : path.resolve(workspace, projectInput);
+    if (!insideWorkspace(workspace, explicitProject)) {
+        return { project: null, error: '.pro 文件必须位于 workspace 内' };
     }
-    // From settings: pinnedProject or manualProPath
+    if (path.extname(explicitProject).toLowerCase() !== '.pro') {
+        return { project: null, error: '项目文件必须是 .pro 文件' };
+    }
+    if (!fs.existsSync(explicitProject)) {
+        return { project: null, error: `项目文件不存在: ${explicitProject}` };
+    }
+    return { project: explicitProject, error: null };
+}
+
+function resolveSavedProject(workspace: string, settings: QtSettings): { project: string | null; error: string | null } {
     const selectedProj = settings.pinnedProject;
     const savedProject = selectedProj ? path.join(selectedProj.root, selectedProj.relative) : null;
     if (savedProject && fs.existsSync(savedProject)) {
         return { project: savedProject, error: null };
     }
+    if (savedProject) {
+        return { project: null, error: `已配置项目不存在: ${savedProject}` };
+    }
     if (settings.manualProPath && fs.existsSync(settings.manualProPath)) {
         return { project: settings.manualProPath, error: null };
+    }
+    if (settings.manualProPath) {
+        return { project: null, error: `已配置项目不存在: ${settings.manualProPath}` };
+    }
+    return { project: null, error: '未配置项目。请先运行 compilot qt projects --json 查看候选，再用 compilot qt use --project <path> --json 选择项目。' };
+}
+
+function resolveInitProject(workspace: string, options: CliOptions, settings: QtSettings): { project: string | null; error: string | null } {
+    const explicitProject = options.project
+        ? resolveExplicitProject(workspace, options.project)
+        : null;
+    if (explicitProject) {
+        return explicitProject;
+    }
+    const savedProject = resolveSavedProject(workspace, settings);
+    if (savedProject.project) {
+        return savedProject;
     }
     const found = scanProFiles(workspace).map(rel => path.join(workspace, rel));
     if (found.length === 1) {
         return { project: found[0], error: null };
     }
     if (found.length > 1) {
-        return { project: null, error: `发现多个 .pro 文件: ${found.join(', ')}。请使用 --project 指定。` };
+        return { project: null, error: `发现多个 .pro 文件: ${found.join(', ')}。请先运行 compilot qt projects --json 查看候选，再用 compilot qt use --project <path> --json 选择项目。` };
     }
-    return { project: null, error: '未找到 .pro 文件。请使用 --project 指定。' };
+    return { project: null, error: '未找到 .pro 文件。请在工作区中创建 .pro 文件，或用 compilot qt use --project <path> --json 选择已有项目。' };
 }
 
 function buildResolvedConfig(
@@ -93,6 +129,67 @@ function buildResolvedConfig(
     return config;
 }
 
+function buildProjectSelectionActions(): string[] {
+    return [
+        'compilot qt projects --json',
+        'compilot qt use --project <path> --json'
+    ];
+}
+
+function buildToolchainActions(missingTools: ReturnType<typeof getMissingTools>): string[] {
+    const actions = ['compilot qt env --json'];
+    for (const tool of missingTools) {
+        if (tool.cliFlag) {
+            actions.push(`compilot qt use ${tool.cliFlag.replace(/<[^>]+>/g, '<path>')} --json`);
+        }
+    }
+    return actions;
+}
+
+function getUnconfirmedBuildConfig(settings: QtSettings): Array<'mode' | 'arch'> {
+    const missing: Array<'mode' | 'arch'> = [];
+    if (!settings.mode) { missing.push('mode'); }
+    if (!settings.arch) { missing.push('arch'); }
+    return missing;
+}
+
+function buildConfigConfirmationActions(unconfirmed: Array<'mode' | 'arch'>): string[] {
+    if (unconfirmed.length === 0) { return []; }
+    const parts: string[] = [];
+    if (unconfirmed.includes('mode')) { parts.push('--mode debug'); }
+    if (unconfirmed.includes('arch')) { parts.push(`--arch ${getDefaultArch()}`); }
+    return [`compilot qt use ${parts.join(' ')} --json`];
+}
+
+function buildStatusGuidance(
+    hasSettings: boolean,
+    projectExists: boolean,
+    unconfirmedBuildConfig: Array<'mode' | 'arch'>,
+    missingTools: ReturnType<typeof getMissingTools>,
+    hasMakefile: boolean,
+    hasExecutable: boolean
+): { nextAction: string; nextActions: string[] } {
+    if (!hasSettings) {
+        return { nextAction: 'init', nextActions: ['compilot qt init --json'] };
+    }
+    if (!projectExists) {
+        return { nextAction: 'projects', nextActions: buildProjectSelectionActions() };
+    }
+    if (unconfirmedBuildConfig.length > 0) {
+        return { nextAction: 'use', nextActions: buildConfigConfirmationActions(unconfirmedBuildConfig) };
+    }
+    if (missingTools.length > 0) {
+        return { nextAction: 'env', nextActions: buildToolchainActions(missingTools) };
+    }
+    if (!hasMakefile) {
+        return { nextAction: 'qmake', nextActions: ['compilot qt qmake --json'] };
+    }
+    if (!hasExecutable) {
+        return { nextAction: 'build', nextActions: ['compilot qt build --json'] };
+    }
+    return { nextAction: 'run', nextActions: ['compilot qt run --json'] };
+}
+
 interface InitDiagnosticsInput {
     options: CliOptions;
     qtCandidates: Array<{path: string; version: string; compiler: string}>;
@@ -106,8 +203,6 @@ function buildInitDiagnostics(input: InitDiagnosticsInput): CliResult['diagnosti
 
     // 合并 env 相关的自动选择提示为一条 warning
     const autoSelected: string[] = [];
-    if (!input.options.mode) { autoSelected.push('mode'); }
-    if (!input.options.arch && getAvailableArch().length > 1) { autoSelected.push('arch'); }
     if (!input.options.qtPath && input.qtCandidates.length > 1) { autoSelected.push('qtPath'); }
     if (autoSelected.length > 0) {
         diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 compilot qt env --json 查看可选项` });
@@ -131,6 +226,24 @@ function buildInitDiagnostics(input: InitDiagnosticsInput): CliResult['diagnosti
     }
 
     return diagnostics;
+}
+
+function buildInitNextActions(project: string | null, projects: string[], missingTools: ReturnType<typeof getMissingTools>): string[] {
+    const nextActions: string[] = [];
+    if (!project) {
+        if (projects.length > 1) {
+            nextActions.push(...buildProjectSelectionActions());
+        } else if (projects.length === 0) {
+            nextActions.push('在工作区中创建 .pro 文件');
+        }
+    }
+    if (missingTools.length > 0) {
+        nextActions.push(...buildToolchainActions(missingTools));
+    }
+    if (nextActions.length === 0) {
+        nextActions.push('compilot qt status --json');
+    }
+    return Array.from(new Set(nextActions));
 }
 
 async function detectEnvironment(workspace: string, options: CliOptions): Promise<{
@@ -182,6 +295,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
 
     const settings = loadQtSettings(workspace);
+    const effectiveOptions = options.action === 'init' ? withoutConfigOptions(options) : options;
 
     if (options.action === 'status') {
         const hasSettings = fs.existsSync(projectConfigPath(workspace, 'qt'));
@@ -190,6 +304,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const projectFull = projectRel ? path.join(workspace, projectRel) : null;
         const projectExists = projectFull ? fs.existsSync(projectFull) : false;
 
+        const unconfirmedBuildConfig = getUnconfirmedBuildConfig(settings);
+        const modeConfirmed = !!settings.mode;
+        const archConfirmed = !!settings.arch;
         const mode = settings.mode || 'debug';
         const arch = settings.arch || getDefaultArch();
         const qtPath = settings.qtPath || '';
@@ -209,29 +326,18 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const checks: Record<string, boolean> = {
             settings: hasSettings,
             project: projectExists,
+            mode: modeConfirmed,
+            arch: archConfirmed,
             ...toolChecks,
             makefile: hasMakefile,
             executable: hasExecutable
         };
 
-        // 推导 nextAction（ready = "ready to build"，不含 executable）
-        let nextAction: string;
-        if (!hasSettings) {
-            nextAction = 'init';
-        } else if (!projectExists) {
-            nextAction = 'init';
-        } else if (missingTools.length > 0) {
-            nextAction = 'init';
-        } else if (!hasMakefile) {
-            nextAction = 'qmake';
-        } else if (!hasExecutable) {
-            nextAction = 'build';
-        } else {
-            nextAction = 'run';
-        }
+        // 推导下一步：init 只用于首次 bootstrap，已有配置后的缺项改由 env/projects/use 处理。
+        const guidance = buildStatusGuidance(hasSettings, projectExists, unconfirmedBuildConfig, missingTools, hasMakefile, hasExecutable);
 
         // ready = 所有构建前置条件满足（可以 build）
-        const ready = hasSettings && projectExists && toolsReady && hasMakefile;
+        const ready = hasSettings && projectExists && modeConfirmed && archConfirmed && toolsReady && hasMakefile;
 
         const diagnostics: CliResult['diagnostics'] = [];
         if (!hasSettings) {
@@ -239,6 +345,12 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         } else {
             if (!projectExists) {
                 diagnostics.push({ level: 'warning', message: '未配置项目' });
+            }
+            if (!modeConfirmed) {
+                diagnostics.push({ level: 'warning', message: '未确认构建模式（默认建议 debug）' });
+            }
+            if (!archConfirmed) {
+                diagnostics.push({ level: 'warning', message: `未确认目标架构（默认建议 ${getDefaultArch()}）` });
             }
             for (const tool of missingTools) {
                 diagnostics.push({ level: 'warning', message: `未配置 ${tool.label}` });
@@ -262,14 +374,18 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             workspace,
             ready,
             checks,
-            nextAction
+            nextAction: guidance.nextAction,
+            nextActions: guidance.nextActions
         };
 
         // missing: 列出哪些前置条件未满足（辅助调用方决定调 env 还是 projects）
         const missing: string[] = [];
         if (!hasSettings) { missing.push('settings'); }
-        if (!projectExists && hasSettings) { missing.push('project'); }
-        for (const tool of missingTools) { missing.push(tool.key); }
+        if (hasSettings) {
+            if (!projectExists) { missing.push('project'); }
+            missing.push(...unconfirmedBuildConfig);
+            for (const tool of missingTools) { missing.push(tool.key); }
+        }
         if (makefileValidation.exists && !makefileValidation.matches) { missing.push('makefile'); }
         else if (!makefileValidation.exists && projectExists) { missing.push('makefile'); }
         if (hasMakefile && !hasExecutable) { missing.push('executable'); }
@@ -281,6 +397,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         // 用 stdout 传自定义结构（和 env/projects 一样）
         result.ok = true;
         result.resolved = statusResolved;
+        result.nextActions = guidance.nextActions;
         result.data = statusResult;
         result.stdout = JSON.stringify(statusResult);
         return result;
@@ -307,7 +424,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 ...(process.platform === 'win32' ? { vsDevShell: detected.vsCandidates.map(c => ({ path: c.devShellPath, version: c.version, edition: c.edition })) } : {})
             },
             configHints: {
-                usage: 'compilot qt init [options] --json',
+                usage: 'compilot qt use [options] --json',
                 mode: '--mode debug|release',
                 ...(getAvailableArch().length > 1 ? { arch: `--arch ${getAvailableArch().join('|')}` } : {}),
                 ...Object.fromEntries(
@@ -340,7 +457,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             current: currentProject,
             available,
             configHints: {
-                usage: 'compilot qt init --project <path> --json'
+                usage: 'compilot qt use --project <path> --json'
             }
         };
         if (currentProject && !currentExists) {
@@ -352,13 +469,95 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         return result;
     }
 
-    const projectResult = resolveProject(workspace, options, settings);
+    if (options.action === 'use') {
+        const updatedQt: QtSettings = { ...settings };
+        const updated: Record<string, string> = {};
+        let project: string | null = settings.pinnedProject
+            ? path.join(settings.pinnedProject.root, settings.pinnedProject.relative)
+            : null;
+
+        if (options.project) {
+            const projectResult = resolveExplicitProject(workspace, options.project);
+            if (projectResult.error || !projectResult.project) {
+                result.diagnostics.push({ level: 'error', message: projectResult.error || '项目路径无效' });
+                result.nextActions.push('compilot qt projects --json');
+                return result;
+            }
+            project = projectResult.project;
+            const relativeProject = path.relative(workspace, project).replace(/\\/g, '/');
+            updatedQt.pinnedProject = { root: workspace, relative: relativeProject };
+            updated.project = relativeProject;
+        }
+        if (options.mode) {
+            updatedQt.mode = options.mode;
+            updated.mode = options.mode;
+        }
+        if (options.arch) {
+            updatedQt.arch = options.arch;
+            updated.arch = options.arch;
+        }
+        if (options.qtPath) {
+            updatedQt.qtPath = options.qtPath;
+            updated.qtPath = options.qtPath;
+        }
+        if (options.vsDevShell) {
+            updatedQt.vsInstall = inferVsInstall(options.vsDevShell);
+            updated.vsDevShell = options.vsDevShell;
+        }
+        if (options.target) {
+            updatedQt.target = options.target;
+            updated.target = options.target;
+        }
+
+        if (Object.keys(updated).length === 0) {
+            result.diagnostics.push({ level: 'error', message: 'use 需要至少指定一个配置参数' });
+            result.nextActions.push('compilot qt use --mode release --json');
+            return result;
+        }
+
+        if (options.executionMode === 'execute') {
+            saveQtSettings(workspace, updatedQt);
+        }
+
+        const mode = updatedQt.mode || 'debug';
+        const arch = updatedQt.arch || getDefaultArch();
+        const vsDevShell = resolveVsDevShellPath(updatedQt.vsInstall) || options.vsDevShell || '';
+        const useResolved = buildResolvedConfig(mode, arch, updatedQt.qtPath || '', vsDevShell, updatedQt.target || '', undefined, undefined, updatedQt.jomPath || undefined);
+        if (updatedQt.pinnedProject) {
+            useResolved.project = updatedQt.pinnedProject.relative;
+        }
+
+        const useData = {
+            ok: true,
+            action: 'use',
+            workspace,
+            mode: options.executionMode,
+            updated,
+            resolved: useResolved,
+            nextActions: ['compilot qt status --json']
+        };
+
+        return {
+            ...result,
+            ok: true,
+            project,
+            diagnostics: options.executionMode === 'dryRun' ? [{ level: 'info', message: '预览配置切换，未写入本地配置' }] : [],
+            nextActions: ['compilot qt status --json'],
+            resolved: useResolved,
+            data: useData,
+            stdout: JSON.stringify(useData)
+        };
+    }
+
+    const projectResult = options.action === 'init'
+        ? resolveInitProject(workspace, effectiveOptions, settings)
+        : resolveSavedProject(workspace, settings);
     if (projectResult.error && options.action !== 'init') {
-        const errMode = options.mode || settings.mode || 'debug';
-        const errArch = options.arch || settings.arch || getDefaultArch();
-        const errQtPath = options.qtPath || settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-        const errVsDevShell = options.vsDevShell || resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
-        const errQmakeTarget = options.target || settings.target || '';
+        const errMode = settings.mode || 'debug';
+        const errArch = settings.arch || getDefaultArch();
+        const errQtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
+        const errVsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+        const errQmakeTarget = settings.target || '';
         result.resolved = buildResolvedConfig(errMode, errArch, errQtPath, errVsDevShell, errQmakeTarget, undefined, undefined, settings.jomPath || undefined);
         result.diagnostics.push({ level: 'error', message: projectResult.error });
         result.nextActions.push('compilot qt status --json');
@@ -366,19 +565,22 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
 
     const project = projectResult.project;
-    const mode = options.mode || settings.mode || 'debug';
-    const arch = options.arch || settings.arch || getDefaultArch();
-    const qtPath = options.qtPath || settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = options.vsDevShell || resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
-    const target = options.target || settings.target || '';
+    const unconfirmedBuildConfig = options.action === 'init' ? [] : getUnconfirmedBuildConfig(settings);
+    const mode = settings.mode || 'debug';
+    const autoArch = getAvailableArch().length === 1 ? getDefaultArch() : '';
+    const arch = settings.arch || autoArch || getDefaultArch();
+    const qtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
+    const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const target = settings.target || '';
     const jomPath = settings.jomPath || '';
+    const runtimeProcessName = settings.runtimeProcessName || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
 
     if (options.action === 'init') {
         if (options.executionMode === 'execute') {
             ensureLocalStateDir(workspace);
             // #1: detectEnvironment 内部已调用 detectEnv，直接复用其结果，不再重复调用
-            const detected = await detectEnvironment(workspace, options);
+            const detected = await detectEnvironment(workspace, effectiveOptions);
             // 直接从检测结果获取候选列表
             const allQtCandidates = detected.qtCandidates;
             let effectiveTarget = target;
@@ -389,12 +591,11 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                     if (proInfo) { effectiveTarget = proInfo.target; }
                 }
                 // #2: 写入 pinnedProject
-                // mode/arch 只在用户显式传参时写入，否则保持 settings 原值（可能为空）
                 const relativeProject = path.relative(workspace, project).replace(/\\/g, '/');
                 const updatedQt: QtSettings = {
                     ...settings,
-                    mode: options.mode || settings.mode,
-                    arch: options.arch || settings.arch,
+                    mode: settings.mode,
+                    arch: settings.arch || autoArch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
                     vsInstall: settings.vsInstall || inferVsInstall(vsDevShell || detected.detected.vs?.devShellPath || ''),
                     jomPath: detected.detected.jom || '',
@@ -404,11 +605,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 saveQtSettings(workspace, updatedQt);
             } else {
                 // #3: 多 .pro 文件或无 .pro 时，仍保存 qtPath 等，显式清除 pinnedProject
-                // mode/arch 只在用户显式传参时写入，否则保持 settings 原值（可能为空）
                 const updatedQt: QtSettings = {
                     ...settings,
-                    mode: options.mode || settings.mode,
-                    arch: options.arch || settings.arch,
+                    mode: settings.mode,
+                    arch: settings.arch || autoArch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
                     vsInstall: settings.vsInstall || inferVsInstall(vsDevShell || detected.detected.vs?.devShellPath || ''),
                     jomPath: detected.detected.jom || '',
@@ -426,27 +626,28 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 jomPath: detected.detected.jom || ''
             };
             const initDiagnostics = buildInitDiagnostics({
-                options,
+                options: effectiveOptions,
                 qtCandidates: allQtCandidates,
                 projects: detected.detected.projects,
                 project,
                 effectiveSettings: effectiveSettingsForCheck
             });
+            const initNextActions = buildInitNextActions(project, detected.detected.projects, getMissingTools(effectiveSettingsForCheck));
 
             const initResolved = buildResolvedConfig(mode, arch, effectiveQtPath, effectiveVsDevShell, effectiveTarget, detected.detected.qt?.version, detected.detected.vs?.version, detected.detected.jom || undefined);
             if (project) {
                 initResolved.project = path.relative(workspace, project).replace(/\\/g, '/');
             }
-            return { ...result, ok: true, project, diagnostics: initDiagnostics, resolved: initResolved };
+            return { ...result, ok: true, project, diagnostics: initDiagnostics, nextActions: initNextActions, resolved: initResolved };
         }
 
         // dry-run: preview what init would do
-        const detected = await detectEnvironment(workspace, options);
+        const detected = await detectEnvironment(workspace, effectiveOptions);
         const previewQtPath = qtPath || detected.detected.qt?.path || '';
         const previewVsDevShell = vsDevShell || detected.detected.vs?.devShellPath || '';
 
         const previewDiagnostics: CliResult['diagnostics'] = [
-            { level: 'info', message: '将创建 .compilot/ 目录并写入 settings.json' }
+            { level: 'info', message: '将写入 Compilot 本地配置' }
         ];
         const previewSettingsForCheck: QtSettings = {
             ...settings,
@@ -455,12 +656,16 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             jomPath: detected.detected.jom || ''
         };
         previewDiagnostics.push(...buildInitDiagnostics({
-            options,
+            options: effectiveOptions,
             qtCandidates: detected.qtCandidates,
             projects: detected.detected.projects,
             project,
             effectiveSettings: previewSettingsForCheck
         }));
+        const previewNextActions = [
+            '确认无误后运行 compilot qt init --json 写入本地配置',
+            ...buildInitNextActions(project, detected.detected.projects, getMissingTools(previewSettingsForCheck))
+        ];
 
         const previewResolved = buildResolvedConfig(mode, arch, previewQtPath, previewVsDevShell, target, detected.detected.qt?.version, detected.detected.vs?.version, detected.detected.jom || undefined);
 
@@ -469,9 +674,19 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             ok: true,
             project,
             diagnostics: previewDiagnostics,
-            nextActions: ['确认无误后运行 compilot qt init --json 写入本地配置'],
+            nextActions: Array.from(new Set(previewNextActions)),
             resolved: previewResolved
         };
+    }
+
+    if (unconfirmedBuildConfig.length > 0) {
+        result.resolved = resolved;
+        result.diagnostics.push({
+            level: 'error',
+            message: `未确认构建配置: ${unconfirmedBuildConfig.join(', ')}。请先运行 compilot qt status --json 查看下一步。`
+        });
+        result.nextActions.push('compilot qt status --json');
+        return result;
     }
 
     const shellBuilder = createShellPlanBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
@@ -516,12 +731,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             if (runCmd) {
                 // Kill existing process before build (use actual exe name from Makefile)
                 const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
-                const exeName = runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro');
+                const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro'));
                 const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
                 commands = [killCmd, ...rccCmds, ...buildCmds, runCmd];
+                result.executablePath = runtimeTarget?.exePath;
             } else {
                 // Makefile not yet generated or mismatched — return build commands with hint to run status
-                const fallbackExeName = path.basename(project, '.pro');
+                const fallbackExeName = runtimeProcessName || path.basename(project, '.pro');
                 const fallbackKillCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(fallbackExeName);
                 const fallbackCmds = [fallbackKillCmd, ...buildCmds];
                 return {
@@ -541,7 +757,11 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     } else if (options.action === 'clean') {
         commands = shellBuilder.cleanCommands(buildConfig).commands;
     } else if (options.action === 'stop') {
-        commands = shellBuilder.stopCommands(path.basename(project || 'app', '.pro'));
+        const runtimeTarget = project ? resolveRuntimeTarget(path.dirname(project), mode, arch) : null;
+        const processName = runtimeProcessName || (runtimeTarget
+            ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath))
+            : (target || path.basename(project || 'app', '.pro')));
+        commands = shellBuilder.stopCommands(processName);
     } else if (options.action === 'rcc') {
         const rccPath = resolveRccProjectPath(settings.rccProjectPath || '', workspace);
         if (!rccPath) {

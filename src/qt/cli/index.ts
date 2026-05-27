@@ -2,10 +2,9 @@ import { parseCliArgs, isHelpRequest, getHelpText } from './args';
 import { CliResult } from './types';
 import { createActionPlan } from '../shared/qtCore';
 import { runCliResult } from '../shared/commandRunner';
-import { executeSyncCli } from '../shared/syncCli';
-import { readRunState, isProcessRunning, runLogPath } from '../shared/localState';
+import { executeSyncCli, planSyncCli } from '../shared/syncCli';
+import { readRunState, resolveRunProcessStatus } from '../shared/localState';
 import * as path from 'path';
-import * as fs from 'fs';
 
 /**
  * Compact JSON output: omit empty/null/default fields to reduce token consumption.
@@ -22,6 +21,8 @@ function compactResult(result: CliResult): Record<string, unknown> {
     if (result.errors.length > 0) { out.errors = result.errors; }
     if (result.warningSummary) { out.warningSummary = result.warningSummary; }
     if (result.logFile) { out.logFile = result.logFile; }
+    if (result.executablePath) { out.executablePath = result.executablePath; }
+    if (typeof result.pid === 'number') { out.pid = result.pid; }
 
     // Successful detach launches: minimal output
     const isDetachSuccess = result.ok && result.logFile && result.exitCode === 0
@@ -77,6 +78,9 @@ function textOutput(result: CliResult): string {
     if (result.project) {
         lines.push(`项目: ${result.project}`);
     }
+    if (result.executablePath) {
+        lines.push(`可执行文件: ${result.executablePath}`);
+    }
     if (result.commands.length > 0) {
         lines.push('命令:');
         for (const cmd of result.commands) {
@@ -124,50 +128,61 @@ async function main(argv: string[]): Promise<void> {
 
         const workspace = path.resolve(options.workspace || process.cwd());
 
-        // logs 查看运行日志
-        if (options.action === 'logs') {
+        // ps 查看后台运行状态
+        if (options.action === 'ps') {
             const state = readRunState(workspace);
-            const logFile = runLogPath(workspace);
+            const status = resolveRunProcessStatus(state);
 
-            if (!fs.existsSync(logFile)) {
-                const msg = '没有运行日志（程序可能未以 --detach 模式启动过）';
-                if (wantsJson) { console.log(JSON.stringify({ ok: false, diagnostics: [{ level: 'warning', message: msg }] })); }
+            if (!state) {
+                const msg = '没有后台运行记录，请先执行 compilot qt run --detach';
+                if (wantsJson) {
+                    console.log(JSON.stringify({
+                        ok: false,
+                        action: 'ps',
+                        running: false,
+                        pid: null,
+                        executablePath: null,
+                        logFile: null,
+                        diagnostics: [{ level: 'warning', message: msg }]
+                    }, null, 2));
+                }
                 else { console.log(msg); }
+                process.exitCode = 1;
                 return;
             }
 
-            const content = fs.readFileSync(logFile, 'utf8');
-            const lines = content.split(/\r?\n/);
-            const tail = lines.slice(-100).join('\n');
-
             if (wantsJson) {
-                const running = state ? isProcessRunning(state.pid) : false;
                 console.log(JSON.stringify({
                     ok: true,
-                    action: 'logs',
-                    pid: state?.pid || null,
-                    running,
-                    logFile,
-                    tail
+                    action: 'ps',
+                    running: status.running,
+                    pid: status.pid,
+                    executablePath: status.executablePath,
+                    logFile: status.logFile
                 }, null, 2));
             } else {
-                if (state) {
-                    const running = isProcessRunning(state.pid);
-                    console.log(`PID: ${state.pid} (${running ? 'running' : 'exited'})`);
-                    console.log(`Log: ${logFile}`);
-                    console.log('---');
-                }
-                console.log(tail);
+                console.log(`运行状态: ${status.running ? 'running' : 'exited'}`);
+                console.log(`PID: ${status.pid ?? '-'}`);
+                if (status.executablePath) { console.log(`Executable: ${status.executablePath}`); }
+                if (status.logFile) { console.log(`Log: ${status.logFile}`); }
             }
+            process.exitCode = 0;
             return;
         }
 
         // sync 走独立路径
         if (options.action === 'sync') {
             if (options.executionMode === 'dryRun') {
-                const output = { ok: true, action: 'sync', mode: 'dryRun', message: '去掉 --plan 执行同步' };
+                const output = await planSyncCli(workspace, options.server || undefined, options.repo || undefined);
                 if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
-                else { console.log('Sync (plan): 去掉 --plan 执行同步'); }
+                else {
+                    if (output.ok) {
+                        console.log(`Sync (plan): ${output.pending.length} 个文件待同步到 ${output.server}:${output.remotePath}`);
+                    } else {
+                        console.log(`Sync (plan) 失败: ${output.failed.map(f => f.error).join(', ')}`);
+                    }
+                }
+                process.exitCode = output.ok ? 0 : 1;
                 return;
             }
             const result = await executeSyncCli(workspace, options.server || undefined, options.repo || undefined);
@@ -187,8 +202,8 @@ async function main(argv: string[]): Promise<void> {
 
         const planned = await createActionPlan(options);
 
-        // env/projects/status: custom output structure, bypass compactResult
-        if (options.action === 'env' || options.action === 'projects' || options.action === 'status') {
+        // env/projects/status/use: custom output structure, bypass compactResult
+        if (options.action === 'env' || options.action === 'projects' || options.action === 'status' || options.action === 'use') {
             if (!planned.ok) {
                 if (wantsJson) {
                     console.log(JSON.stringify(compactResult(planned), null, 2));
@@ -229,6 +244,17 @@ async function main(argv: string[]): Promise<void> {
                     console.log(JSON.stringify(projectsOutput, null, 2));
                 } else {
                     console.log(formatProjectsText(projectsOutput));
+                }
+            } else if (options.action === 'use') {
+                const useOutput = {
+                    ok: true,
+                    action: 'use',
+                    ...customData
+                };
+                if (wantsJson) {
+                    console.log(JSON.stringify(useOutput, null, 2));
+                } else {
+                    console.log(textOutput(planned));
                 }
             } else {
                 // status — resolved 只包含非空字段，平台无关字段不输出
@@ -302,6 +328,12 @@ function formatStatusText(data: Record<string, unknown>): string {
 
     lines.push('');
     lines.push(`下一步: compilot qt ${data.nextAction}`);
+    const nextActions = data.nextActions as string[] | undefined;
+    if (nextActions && nextActions.length > 0) {
+        for (const action of nextActions) {
+            lines.push(`  ${action}`);
+        }
+    }
 
     const diagnostics = data.diagnostics as Array<Record<string, string>> | undefined;
     if (diagnostics && diagnostics.length > 0) {

@@ -1,4 +1,4 @@
-export type CliAction = 'init' | 'status' | 'env' | 'projects' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'logs' | 'rcc';
+export type CliAction = 'init' | 'use' | 'status' | 'env' | 'projects' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'ps' | 'rcc';
 export type CliExecutionMode = 'dryRun' | 'execute';
 export type CliBuildMode = 'debug' | 'release';
 export type CliArch = 'x86' | 'x64';
@@ -58,6 +58,10 @@ export interface CliResult {
     /** Warning summary: total count and deduplicated breakdown */
     warningSummary?: { total: number; summary: string };
     logFile: string | null;
+    /** run 成功时解析出的可执行文件绝对路径 */
+    executablePath?: string;
+    /** run --detach 成功时解析出的目标进程 PID */
+    pid?: number;
     diagnostics: CliDiagnostic[];
     resolved: CliResolvedConfig | null;
     /** RCC 项目路径（status 时返回） */

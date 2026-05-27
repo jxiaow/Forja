@@ -13,7 +13,7 @@
 | 改动范围 | 分类 | 流程 |
 | --- | --- | --- |
 | 单文件、≤15 行、不改接口/类型/导出 | Patch | 直接执行，无 gate |
-| 多文件、改接口、改数据结构、新命令/协议、跨目录 | Task | Scope → Build → Close |
+| 多文件、改接口、改数据结构、新命令/协议、跨目录 | Task | Scope → Solution → Build → Close |
 
 累积升级（同一会话内满足任一即升级为 Task）：
 - 改动文件 ≥ 5 个
@@ -42,28 +42,32 @@ Task 分类参考（用于 Scope gate 的 task type 字段）：
 ### 标准流程
 
 ```
-Scope → [Plan] → Build → Close
+Scope → Solution → [Plan] → Build → Close
 ```
 
 1. 声明任务类型（新功能 / Bug / 重构 / UI 调整 / 跨模块 / 其他）
 2. 输出 Scope gate（解决什么、怎么改、boundary、风险、怎么验证）
-3. （仅长任务）输出 Plan gate，建运行态工作区
-4. 实现前补看相关规则（`harness/core/rules/` + `harness/project/rules/`）
-5. 实现
-6. 输出 Build gate（实际改了什么，是否偏离 Scope）
-7. 验证；输出 Close gate
+3. 输出 Solution gate（目标行为、选定方案、对外影响面、兼容性、验证影响）
+4. （仅长任务）输出 Plan gate，建运行态工作区
+5. 实现前补看相关规则（`harness/core/rules/` + `harness/project/rules/`）
+6. 实现
+7. 输出 Build gate（实际改了什么，是否偏离 Scope/Solution）
+8. 验证；输出 Close gate
 
 如果任务信息不足，必须先过 Scope gate 补齐边界，**禁止**直接进入实现。
+如果 Solution gate 涉及 CLI/API/输出协议/配置语义/用户流程/已有入口行为变化，且该精确方向尚未被用户批准，**必须暂停等待确认**。若该方向已由当前目标、既有设计或前序 gate 明确批准，则继续推进。
 
 ### Autopilot 默认规则
 
-默认按自动 agent 执行。gate 是过程记录，不是确认点；无阻塞时输出 gate 后必须继续到实现、验证和交付。
+默认按自动 agent 执行。gate 默认是过程记录，不是确认点；无阻塞且无未批准公开行为方案时，输出 gate 后必须继续到实现、验证和交付。
 
-只在以下情况暂停：需要用户授权命令；继续会误伤已有改动；需求变化导致继续明显偏离目标；缺关键输入且无法从仓库自行判断。
+风险记录不是暂停条件。Scope/Solution/Close 中列出的普通工程风险，必须优先通过收窄范围、测试、降级、文档或显式不做来处理；不能因为“有风险”停止推进。
+
+只在以下情况暂停：需要用户授权命令；继续会误伤已有改动；需求变化导致继续明显偏离目标；缺关键输入且无法从仓库自行判断；Solution gate 暴露了尚未批准的公开行为方案。
 
 禁止使用"如果你同意 / 要不要继续 / 是否继续"这类停顿式表述。
 
-长周期 / 多阶段 / 全局目标必须先建阶段级 todo/checklist 和执行顺序；之后按顺序推进。
+长周期 / 多阶段 / 全局目标必须在 Solution gate 后先建阶段级 todo/checklist 和执行顺序；之后按顺序推进。
 
 ### 默认精简输出
 
@@ -82,11 +86,11 @@ Scope → [Plan] → Build → Close
 
 ## Hard Constraints
 
-- **Task 级改动必须**先过 Scope gate 再实现；Patch 级可直接执行
-- **禁止**把 gate 输出当作暂停理由
+- **Task 级改动必须**先过 Scope gate 和 Solution gate 再实现；Patch 级可直接执行
+- **禁止**把 gate 输出或风险记录当作暂停理由，除非 Solution gate 涉及未批准的公开行为方案
 - **累积升级不可逆**：同一会话内一旦触发，后续全部按 Task 处理
 - **默认自动推进**；除真实阻塞外，不得用提问替代可自行完成的动作
-- 长周期任务**必须先写阶段级 todo/checklist**
+- 长周期任务**必须在 Solution gate 后先写阶段级 todo/checklist**
 - 命中根目录 / workspace / 目录迁移时，**必须先创建 `docs/operations/<initiative>/`**
 - 不修改 `extension.ts` 的 activate 函数签名或导出
 - 不删除或重命名现有 VSCode 命令 ID（可新增别名命令，旧 ID 必须保留并正常工作）
@@ -150,4 +154,4 @@ AGENTS.md 是路由器，不是注册表。**硬限制：不超过 250 行。** 
 
 ---
 
-_更新时间: 2026-05-20_
+_更新时间: 2026-05-23_

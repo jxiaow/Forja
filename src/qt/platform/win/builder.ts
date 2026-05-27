@@ -6,6 +6,23 @@ export function getVsDevCmd(vsDevShell: string): string {
     return vsDevShell.replace(/Launch-VsDevShell\.ps1$/i, 'VsDevCmd.bat');
 }
 
+function psSingleQuoted(value: string): string {
+    return `'${value.replace(/'/g, "''")}'`;
+}
+
+function buildProcessKillCommand(exeName: string): string {
+    const processName = exeName.replace(/\.exe$/i, '');
+    const imageName = `${processName}.exe`;
+    const script = [
+        `$ErrorActionPreference='SilentlyContinue'`,
+        `$name=${psSingleQuoted(processName)}`,
+        '$procs=Get-Process -Name $name',
+        'if ($procs) { $procs | Stop-Process -Force; $procs | Wait-Process -Timeout 5 }',
+        `if (Get-Process -Name $name) { Write-Error ${psSingleQuoted(`Failed to stop ${imageName}`)}; exit 1 }`
+    ].join('; ');
+    return `powershell -NoProfile -ExecutionPolicy Bypass -Command "${script.replace(/"/g, '\\"')}"`;
+}
+
 export const winConfig: PlatformConfig = {
     shellExecutable: 'cmd.exe',
     shellArgs: ['/c'],
@@ -17,7 +34,7 @@ export const winConfig: PlatformConfig = {
         // set PATH 必须在 VsDevCmd.bat 之前：cmd 的 %PATH% 在命令行解析阶段展开，
         // 如果放在 VsDevCmd 之后，%PATH% 展开的是旧值，会覆盖 VsDevCmd 设置的 MSVC 路径。
         // VsDevCmd.bat 会在当前 PATH 基础上追加 MSVC 工具路径，所以先设置 Qt/jom 路径是安全的。
-        const qtBin = cfg.qtPath ? path.join(cfg.qtPath, 'bin') : '';
+        const qtBin = cfg.qtPath ? path.win32.join(cfg.qtPath, 'bin') : '';
         if (qtBin) {
             cmds.push(`set "PATH=${qtBin};%PATH%"`);
         }
@@ -38,11 +55,11 @@ export const winConfig: PlatformConfig = {
     },
 
     killCommand(exeName: string): string {
-        return `(taskkill /F /IM "${exeName}.exe" >nul 2>nul || ver >nul)`;
+        return buildProcessKillCommand(exeName);
     },
 
     stopCommands(exeName: string): string[] {
-        return [`taskkill /F /IM "${exeName}.exe"`];
+        return [buildProcessKillCommand(exeName)];
     },
 
     qmakeSpec: 'win32-msvc',

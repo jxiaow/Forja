@@ -1,10 +1,10 @@
 import * as path from 'path';
 import { BuildConfig } from '../platform/builder';
-import { getState } from '../../core/qtState';
+import { getState } from '../../vscode/qtState';
 import { decodePinnedProject } from '../project/pinnedProject';
 import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
-import { getQtSetting, setQtSetting, QtSettings, resolveVsDevShellPath } from '../../core/settingsStore';
-import { resolveProjectRoot } from '../../core/workspaceResolver';
+import { getQtSetting, setQtSetting, QtSettings, resolveVsDevShellPath } from '../../vscode/settingsStore';
+import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 
 // ── 配置读取 ──
 
@@ -55,6 +55,10 @@ export function getScanExcludeDirs(): string[] {
 
 export function getTarget(): string {
     return getQtSetting('target');
+}
+
+export function getRuntimeProcessName(): string {
+    return getQtSetting('runtimeProcessName');
 }
 
 export function getManualProPath(): string {

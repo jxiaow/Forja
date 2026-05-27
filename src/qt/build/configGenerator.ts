@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ProjectInfo } from '../project/projectManager';
-import { getState } from '../../core/qtState';
+import { getState } from '../../vscode/qtState';
 import { getWorkspaceRoot, getCStandard, getCppStandard, getEffectiveQtPath, getScanExcludeDirs } from '../services/configService';
-import { log } from '../../core/logger';
+import { log } from '../../vscode/logger';
 
 // 判断目录是否应跳过（精确匹配 + build* 前缀 + 用户自定义）
 function shouldSkip(name: string, extraSkip: string[]): boolean {

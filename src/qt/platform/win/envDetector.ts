@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { EnvInfo, VSInfo, QtInfo, execAsync, hasQmake, parseQtInfo, scanQt } from '../../env/envDetector';
-import { log } from '../../../core/logger';
+import { log } from '../../../core/loggerBase';
 
 // ── VS 检测 ──
 
@@ -226,30 +226,21 @@ async function scanVS(): Promise<VSInfo[]> {
 }
 
 export async function detectEnvWin(manualQtPath?: string, manualVsPath?: string): Promise<EnvInfo> {
-    // 指定了哪个就跳过哪个的全量扫描，只验证指定路径
-    const vsPromise = manualVsPath
-        ? Promise.resolve(fs.existsSync(manualVsPath) ? parseVsPath(manualVsPath) : null)
-        : detectVS();
-
-    const qtPromise = manualQtPath
-        ? (async () => {
-            if (!hasQmake(manualQtPath)) { return { qt: null, candidates: [] as QtInfo[] }; }
-            const qt = await parseQtInfo(manualQtPath, detectCompiler(manualQtPath));
-            return { qt, candidates: [qt] };
-        })()
-        : detectQt();
-
-    const vsCandidatesPromise = manualVsPath
-        ? Promise.resolve(
-            fs.existsSync(manualVsPath) ? [parseVsPath(manualVsPath)] : [] as VSInfo[]
-        )
-        : scanVS();
+    const manualVs = manualVsPath && fs.existsSync(manualVsPath)
+        ? parseVsPath(manualVsPath)
+        : null;
+    const vsPromise = manualVs ? Promise.resolve(manualVs) : detectVS();
+    const qtPromise = detectQt(manualQtPath);
+    const vsCandidatesPromise = scanVS();
 
     const [vs, { qt, candidates }, vsCandidates] = await Promise.all([
         vsPromise,
         qtPromise,
         vsCandidatesPromise
     ]);
+    const allVsCandidates = manualVs && !vsCandidates.some(c => c.installPath.toLowerCase() === manualVs.installPath.toLowerCase())
+        ? [manualVs, ...vsCandidates]
+        : vsCandidates;
     const jom = await detectJom(qt);
-    return { vs, qt, qtCandidates: candidates, vsCandidates, jom };
+    return { vs, qt, qtCandidates: candidates, vsCandidates: allVsCandidates, jom };
 }

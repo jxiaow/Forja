@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import * as path from 'path';
 import { SdkProjectInfo, BuildMode, Arch, StateChangeEvent } from '../types';
-import { isLinux } from '../platform';
-import { getSdkSetting, setSdkSetting } from '../../core/settingsStore';
-import { resolveProjectRoot } from '../../core/workspaceResolver';
+import { getDefaultArch, isLinux } from '../platform';
+import { getSdkSetting, setSdkSetting } from '../../vscode/settingsStore';
+import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 
 export class StateManager implements vscode.Disposable {
   private _currentProject: SdkProjectInfo | null = null;
   private _mode: BuildMode = 'debug';
-  private _arch: Arch = 'x86';
+  private _arch: Arch = getDefaultArch();
   private _isBuilding: boolean = false;
 
   private readonly _onStateChanged = new vscode.EventEmitter<StateChangeEvent>();
@@ -42,7 +43,14 @@ export class StateManager implements vscode.Disposable {
   }
 
   set arch(value: Arch) {
-    if (isLinux) { return; }
+    if (isLinux) {
+      const old = this._arch;
+      this._arch = getDefaultArch();
+      if (old !== this._arch) {
+        this._onStateChanged.fire({ field: 'arch', oldValue: old, newValue: this._arch });
+      }
+      return;
+    }
     if (value !== 'x86' && value !== 'x64') { return; }
     const old = this._arch;
     this._arch = value;
@@ -69,19 +77,29 @@ export class StateManager implements vscode.Disposable {
     const arch = getSdkSetting('arch');
     if (!isLinux && (arch === 'x86' || arch === 'x64')) {
       this._arch = arch;
+    } else {
+      this._arch = getDefaultArch();
     }
 
     const pinnedProject = getSdkSetting('pinnedProject');
-    if (pinnedProject) {
-      const wsRoot = resolveProjectRoot('sdk');
-      let resolvedPath = pinnedProject;
-      if (wsRoot && !path.isAbsolute(resolvedPath)) {
-        resolvedPath = path.join(wsRoot, resolvedPath);
-      }
-      const name = path.basename(resolvedPath, path.extname(resolvedPath));
-      const type = resolvedPath.endsWith('.sln') ? 'sln' : 'makefile';
-      this._currentProject = { name, path: resolvedPath, type } as SdkProjectInfo;
+    if (!pinnedProject) {
+      this._currentProject = null;
+      return;
     }
+
+    const wsRoot = resolveProjectRoot('sdk');
+    let resolvedPath = pinnedProject;
+    if (wsRoot && !path.isAbsolute(resolvedPath)) {
+      resolvedPath = path.join(wsRoot, resolvedPath);
+    }
+    if (!fs.existsSync(resolvedPath)) {
+      this._currentProject = null;
+      return;
+    }
+
+    const name = path.basename(resolvedPath, path.extname(resolvedPath));
+    const type = resolvedPath.endsWith('.sln') ? 'sln' : 'makefile';
+    this._currentProject = { name, path: resolvedPath, type } as SdkProjectInfo;
   }
 
   /** 将当前状态持久化到统一配置的 sdk 部分 */

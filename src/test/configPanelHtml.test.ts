@@ -16,6 +16,7 @@ function createTemplateData(): TemplateData {
         cppStandard: 'c++17',
         scanExcludeDirs: '',
         target: '',
+        runtimeProcessName: '',
         isWin: true,
         autoDevShell: '',
         autoQtPath: '',
@@ -56,6 +57,17 @@ test('qmake target input saves after editing is committed', () => {
         /<input id="target"[^>]*oninput="saveTarget\(\)"/,
         'target input should not write configuration for each typed character'
     );
+});
+
+test('config panel exposes runtime process name override', () => {
+    const html = getHtml({
+        ...createTemplateData(),
+        runtimeProcessName: 'XYWinQTPri'
+    });
+
+    assert.match(html, /id="runtimeProcessName"/);
+    assert.match(html, /value="XYWinQTPri"/);
+    assert.match(html, /saveRuntimeProcessName/);
 });
 
 test('qmake target input falls back to current project target when override is empty', () => {
@@ -139,6 +151,27 @@ test('config panel project name prefers qmake target override', () => {
         /<span class="project-hero-name">OverrideApp<\/span>/,
         'config panel should show the effective qmake target as the project name'
     );
+});
+
+test('config panel tag initialization serializes user text as JavaScript literals', () => {
+    const html = getHtml({
+        ...createTemplateData(),
+        scanExcludeDirs: "build', </script><script>alert(1)</script>",
+        syncIgnore: "node_modules', </script><script>alert(2)</script>"
+    });
+
+    assert.doesNotMatch(
+        html,
+        /initTags\('scanExcludeDirsWrap', '.*<\/script>/,
+        'scan exclude dirs should not be injected as a raw single-quoted script string'
+    );
+    assert.doesNotMatch(
+        html,
+        /initTags\('syncIgnoreWrap', '.*<\/script>/,
+        'sync ignore dirs should not be injected as a raw single-quoted script string'
+    );
+    assert.match(html, /initTags\('scanExcludeDirsWrap', "build', <\\\/script>/);
+    assert.match(html, /initTags\('syncIgnoreWrap', "node_modules', <\\\/script>/);
 });
 
 test('browse buttons preserve existing values when picker is cancelled', () => {

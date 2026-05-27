@@ -3,7 +3,6 @@
  * Called by the unified Compilot extension.ts when SDK projects are detected.
  */
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { StateManager } from './modules/stateManager';
 import { ConfigService } from './modules/configService';
 import { ProjectScanner } from './modules/projectScanner';
@@ -11,8 +10,9 @@ import { SdkBuilder } from './modules/sdkBuilder';
 import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN, CMD_SHOW_ACTIONS, CMD_SELECT_PROJECT, CTX_ACTIVATED, TASK_SOURCE } from './constants';
 import { isWindows } from './platform';
 import { initLogger, log, logError } from './utils/logger';
-import { setSdkState, setActiveModule, onSdkUpdate } from '../ui/unifiedStatusBar';
-import { setSdkProjectRoot } from '../core/workspaceResolver';
+import { setSdkState, activateSdkModuleIfNoQtProject, onSdkUpdate } from '../ui/unifiedStatusBar';
+import { setSdkProjectRoot } from '../vscode/workspaceResolver';
+import { onSettingsChange } from '../vscode/settingsStore';
 
 export async function activateSdk(context: vscode.ExtensionContext): Promise<void> {
     // 0. 初始化日志
@@ -103,9 +103,20 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         stateManager.arch = arch as import('./types').Arch;
         stateManager.persistToConfig();
     });
+    context.subscriptions.push(onSettingsChange((section) => {
+        if (section !== 'sdk') { return; }
+        stateManager.restoreFromConfig()
+            .then(async () => {
+                if (isWindows) {
+                    await configService.getVsDevCmdPath();
+                }
+                updateSdkStatusBar();
+            })
+            .catch((e: Error) => logError('settingsStore 变更后重新加载 SDK 配置失败', e));
+    }));
     // 有 SDK 项目时激活 SDK 模块
     if (stateManager.currentProject) {
-        setActiveModule('sdk');
+        activateSdkModuleIfNoQtProject();
     }
     log('状态栏已初始化（统一模式）');
 
@@ -170,19 +181,10 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     });
     context.subscriptions.push(taskEndListener);
 
-    // 10. 监听配置文件变化（外部编辑或 CLI 写入时重新加载）
-    configService.onSettingsFileChanged(context, async () => {
-        log('settings.json 变更，重新加载...');
-        await stateManager.restoreFromConfig();
-        if (isWindows) {
-            await configService.getVsDevCmdPath();
-        }
-    });
-
-    // 11. 设置激活上下文
+    // 10. 设置激活上下文
     await vscode.commands.executeCommand('setContext', CTX_ACTIVATED, true);
 
-    // 12. 注册 Disposables
+    // 11. 注册 Disposables
     context.subscriptions.push(stateManager, configService);
 
     log('Compilot SDK 模块激活完成!');

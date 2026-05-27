@@ -7,6 +7,7 @@ Prevent cross-layer and cross-module dependency violations that break the CLI/ex
 ## Repo Facts
 
 - `src/core/` — pure Node.js utilities, no `vscode` import allowed
+- `src/vscode/` — VSCode extension adapters/state (`settingsStore`, `workspaceResolver`, `logger`, `qtState`), may depend on `vscode`
 - `src/qt/shared/` — pure Node.js logic shared between CLI and extension, no `vscode` import
 - `src/qt/cli/` — Qt CLI entry, depends on `qt/shared/` and `core/`
 - `src/sdk/cli/` — SDK CLI entry, depends on `sdk/` internals and `core/`
@@ -20,7 +21,7 @@ Prevent cross-layer and cross-module dependency violations that break the CLI/ex
 1. Dependency direction: `ui/ → qt/ | sdk/ → core/`; reverse is forbidden
 2. `sdk/` and `qt/` must NOT import from each other
 3. `core/` must NOT import from `qt/`, `sdk/`, or `ui/`
-4. `qt/shared/` and `core/` must NOT import `vscode`
+4. `core/`, `qt/shared/`, and CLI entries must NOT import `vscode`
 5. CLI entries (`cli/`, `qt/cli/`, `sdk/cli/`) must NOT import `vscode`
 6. Platform-specific code lives in `qt/platform/{win,linux}/` or `sdk/platform/`, never in `shared/`
 
@@ -32,12 +33,12 @@ Prevent cross-layer and cross-module dependency violations that break the CLI/ex
 
 ## Implementation Checklist
 
-- [ ] No `import * as vscode` in `core/`, `shared/`, or `cli/` files
+- [ ] No `import * as vscode` in `core/`, `qt/shared/`, or CLI files
 - [ ] No `import ... from '../sdk/...'` in `qt/` or vice versa
 - [ ] No circular dependency introduced (check with `tsc --noEmit`)
 
 ## Common Smells
 
-- Importing `vscode` in a "shared" utility "just for types" — use a local interface instead
+- Importing `vscode` in a pure utility or "shared" file "just for types" — use a local interface instead
 - Putting platform detection in `shared/` because "it's just an if-statement" — use `platform/`
 - Creating a helper in `qt/` that `sdk/` also needs — move to `core/`

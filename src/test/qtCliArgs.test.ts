@@ -12,18 +12,75 @@ test('parseCliArgs --detach sets detach flag', () => {
     assert.equal(opts.action, 'run');
 });
 
+test('parseCliArgs accepts ps action', () => {
+    const opts = parseCliArgs(['ps', '--workspace', '/tmp/app', '--json']);
+
+    assert.equal(opts.action, 'ps');
+    assert.equal(opts.workspace, '/tmp/app');
+    assert.equal(opts.json, true);
+});
+
 test('parseCliArgs defaults to status when no action given', () => {
     const opts = parseCliArgs(['--json']);
     assert.equal(opts.action, 'status');
     assert.equal(opts.json, true);
 });
 
-test('parseCliArgs --mode and --arch set correctly', () => {
-    const opts = parseCliArgs(['build', '--mode', 'release', '--arch', 'x64']);
+test('parseCliArgs --mode and --arch are use options', () => {
+    const opts = parseCliArgs(['use', '--mode', 'release', '--arch', 'x64']);
+    assert.equal(opts.action, 'use');
     assert.equal(opts.mode, 'release');
     assert.equal(opts.arch, 'x64');
 });
 
+test('parseCliArgs accepts use config options', () => {
+    const opts = parseCliArgs(['use', '--project', 'demo.pro', '--mode', 'release', '--arch', 'x64', '--target', 'demo']);
+
+    assert.equal(opts.action, 'use');
+    assert.equal(opts.project, 'demo.pro');
+    assert.equal(opts.mode, 'release');
+    assert.equal(opts.arch, 'x64');
+    assert.equal(opts.target, 'demo');
+});
+
+test('parseCliArgs rejects build config options on execution and read-only actions', () => {
+    const restrictedFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
+    for (const action of ['init', 'build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'ps', 'stop', 'rcc']) {
+        for (const flag of restrictedFlags) {
+            assert.throws(
+                () => parseCliArgs([action, flag, 'value']),
+                new RegExp(`${flag} 不能用于 ${action}`)
+            );
+        }
+    }
+});
+
+test('parseCliArgs rejects removed init-only save-local flag', () => {
+    assert.throws(
+        () => parseCliArgs(['init', '--save-local']),
+        /未知参数: --save-local/
+    );
+});
+
+test('parseCliArgs only accepts sync flags on sync', () => {
+    const opts = parseCliArgs(['sync', '--server', 'dev', '--repo', 'app', '--dry-run']);
+
+    assert.equal(opts.action, 'sync');
+    assert.equal(opts.server, 'dev');
+    assert.equal(opts.repo, 'app');
+    assert.equal(opts.executionMode, 'dryRun');
+    assert.throws(() => parseCliArgs(['build', '--server', 'dev']), /--server 不能用于 build/);
+});
+
+test('parseCliArgs only accepts detach on run', () => {
+    assert.equal(parseCliArgs(['run', '--detach']).detach, true);
+    assert.throws(() => parseCliArgs(['build', '--detach']), /--detach 不能用于 build/);
+});
+
 test('parseCliArgs throws on unknown action', () => {
     assert.throws(() => parseCliArgs(['deploy']), /未知命令/);
+});
+
+test('parseCliArgs rejects removed logs action', () => {
+    assert.throws(() => parseCliArgs(['logs']), /未知命令/);
 });
