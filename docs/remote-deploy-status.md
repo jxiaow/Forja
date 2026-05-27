@@ -95,6 +95,80 @@ npm run remote:smoke -- --target both --build --run-detach --stop --execute --ye
 
 手工排查时，`compilot remote status` 的普通文本输出会给出 server、remotePath、remoteCompilotBin、buildOrder、transfer 和 next action 摘要。JSON 模式仍是 AI/脚本集成的稳定入口。
 
+## Remote Test Checklist
+
+按从低风险到真实执行的顺序测试。每一步失败时先保留命令输出和 `--json-dir` 产物，不要直接执行 unlock、restore、reset 或 clean。
+
+### 1. 本地静态与 CLI 基线
+
+- `npm run compile` 通过，确认 `out/cli/index.js` 已更新。
+- `node --test --test-reporter=spec out/test/remote*.test.js out/test/cliEntrySource.test.js out/test/statusBarLabels.test.js out/test/settingsIO.test.js out/test/serverStoreCrud.test.js` 通过。
+- `compilot remote --help` 能看到 status、doctor、test、bootstrap、build-order、transfer、qt、sdk 等入口。
+
+### 2. 本地配置与 dry-run
+
+- `compilot remote status --json` 返回当前 server、remotePath、remoteCompilotBin、buildOrder、transfer 摘要。
+- `compilot remote doctor --json` 能给出 readiness layers 和 nextActions。
+- `compilot remote test --json` 在未配置或不可连接时返回可解释的 blocked/degraded 诊断。
+- `compilot remote build-order status --json` 能读取当前构建顺序配置。
+- `compilot remote transfer status --json` 在不连 SSH 时也能校验本地 transfer plan。
+- `npm run remote:smoke -- --target both --build --run-detach --stop` 只打印计划，不执行 SSH。
+
+### 3. 远端连接与 bootstrap
+
+- 配置 sync server、selectedServer、remotePath 后，`compilot remote test --json` 能验证 SSH、remotePath 和 remoteCompilot。
+- 远端缺少 compilot 或版本不兼容时，执行 `compilot remote test --bootstrap --json` 先确认诊断。
+- 准备好 artifact 后，再执行 `compilot remote test --bootstrap --yes --json`，确认 bootstrap 后复测通过。
+- `compilot remote doctor --json` 不应留下 stale lock 或不可解释的 readiness 退化。
+
+### 4. 远端 Qt / SDK 桥接
+
+- `compilot remote qt status --json` 能在远端 workspace 下返回 Qt 状态。
+- `compilot remote sdk status --json` 能在远端 workspace 下返回 SDK 状态。
+- Qt 未初始化时，按 nextActions 执行 `compilot remote qt init --json` 和 `compilot remote qt use ... --json`。
+- SDK 未初始化时，按 nextActions 执行 `compilot remote sdk init --json` 和 `compilot remote sdk use ... --json`。
+- `compilot remote qt ps --json` 和 `compilot remote qt stop --json` 直接桥接运行状态管理，不应触发 branchSync/sync。
+
+### 5. 远端准备式构建与运行
+
+- `compilot remote qt qmake --json` 成功执行 prepare、branchSync、overlaySync、targetReadiness 和远端 qmake。
+- `compilot remote qt build --json` 成功执行远端 Qt build。
+- `compilot remote qt run --detach --json` 能后台启动目标进程。
+- `compilot remote qt ps --json` 能看到运行状态。
+- `compilot remote qt stop --json` 能停止后台进程。
+- `compilot remote qt clean --json` 只清理 Qt 构建目标，不误清远端 checkout。
+- `compilot remote sdk build --json`、`compilot remote sdk rebuild --json`、`compilot remote sdk clean --json` 分别验证 SDK 构建类动作。
+
+### 6. 远端安全动作
+
+- 本地 git repo 处于 detached HEAD、behind、unpushed 或 tracked dirty 时，prepare 阶段应阻断并返回诊断。
+- 远端 checkout 有不属于当前 overlay 的 tracked dirty 文件时，branchSync 应阻断或 preserve 后恢复。
+- `compilot remote unlock --lock-id <id> --force --json` 只删除匹配 lock id 的锁。
+- `compilot remote qt restore --repo <repo> -- <paths...> --json` 只恢复显式路径，并清理命中的 overlay manifest 与 underlay backup。
+- `compilot remote clean-untracked --repo <repo> -- <paths...> --json` 只删除显式 untracked 路径。
+
+### 7. VSCode 手工验证
+
+- 命令面板中 remote status、doctor、workbench、execution local/remote、Qt/SDK remote build/run/stop 命令可见。
+- 切换执行位置后，状态栏显示本地/远端模式正确，Qt/SDK 原有本地命令仍可用。
+- 远程命令失败时，输出面板能看到阶段、server、remotePath、nextActions 和问题匹配映射。
+- 配置面板修改 server、remotePath、buildOrder、transfer 后，CLI status 能读取到一致配置。
+
+### 8. 发布前真实 smoke
+
+推荐完整命令：
+
+```bash
+npm run remote:smoke -- --target both --build --run-detach --stop --execute --yes --json-dir /tmp/compilot-remote-smoke
+```
+
+完成后检查：
+
+- 每个 step 的 exit code 为 0，或失败 step 有明确 nextActions。
+- `remote doctor` 前后结果没有新增 stale lock。
+- 远端 Qt 进程已停止，远端 checkout 没有遗留未解释 dirty 文件。
+- `--json-dir` 产物已保存到本次测试记录中。
+
 ## Status JSON
 
 `compilot remote status --json` 返回快照结构：
