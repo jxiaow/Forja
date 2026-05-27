@@ -266,7 +266,7 @@ function buildEnvScript(data: TemplateData): string {
     h += 'card.querySelectorAll("input,button").forEach(function(el){el.disabled=on});';
     h += 'card.querySelectorAll(".csel").forEach(function(el){el.classList.toggle("disabled",on);el.setAttribute("aria-disabled",on?"true":"false");if(on){el.classList.remove("open")}})});';
     h += 'var any=document.querySelector(".env-card.loading");var btn=document.getElementById("refreshEnvBtn");if(btn){btn.disabled=!!any;btn.textContent=any?"检测中...":"重新扫描工具链"}}';
-    h += 'window.refreshEnv=function(){setToolchainLoading("all",true);vscode.postMessage({command:"refreshEnv"})};';
+    h += 'window.refreshEnv=function(){vscode.postMessage({command:"refreshEnv"})};';
     h += 'function updateVsDisplayFromPath(path,label){';
     h += 'label=vsCandidateLabels[path]||label;';
     h += 'var input=document.getElementById("vsDevShellPath");if(input){input.value=path||""}';
@@ -305,7 +305,6 @@ function buildEnvScript(data: TemplateData): string {
     h += 'if(vsS)vsS.addEventListener("csel-change",function(e){';
     h += 'updateVsDisplayFromPath(e.detail.value);';
     h += 'rememberOpenPanels();';
-    h += 'setToolchainLoading("vs",true);';
     h += 'vscode.postMessage({command:"saveVsPath",value:e.detail.value})});';
     h += 'var sdkVsS=document.getElementById("sdkVsSelect");';
     h += 'if(sdkVsS)sdkVsS.addEventListener("csel-change",function(e){';
@@ -316,7 +315,6 @@ function buildEnvScript(data: TemplateData): string {
     h += 'if(qtS)qtS.addEventListener("csel-change",function(e){';
     h += 'updateQtDisplayFromPath(e.detail.value);';
     h += 'rememberOpenPanels();';
-    h += 'setToolchainLoading("qt",true);';
     h += 'vscode.postMessage({command:"saveQtPath",value:e.detail.value})});';
     if (!data.env) {
         h += 'setToolchainLoading("all",true);';

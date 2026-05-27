@@ -169,6 +169,9 @@ test('environment page disables toolchain controls while detection is running', 
     assert.match(html, /setToolchainLoading\("all",false\)/);
     assert.match(loadingHtml, /setToolchainLoading\("all",true\);restoreOpenPanels/);
     assert.match(managerSource, /postMessage\(\{ command: 'envDetecting', scope: 'all' \}\)/);
-    assert.match(messageSource, /case 'refreshEnv':[\s\S]*envDetecting', scope: 'all'/);
+    assert.doesNotMatch(messageSource, /envDetecting/);
+    assert.doesNotMatch(html, /setToolchainLoading\("vs",true\)/);
+    assert.doesNotMatch(html, /setToolchainLoading\("qt",true\)/);
+    assert.match(html, /window\.refreshEnv=function\(\)\{vscode\.postMessage\(\{command:"refreshEnv"\}\)\}/);
     assert.match(templateSource, /aria-disabled/);
 });

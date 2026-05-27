@@ -66,7 +66,6 @@ export async function handleMessage(
             break;
         }
         case 'refreshEnv': {
-            webview.postMessage({ command: 'envDetecting', scope: 'all' });
             const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env);
             updateHtml();
@@ -81,7 +80,6 @@ export async function handleMessage(
         case 'saveVsPath': {
             logger.info(`保存 VS 路径: "${msg.value}"`);
             await updateConfig('vsInstall', inferVsInstall(String(msg.value || '')));
-            webview.postMessage({ command: 'envDetecting', scope: 'vs' });
             const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env);
             updateHtml();
@@ -91,7 +89,6 @@ export async function handleMessage(
         case 'saveQtPath': {
             logger.info(`保存 Qt 路径: "${msg.value}"`);
             await updateConfig('qtPath', String(msg.value || ''));
-            webview.postMessage({ command: 'envDetecting', scope: 'qt' });
             const env2 = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env2);
             updateHtml();
