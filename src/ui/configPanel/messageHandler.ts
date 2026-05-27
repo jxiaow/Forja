@@ -82,7 +82,6 @@ export async function handleMessage(
             await updateConfig('vsInstall', inferVsInstall(String(msg.value || '')));
             const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env);
-            updateHtml();
             pushEnvUpdate();
             break;
         }
@@ -91,7 +90,6 @@ export async function handleMessage(
             await updateConfig('qtPath', String(msg.value || ''));
             const env2 = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env2);
-            updateHtml();
             pushEnvUpdate();
             break;
         }
