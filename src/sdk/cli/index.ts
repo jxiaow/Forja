@@ -563,7 +563,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         const shellCommand = commands.join(' && ');
 
         if (!options.execute) {
-            const out = { ok: true, action: options.action, project: projectRel, commands, shellCommand, resolved: { mode: effectiveMode, arch: effectiveArch } };
+            const out = { ok: true, action: options.action, project: projectRel, shellCommand, resolved: { mode: effectiveMode, arch: effectiveArch } };
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
                 console.log(`SDK ${options.action} 命令:`);

@@ -25,7 +25,6 @@ function emptyResult(options: CliOptions, workspace: string): CliResult {
         project: null,
         commands: [],
         shellCommand: '',
-        candidates: [],
         nextActions: [],
         exitCode: null,
         durationMs: 0,
@@ -705,7 +704,16 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     if (options.action === 'qmake') {
         commands = shellBuilder.qmakeCommands(buildConfig).commands;
     } else if (options.action === 'build') {
-        commands = shellBuilder.buildCommands(buildConfig).commands;
+        const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
+        if (project) {
+            const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
+            const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro'));
+            const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
+            commands = [killCmd, ...buildCmds];
+            result.executablePath = runtimeTarget?.exePath;
+        } else {
+            commands = buildCmds;
+        }
     } else if (options.action === 'run') {
         const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
 

@@ -35,7 +35,6 @@ function compactResult(result: CliResult): Record<string, unknown> {
     if (result.project) {
         out.project = path.relative(result.workspace, result.project) || result.project;
     }
-    if (result.commands.length > 0) { out.commands = result.commands; }
     if (result.shellCommand) { out.shellCommand = result.shellCommand; }
     if (result.durationMs > 0) { out.durationMs = result.durationMs; }
 
