@@ -18,8 +18,14 @@ import { VERSION } from '../version';
 
 
 const tmpDirs: string[] = [];
+const oldCompilotHome = process.env.COMPILOT_HOME;
+const testCompilotHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-remote-phase1-home-'));
+process.env.COMPILOT_HOME = testCompilotHome;
 after(() => {
     for (const dir of tmpDirs) { fs.rmSync(dir, { recursive: true, force: true }); }
+    fs.rmSync(testCompilotHome, { recursive: true, force: true });
+    if (oldCompilotHome === undefined) { delete process.env.COMPILOT_HOME; }
+    else { process.env.COMPILOT_HOME = oldCompilotHome; }
 });
 afterEach(() => { process.exitCode = undefined; });
 
@@ -169,6 +175,20 @@ test('bootstrap artifact lookup requires exact current version tgz', () => {
     assert.equal(found.version, '1.2.3');
 });
 
+test('bootstrap artifact lookup does not depend on current working directory', () => {
+    const previousCwd = process.cwd();
+    const otherCwd = tmpDir('compilot-remote-artifact-cwd-');
+    process.chdir(otherCwd);
+    try {
+        const found = findBootstrapArtifact();
+        assert.equal(found.ok, true);
+        assert.equal(found.version, VERSION);
+        assert.ok(found.artifactPath?.endsWith(path.join('dist', `compilot-${VERSION}`, 'cli', `compilot-cli-${VERSION}.tgz`)));
+    } finally {
+        process.chdir(previousCwd);
+    }
+});
+
 test('unlock requires force and matching lock id', () => {
     const stateRoot = tmpDir('compilot-remote-state-');
     const lockDir = path.join(stateRoot, 'locks', 'target-a');
@@ -203,7 +223,7 @@ test('remote status uses configured remote compilot bin during probe', async () 
                 if (command.includes('printf compilot-remote-ok')) { return { exitCode: 0, stdout: 'compilot-remote-ok', stderr: '' }; }
                 if (command.includes('uname -s')) { return { exitCode: 0, stdout: 'Linux\n', stderr: '' }; }
                 if (command.includes('pwd -P')) { return { exitCode: 0, stdout: '/remote/ws\n', stderr: '' }; }
-                if (command.includes('/opt/compilot/bin/compilot')) { return { exitCode: 0, stdout: '0.7.41\n', stderr: '' }; }
+                if (command.includes('/opt/compilot/bin/compilot')) { return { exitCode: 0, stdout: VERSION + '\n', stderr: '' }; }
                 return { exitCode: 1, stdout: '', stderr: 'unexpected command' };
             }
         }

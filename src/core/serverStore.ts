@@ -11,7 +11,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import { compilotHomeDir } from './compilotHome';
 
 function atomicWriteJson(filePath: string, data: unknown): void {
     const tmp = filePath + `.tmp.${process.pid}`;
@@ -51,7 +51,7 @@ export interface ProjectSyncConfig {
 // ── 路径 ──
 
 function _globalDir(): string {
-    return path.join(os.homedir(), '.compilot');
+    return compilotHomeDir();
 }
 
 /** 清理 ~/.compilot/ 下残留的 .tmp 文件（原子写入失败时遗留） */

@@ -10,7 +10,15 @@ import { saveSyncSettings, DEFAULT_SYNC } from '../core/settingsIO';
 import { writeServers } from '../core/serverStore';
 
 const _tmpDirs: string[] = [];
-after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
+const _oldCompilotHome = process.env.COMPILOT_HOME;
+const _testCompilotHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-qt-cli-home-'));
+process.env.COMPILOT_HOME = _testCompilotHome;
+after(() => {
+    for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); }
+    fs.rmSync(_testCompilotHome, { recursive: true, force: true });
+    if (_oldCompilotHome === undefined) { delete process.env.COMPILOT_HOME; }
+    else { process.env.COMPILOT_HOME = _oldCompilotHome; }
+});
 beforeEach(() => { process.exitCode = undefined; });
 afterEach(() => { process.exitCode = undefined; });
 

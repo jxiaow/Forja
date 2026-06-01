@@ -16,15 +16,22 @@ import {
     loadRemoteSettings,
     saveRemoteSettings,
     projectConfigPath,
+    projectsDir,
     listProjectConfigs,
 } from '../core/settingsIO';
 
 const _tmpDirs: string[] = [];
 const _createdFiles: string[] = [];
+const _oldCompilotHome = process.env.COMPILOT_HOME;
+const _testCompilotHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-settings-home-'));
+process.env.COMPILOT_HOME = _testCompilotHome;
 
 after(() => {
     for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); }
     for (const f of _createdFiles) { try { fs.unlinkSync(f); } catch { /* ok */ } }
+    fs.rmSync(_testCompilotHome, { recursive: true, force: true });
+    if (_oldCompilotHome === undefined) { delete process.env.COMPILOT_HOME; }
+    else { process.env.COMPILOT_HOME = _oldCompilotHome; }
 });
 
 function makeWorkspace(): string {
@@ -273,7 +280,8 @@ test('saveRemoteSettings round-trips sanitized build order', () => {
 
 test('projectConfigPath returns path under ~/.compilot/projects/', () => {
     const result = projectConfigPath('C:/workspace/dev/qt_client', 'qt');
-    assert.match(result, /\.compilot[/\\]projects[/\\][a-f0-9]{12}\.json$/);
+    assert.equal(path.dirname(result), projectsDir());
+    assert.match(path.basename(result), /^[a-f0-9]{12}\.json$/);
 });
 
 test('projectConfigPath generates different hashes for different types', () => {

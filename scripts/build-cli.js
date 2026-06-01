@@ -37,6 +37,7 @@ const syncFiles = [
 
 // Individual files needed from core/
 const coreFiles = [
+    'core/compilotHome.js',
     'core/loggerBase.js',
     'core/settingsIO.js',
     'core/types.js',

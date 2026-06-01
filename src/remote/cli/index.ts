@@ -60,7 +60,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 writeOutput(result, options.json);
                 return;
             }
-            const artifact = findBootstrapArtifact(process.cwd());
+            const artifact = findBootstrapArtifact();
             const password = resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null;
             const runner = createSshRunner(resolved.config.server, password);
             const uploader = createScpUploader(resolved.config.server, password);
@@ -83,7 +83,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 writeOutput(result, options.json);
                 return;
             }
-            const artifact = findBootstrapArtifact(process.cwd());
+            const artifact = findBootstrapArtifact();
             const password = resolved.config.server.password || process.env.COMPILOT_SSH_PASSWORD || null;
             const runner = createSshRunner(resolved.config.server, password);
             const uploader = createScpUploader(resolved.config.server, password);
@@ -99,7 +99,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 writeOutput(blockedResult('bootstrap', resolved.diagnostics, resolved.nextActions), options.json);
                 return;
             }
-            const artifact = findBootstrapArtifact(process.cwd());
+            const artifact = findBootstrapArtifact();
             if (!artifact.ok) {
                 process.exitCode = 1;
                 writeOutput({ action: 'bootstrap', mode: 'remote', remoteBin: '$HOME/.compilot/bin/compilot', ...artifact }, options.json);

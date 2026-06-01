@@ -8,8 +8,10 @@ import {
     updateServer, getServerById, getServerByName
 } from '../core/serverStore';
 
-const SERVERS_PATH = path.join(os.homedir(), '.compilot', 'servers.json');
-let backup: string | null = null;
+const OLD_COMPILOT_HOME = process.env.COMPILOT_HOME;
+const TEST_COMPILOT_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-server-store-home-'));
+process.env.COMPILOT_HOME = TEST_COMPILOT_HOME;
+const SERVERS_PATH = path.join(TEST_COMPILOT_HOME, 'servers.json');
 
 function resetServers(): void {
     fs.writeFileSync(SERVERS_PATH, '[]', 'utf-8');
@@ -30,21 +32,15 @@ function addTestServer(overrides: Partial<Parameters<typeof addServer>[0]> = {})
 }
 
 before(() => {
-    if (fs.existsSync(SERVERS_PATH)) {
-        backup = fs.readFileSync(SERVERS_PATH, 'utf-8');
-    }
-    // Start with empty
     const dir = path.dirname(SERVERS_PATH);
     if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
     resetServers();
 });
 
 after(() => {
-    if (backup !== null) {
-        fs.writeFileSync(SERVERS_PATH, backup, 'utf-8');
-    } else if (fs.existsSync(SERVERS_PATH)) {
-        fs.unlinkSync(SERVERS_PATH);
-    }
+    if (OLD_COMPILOT_HOME === undefined) { delete process.env.COMPILOT_HOME; }
+    else { process.env.COMPILOT_HOME = OLD_COMPILOT_HOME; }
+    fs.rmSync(TEST_COMPILOT_HOME, { recursive: true, force: true });
 });
 
 test('readServers returns empty array when file has []', () => {

@@ -163,7 +163,12 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
             remotePath: options.remotePath,
             runner: options.runner
         });
-        if (!readiness.ok) {
+        const targetReady = readiness.ok && isReadyStatus(readiness.result);
+        if (!targetReady) {
+            const nextActions = statusNextActions(readiness.result);
+            const diagnostics = readiness.diagnostics.length > 0
+                ? readiness.diagnostics
+                : [{ level: 'error' as const, message: `远端 ${target} 未就绪` }];
             return {
                 ok: false,
                 action: 'preparedAction',
@@ -171,8 +176,8 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
                 failedStage: 'targetReadiness',
                 repos: [],
                 stages: [{ stage: 'targetReadiness', ok: false, message: target }],
-                diagnostics: readiness.diagnostics,
-                nextActions: readiness.nextActions.length > 0 ? readiness.nextActions : [`compilot remote ${target} status --json`],
+                diagnostics,
+                nextActions: nextActions.length > 0 ? nextActions : readiness.nextActions.length > 0 ? readiness.nextActions : [`compilot remote ${target} status --json`],
                 remote: readiness
             };
         }
@@ -236,4 +241,14 @@ function selectRemoteActions(options: ExecutePreparedRemoteActionOptions): Remot
 function isBuildOrderEntryPoint(options: ExecutePreparedRemoteActionOptions): boolean {
     if (options.target === 'qt') { return options.action === 'build'; }
     return options.action === 'build' || options.action === 'rebuild';
+}
+
+function isReadyStatus(value: unknown): boolean {
+    return typeof value !== 'object' || value === null || (value as { ready?: unknown }).ready !== false;
+}
+
+function statusNextActions(value: unknown): string[] {
+    if (typeof value !== 'object' || value === null) { return []; }
+    const nextActions = (value as { nextActions?: unknown }).nextActions;
+    return Array.isArray(nextActions) ? nextActions.filter((item): item is string => typeof item === 'string') : [];
 }

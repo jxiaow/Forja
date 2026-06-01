@@ -88,7 +88,7 @@ npm run remote:smoke -- --target qt --build --run-detach --stop --execute --yes
 推荐记录：
 
 ```bash
-npm run remote:smoke -- --target both --build --run-detach --stop --execute --yes --json-dir /tmp/compilot-remote-smoke
+npm run remote:smoke -- --workspace C:\Code\workspace\dev\qt_client --target both --build --run-detach --stop --execute --yes --json-dir /tmp/compilot-remote-smoke
 ```
 
 `--json-dir` 只保存每个 step 的 stdout/stderr 和退出码，便于对照 pipeline JSON；它不是远端状态源。
@@ -112,7 +112,7 @@ npm run remote:smoke -- --target both --build --run-detach --stop --execute --ye
 - `compilot remote test --json` 在未配置或不可连接时返回可解释的 blocked/degraded 诊断。
 - `compilot remote build-order status --json` 能读取当前构建顺序配置。
 - `compilot remote transfer status --json` 在不连 SSH 时也能校验本地 transfer plan。
-- `npm run remote:smoke -- --target both --build --run-detach --stop` 只打印计划，不执行 SSH。
+- `npm run remote:smoke -- --workspace C:\Code\workspace\dev\qt_client --target both --build --run-detach --stop` 只打印计划，不执行 SSH。
 
 ### 3. 远端连接与 bootstrap
 
@@ -159,7 +159,7 @@ npm run remote:smoke -- --target both --build --run-detach --stop --execute --ye
 推荐完整命令：
 
 ```bash
-npm run remote:smoke -- --target both --build --run-detach --stop --execute --yes --json-dir /tmp/compilot-remote-smoke
+npm run remote:smoke -- --workspace C:\Code\workspace\dev\qt_client --target both --build --run-detach --stop --execute --yes --json-dir /tmp/compilot-remote-smoke
 ```
 
 完成后检查：

@@ -313,3 +313,34 @@ test('executePreparedRemoteAction stops before prepare when target readiness fai
     assert.equal(commands.some(command => command.includes('mkdir "$lock_dir"')), false);
     assert.equal(commands.some(command => command.includes("'qt' 'build'")), false);
 });
+
+test('executePreparedRemoteAction stops before prepare when target status is not ready', async () => {
+    const commands: string[] = [];
+    const result = await executePreparedRemoteAction({
+        workspace: workspace(),
+        remotePath: '/remote/ws',
+        ignore: [],
+        owner: 'cli',
+        target: 'qt',
+        action: 'build',
+        args: [],
+        json: true,
+        runner: {
+            async run(command: string) {
+                commands.push(command);
+                if (command.includes("'qt' 'status'")) {
+                    return { exitCode: 0, stdout: '{"ok":true,"action":"status","ready":false,"nextActions":["compilot qt init --json"],"diagnostics":[{"level":"warning","message":"尚未初始化"}]}\n', stderr: '' };
+                }
+                return { exitCode: 0, stdout: '', stderr: '' };
+            }
+        },
+        uploader: { async upload() { throw new Error('not reached'); } },
+        git: fakeGit('')
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.failedStage, 'targetReadiness');
+    assert.deepEqual(result.stages.map(stage => stage.stage), ['targetReadiness']);
+    assert.equal(commands.some(command => command.includes('mkdir "$lock_dir"')), false);
+    assert.deepEqual(result.nextActions, ['compilot qt init --json']);
+});

@@ -10,7 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import * as os from 'os';
+import { compilotHomeDir } from './compilotHome';
 
 // ── 类型定义 ──
 
@@ -129,7 +129,7 @@ export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
 
 /** 用户数据目录下的 projects 配置目录 */
 export function projectsDir(): string {
-    return path.join(os.homedir(), '.compilot', 'projects');
+    return path.join(compilotHomeDir(), 'projects');
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */

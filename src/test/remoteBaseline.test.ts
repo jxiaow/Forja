@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { inspectLocalRepositories, inspectRemoteRepositories, buildRemoteBaselineStatus } from '../remote/core/baseline';
 import { buildRemoteStatus } from '../remote/core/status';
+import { VERSION } from '../version';
 
 const tmpDirs: string[] = [];
 
@@ -169,7 +170,7 @@ test('remote status includes repo baseline snapshot after readiness probes', asy
                 if (command.includes('printf compilot-remote-ok')) { return { exitCode: 0, stdout: 'compilot-remote-ok', stderr: '' }; }
                 if (command.includes('uname -s')) { return { exitCode: 0, stdout: 'Linux\n', stderr: '' }; }
                 if (command.includes('pwd -P')) { return { exitCode: 0, stdout: '/remote/ws\n', stderr: '' }; }
-                if (command.includes('$HOME/.compilot/bin/compilot --version')) { return { exitCode: 0, stdout: '0.7.41\n', stderr: '' }; }
+                if (command.includes('$HOME/.compilot/bin/compilot --version')) { return { exitCode: 0, stdout: VERSION + '\n', stderr: '' }; }
                 if (command.includes('lock.json')) { return { exitCode: 0, stdout: 'absent\n', stderr: '' }; }
                 if (command.includes("'qt-app'")) { return { exitCode: 0, stdout: 'mode:git\ncommit:abc123\nstatus:\n M generated/version.h\n', stderr: '' }; }
                 return { exitCode: 1, stdout: '', stderr: 'unexpected command' };
@@ -185,4 +186,6 @@ test('remote status includes repo baseline snapshot after readiness probes', asy
     assert.equal(result.repos?.[0].commitAligned, true);
     assert.deepEqual(result.repos?.[0].preservedTracked, ['generated/version.h']);
     assert.ok(commands.some(command => command.includes('git status --porcelain -uall')));
+    assert.ok(commands.some(command => /git status --porcelain -uall\s*;\s*elif/.test(command)));
+    assert.ok(commands.some(command => /printf "mode:files\\n"\s*;\s*else/.test(command)));
 });

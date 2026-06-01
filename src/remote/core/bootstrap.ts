@@ -36,7 +36,7 @@ export interface ExecuteRemoteBootstrapResult {
     nextActions: string[];
 }
 
-export function findBootstrapArtifact(root: string = process.cwd()): BootstrapArtifactResult {
+export function findBootstrapArtifact(root: string = resolveBootstrapRoot()): BootstrapArtifactResult {
     const packagePath = path.join(root, 'package.json');
     if (!fs.existsSync(packagePath)) {
         return missing('未找到 package.json');
@@ -58,6 +58,31 @@ export function findBootstrapArtifact(root: string = process.cwd()): BootstrapAr
     }
     const sha256 = crypto.createHash('sha256').update(fs.readFileSync(artifactPath)).digest('hex');
     return { ok: true, version, artifactPath, sha256, diagnostics: [], nextActions: [] };
+}
+
+function resolveBootstrapRoot(): string {
+    let current = __dirname;
+    while (true) {
+        const candidate = bootstrapArtifactFromRoot(current);
+        if (candidate) { return current; }
+        const parent = path.dirname(current);
+        if (parent === current) { return process.cwd(); }
+        current = parent;
+    }
+}
+
+function bootstrapArtifactFromRoot(root: string): string | null {
+    const packagePath = path.join(root, 'package.json');
+    if (!fs.existsSync(packagePath)) { return null; }
+    try {
+        const raw = JSON.parse(fs.readFileSync(packagePath, 'utf8')) as { version?: unknown };
+        const version = typeof raw.version === 'string' ? raw.version : '';
+        if (!version) { return null; }
+        const artifactPath = path.join(root, 'dist', `compilot-${version}`, 'cli', `compilot-cli-${version}.tgz`);
+        return fs.existsSync(artifactPath) ? artifactPath : null;
+    } catch {
+        return null;
+    }
 }
 
 export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOptions): Promise<ExecuteRemoteBootstrapResult> {

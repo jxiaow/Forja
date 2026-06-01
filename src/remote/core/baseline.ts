@@ -229,9 +229,9 @@ function buildRemoteRepoInspectCommand(remotePath: string, repoName: string): st
     return [
         'repo_dir=' + repoDir + ';',
         'if [ -d "$repo_dir/.git" ]; then',
-        'cd "$repo_dir" && printf "mode:git\\n" && printf "commit:" && git rev-parse HEAD && printf "status:\\n" && git status --porcelain -uall',
-        'elif [ -d "$repo_dir" ]; then printf "mode:files\\n"',
-        'else printf "mode:files\\nmissing:true\\n"',
+        'cd "$repo_dir" && printf "mode:git\\n" && printf "commit:" && git rev-parse HEAD && printf "status:\\n" && git status --porcelain -uall;',
+        'elif [ -d "$repo_dir" ]; then printf "mode:files\\n";',
+        'else printf "mode:files\\nmissing:true\\n";',
         'fi'
     ].join(' ');
 }

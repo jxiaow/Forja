@@ -97,6 +97,7 @@ test('executeRemoteAcquireLock creates a canonical target lock over SSH', async 
     assert.equal(result.lock?.stage, 'baseline');
     assert.ok(result.targetId.length > 20);
     assert.ok(commands.some(command => command.includes('$HOME/.compilot/locks/')));
+    assert.equal(commands.some(command => command.includes('then;')), false);
 });
 
 test('executeRemoteReleaseLock refuses to remove a mismatched remote lock', async () => {

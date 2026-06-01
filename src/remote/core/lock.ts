@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import { compilotHomeDir } from '../../core/compilotHome';
 import { quoteRemoteArg, remoteCommand } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
@@ -127,7 +127,7 @@ export interface ExecuteRemoteUnlockResult extends UnlockRemoteTargetResult {
 }
 
 export function defaultRemoteStateRoot(): string {
-    return path.join(os.homedir(), '.compilot');
+    return compilotHomeDir();
 }
 
 export function acquireRemoteTarget(options: AcquireRemoteTargetOptions): AcquireRemoteTargetResult {
@@ -222,7 +222,7 @@ export async function executeRemoteAcquireLock(options: ExecuteRemoteAcquireLock
         'cat "$lock_file" 2>/dev/null',
         'exit 2',
         'fi'
-    ].join('; ');
+    ].join('\n');
     const acquired = await options.runner.run(command, 10000);
     const parsed = parseLockFromOutput(acquired.stdout) || lock;
     if (acquired.exitCode !== 0) {
