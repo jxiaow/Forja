@@ -707,7 +707,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
         if (project) {
             const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
-            const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro'));
+            const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : (target || path.basename(project, '.pro')));
             const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
             commands = [killCmd, ...buildCmds];
             result.executablePath = runtimeTarget?.exePath;
@@ -739,13 +739,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             if (runCmd) {
                 // Kill existing process before build (use actual exe name from Makefile)
                 const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
-                const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro'));
+                const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : (target || path.basename(project, '.pro')));
                 const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
                 commands = [killCmd, ...rccCmds, ...buildCmds, runCmd];
                 result.executablePath = runtimeTarget?.exePath;
             } else {
                 // Makefile not yet generated or mismatched — return build commands with hint to run status
-                const fallbackExeName = runtimeProcessName || path.basename(project, '.pro');
+                const fallbackExeName = runtimeProcessName || target || path.basename(project, '.pro');
                 const fallbackKillCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(fallbackExeName);
                 const fallbackCmds = [fallbackKillCmd, ...buildCmds];
                 return {
