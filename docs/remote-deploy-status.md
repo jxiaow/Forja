@@ -102,7 +102,8 @@ npm run remote:smoke -- --workspace C:\Code\workspace\dev\qt_client --target bot
 ### 1. 本地静态与 CLI 基线
 
 - `npm run compile` 通过，确认 `out/cli/index.js` 已更新。
-- `node --test --test-reporter=spec out/test/remote*.test.js out/test/cliEntrySource.test.js out/test/statusBarLabels.test.js out/test/settingsIO.test.js out/test/serverStoreCrud.test.js` 通过。
+- `node --test --test-reporter=spec out/test/remoteBaseline.test.js out/test/remoteBranchSync.test.js out/test/remoteLock.test.js out/test/remoteOverlaySync.test.js out/test/remotePhase1.test.js out/test/remotePipeline.test.js out/test/remoteProblemMatcher.test.js out/test/cliEntrySource.test.js out/test/statusBarLabels.test.js out/test/settingsIO.test.js out/test/serverStoreCrud.test.js` 通过。
+- 如需安装本地 CLI tgz，使用 `npm install -g .\dist\compilot-<version>\cli\compilot-cli-<version>.tgz`；不要使用 `node install ...`。
 - `compilot remote --help` 能看到 status、doctor、test、bootstrap、build-order、transfer、qt、sdk 等入口。
 
 ### 2. 本地配置与 dry-run
