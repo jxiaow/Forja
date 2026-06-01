@@ -6,21 +6,12 @@ export function getVsDevCmd(vsDevShell: string): string {
     return vsDevShell.replace(/Launch-VsDevShell\.ps1$/i, 'VsDevCmd.bat');
 }
 
-function psSingleQuoted(value: string): string {
-    return `'${value.replace(/'/g, "''")}'`;
-}
-
 function buildProcessKillCommand(exeName: string): string {
-    const processName = exeName.replace(/\.exe$/i, '');
-    const imageName = `${processName}.exe`;
-    const script = [
-        `$ErrorActionPreference='SilentlyContinue'`,
-        `$name=${psSingleQuoted(processName)}`,
-        '$procs=Get-Process -Name $name',
-        'if ($procs) { $procs | Stop-Process -Force; $procs | Wait-Process -Timeout 5 }',
-        `if (Get-Process -Name $name) { Write-Error ${psSingleQuoted(`Failed to stop ${imageName}`)}; exit 1 }`
-    ].join('; ');
-    return `powershell -NoProfile -ExecutionPolicy Bypass -Command "${script.replace(/"/g, '\\"')}"`;
+    const imageName = exeName.replace(/\.exe$/i, '') + '.exe';
+    // taskkill /F /IM <exe> — 强制终止目标进程
+    // 2>nul — 进程不存在时屏蔽错误信息
+    // || ver>nul — 进程不存在时 taskkill 返回非零，确保链继续
+    return `taskkill /F /IM ${imageName} 2>nul || ver>nul`;
 }
 
 export const winConfig: PlatformConfig = {
