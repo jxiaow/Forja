@@ -70,15 +70,15 @@ jobs:
         run: |
           PREV_TAG=$(git tag --sort=-v:refname | head -2 | tail -1)
           cat > _release/body.md << 'BODYEOF'
-          ## 下载说明
+          ## Downloads
 
-          | 文件 | 用途 |
+          | File | Description |
           | --- | --- |
-          | `*.vsix` | **VSCode 扩展** — 下载后双击安装，或 VSCode 中 "Install from VSIX" |
-          | `*-cli-*.tgz` | **CLI 命令行工具** — `npm install -g ./forja-cli-*.tgz` |
-          | `*-skills-*.tar.gz` | **AI 助手技能文件** — 解压后复制到 AI 工具的 skills 目录 |
+          | `*.vsix` | **VSCode Extension** — Double-click to install, or "Install from VSIX" in VSCode |
+          | `*-cli-*.tgz` | **CLI** — `npm install -g ./forja-cli-*.tgz` |
+          | `*-skills-*.tar.gz` | **AI Skills** — Extract and copy to your AI tool's skills directory |
 
-          ## 更新内容
+          ## Changelog
 
           BODYEOF
           if [ -n "$PREV_TAG" ]; then
