@@ -147,6 +147,7 @@
     "package": "npm run compile && node scripts/package-vs.js",
     "package:cli": "npm run build:cli",
     "package:all": "node scripts/bump-version.js && npm run package && npm run package:cli",
+    "release": "npm version patch && git push origin master --follow-tags && git push github master --follow-tags",
     "vsix": "vsce package --allow-missing-repository",
     "harness:check": "node harness/core/automation/check-harness.js",
     "harness:ops:init": "node harness/core/operations/create-operation-docs.js"
