@@ -32,8 +32,7 @@ code --install-extension forja-x.x.x.vsix
 | 按钮 | 说明 |
 |------|------|
 | `项目名 · Debug x86` | 点击打开操作菜单：切换模式/架构、执行构建、切换项目、切换执行位置 |
-| `项目名 · Debug x86 · 远程` | 远程模式时显示，Run 按钮触发远程部署流程 |
-| `Run` | 本地模式：构建并运行；远程模式：远程编译部署；构建中显示旋转图标 |
+| `Run` | 构建并运行；构建中显示旋转图标 |
 | `Debug` | 构建并启动调试 |
 | `同步` | 远程同步启用时显示，点击上传变更文件 |
 
@@ -54,9 +53,6 @@ code --install-extension forja-x.x.x.vsix
 | Forja Qt: 用 Qt Designer 打开 | 打开 .ui 文件 |
 | Forja Qt: 同步变更文件到远程 | SCP 上传变更 |
 | Forja Qt: 测试远程连接 | 测试 SSH 连接 |
-| Forja Remote: Run Deploy | 远程编译部署（完整流程） |
-| Forja Remote: Restart | 远程重启程序（不重新编译） |
-| Forja Remote: Show Logs | 显示远程部署日志 |
 | Forja SDK: Build | 编译 SDK 项目 |
 | Forja SDK: Rebuild | 重新编译 |
 | Forja SDK: Clean | 清理 |
@@ -69,10 +65,6 @@ code --install-extension forja-x.x.x.vsix
 - **环境**：Qt VS DevShell、Qt 路径、Designer 路径、Qt 源码路径，以及 SDK Visual Studio 配置
 - **同步**：服务器配置、远程路径、同步开关、忽略规则
 - **高级**：文件提醒和 QMake 提醒等开关
-
-## 远程编译部署（设计稿，暂未实现）
-
-完整远程编译部署流程（branchSync、baselineCheck、build、transfer、stop、launch）仍是设计稿。当前 VSCode 侧已实现的是远程同步配置和文件同步，不读取独立的部署配置文件。
 
 ## 远程同步
 
