@@ -26,9 +26,9 @@ export function registerSyncWatcher(context: vscode.ExtensionContext): void {
         }
     }));
 
-    // 监听全局 servers.json（位于 ~/.compilot/）
+    // 监听全局 servers.json（位于 ~/.forja/）
     const os = require('os') as typeof import('os');
-    const globalServersDir = path.join(os.homedir(), '.compilot');
+    const globalServersDir = path.join(os.homedir(), '.forja');
     const globalPattern = new vscode.RelativePattern(vscode.Uri.file(globalServersDir), 'servers.json');
     const globalWatcher = vscode.workspace.createFileSystemWatcher(globalPattern);
     globalWatcher.onDidChange(() => _refreshStatusBar());
@@ -56,19 +56,19 @@ function _refreshStatusBar(): void {
     }
 
     if (!_statusItem) {
-        _statusItem = vscode.window.createStatusBarItem('compilot.sync', vscode.StatusBarAlignment.Left, 95);
-        _statusItem.name = 'Compilot: Sync';
+        _statusItem = vscode.window.createStatusBarItem('forja.sync', vscode.StatusBarAlignment.Left, 95);
+        _statusItem.name = 'Forja: Sync';
     }
 
     const resolved = getResolvedConfig(wsRoot);
     if (resolved) {
         _statusItem.text = '$(cloud-upload)';
-        _statusItem.tooltip = `Compilot: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
-        _statusItem.command = 'compilot.qt.syncChangedFiles';
+        _statusItem.tooltip = `Forja: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
+        _statusItem.command = 'forja.qt.syncChangedFiles';
     } else {
         _statusItem.text = '$(cloud)';
-        _statusItem.tooltip = 'Compilot: 同步未就绪，点击配置远程服务器';
-        _statusItem.command = 'compilot.qt.showSyncTab';
+        _statusItem.tooltip = 'Forja: 同步未就绪，点击配置远程服务器';
+        _statusItem.command = 'forja.qt.showSyncTab';
     }
     _statusItem.show();
 }

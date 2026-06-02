@@ -1,11 +1,11 @@
-# Compilot
+# Forja
 
 C++ 项目构建扩展，支持 Qt (qmake) 和 SDK (.sln/Makefile) 项目。
 
 ## 安装
 
 ```bash
-code --install-extension compilot-x.x.x.vsix
+code --install-extension forja-x.x.x.vsix
 ```
 
 ## 功能
@@ -39,31 +39,31 @@ code --install-extension compilot-x.x.x.vsix
 
 ## 命令
 
-命令面板（`Ctrl+Shift+P`）搜索 `Compilot`：
+命令面板（`Ctrl+Shift+P`）搜索 `Forja`：
 
 | 命令 | 说明 |
 |------|------|
-| Compilot Qt: 选择项目 | 选择 .pro 文件作为当前项目 |
-| Compilot Qt: QMake | 生成 Makefile |
-| Compilot Qt: Build | 编译 |
-| Compilot Qt: Run | 编译并运行 |
-| Compilot Qt: Clean | 清理 |
-| Compilot Qt: 停止 | 终止程序 |
-| Compilot Qt: 调试 | 编译并调试 |
-| Compilot Qt: RCC 编译 | 编译 .qrc 资源 |
-| Compilot Qt: 用 Qt Designer 打开 | 打开 .ui 文件 |
-| Compilot Qt: 同步变更文件到远程 | SCP 上传变更 |
-| Compilot Qt: 测试远程连接 | 测试 SSH 连接 |
-| Compilot Remote: Run Deploy | 远程编译部署（完整流程） |
-| Compilot Remote: Restart | 远程重启程序（不重新编译） |
-| Compilot Remote: Show Logs | 显示远程部署日志 |
-| Compilot SDK: Build | 编译 SDK 项目 |
-| Compilot SDK: Rebuild | 重新编译 |
-| Compilot SDK: Clean | 清理 |
+| Forja Qt: 选择项目 | 选择 .pro 文件作为当前项目 |
+| Forja Qt: QMake | 生成 Makefile |
+| Forja Qt: Build | 编译 |
+| Forja Qt: Run | 编译并运行 |
+| Forja Qt: Clean | 清理 |
+| Forja Qt: 停止 | 终止程序 |
+| Forja Qt: 调试 | 编译并调试 |
+| Forja Qt: RCC 编译 | 编译 .qrc 资源 |
+| Forja Qt: 用 Qt Designer 打开 | 打开 .ui 文件 |
+| Forja Qt: 同步变更文件到远程 | SCP 上传变更 |
+| Forja Qt: 测试远程连接 | 测试 SSH 连接 |
+| Forja Remote: Run Deploy | 远程编译部署（完整流程） |
+| Forja Remote: Restart | 远程重启程序（不重新编译） |
+| Forja Remote: Show Logs | 显示远程部署日志 |
+| Forja SDK: Build | 编译 SDK 项目 |
+| Forja SDK: Rebuild | 重新编译 |
+| Forja SDK: Clean | 清理 |
 
 ## 配置面板
 
-点击活动栏 Compilot 图标打开：
+点击活动栏 Forja 图标打开：
 
 - **概览**：项目名称、环境状态、C/C++ 标准、QMake TARGET、IntelliSense 生成
 - **环境**：Qt VS DevShell、Qt 路径、Designer 路径、Qt 源码路径，以及 SDK Visual Studio 配置
@@ -87,7 +87,7 @@ code --install-extension compilot-x.x.x.vsix
 
 ## 配置项
 
-项目级配置通过 settings store 存储在用户数据目录 `~/.compilot/projects/<hash>.json`，服务器列表存储在 `~/.compilot/servers.json`，同步运行状态存储在 `.compilot/sync-state.json`。
+项目级配置通过 settings store 存储在用户数据目录 `~/.forja/projects/<hash>.json`，服务器列表存储在 `~/.forja/servers.json`，同步运行状态存储在 `.forja/sync-state.json`。
 
 | 配置项 | 说明 |
 |--------|------|

@@ -27,7 +27,7 @@ class ConfigNavTreeItem extends vscode.TreeItem {
         super(nav.label, vscode.TreeItemCollapsibleState.None);
         this.iconPath = new vscode.ThemeIcon(nav.icon);
         this.command = {
-            command: 'compilot.config.openPage',
+            command: 'forja.config.openPage',
             title: '打开配置页',
             arguments: [nav.id]
         };
@@ -38,7 +38,7 @@ class ConfigNavTreeItem extends vscode.TreeItem {
 }
 
 export class ConfigNavTreeProvider implements vscode.TreeDataProvider<ConfigNavTreeItem> {
-    static readonly viewId = 'compilot.configView';
+    static readonly viewId = 'forja.configView';
 
     private _onDidChangeTreeData = new vscode.EventEmitter<ConfigNavTreeItem | undefined>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;

@@ -40,7 +40,7 @@ export function registerQtCommands(context: vscode.ExtensionContext, panel: Conf
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cmds: [string, (...args: any[]) => any][] = [
-        ['compilot.qt.selectProject', async () => {
+        ['forja.qt.selectProject', async () => {
             const p = await selectProject(context, true);
             if (p) {
                 const wsRoot = getWorkspaceRoot();
@@ -49,7 +49,7 @@ export function registerQtCommands(context: vscode.ExtensionContext, panel: Conf
             setState('currentProject', p);
             panel.refresh();
         }],
-        ['compilot.qt.loadManualProject', () => {
+        ['forja.qt.loadManualProject', () => {
             const proPath = getManualProPath();
             if (proPath && fs.existsSync(proPath)) {
                 const info = parseProFile(proPath);
@@ -63,14 +63,14 @@ export function registerQtCommands(context: vscode.ExtensionContext, panel: Conf
                 vscode.window.showWarningMessage('.pro 文件不存在: ' + proPath);
             }
         }],
-        ['compilot.qt.showActions',   () => showUnifiedActions()],
-        ['compilot.qt.qmake',         () => Promise.resolve(buildManager.qmake()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
-        ['compilot.qt.build',         () => Promise.resolve(buildManager.build()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
-        ['compilot.qt.clean',         () => Promise.resolve(buildManager.clean()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
-        ['compilot.qt.run',           () => buildManager.run().catch((e: Error) => vscode.window.showErrorMessage(e.message))],
-        ['compilot.qt.stop',          () => buildManager.stop()],
-        ['compilot.qt.debug',         () => startDebug()],
-        ['compilot.qt.openWithQtDesigner', (uri?: vscode.Uri) => {
+        ['forja.qt.showActions',   () => showUnifiedActions()],
+        ['forja.qt.qmake',         () => Promise.resolve(buildManager.qmake()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
+        ['forja.qt.build',         () => Promise.resolve(buildManager.build()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
+        ['forja.qt.clean',         () => Promise.resolve(buildManager.clean()).catch((e: Error) => vscode.window.showErrorMessage(e.message))],
+        ['forja.qt.run',           () => buildManager.run().catch((e: Error) => vscode.window.showErrorMessage(e.message))],
+        ['forja.qt.stop',          () => buildManager.stop()],
+        ['forja.qt.debug',         () => startDebug()],
+        ['forja.qt.openWithQtDesigner', (uri?: vscode.Uri) => {
             const target = uri ?? vscode.window.activeTextEditor?.document.uri;
             if (!target || target.scheme !== 'file') {
                 vscode.window.showWarningMessage('请选择一个本地 .ui 文件');
@@ -96,10 +96,10 @@ export function registerQtCommands(context: vscode.ExtensionContext, panel: Conf
             });
             proc.unref();
         }],
-        ['compilot.qt.syncTestConnection', () => executeTestConnection()],
-        ['compilot.qt.syncChangedFiles', () => executeSyncChangedFiles()],
-        ['compilot.qt.rcc', () => buildManager.rcc()],
-        ['compilot.qt.runCustomCommand', (name: string, command: string) => buildManager.runCustomCommand(name, command)]
+        ['forja.qt.syncTestConnection', () => executeTestConnection()],
+        ['forja.qt.syncChangedFiles', () => executeSyncChangedFiles()],
+        ['forja.qt.rcc', () => buildManager.rcc()],
+        ['forja.qt.runCustomCommand', (name: string, command: string) => buildManager.runCustomCommand(name, command)]
     ];
 
     cmds.forEach(([cmd, handler]) => {

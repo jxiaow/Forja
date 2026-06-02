@@ -18,7 +18,7 @@ export function initLogger(): vscode.OutputChannel | null {
     _initialized = true;
     try {
         const vscodeApi = require('vscode') as typeof vscode;
-        _channel = vscodeApi.window.createOutputChannel('Compilot');
+        _channel = vscodeApi.window.createOutputChannel('Forja');
     } catch {
         _useConsole = true;
         return null;

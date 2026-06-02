@@ -1,6 +1,6 @@
 /**
  * CLI-compatible sync module — no vscode dependency.
- * Reads config from ~/.compilot/servers.json and ~/.compilot/projects/<hash>.json (type=sync)
+ * Reads config from ~/.forja/servers.json and ~/.forja/projects/<hash>.json (type=sync)
  */
 import * as path from 'path';
 import * as cp from 'child_process';
@@ -83,13 +83,13 @@ export function isIgnored(relativePath: string, ignoreList: string[]): boolean {
 
 /**
  * CLI 侧密码获取优先级：
- * 1. 环境变量 COMPILOT_SSH_PASSWORD
+ * 1. 环境变量 FORJA_SSH_PASSWORD
  * 2. servers.json 中的明文密码（向后兼容旧数据）
  * 3. stdin 交互式提示（仅 TTY 环境）
  */
 async function resolveCliPassword(server: ServerConfig): Promise<string | null> {
     // 环境变量优先
-    const envPwd = process.env.COMPILOT_SSH_PASSWORD;
+    const envPwd = process.env.FORJA_SSH_PASSWORD;
     if (envPwd) { return envPwd; }
 
     // 文件中的明文密码（向后兼容）
@@ -185,7 +185,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string,
     const targetName = serverName || project.selectedServer;
     const server = getServerById(targetName) || getServerByName(targetName);
     if (!server) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetName}" 未找到，请检查 ~/.compilot/servers.json` }], server: targetName, remotePath: '' };
+        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetName}" 未找到，请检查 ~/.forja/servers.json` }], server: targetName, remotePath: '' };
     }
 
     const remotePath = project.remotePaths[server.id] || '';
@@ -198,7 +198,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string,
     if (server.authMode === 'password') {
         resolvedPassword = await resolveCliPassword(server);
         if (!resolvedPassword) {
-            return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未提供密码。可通过环境变量 COMPILOT_SSH_PASSWORD 设置，或在 TTY 中交互输入' }], server: server.name, remotePath };
+            return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未提供密码。可通过环境变量 FORJA_SSH_PASSWORD 设置，或在 TTY 中交互输入' }], server: server.name, remotePath };
         }
     }
 
@@ -295,7 +295,7 @@ export async function planSyncCli(workspaceRoot: string, serverName?: string, re
     const targetName = serverName || project.selectedServer;
     const server = getServerById(targetName) || getServerByName(targetName);
     if (!server) {
-        return empty(`服务器 "${targetName}" 未找到，请检查 ~/.compilot/servers.json`, targetName, '');
+        return empty(`服务器 "${targetName}" 未找到，请检查 ~/.forja/servers.json`, targetName, '');
     }
 
     const remotePath = project.remotePaths[server.id] || '';

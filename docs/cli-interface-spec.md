@@ -1,15 +1,15 @@
 # CLI 接口规范
 
-本文档定义 compilot CLI 的输入参数、输出结构和数据类型，供 AI 工具和集成方参考。
+本文档定义 forja CLI 的输入参数、输出结构和数据类型，供 AI 工具和集成方参考。
 
 ## 调用约定
 
 ```
-compilot <subcommand> <action> [options]
+forja <subcommand> <action> [options]
 ```
 
 - 当前已实现子命令：`qt` | `sdk` | `cleanup`
-- `remote` 相关内容是远程部署设计稿，当前 CLI dispatcher 尚未实现 `compilot remote ...`
+- `remote` 相关内容是远程部署设计稿，当前 CLI dispatcher 尚未实现 `forja remote ...`
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -23,11 +23,11 @@ compilot <subcommand> <action> [options]
 | `--workspace <path>` | string | `process.cwd()` | 操作根目录，用于定位本地配置、扫描项目和执行命令 |
 | `--json` | boolean | `false` | JSON 格式输出 |
 
-`--workspace` 不是 `.pro` 文件路径。Qt 多项目仓库中，`--workspace` 指向仓库/工作区根目录，具体 `.pro` 通过 `compilot qt use --project <relative.pro>` 选择；`build` / `run` / `clean` / `qmake` 只读取该 workspace 已保存的项目和构建配置。
+`--workspace` 不是 `.pro` 文件路径。Qt 多项目仓库中，`--workspace` 指向仓库/工作区根目录，具体 `.pro` 通过 `forja qt use --project <relative.pro>` 选择；`build` / `run` / `clean` / `qmake` 只读取该 workspace 已保存的项目和构建配置。
 
 ## Qt 命令参数矩阵
 
-`status` 是推荐第一条命令。`build` / `run` / `clean` / `qmake` / `stop` 只读取已保存配置，不接受构建配置参数；缺项目、mode/arch 未确认或配置不完整时返回 `compilot qt status --json`，由 `status` 统一给出后续动作。
+`status` 是推荐第一条命令。`build` / `run` / `clean` / `qmake` / `stop` 只读取已保存配置，不接受构建配置参数；缺项目、mode/arch 未确认或配置不完整时返回 `forja qt status --json`，由 `status` 统一给出后续动作。
 
 | 命令 | 允许参数 |
 |------|----------|
@@ -49,7 +49,7 @@ compilot <subcommand> <action> [options]
 
 ## Qt use 配置参数
 
-以下参数只允许用于 `compilot qt use`。`compilot qt init` 只做自动初始化，不接收显式构建配置：
+以下参数只允许用于 `forja qt use`。`forja qt init` 只做自动初始化，不接收显式构建配置：
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -62,7 +62,7 @@ compilot <subcommand> <action> [options]
 
 ## SDK 命令参数矩阵
 
-`status` 是 SDK 推荐第一条命令。`build` / `rebuild` / `clean` 只读取已保存配置，不接受构建配置参数；缺项目、缺本地配置或配置不完整时返回 `compilot sdk status --json`，由 `status` 统一给出后续动作。
+`status` 是 SDK 推荐第一条命令。`build` / `rebuild` / `clean` 只读取已保存配置，不接受构建配置参数；缺项目、缺本地配置或配置不完整时返回 `forja sdk status --json`，由 `status` 统一给出后续动作。
 
 | 命令 | 允许参数 |
 |------|----------|
@@ -77,7 +77,7 @@ compilot <subcommand> <action> [options]
 
 ## SDK use 配置参数
 
-以下参数只允许用于 `compilot sdk use`。`compilot sdk init` 只做自动初始化，不接收显式构建配置：
+以下参数只允许用于 `forja sdk use`。`forja sdk init` 只做自动初始化，不接收显式构建配置：
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -184,7 +184,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "action": "status",
   "resolved": { "mode": "debug", "arch": "x86", "qtPath": "C:/Qt/5.15.2/msvc2019", ... },
   "nextAction": "build",
-  "nextActions": ["compilot qt build --json"],
+  "nextActions": ["forja qt build --json"],
   "candidates": ["app/app.pro", "lib/lib.pro"],
   "rccProjectPath": "XYRcc/XYRcc.pro",
   "diagnostics": []
@@ -241,7 +241,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "action": "run",
   "exitCode": 0,
   "pid": 13228,
-  "logFile": "C:/Users/.../compilot-logs/workspace/run.log",
+  "logFile": "C:/Users/.../forja-logs/workspace/run.log",
   "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
   "resolved": { "mode": "release", "arch": "x86" }
 }
@@ -258,7 +258,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "running": true,
   "pid": 13228,
   "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
-  "logFile": "C:/Users/.../compilot-logs/workspace/run.log"
+  "logFile": "C:/Users/.../forja-logs/workspace/run.log"
 }
 ```
 
@@ -277,7 +277,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "ok": false,
   "action": "build",
   "diagnostics": [{ "level": "error", "message": "未配置项目" }],
-  "nextActions": ["compilot qt status --json"]
+  "nextActions": ["forja qt status --json"]
 }
 
 // Qt 环境未配置
@@ -286,7 +286,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "action": "status",
   "diagnostics": [{ "level": "warning", "message": "未配置 Qt" }],
   "nextAction": "env",
-  "nextActions": ["compilot qt env --json", "compilot qt use --qt-path <path> --json"]
+  "nextActions": ["forja qt env --json", "forja qt use --qt-path <path> --json"]
 }
 ```
 
@@ -357,7 +357,7 @@ interface SdkCliResult {
     "arch": "x64",
     "project": "Makefile"
   },
-  "nextActions": ["compilot sdk status --json"]
+  "nextActions": ["forja sdk status --json"]
 }
 ```
 
@@ -384,7 +384,7 @@ interface SdkCliResult {
   "ok": false,
   "action": "build",
   "diagnostics": [{ "level": "error", "message": "尚未初始化" }],
-  "nextActions": ["compilot sdk status --json"]
+  "nextActions": ["forja sdk status --json"]
 }
 ```
 
@@ -449,7 +449,7 @@ type DeployStage = "preCheck" | "branchSync" | "sync" | "baselineCheck" | "build
 
 ---
 
-## `compilot remote test` 输出结构（设计稿，暂未实现）
+## `forja remote test` 输出结构（设计稿，暂未实现）
 
 ```typescript
 interface RemoteTestResult {
@@ -459,7 +459,7 @@ interface RemoteTestResult {
 }
 
 interface RemoteCheck {
-  name: string;    // 检查项名称（如 "SSH 连通"、"路径存在"、"compilot 已安装"、"版本兼容"）
+  name: string;    // 检查项名称（如 "SSH 连通"、"路径存在"、"forja 已安装"、"版本兼容"）
   ok: boolean;
   detail: string;  // 成功时为详情，失败时为错误原因
 }
@@ -474,7 +474,7 @@ interface RemoteCheck {
   "checks": [
     { "name": "SSH 连通", "ok": true, "detail": "" },
     { "name": "路径存在", "ok": true, "detail": "/home/dev/project" },
-    { "name": "compilot 已安装", "ok": true, "detail": "v0.6.28" },
+    { "name": "forja 已安装", "ok": true, "detail": "v0.6.28" },
     { "name": "版本兼容", "ok": true, "detail": "远程 v0.6.28" }
   ]
 }
@@ -484,7 +484,7 @@ interface RemoteCheck {
 
 ## 配置文件格式
 
-### `~/.compilot/projects/<hash>.json`
+### `~/.forja/projects/<hash>.json`
 
 项目级配置由 `src/core/settingsIO.ts` 管理，按 workspace hash 存储到用户数据目录。文件通过 `type` 区分 Qt、SDK 和 sync 配置。
 
@@ -520,7 +520,7 @@ interface RemoteCheck {
 }
 ```
 
-### `~/.compilot/servers.json`
+### `~/.forja/servers.json`
 
 ```jsonc
 [
@@ -538,9 +538,9 @@ interface RemoteCheck {
 ]
 ```
 
-### `.compilot/sync-state.json`
+### `.forja/sync-state.json`
 
-同步运行状态写入项目目录下的 `.compilot/sync-state.json`。远程部署、branchSync 和 buildOrder 仍属于设计稿，当前实现不读取独立 deploy 配置文件。
+同步运行状态写入项目目录下的 `.forja/sync-state.json`。远程部署、branchSync 和 buildOrder 仍属于设计稿，当前实现不读取独立 deploy 配置文件。
 
 ---
 

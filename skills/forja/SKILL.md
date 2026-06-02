@@ -1,11 +1,11 @@
 ---
-name: compilot
-description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run, clean, environment status, or remote sync work through the compilot CLI.
+name: forja
+description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run, clean, environment status, or remote sync work through the forja CLI.
 ---
 
-# compilot
+# forja
 
-当需要处理本地 C++ 项目，且机器上已经可用 `compilot` 命令时使用。
+当需要处理本地 C++ 项目，且机器上已经可用 `forja` 命令时使用。
 
 ## 适用场景
 
@@ -17,7 +17,7 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
 ## 不适用
 
 - 项目不是 C++ 项目（不含 .pro/.sln/Makefile）
-- 机器上没有 `compilot` 命令
+- 机器上没有 `forja` 命令
 - 只是读代码或改代码，不涉及构建/运行
 
 ## 核心原则
@@ -30,13 +30,13 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
 6. **加 --json**：获取结构化输出，省 token
 7. **run 必须 --detach**：程序启动后不会自行退出，不加会阻塞终端
 8. **build/clean/qmake 不加 --detach**：前台执行完直接返回结果
-9. **混合仓库**：同时有 .pro 和 .sln 时，分别用 `compilot qt` 和 `compilot sdk`
+9. **混合仓库**：同时有 .pro 和 .sln 时，分别用 `forja qt` 和 `forja sdk`
 
 ## 决策流程
 
 ```
 用户要求构建/运行 →
-  1. compilot qt status --json（或 sdk status）
+  1. forja qt status --json（或 sdk status）
   2. 看 diagnostics / nextActions：
      - 没有本地配置 → 运行 init --json，让 CLI 保存可自动确定的配置
      - 缺项目 → 运行 projects --json，展示候选，让用户选择后运行 use --project <path> --json
@@ -82,7 +82,7 @@ debug/release、x86/x64）且用户未设置过时，必须展示选项让用户
 | `--detach` | 仅 `run` 可用，后台启动程序并写日志 |
 | `--json` | 结构化 JSON 输出 |
 
-Qt 配置参数只允许用于 `compilot qt use`：
+Qt 配置参数只允许用于 `forja qt use`：
 
 | 参数 | 说明 |
 |------|------|
@@ -114,7 +114,7 @@ Qt 配置参数只允许用于 `compilot qt use`：
 | `--plan` | 仅输出命令计划，不执行 |
 | `--json` | JSON 格式输出 |
 
-SDK 配置参数只允许用于 `compilot sdk use`：
+SDK 配置参数只允许用于 `forja sdk use`：
 
 | 参数 | 说明 |
 |------|------|
@@ -158,8 +158,8 @@ SDK 配置参数只允许用于 `compilot sdk use`：
 
 ## 执行规则
 
-- **不要拆解命令**：`compilot qt run` 会先杀旧进程、编译、再启动，不要自己拆步骤
-- **不要猜路径**：不要自己拼 qmake/jom/msbuild 命令，统一用 compilot
+- **不要拆解命令**：`forja qt run` 会先杀旧进程、编译、再启动，不要自己拆步骤
+- **不要猜路径**：不要自己拼 qmake/jom/msbuild 命令，统一用 forja
 - **多候选必须让用户选**：env/projects 返回多个候选时，列出选项让用户决定，不要自动取第一个
 - **首次配置必须确认**：status 中 resolved 的 qtPath、vsDevShell、project 如果是自动检测的，先展示给用户确认再执行
 - **只有 run 加 --detach**：程序启动后不会自行退出，不加会阻塞
@@ -173,29 +173,29 @@ SDK 配置参数只允许用于 `compilot sdk use`：
 
 ```bash
 # 首次使用：先看状态，再自动初始化
-compilot qt status --json
-compilot qt init --json
+forja qt status --json
+forja qt init --json
 
 # 显式选择配置
-compilot qt use --project src/app.pro --mode release --json
+forja qt use --project src/app.pro --mode release --json
 
 # 日常编译
-compilot qt build --json
+forja qt build --json
 
 # 编译并后台运行
-compilot qt run --detach --json
+forja qt run --detach --json
 
 # 查运行状态和日志路径
-compilot qt ps --json
+forja qt ps --json
 
 # 停止程序
-compilot qt stop --json
+forja qt stop --json
 
 # 只看编译计划不执行
-compilot qt build --plan --json
+forja qt build --plan --json
 
 # SDK 编译：配置先用 use，build 只读保存配置
-compilot sdk status --json
-compilot sdk use --project Makefile --mode release --json
-compilot sdk build --json
+forja sdk status --json
+forja sdk use --project Makefile --mode release --json
+forja sdk build --json
 ```

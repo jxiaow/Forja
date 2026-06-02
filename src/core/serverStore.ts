@@ -1,13 +1,13 @@
 /**
  * 统一的服务器配置存储。
- * 全局服务器列表：~/.compilot/servers.json
- * 项目同步配置：~/.compilot/projects/<hash>.json 中 type=sync 的文件
+ * 全局服务器列表：~/.forja/servers.json
+ * 项目同步配置：~/.forja/projects/<hash>.json 中 type=sync 的文件
  * 
  * 扩展和 CLI 共用，不依赖 vscode。
  *
  * ⚠ 安全警告：密码以明文存储在 servers.json 中。
  * VSCode 扩展场景建议通过 SecretStorage API 存储密码（参见 qt/sync/sftpClient.ts askPassword）。
- * CLI 场景可通过环境变量 COMPILOT_SSH_PASSWORD 注入，避免写入磁盘。
+ * CLI 场景可通过环境变量 FORJA_SSH_PASSWORD 注入，避免写入磁盘。
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -51,10 +51,10 @@ export interface ProjectSyncConfig {
 // ── 路径 ──
 
 function _globalDir(): string {
-    return path.join(os.homedir(), '.compilot');
+    return process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja');
 }
 
-/** 清理 ~/.compilot/ 下残留的 .tmp 文件（原子写入失败时遗留） */
+/** 清理 ~/.forja/ 下残留的 .tmp 文件（原子写入失败时遗留） */
 let _cleaned = false;
 function _cleanupTmpFiles(): void {
     if (_cleaned) { return; }
@@ -118,7 +118,7 @@ export function readServers(): ServerConfig[] {
             return servers;
         }
     } catch (e) {
-        console.warn(`[compilot] servers.json 解析失败: ${e instanceof Error ? e.message : e}`);
+        console.warn(`[forja] servers.json 解析失败: ${e instanceof Error ? e.message : e}`);
     }
     return [];
 }
@@ -143,7 +143,7 @@ export function writeServers(servers: ServerConfig[]): void {
     // 收紧文件权限（仅当前用户可读写）— Windows 上 chmod 无效但不报错
     try { fs.chmodSync(_serversFilePath(), 0o600); } catch (e) {
         if (process.platform !== 'win32') {
-            console.warn(`[compilot] chmod servers.json 失败: ${e instanceof Error ? e.message : e}`);
+            console.warn(`[forja] chmod servers.json 失败: ${e instanceof Error ? e.message : e}`);
         }
     }
 }

@@ -1,5 +1,5 @@
 /**
- * Build script for the standalone compilot-cli npm package.
+ * Build script for the standalone forja npm package.
  *
  * Generates dist/<version>/cli/ containing:
  *   - compilot-cli-x.x.x.tgz (npm package)
@@ -13,7 +13,7 @@ const root = path.resolve(__dirname, '..');
 const srcOut = path.join(root, 'out');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const version = pkg.version;
-const distCli = path.join(root, 'dist', `compilot-${version}`, 'cli');
+const distCli = path.join(root, 'dist', `forja-${version}`, 'cli');
 const tmpBuild = path.join(root, 'dist', '_cli-build');
 
 // Directories to copy (relative to out/)
@@ -170,12 +170,12 @@ if (fs.existsSync(cliReadme)) {
 // Generate package.json for npm package
 const mainPkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const cliPkg = {
-    name: 'compilot-cli',
+    name: 'forja',
     version: mainPkg.version,
     description: 'CLI for C++ project builds — Qt (qmake) and SDK (.sln/Makefile)',
     license: 'MIT',
     bin: {
-        compilot: './cli/index.js'
+        forja: './cli/index.js'
     },
     files: [
         'cli/**',
@@ -187,7 +187,7 @@ const cliPkg = {
     engines: {
         node: '>=18.0.0'
     },
-    keywords: ['qt', 'qmake', 'sdk', 'cpp', 'build', 'compilot']
+    keywords: ['qt', 'qmake', 'sdk', 'cpp', 'build', 'forja']
 };
 fs.writeFileSync(path.join(tmpBuild, 'package.json'), JSON.stringify(cliPkg, null, 2) + '\n');
 
@@ -201,7 +201,7 @@ for (const tgz of tgzFiles) {
     const src = path.join(tmpBuild, tgz);
     const dst = path.join(distCli, tgz);
     fs.renameSync(src, dst);
-    console.log(`Packed: dist/compilot-${version}/cli/${tgz}`);
+    console.log(`Packed: dist/forja-${version}/cli/${tgz}`);
 }
 
 // Remove temp build directory
@@ -213,15 +213,15 @@ fs.rmSync(tmpBuild, { recursive: true });
 const cliReadmeFinal = path.join(root, 'docs', 'README-cli.md');
 if (fs.existsSync(cliReadmeFinal)) {
     fs.copyFileSync(cliReadmeFinal, path.join(distCli, 'README.md'));
-    console.log('Copied: dist/compilot-' + version + '/cli/README.md');
+    console.log('Copied: dist/forja-' + version + '/cli/README.md');
 }
 
 // Copy skills directory
-const skillsSrc = path.join(root, 'skills', 'compilot');
-const skillsDst = path.join(distCli, 'skills', 'compilot');
+const skillsSrc = path.join(root, 'skills', 'forja');
+const skillsDst = path.join(distCli, 'skills', 'forja');
 if (fs.existsSync(skillsSrc)) {
     copyDirRecursive(skillsSrc, skillsDst);
-    console.log('Copied: dist/compilot-' + version + '/cli/skills/compilot/');
+    console.log('Copied: dist/forja-' + version + '/cli/skills/forja/');
 }
 
-console.log(`\nCLI package complete: dist/compilot-${version}/cli/`);
+console.log(`\nCLI package complete: dist/forja-${version}/cli/`);

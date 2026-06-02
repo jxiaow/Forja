@@ -62,13 +62,13 @@ git push
 | `harness/core/rules/` | 通用执行规则 |
 | `harness/core/gates/` | Scope / Plan / Build / Close gate 定义 |
 | `harness/core/automation/` | harness 检查脚本 |
-| `harness/project/` | Compilot 项目专属 profile 和规则 |
+| `harness/project/` | Forja 项目专属 profile 和规则 |
 
 ## 调试扩展
 
 1. 在 VSCode 中按 F5 启动 Extension Development Host
 2. 打开包含 `.pro` 或 `.sln` 文件的工作区
-3. 通过命令面板（Ctrl+Shift+P）测试 `Compilot Qt:` 或 `Compilot SDK:` 命令
+3. 通过命令面板（Ctrl+Shift+P）测试 `Forja Qt:` 或 `Forja SDK:` 命令
 
 ---
 
@@ -81,8 +81,8 @@ npm run package:all
 ```
 
 输出到 `dist/` 目录：
-- `dist/compilot-x.x.x.vsix` — VSCode 扩展
-- `dist/compilot-cli-x.x.x.tgz` — CLI npm 包
+- `dist/forja-x.x.x.vsix` — VSCode 扩展
+- `dist/forja-cli-x.x.x.tgz` — CLI npm 包
 
 ### 1. VSCode 扩展（.vsix）
 
@@ -100,7 +100,7 @@ npm run package
 **不包含**：`src/`、`scripts/`、`docs/`、`node_modules/`、`AGENTS.md`、`skills/`
 
 分发方式：
-- 本地安装：`code --install-extension dist/compilot-x.x.x.vsix`
+- 本地安装：`code --install-extension dist/forja-x.x.x.vsix`
 - 发布到 Marketplace：`vsce publish`
 
 ### 2. CLI（npm 包）
@@ -112,7 +112,7 @@ npm run package:cli
 由 `scripts/build-cli.js` 从 `out/` 中提取 CLI 所需文件，组装为独立 npm 包。
 
 包含内容：
-- `cli/` — 统一入口（compilot qt/sdk 分发）
+- `cli/` — 统一入口（forja qt/sdk 分发）
 - `qt/cli/` — Qt CLI 逻辑
 - `qt/shared/` — 核心逻辑（命令规划、环境检测、配置解析）
 - `qt/env/` — 环境检测
@@ -122,15 +122,15 @@ npm run package:cli
 - `core/` — 纯 Node 日志、配置 IO、同步状态和 SSH 工具
 
 分发方式：
-- 全局安装：`npm install -g dist/compilot-cli-x.x.x.tgz`
+- 全局安装：`npm install -g dist/forja-cli-x.x.x.tgz`
 
-安装后提供 `compilot` 命令，支持 `compilot qt ...` 和 `compilot sdk ...` 子命令。
+安装后提供 `forja` 命令，支持 `forja qt ...` 和 `forja sdk ...` 子命令。
 
 ---
 
 ## CLI 命令行工具
 
-项目还产出独立的 npm 包 `compilot-cli`，用于终端操作、脚本自动化和 AI 编程工具集成。
+项目还产出独立的 npm 包 `forja-cli`，用于终端操作、脚本自动化和 AI 编程工具集成。
 
 CLI 的使用文档见 [`docs/README-cli.md`](./README-cli.md)。
 
@@ -164,7 +164,7 @@ CLI 的使用文档见 [`docs/README-cli.md`](./README-cli.md)。
 
 1. 运行 `npm test` 确保测试通过
 2. 一键打包：`npm run package:all`（自动 bump 版本）
-3. 安装验证：`code --install-extension dist/compilot-x.x.x.vsix`
+3. 安装验证：`code --install-extension dist/forja-x.x.x.vsix`
 4. 分发 `dist/` 下的 `.vsix` 和 `.tgz`
 
 ---
@@ -172,7 +172,7 @@ CLI 的使用文档见 [`docs/README-cli.md`](./README-cli.md)。
 ## 项目结构
 
 ```
-compilot/
+forja/
 ├── src/
 │   ├── extension.ts            # 扩展入口（activate/deactivate）
 │   ├── core/                   # 核心服务
@@ -204,7 +204,7 @@ compilot/
 │   │   ├── statusBar.ts        # 状态栏按钮
 │   │   ├── statusBarLabels.ts  # 状态栏标签文本
 │   │   └── configPanel/        # Webview 配置面板
-│   ├── cli/                    # 统一 CLI 入口（compilot qt/sdk 分发）
+│   ├── cli/                    # 统一 CLI 入口（forja qt/sdk 分发）
 │   └── test/                   # 单元测试（node:test）
 ├── out/                        # 编译输出（gitignored）
 ├── dist/                       # 打包产物（gitignored）
@@ -213,7 +213,7 @@ compilot/
 │   ├── bump-version.js         # 版本号递增
 │   └── generate-icon.js        # 图标生成
 ├── skills/
-│   └── compilot/SKILL.md       # AI 工具 Skill 文件
+│   └── forja/SKILL.md       # AI 工具 Skill 文件
 ├── docs/                       # 文档
 ├── media/                      # 图标资源
 ├── package.json                # 扩展清单 + 开发依赖
@@ -242,7 +242,7 @@ compilot/
 
 | 文件 | 职责 |
 |------|------|
-| `core/serverStore.ts` | 服务器配置存储（全局 `~/.compilot/servers.json`） |
+| `core/serverStore.ts` | 服务器配置存储（全局 `~/.forja/servers.json`） |
 | `core/syncCli.ts` | CLI 侧：独立同步逻辑（不依赖 vscode） |
 | `core/ssh.ts` | SSH/SCP 参数构建 + ASKPASS 认证 |
 
@@ -250,25 +250,25 @@ compilot/
 
 ```
 VSCode 配置面板
-  → 写入 ~/.compilot/servers.json 和 ~/.compilot/projects/<hash>.json 的 sync 配置
+  → 写入 ~/.forja/servers.json 和 ~/.forja/projects/<hash>.json 的 sync 配置
 
 CLI
-  → 读取 ~/.compilot/projects/<hash>.json 的 sync 配置
+  → 读取 ~/.forja/projects/<hash>.json 的 sync 配置
   → 执行同步
 
 两者共用
-  → .compilot/sync-state.json（已同步文件记录）
+  → .forja/sync-state.json（已同步文件记录）
 ```
 
 ### 配置存储
 
 | 配置项 | 作用域 | 存储位置 |
 |--------|--------|----------|
-| 服务器列表 | 全局 | `~/.compilot/servers.json` |
-| 启用开关 | 项目 | `~/.compilot/projects/<hash>.json` (`type=sync`) |
-| 远程路径 | 项目 | `~/.compilot/projects/<hash>.json` (`type=sync`) |
-| 忽略列表 | 项目 | `~/.compilot/projects/<hash>.json` (`type=sync`) |
-| 同步状态 | 项目 | `.compilot/sync-state.json` |
+| 服务器列表 | 全局 | `~/.forja/servers.json` |
+| 启用开关 | 项目 | `~/.forja/projects/<hash>.json` (`type=sync`) |
+| 远程路径 | 项目 | `~/.forja/projects/<hash>.json` (`type=sync`) |
+| 忽略列表 | 项目 | `~/.forja/projects/<hash>.json` (`type=sync`) |
+| 同步状态 | 项目 | `.forja/sync-state.json` |
 
 ---
 

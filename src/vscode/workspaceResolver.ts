@@ -2,7 +2,7 @@
  * 解析项目所在的 workspace folder。
  *
  * 解析策略（Qt 和 SDK 统一）：
- *   1. 查找 ~/.compilot/projects/ 下已有的配置文件，匹配当前 workspaceFolders
+ *   1. 查找 ~/.forja/projects/ 下已有的配置文件，匹配当前 workspaceFolders
  *   2. Qt fallback：浅层扫描找 .pro 文件
  *   3. SDK fallback：等待 sdkExtension 激活后通过 setSdkProjectRoot 设置
  *   4. 未识别到项目 → 返回空字符串
@@ -31,7 +31,7 @@ export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void
         vscode.workspace.onDidChangeWorkspaceFolders(() => _resetResolvedRoots())
     );
 
-    // 监听 ~/.compilot/projects/ 配置文件变化，重置缓存
+    // 监听 ~/.forja/projects/ 配置文件变化，重置缓存
     const configDir = projectsDir();
     if (!fs.existsSync(configDir)) {
         fs.mkdirSync(configDir, { recursive: true });
@@ -71,7 +71,7 @@ export function resetProjectRoot(): void {
 // ── 从已有配置文件反查 workspace ──
 
 /**
- * 在 ~/.compilot/projects/ 下查找指定类型的配置文件，
+ * 在 ~/.forja/projects/ 下查找指定类型的配置文件，
  * 如果其中记录的 workspace 路径匹配当前打开的某个 folder，返回该路径。
  */
 function _findFromExistingConfig(type: 'qt' | 'sdk'): string | null {

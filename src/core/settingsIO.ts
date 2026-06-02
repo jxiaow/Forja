@@ -1,7 +1,7 @@
 /**
  * 统一配置文件读写 — 不依赖 vscode，可独立测试。
  *
- * 配置存储在用户数据目录 ~/.compilot/projects/ 下，
+ * 配置存储在用户数据目录 ~/.forja/projects/ 下，
  * 文件名为 workspace 路径的 hash，内容平铺不加前缀分组。
  *
  * 每个 workspace 目录对应一个配置文件，只存一种配置（qt 或 sdk 或 sync）。
@@ -50,7 +50,7 @@ export interface SyncSettings {
     ignore: string[];
 }
 
-export interface CompilotSettings {
+export interface ForjaSettings {
     qt: QtSettings;
     sdk: SdkSettings;
     sync: SyncSettings;
@@ -90,10 +90,10 @@ export const DEFAULT_SYNC: Readonly<SyncSettings> = {
     enabled: false,
     selectedServer: '',
     remotePaths: {},
-    ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release']
+    ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release']
 };
 
-export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
+export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
     qt: DEFAULT_QT,
     sdk: DEFAULT_SDK,
     sync: DEFAULT_SYNC
@@ -103,7 +103,7 @@ export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
 
 /** 用户数据目录下的 projects 配置目录 */
 export function projectsDir(): string {
-    return path.join(os.homedir(), '.compilot', 'projects');
+    return path.join(os.homedir(), '.forja', 'projects');
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */

@@ -9,7 +9,7 @@ test('SDK extension observes unified settingsStore changes instead of old worksp
 
     assert.match(sdkExtension, /onSettingsChange/);
     assert.doesNotMatch(sdkExtension, /onSettingsFileChanged/);
-    assert.doesNotMatch(configService, /\.compilot\/settings\.json/);
+    assert.doesNotMatch(configService, /\.forja\/settings\.json/);
 });
 
 test('workspace resolver watches unified project config files instead of old workspace settings file', () => {
@@ -17,7 +17,7 @@ test('workspace resolver watches unified project config files instead of old wor
 
     assert.match(source, /projectsDir/);
     assert.match(source, /createFileSystemWatcher\(pattern\)/);
-    assert.doesNotMatch(source, /\.compilot\/settings\.json/);
+    assert.doesNotMatch(source, /\.forja\/settings\.json/);
 });
 
 test('sync watcher refreshes status from unified settings changes', () => {
@@ -25,7 +25,7 @@ test('sync watcher refreshes status from unified settings changes', () => {
 
     assert.match(source, /onSettingsChange/);
     assert.match(source, /section === 'sync'/);
-    assert.doesNotMatch(source, /\.compilot\/settings\.json/);
+    assert.doesNotMatch(source, /\.forja\/settings\.json/);
 });
 
 test('SDK state manager uses non-Windows x64 default arch before persisting config', () => {
@@ -76,6 +76,6 @@ test('SDK builder refuses to build when current project file no longer exists', 
 test('developer docs describe unified sync settings storage', () => {
     const docs = fs.readFileSync(path.join(process.cwd(), 'docs', 'development.md'), 'utf8');
 
-    assert.match(docs, /~\/\.compilot\/projects\/<hash>\.json/);
-    assert.doesNotMatch(docs, /\.compilot\/settings\.json/);
+    assert.match(docs, /~\/\.forja\/projects\/<hash>\.json/);
+    assert.doesNotMatch(docs, /\.forja\/settings\.json/);
 });

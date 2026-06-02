@@ -26,7 +26,7 @@ after(() => {
 });
 
 function makeWorkspace(): string {
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-settings-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-settings-'));
     _tmpDirs.push(ws);
     return ws;
 }
@@ -43,7 +43,7 @@ test('loadQtSettings returns defaults when no config exists', () => {
     assert.deepEqual(settings, DEFAULT_QT);
 });
 
-test('loadQtSettings reads from ~/.compilot/projects/<hash>.json', () => {
+test('loadQtSettings reads from ~/.forja/projects/<hash>.json', () => {
     const workspace = makeWorkspace();
     const filePath = projectConfigPath(workspace, 'qt');
     trackFile(filePath);
@@ -114,7 +114,7 @@ test('loadQtSettings returns defaults when file is malformed', () => {
 
 // ── saveQtSettings ──
 
-test('saveQtSettings writes to ~/.compilot/projects/ with workspace and type fields', () => {
+test('saveQtSettings writes to ~/.forja/projects/ with workspace and type fields', () => {
     const workspace = makeWorkspace();
     const filePath = projectConfigPath(workspace, 'qt');
     trackFile(filePath);
@@ -234,9 +234,9 @@ test('loadSyncSettings prefers current directory over parent', () => {
 
 // ── projectConfigPath ──
 
-test('projectConfigPath returns path under ~/.compilot/projects/', () => {
+test('projectConfigPath returns path under ~/.forja/projects/', () => {
     const result = projectConfigPath('C:/workspace/dev/qt_client', 'qt');
-    assert.match(result, /\.compilot[/\\]projects[/\\][a-f0-9]{12}\.json$/);
+    assert.match(result, /\.forja[/\\]projects[/\\][a-f0-9]{12}\.json$/);
 });
 
 test('projectConfigPath generates different hashes for different types', () => {

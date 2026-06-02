@@ -23,7 +23,7 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
     const wsRoot = getWorkspaceRoot();
     const sync = wsRoot
         ? readProjectSyncConfig(wsRoot)
-        : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'], remotePaths: {} };
+        : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release'], remotePaths: {} };
     const servers = readServers();
     const pendingInfo = wsRoot ? getSyncPendingInfo(wsRoot, sync.ignore) : { count: 0, lastTime: '' };
 

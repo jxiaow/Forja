@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Compilot CLI — unified entry point.
+ * Forja CLI — unified entry point.
  * Dispatches to Qt or SDK subcommand handlers.
  *
  * Usage:
- *   compilot qt <action> [options]
- *   compilot sdk <action> [options]
+ *   forja qt <action> [options]
+ *   forja sdk <action> [options]
  */
 
 import { runQtCli } from '../qt/cli/index';
@@ -17,10 +17,10 @@ import { setSilent } from '../core/loggerBase';
 
 function printHelp(): void {
     const help = `
-Compilot v${VERSION} — C++ 项目构建工具
+Forja v${VERSION} — C++ 项目构建工具
 
 用法:
-  compilot <subcommand> [action] [options]
+  forja <subcommand> [action] [options]
 
 子命令:
   qt       Qt/qmake 项目操作 (init, env, projects, status, qmake, build, run, clean, stop, sync, rcc, logs)
@@ -33,10 +33,10 @@ Compilot v${VERSION} — C++ 项目构建工具
   --json         JSON 格式输出
 
 示例:
-  compilot qt build --json
-  compilot sdk build --workspace ./my-sdk
-  compilot qt status --json
-  compilot qt build --plan --json      查看计划（不执行）
+  forja qt build --json
+  forja sdk build --workspace ./my-sdk
+  forja qt status --json
+  forja qt build --plan --json      查看计划（不执行）
 `.trim();
     console.log(help);
 }
@@ -77,7 +77,7 @@ async function main(argv: string[]): Promise<void> {
                 console.log(JSON.stringify({ ok: false, diagnostics: [{ level: 'error', message: msg }] }));
             } else {
                 console.error(msg);
-                console.error('使用 compilot --help 查看帮助');
+                console.error('使用 forja --help 查看帮助');
             }
             process.exitCode = 1;
         }

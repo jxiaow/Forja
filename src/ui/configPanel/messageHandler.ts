@@ -73,7 +73,7 @@ export async function handleMessage(
             break;
         }
         case 'selectProject': {
-            await vscode.commands.executeCommand('compilot.qt.selectProject');
+            await vscode.commands.executeCommand('forja.qt.selectProject');
             updateHtml();
             break;
         }
@@ -156,7 +156,7 @@ export async function handleMessage(
             logger.info(`手动指定 .pro: "${msg.value}"`);
             await updateConfig('manualProPath', String(msg.value || ''));
             if (msg.value) {
-                await vscode.commands.executeCommand('compilot.qt.loadManualProject');
+                await vscode.commands.executeCommand('forja.qt.loadManualProject');
             }
             updateHtml();
             break;
@@ -329,7 +329,7 @@ export async function handleMessage(
         }
         case 'syncNow': {
             logger.info('手动触发同步');
-            await vscode.commands.executeCommand('compilot.qt.syncChangedFiles');
+            await vscode.commands.executeCommand('forja.qt.syncChangedFiles');
             break;
         }
         case 'testSyncConnection': {
@@ -409,7 +409,7 @@ export async function handleMessage(
             break;
         }
         case 'selectSdkProject': {
-            await vscode.commands.executeCommand('compilot.sdk.selectProject');
+            await vscode.commands.executeCommand('forja.sdk.selectProject');
             updateHtml();
             break;
         }

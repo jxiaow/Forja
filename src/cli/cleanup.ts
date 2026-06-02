@@ -1,7 +1,7 @@
 /**
- * compilot cleanup — 清理已删除/移动项目的残留配置文件。
+ * forja cleanup — 清理已删除/移动项目的残留配置文件。
  *
- * 扫描 ~/.compilot/projects/ 下所有配置文件，检查其 workspace 路径是否仍然存在。
+ * 扫描 ~/.forja/projects/ 下所有配置文件，检查其 workspace 路径是否仍然存在。
  * 不存在的配置文件列出并可选删除。
  */
 import * as fs from 'fs';

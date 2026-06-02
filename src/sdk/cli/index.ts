@@ -1,5 +1,5 @@
 /**
- * SDK CLI entry point — called by the unified compilot dispatcher.
+ * SDK CLI entry point — called by the unified forja dispatcher.
  * Provides init/env/projects/status/build/rebuild/clean operations for .sln and Makefile projects.
  */
 
@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as cp from 'child_process';
 import { EXCLUDE_DIRS, EXCLUDE_PATH_SEGMENTS, DEFAULT_SCAN_DEPTH } from '../constants';
-import { getSdkDefaultArch, getSdkAvailableArch } from './requirements';
+import { getSdkDefaultArch, getSdkAvailableArch, buildSdkEnvCurrent, getSdkPlatformAvailable, getSdkPlatformConfigHints } from './requirements';
 import { loadSdkSettings, saveSdkSettings, sdkSettingsFilePath } from './settings';
 import { detectVsInstallations, detectMake } from './envDetector';
 
@@ -225,10 +225,10 @@ function extractErrors(output: string): string[] {
 
 function getHelpText(): string {
     return `
-Compilot SDK CLI
+Forja SDK CLI
 
 用法:
-  compilot sdk <action> [options]
+  forja sdk <action> [options]
 
 动作:
   init      初始化本地配置（检测 VS 环境、保存可自动确定的配置）
@@ -250,11 +250,11 @@ Compilot SDK CLI
   --json                 JSON 格式输出
 
 示例:
-  compilot sdk status --json
-  compilot sdk init --json
-  compilot sdk use --project Makefile --mode release --json
-  compilot sdk env --json
-  compilot sdk build --plan --json
+  forja sdk status --json
+  forja sdk init --json
+  forja sdk use --project Makefile --mode release --json
+  forja sdk env --json
+  forja sdk build --plan --json
 `.trim();
 }
 
@@ -298,11 +298,11 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             if (!options.vsDevCmd && vsInstallations.length > 1) { autoSelected.push('vsDevCmd'); }
             if (!settings.pinnedProject && project) { autoSelected.push('project'); }
             if (autoSelected.length > 0) {
-                diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 compilot sdk status --json 查看当前配置` });
+                diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 forja sdk status --json 查看当前配置` });
             }
             if (!project) {
                 if (candidates.length > 1) {
-                    diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，未自动选择，可用 compilot sdk projects --json 查看全部` });
+                    diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，未自动选择，可用 forja sdk projects --json 查看全部` });
                 } else if (candidates.length === 0) {
                     diagnostics.push({ level: 'warning', message: '未检测到项目文件' });
                 }
@@ -336,11 +336,11 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 ok: true,
                 action: 'use',
                 resolved: { mode, arch, vsDevCmdPath: vsDevCmd || undefined, project: project || undefined },
-                nextActions: ['compilot sdk status --json']
+                nextActions: ['forja sdk status --json']
             };
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else { console.log('SDK 配置已更新，可执行 compilot sdk status 查看状态'); }
+            else { console.log('SDK 配置已更新，可执行 forja sdk status 查看状态'); }
             return;
         }
 
@@ -353,41 +353,34 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             const out: Record<string, unknown> = {
                 ok: true,
                 action: 'env',
-                current: {
-                    mode: effectiveMode,
-                    arch: effectiveArch,
-                    vsDevCmd: currentVsDevCmd || null,
-                    make: makePath || null
-                },
+                current: buildSdkEnvCurrent({ mode: effectiveMode, arch: effectiveArch, vsDevCmd: currentVsDevCmd || null, make: makePath || null }),
                 available: {
                     mode: ['debug', 'release'],
                     arch: getSdkAvailableArch(),
-                    ...(process.platform === 'win32' ? {
-                        vs: vsInstallations.map(v => ({ path: v.vsDevCmdPath, version: v.version, edition: v.edition }))
-                    } : {}),
-                    ...(process.platform !== 'win32' ? { make: makePath ? [makePath] : [] } : {})
+                    ...getSdkPlatformAvailable({ vsInstallations, makePath })
                 },
                 configHints: {
-                    usage: 'compilot sdk use [options] --json',
+                    usage: 'forja sdk use [options] --json',
                     mode: '--mode debug|release',
                     ...(getSdkAvailableArch().length > 1 ? { arch: `--arch ${getSdkAvailableArch().join('|')}` } : {}),
-                    ...(process.platform === 'win32' ? { vsDevCmd: '--vs-dev-cmd <path>' } : {})
+                    ...getSdkPlatformConfigHints()
                 }
             };
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
                 console.log('SDK 构建环境:');
-                console.log(`  mode: ${effectiveMode}`);
-                console.log(`  arch: ${effectiveArch}`);
-                if (process.platform === 'win32') {
-                    console.log(`  VS: ${currentVsDevCmd || '未检测到'}`);
+                const cur = out.current as Record<string, unknown>;
+                console.log(`  mode: ${cur.mode}`);
+                console.log(`  arch: ${cur.arch}`);
+                if ('vsDevCmd' in cur) {
+                    console.log(`  VS: ${cur.vsDevCmd || '未检测到'}`);
                     if (vsInstallations.length > 1) {
                         console.log(`  可用 VS (${vsInstallations.length}):`);
                         vsInstallations.forEach(v => console.log(`    ${v.vsDevCmdPath} (${v.version} ${v.edition})`));
                     }
                 } else {
-                    console.log(`  make: ${makePath || '未检测到'}`);
+                    console.log(`  make: ${cur.make || '未检测到'}`);
                 }
             }
             return;
@@ -407,7 +400,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 action: 'projects',
                 current: currentProject,
                 available,
-                configHints: { usage: 'compilot sdk use --project <path> --json' }
+                configHints: { usage: 'forja sdk use --project <path> --json' }
             };
             if (currentProject && !fs.existsSync(path.join(options.workspace, currentProject))) {
                 out.currentExists = false;
@@ -467,7 +460,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             if (!hasSettings) { diagnostics.push({ level: 'warning', message: '尚未初始化' }); }
             if (!projectExists) {
                 if (candidates.length > 1) {
-                    diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，请使用 compilot sdk use --project <path> 指定` });
+                    diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，请使用 forja sdk use --project <path> 指定` });
                 } else if (candidates.length === 0) {
                     diagnostics.push({ level: 'warning', message: '未找到项目文件' });
                 } else if (hasSettings) {
@@ -502,7 +495,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                     diagnostics.forEach(d => console.log(`${d.level}: ${d.message}`));
                 }
                 console.log('');
-                console.log(`下一步: compilot sdk ${nextAction}`);
+                console.log(`下一步: forja sdk ${nextAction}`);
             }
             return;
         }
@@ -513,10 +506,10 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 ok: false,
                 action: options.action,
                 diagnostics: [{ level: 'error', message: '尚未初始化' }],
-                nextActions: ['compilot sdk status --json']
+                nextActions: ['forja sdk status --json']
             };
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else { console.error('SDK 尚未初始化，请先执行 compilot sdk status'); }
+            else { console.error('SDK 尚未初始化，请先执行 forja sdk status'); }
             process.exitCode = 1;
             return;
         }
@@ -531,7 +524,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                     action: options.action,
                     project: settings.pinnedProject,
                     diagnostics: [{ level: 'error', message: `项目文件不存在: ${settings.pinnedProject}` }],
-                    nextActions: ['compilot sdk status --json']
+                    nextActions: ['forja sdk status --json']
                 };
                 if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
                 else { console.error(`项目文件不存在: ${settings.pinnedProject}`); }
@@ -541,15 +534,15 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         }
         if (!projectPath) {
             if (candidates.length === 0) {
-                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未找到项目文件' }], nextActions: ['compilot sdk status --json'] };
+                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未找到项目文件' }], nextActions: ['forja sdk status --json'] };
                 if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
                 else { console.error('未找到 .sln 或 Makefile 项目文件'); }
                 process.exitCode = 1;
                 return;
             } else {
-                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未选择 SDK 项目' }], nextActions: ['compilot sdk status --json'] };
+                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未选择 SDK 项目' }], nextActions: ['forja sdk status --json'] };
                 if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-                else { console.error('未选择 SDK 项目，请先执行 compilot sdk status'); }
+                else { console.error('未选择 SDK 项目，请先执行 forja sdk status'); }
                 process.exitCode = 1;
                 return;
             }
@@ -588,7 +581,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         if (errors.length > 0) { out.errors = errors; }
         if (!out.ok) {
             out.diagnostics = [{ level: 'error', message: '命令执行失败' }];
-            out.nextActions = ['compilot sdk status --json'];
+            out.nextActions = ['forja sdk status --json'];
         }
 
         if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }

@@ -22,7 +22,7 @@ interface SyncStateData {
 function _stateFilePath(workspaceRoot: string): string {
     const normalized = workspaceRoot.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
-    return path.join(os.homedir(), '.compilot', 'sync', `${hash}.json`);
+    return path.join(os.homedir(), '.forja', 'sync', `${hash}.json`);
 }
 
 function _readState(workspaceRoot: string): SyncStateData {
@@ -229,7 +229,7 @@ export function getSyncPendingInfo(workspaceRoot: string, ignore: string[]): { c
 
 /** 列出所有 sync state 文件（用于 cleanup 命令） */
 export function listSyncStates(): Array<{ filePath: string; workspace: string }> {
-    const dir = path.join(os.homedir(), '.compilot', 'sync');
+    const dir = path.join(os.homedir(), '.forja', 'sync');
     if (!fs.existsSync(dir)) { return []; }
     const results: Array<{ filePath: string; workspace: string }> = [];
     try {

@@ -98,9 +98,16 @@ export async function scanQt(parentDirs: string[], tag: string): Promise<string[
         const m = qtPath.match(/(\d+\.\d+\.\d+)/);
         found.push({ path: qtPath, version: m ? m[1] : '0.0.0' });
     }
-    found.sort((a, b) => compareVersion(b.version, a.version));
-    if (found.length > 0) { log(`[${tag}] 扫描找到 ${found.length} 个 Qt: ${found.map(f => f.path).join(', ')}`); }
-    return found.map(f => f.path);
+    // 去重：同一个 Qt 路径可能从多个 scanRoot 被找到（如父目录 + 自身）
+    const seen = new Set<string>();
+    const deduped = found.filter(f => {
+        if (seen.has(f.path)) { return false; }
+        seen.add(f.path);
+        return true;
+    });
+    deduped.sort((a, b) => compareVersion(b.version, a.version));
+    if (deduped.length > 0) { log(`[${tag}] 扫描找到 ${deduped.length} 个 Qt: ${deduped.map(f => f.path).join(', ')}`); }
+    return deduped.map(f => f.path);
 }
 
 // ── 入口 ──

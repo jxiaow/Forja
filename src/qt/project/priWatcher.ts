@@ -100,7 +100,7 @@ export function registerPriWatcher(context: vscode.ExtensionContext): void {
             ).then(answer => {
                 qmakeNeeded = false;
                 if (answer === '立即 QMake') {
-                    vscode.commands.executeCommand('compilot.qt.qmake');
+                    vscode.commands.executeCommand('forja.qt.qmake');
                 }
             });
         }

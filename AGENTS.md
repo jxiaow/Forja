@@ -1,4 +1,4 @@
-# AGENTS.md - Compilot 开发指南
+# AGENTS.md - Forja 开发指南
 
 ## 本文件是当前仓库面向 AI/agent 的总入口。流程层：`harness/core/`（通用）+ `harness/project/`（项目专属）。
 

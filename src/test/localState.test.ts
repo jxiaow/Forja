@@ -15,7 +15,7 @@ const _tmpDirs: string[] = [];
 after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
 
 function makeWorkspace(): string {
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-local-state-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-local-state-'));
     _tmpDirs.push(ws);
     return ws;
 }
@@ -26,8 +26,8 @@ test('ensureLocalStateDir creates logs directory only', () => {
 
     // Logs dir should exist
     assert.equal(fs.existsSync(logsDir(workspace)), true);
-    // .compilot/ should NOT be created in project directory
-    assert.equal(fs.existsSync(path.join(workspace, '.compilot')), false);
+    // .forja/ should NOT be created in project directory
+    assert.equal(fs.existsSync(path.join(workspace, '.forja')), false);
 });
 
 test('isProcessRunning treats non-positive pids as not running', () => {

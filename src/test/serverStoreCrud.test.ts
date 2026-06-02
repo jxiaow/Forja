@@ -2,31 +2,24 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import { tmpdir } from 'os';
 import {
     readServers, addServer, removeServer,
     updateServer, getServerById, getServerByName
 } from '../core/serverStore';
 
-const SERVERS_PATH = path.join(os.homedir(), '.compilot', 'servers.json');
-let backup: string | null = null;
+// 用临时目录，不碰用户真实的 ~/.forja/servers.json
+const tmpDir = fs.mkdtempSync(path.join(tmpdir(), 'forja-test-'));
+process.env.FORJA_CONFIG_DIR = tmpDir;
+const SERVERS_PATH = path.join(tmpDir, 'servers.json');
 
 before(() => {
-    if (fs.existsSync(SERVERS_PATH)) {
-        backup = fs.readFileSync(SERVERS_PATH, 'utf-8');
-    }
-    // Start with empty
-    const dir = path.dirname(SERVERS_PATH);
-    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
     fs.writeFileSync(SERVERS_PATH, '[]', 'utf-8');
 });
 
 after(() => {
-    if (backup !== null) {
-        fs.writeFileSync(SERVERS_PATH, backup, 'utf-8');
-    } else if (fs.existsSync(SERVERS_PATH)) {
-        fs.unlinkSync(SERVERS_PATH);
-    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    delete process.env.FORJA_CONFIG_DIR;
 });
 
 test('readServers returns empty array when file has []', () => {

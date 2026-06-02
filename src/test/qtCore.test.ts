@@ -10,7 +10,7 @@ const _tmpDirs: string[] = [];
 after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
 
 function makeWorkspace(): string {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-core-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-core-'));
     _tmpDirs.push(workspace);
     fs.writeFileSync(path.join(workspace, 'demo.pro'), 'TARGET = demo\nQT += core gui widgets\n', 'utf8');
     return workspace;
@@ -76,7 +76,7 @@ test('execution actions require a saved project even when a single pro file exis
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未配置项目/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
 });
 
 test('createActionPlan reports missing saved project before scanning multiple projects', async () => {
@@ -101,7 +101,7 @@ test('createActionPlan reports missing saved project before scanning multiple pr
     assert.equal(result.ok, false);
     assert.equal(result.diagnostics[0].level, 'error');
     assert.match(result.diagnostics[0].message, /未配置项目/);
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
 });
 
 test('createActionPlan status returns checks and resolved config', async () => {
@@ -157,7 +157,7 @@ test('status points to init before local qt settings exist', async () => {
 
     const data = JSON.parse(result.stdout);
     assert.equal(data.nextAction, 'init');
-    assert.deepEqual(data.nextActions, ['compilot qt init --json']);
+    assert.deepEqual(data.nextActions, ['forja qt init --json']);
 });
 
 test('status points to projects/use when settings exist but no project is selected', async () => {
@@ -182,8 +182,8 @@ test('status points to projects/use when settings exist but no project is select
     const data = JSON.parse(result.stdout);
     assert.equal(data.nextAction, 'projects');
     assert.deepEqual(data.nextActions, [
-        'compilot qt projects --json',
-        'compilot qt use --project <path> --json'
+        'forja qt projects --json',
+        'forja qt use --project <path> --json'
     ]);
 });
 
@@ -207,8 +207,8 @@ test('status points to env/use when project exists but toolchain is missing', as
 
     const data = JSON.parse(result.stdout);
     assert.equal(data.nextAction, 'env');
-    assert.ok(data.nextActions.includes('compilot qt env --json'));
-    assert.ok(data.nextActions.some((action: string) => /compilot qt use --qt-path <path> --json/.test(action)));
+    assert.ok(data.nextActions.includes('forja qt env --json'));
+    assert.ok(data.nextActions.some((action: string) => /forja qt use --qt-path <path> --json/.test(action)));
 });
 
 test('status points to use when build config needs confirmation', async () => {
@@ -244,7 +244,7 @@ test('status points to use when build config needs confirmation', async () => {
         ['mode', 'arch']
     );
     assert.equal(data.nextAction, 'use');
-    assert.deepEqual(data.nextActions, [`compilot qt use --mode debug --arch ${defaultArch()} --json`]);
+    assert.deepEqual(data.nextActions, [`forja qt use --mode debug --arch ${defaultArch()} --json`]);
     assert.ok(data.diagnostics.some((d: { message: string }) => /未确认构建模式/.test(d.message)));
     assert.ok(data.diagnostics.some((d: { message: string }) => /未确认目标架构/.test(d.message)));
 });
@@ -275,7 +275,7 @@ test('execution actions require confirmed mode and arch', async () => {
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未确认构建配置/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
 });
 
 test('execution actions require saved arch confirmation', async () => {
@@ -298,7 +298,7 @@ test('execution actions require saved arch confirmation', async () => {
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未确认构建配置: arch/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
 });
 
 test('init writes default arch when the platform has a single architecture option', async () => {
@@ -358,8 +358,8 @@ test('createActionPlan use updates only explicit config fields', async () => {
     assert.equal(result.resolved?.qtPath, 'D:/Qt-old');
     assert.equal(result.resolved?.target, 'demo');
     assert.deepEqual(result.data?.updated, { mode: 'release' });
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
-    assert.deepEqual(result.data?.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
+    assert.deepEqual(result.data?.nextActions, ['forja qt status --json']);
 });
 
 test('createActionPlan use --project switches pinned project', async () => {
@@ -406,7 +406,7 @@ test('createActionPlan use --project rejects missing project files', async () =>
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /项目文件不存在/.test(d.message)));
-    assert.ok(result.nextActions.includes('compilot qt projects --json'));
+    assert.ok(result.nextActions.includes('forja qt projects --json'));
 });
 
 test('createActionPlan qmake warns when Qt and VS environment are unresolved', async () => {
@@ -500,8 +500,8 @@ test('init dry-run points to projects/use when multiple projects prevent auto se
     });
 
     assert.equal(result.ok, true);
-    assert.ok(result.nextActions.includes('compilot qt projects --json'));
-    assert.ok(result.nextActions.includes('compilot qt use --project <path> --json'));
+    assert.ok(result.nextActions.includes('forja qt projects --json'));
+    assert.ok(result.nextActions.includes('forja qt use --project <path> --json'));
 });
 
 test('createActionPlan init ignores explicit config override fields', async () => {
@@ -624,7 +624,7 @@ test('nextActions points to status when Qt path is empty', async () => {
 
 test('project error branch fills resolved with current config', async () => {
     // Workspace with no .pro files
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-nopro-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-nopro-'));
     _tmpDirs.push(workspace);
 
     const result = await createActionPlan({
@@ -775,7 +775,7 @@ test('workspace not exist returns error diagnostic', async () => {
     const result = await createActionPlan({
         action: 'build',
         executionMode: 'dryRun',
-        workspace: path.join(os.tmpdir(), 'compilot-nonexistent-' + Date.now()),
+        workspace: path.join(os.tmpdir(), 'forja-nonexistent-' + Date.now()),
         project: null,
         mode: 'debug',
         arch: 'x86',
@@ -812,7 +812,7 @@ test('init still auto-selects a single candidate project', async () => {
 });
 
 test('execution action without saved project points back to status', async () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-empty-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-empty-'));
     _tmpDirs.push(workspace);
 
     const result = await createActionPlan({
@@ -831,7 +831,7 @@ test('execution action without saved project points back to status', async () =>
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未配置项目/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
 });
 
 test('non-existent qtPath still generates commands (validation delegated to status)', async () => {

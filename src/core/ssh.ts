@@ -68,7 +68,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-const ASKPASS_ENV_VAR = 'COMPILOT_SSH_PASS';
+const ASKPASS_ENV_VAR = 'FORJA_SSH_PASS';
 
 export interface AskpassEnv {
     env: NodeJS.ProcessEnv;
@@ -91,10 +91,10 @@ export function createAskpassEnv(password: string | null, suffix?: string): Askp
         let scriptPath: string;
 
         if (process.platform === 'win32') {
-            scriptPath = path.join(tmpDir, `compilot-askpass-${tag}.ps1`);
+            scriptPath = path.join(tmpDir, `forja-askpass-${tag}.ps1`);
             fs.writeFileSync(scriptPath, `Write-Host -NoNewline $env:${ASKPASS_ENV_VAR}\n`);
         } else {
-            scriptPath = path.join(tmpDir, `compilot-askpass-${tag}.sh`);
+            scriptPath = path.join(tmpDir, `forja-askpass-${tag}.sh`);
             fs.writeFileSync(scriptPath, `#!/bin/sh\nprintf '%s' "$${ASKPASS_ENV_VAR}"\n`, { mode: 0o700 });
         }
 
@@ -116,7 +116,7 @@ export function createAskpassEnv(password: string | null, suffix?: string): Askp
 
         return { env, cleanup };
     } catch (e) {
-        console.warn(`[compilot] createAskpassEnv 失败: ${e instanceof Error ? e.message : e}`);
+        console.warn(`[forja] createAskpassEnv 失败: ${e instanceof Error ? e.message : e}`);
         return undefined;
     }
 }

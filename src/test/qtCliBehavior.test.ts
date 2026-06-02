@@ -15,7 +15,7 @@ beforeEach(() => { process.exitCode = undefined; });
 afterEach(() => { process.exitCode = undefined; });
 
 function makeWorkspace(): string {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-cli-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cli-'));
     _tmpDirs.push(workspace);
     return workspace;
 }

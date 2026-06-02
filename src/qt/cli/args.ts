@@ -2,9 +2,9 @@ import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
 const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'ps', 'rcc'];
 
-const helpText = `Compilot Qt CLI — qmake 项目构建工具
+const helpText = `Forja Qt CLI — qmake 项目构建工具
 
-用法: compilot qt <command> [options]
+用法: forja qt <command> [options]
 
 命令:
   init        自动初始化本地配置（检测环境、保存可自动确定的配置）
@@ -44,15 +44,15 @@ sync 选项:
   --repo <name>          同步时指定子仓库名称（多仓库工作区）
 
 示例:
-  compilot qt status --json            查看配置状态和下一步
-  compilot qt init --json              初始化并保存可自动确定的配置
-  compilot qt use --mode release       确认/切换到 release 配置
-  compilot qt build                    执行构建
-  compilot qt build --plan             查看构建命令（不执行）
-  compilot qt run --detach             后台构建并运行
-  compilot qt ps --json                查看后台运行状态
-  compilot qt sync                     同步变更文件到远程
-  compilot qt status                   查看当前状态
+  forja qt status --json            查看配置状态和下一步
+  forja qt init --json              初始化并保存可自动确定的配置
+  forja qt use --mode release       确认/切换到 release 配置
+  forja qt build                    执行构建
+  forja qt build --plan             查看构建命令（不执行）
+  forja qt run --detach             后台构建并运行
+  forja qt ps --json                查看后台运行状态
+  forja qt sync                     同步变更文件到远程
+  forja qt status                   查看当前状态
 `;
 
 export function isHelpRequest(args: string[]): boolean {

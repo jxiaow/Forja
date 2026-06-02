@@ -4,6 +4,7 @@ import { createActionPlan } from '../shared/qtCore';
 import { runCliResult } from '../shared/commandRunner';
 import { executeSyncCli, planSyncCli } from '../shared/syncCli';
 import { readRunState, resolveRunProcessStatus } from '../shared/localState';
+import { getPlatformEnvFields, buildEnvCurrent } from '../platform/requirements';
 import * as path from 'path';
 
 /**
@@ -66,6 +67,8 @@ function compactResult(result: CliResult): Record<string, unknown> {
 
     return out;
 }
+
+// 从 requirements.ts 导入：getPlatformEnvFields / buildEnvCurrent
 
 function textOutput(result: CliResult): string {
     const status = result.ok ? '成功' : '失败';
@@ -133,7 +136,7 @@ async function main(argv: string[]): Promise<void> {
             const status = resolveRunProcessStatus(state);
 
             if (!state) {
-                const msg = '没有后台运行记录，请先执行 compilot qt run --detach';
+                const msg = '没有后台运行记录，请先执行 forja qt run --detach';
                 if (wantsJson) {
                     console.log(JSON.stringify({
                         ok: false,
@@ -217,15 +220,7 @@ async function main(argv: string[]): Promise<void> {
                 const envOutput = {
                     ok: true,
                     action: 'env',
-                    current: {
-                        mode: planned.resolved?.mode || 'debug',
-                        arch: planned.resolved?.arch || 'x86',
-                        qtPath: planned.resolved?.qtPath || null,
-                        qtVersion: planned.resolved?.qtVersion || null,
-                        vsDevShell: planned.resolved?.vsDevShell || null,
-                        vsVersion: planned.resolved?.vsVersion || null,
-                        jomPath: planned.resolved?.jomPath || null
-                    },
+                    current: buildEnvCurrent(planned.resolved as Record<string, unknown> | null),
                     ...customData
                 };
                 if (wantsJson) {
@@ -326,7 +321,7 @@ function formatStatusText(data: Record<string, unknown>): string {
     }
 
     lines.push('');
-    lines.push(`下一步: compilot qt ${data.nextAction}`);
+    lines.push(`下一步: forja qt ${data.nextAction}`);
     const nextActions = data.nextActions as string[] | undefined;
     if (nextActions && nextActions.length > 0) {
         for (const action of nextActions) {
@@ -348,12 +343,13 @@ function formatStatusText(data: Record<string, unknown>): string {
 function formatEnvText(env: Record<string, unknown>): string {
     const current = env.current as Record<string, unknown>;
     const available = env.available as Record<string, unknown>;
-    const lines: string[] = ['工具链环境:', ''];
-    lines.push(`  mode: ${current.mode}`);
-    lines.push(`  arch: ${current.arch}`);
-    lines.push(`  Qt: ${current.qtPath || '未检测到'}${current.qtVersion ? ' (v' + current.qtVersion + ')' : ''}`);
-    lines.push(`  VS DevShell: ${current.vsDevShell || '未检测到'}${current.vsVersion ? ' (' + current.vsVersion + ')' : ''}`);
-    lines.push(`  构建工具: ${current.jomPath || '未检测到'}`);
+    const lines: string[] = ['工具链环境:'];
+    for (const field of getPlatformEnvFields()) {
+        const val = field.render(current);
+        if (val === null) { continue; }
+        lines.push(`  ${field.label}: ${val}`);
+    }
+
 
     const qtList = available.qt as Array<Record<string, string>>;
     if (qtList && qtList.length > 1) {
@@ -393,7 +389,7 @@ function formatProjectsText(data: Record<string, unknown>): string {
 }
 
 /**
- * Qt CLI entry point — called by the unified compilot dispatcher.
+ * Qt CLI entry point — called by the unified forja dispatcher.
  */
 export async function runQtCli(argv: string[]): Promise<void> {
     await main(argv);

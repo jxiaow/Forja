@@ -9,7 +9,7 @@ const _tmpDirs: string[] = [];
 after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
 
 function makeWorkspace(): string {
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-runtime-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-runtime-'));
     _tmpDirs.push(ws);
     return ws;
 }

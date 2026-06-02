@@ -1,4 +1,4 @@
-# Compilot
+# Forja
 
 C++ 项目构建工具链，包含 VSCode 扩展和独立 CLI 两种使用方式。
 
@@ -10,7 +10,7 @@ C++ 项目构建工具链，包含 VSCode 扩展和独立 CLI 两种使用方式
 |------|------|------|
 | **VSCode 扩展** | 图形化构建、调试、远程同步、远程部署 | [docs/README-vscode.md](docs/README-vscode.md) |
 | **CLI** | 命令行构建工具，支持本地和远程编译部署 | [docs/README-cli.md](docs/README-cli.md) |
-| **AI Skill** | 为 AI 助手提供构建能力的指令文件 | [skills/compilot/README.md](skills/compilot/README.md) |
+| **AI Skill** | 为 AI 助手提供构建能力的指令文件 | [skills/forja/README.md](skills/forja/README.md) |
 
 ## 安装
 
@@ -18,22 +18,22 @@ C++ 项目构建工具链，包含 VSCode 扩展和独立 CLI 两种使用方式
 
 ```bash
 # 从 .vsix 文件安装
-code --install-extension compilot-x.x.x.vsix
+code --install-extension forja-x.x.x.vsix
 ```
 
 ### CLI
 
 ```bash
 # 从 .tgz 文件全局安装
-npm install -g compilot-cli-x.x.x.tgz
+npm install -g forja-cli-x.x.x.tgz
 ```
 
 ### AI Skill
 
-将 `skills/compilot/` 复制到 AI 工具的 skills 目录：
+将 `skills/forja/` 复制到 AI 工具的 skills 目录：
 
 ```bash
-cp -r skills/compilot/ <ai-tool-skills-dir>/compilot/
+cp -r skills/forja/ <ai-tool-skills-dir>/forja/
 ```
 
 ## 构建与打包
@@ -58,13 +58,13 @@ npm run package:cli
 dist/
 └── <version>/
     ├── vs/                          # VSCode 扩展
-    │   ├── compilot-x.x.x.vsix
+    │   ├── forja-x.x.x.vsix
     │   └── README.md
     └── cli/                         # CLI + AI Skill
-        ├── compilot-cli-x.x.x.tgz
+        ├── forja-cli-x.x.x.tgz
         ├── README.md
         └── skills/
-            └── compilot/
+            └── forja/
                 ├── SKILL.md
                 └── README.md
 ```

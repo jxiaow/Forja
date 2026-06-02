@@ -1,9 +1,9 @@
 {
-  "name": "compilot",
-  "displayName": "Compilot",
-  "publisher": "compilot",
+  "name": "forja",
+  "displayName": "Forja",
+  "publisher": "forja",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.42",
+  "version": "0.7.44",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -19,100 +19,100 @@
   ],
   "main": "./out/extension.js",
   "bin": {
-    "compilot": "./out/cli/index.js"
+    "forja": "./out/cli/index.js"
   },
   "contributes": {
     "commands": [
       {
-        "command": "compilot.config.openPage",
-        "title": "Compilot: 打开配置页"
+        "command": "forja.config.openPage",
+        "title": "Forja: 打开配置页"
       },
       {
-        "command": "compilot.showActions",
-        "title": "Compilot: 显示操作菜单"
+        "command": "forja.showActions",
+        "title": "Forja: 显示操作菜单"
       },
       {
-        "command": "compilot.qt.selectProject",
-        "title": "Compilot Qt: 选择项目"
+        "command": "forja.qt.selectProject",
+        "title": "Forja Qt: 选择项目"
       },
       {
-        "command": "compilot.qt.showActions",
-        "title": "Compilot Qt: 显示操作菜单"
+        "command": "forja.qt.showActions",
+        "title": "Forja Qt: 显示操作菜单"
       },
       {
-        "command": "compilot.qt.qmake",
-        "title": "Compilot Qt: QMake"
+        "command": "forja.qt.qmake",
+        "title": "Forja Qt: QMake"
       },
       {
-        "command": "compilot.qt.build",
-        "title": "Compilot Qt: Build"
+        "command": "forja.qt.build",
+        "title": "Forja Qt: Build"
       },
       {
-        "command": "compilot.qt.clean",
-        "title": "Compilot Qt: Clean"
+        "command": "forja.qt.clean",
+        "title": "Forja Qt: Clean"
       },
       {
-        "command": "compilot.qt.run",
-        "title": "Compilot Qt: Run"
+        "command": "forja.qt.run",
+        "title": "Forja Qt: Run"
       },
       {
-        "command": "compilot.qt.stop",
-        "title": "Compilot Qt: 停止"
+        "command": "forja.qt.stop",
+        "title": "Forja Qt: 停止"
       },
       {
-        "command": "compilot.qt.debug",
-        "title": "Compilot Qt: 调试"
+        "command": "forja.qt.debug",
+        "title": "Forja Qt: 调试"
       },
       {
-        "command": "compilot.qt.openWithQtDesigner",
-        "title": "Compilot Qt: 用 Qt Designer 打开"
+        "command": "forja.qt.openWithQtDesigner",
+        "title": "Forja Qt: 用 Qt Designer 打开"
       },
       {
-        "command": "compilot.qt.syncTestConnection",
-        "title": "Compilot Qt: 测试远程连接"
+        "command": "forja.qt.syncTestConnection",
+        "title": "Forja Qt: 测试远程连接"
       },
       {
-        "command": "compilot.qt.syncChangedFiles",
-        "title": "Compilot Qt: 同步变更文件到远程"
+        "command": "forja.qt.syncChangedFiles",
+        "title": "Forja Qt: 同步变更文件到远程"
       },
       {
-        "command": "compilot.qt.rcc",
-        "title": "Compilot Qt: RCC 编译"
+        "command": "forja.qt.rcc",
+        "title": "Forja Qt: RCC 编译"
       },
       {
-        "command": "compilot.qt.runCustomCommand",
-        "title": "Compilot Qt: 执行自定义命令"
+        "command": "forja.qt.runCustomCommand",
+        "title": "Forja Qt: 执行自定义命令"
       },
       {
-        "command": "compilot.sdk.build",
-        "title": "Compilot SDK: Build",
-        "enablement": "compilot.sdk.activated"
+        "command": "forja.sdk.build",
+        "title": "Forja SDK: Build",
+        "enablement": "forja.sdk.activated"
       },
       {
-        "command": "compilot.sdk.rebuild",
-        "title": "Compilot SDK: Rebuild",
-        "enablement": "compilot.sdk.activated"
+        "command": "forja.sdk.rebuild",
+        "title": "Forja SDK: Rebuild",
+        "enablement": "forja.sdk.activated"
       },
       {
-        "command": "compilot.sdk.clean",
-        "title": "Compilot SDK: Clean",
-        "enablement": "compilot.sdk.activated"
+        "command": "forja.sdk.clean",
+        "title": "Forja SDK: Clean",
+        "enablement": "forja.sdk.activated"
       },
       {
-        "command": "compilot.sdk.selectProject",
-        "title": "Compilot SDK: Select Project",
-        "enablement": "compilot.sdk.activated"
+        "command": "forja.sdk.selectProject",
+        "title": "Forja SDK: Select Project",
+        "enablement": "forja.sdk.activated"
       },
       {
-        "command": "compilot.sdk.showActions",
-        "title": "Compilot SDK: Show Actions",
-        "enablement": "compilot.sdk.activated"
+        "command": "forja.sdk.showActions",
+        "title": "Forja SDK: Show Actions",
+        "enablement": "forja.sdk.activated"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "command": "compilot.qt.openWithQtDesigner",
+          "command": "forja.qt.openWithQtDesigner",
           "when": "resourceExtname == .ui",
           "group": "navigation@100"
         }
@@ -121,16 +121,16 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "compilot",
-          "title": "Compilot",
+          "id": "forja",
+          "title": "Forja",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "compilot": [
+      "forja": [
         {
-          "id": "compilot.configView",
+          "id": "forja.configView",
           "name": "配置",
           "when": "workspaceFolderCount > 0"
         }

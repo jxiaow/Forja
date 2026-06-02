@@ -66,8 +66,8 @@ test('SDK CLI rejects unknown run action', async () => {
 test('SDK CLI accepts use config options', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-use-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-use-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -95,7 +95,7 @@ test('SDK CLI accepts use config options', async () => {
         assert.equal(parsed.resolved.project, 'Makefile');
         assert.equal(parsed.resolved.mode, 'release');
         assert.equal(parsed.resolved.arch, 'x64');
-        assert.deepEqual(parsed.nextActions, ['compilot sdk status --json']);
+        assert.deepEqual(parsed.nextActions, ['forja sdk status --json']);
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
         else { process.env.HOME = oldHome; }
@@ -129,14 +129,14 @@ test('SDK CLI build accepts --plan and routes missing config to status', async (
     assert.equal(process.exitCode, 1);
     assert.equal(parsed.ok, false);
     assert.equal(parsed.action, 'build');
-    assert.deepEqual(parsed.nextActions, ['compilot sdk status --json']);
+    assert.deepEqual(parsed.nextActions, ['forja sdk status --json']);
 });
 
 test('SDK CLI build plan inherits mode and arch saved by use', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-config-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-config-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -185,8 +185,8 @@ test('SDK CLI build plan inherits mode and arch saved by use', async () => {
 test('SDK CLI use updates only explicit fields and build plan inherits saved settings', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-use-inherit-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-use-inherit-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -238,8 +238,8 @@ test('SDK CLI use updates only explicit fields and build plan inherits saved set
 test('SDK CLI use rejects a missing project', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-use-missing-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-use-missing-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -272,8 +272,8 @@ test('SDK CLI init uses the platform default arch when no SDK config exists', as
 
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-default-arch-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-default-arch-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -296,8 +296,8 @@ test('SDK CLI init uses the platform default arch when no SDK config exists', as
 test('SDK CLI use resolves relative --project from workspace', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-project-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-project-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -339,8 +339,8 @@ test('SDK CLI use resolves relative --project from workspace', async () => {
 test('SDK CLI init rejects explicit project options', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-missing-init-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-missing-init-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -371,8 +371,8 @@ test('SDK CLI init rejects explicit project options', async () => {
 test('SDK CLI build plan rejects a stale pinned project instead of building another candidate', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-stale-project-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-stale-project-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -421,8 +421,8 @@ test('SDK CLI build plan rejects a stale pinned project instead of building anot
 test('SDK CLI build plan requires saved SDK config even when one candidate exists', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-no-config-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-no-config-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -436,7 +436,7 @@ test('SDK CLI build plan requires saved SDK config even when one candidate exist
 
         assert.equal(process.exitCode, 1);
         assert.equal(parsed.ok, false);
-        assert.deepEqual(parsed.nextActions, ['compilot sdk status --json']);
+        assert.deepEqual(parsed.nextActions, ['forja sdk status --json']);
         assert.ok(parsed.diagnostics[0].message.includes('尚未初始化'));
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
@@ -449,8 +449,8 @@ test('SDK CLI build plan requires saved SDK config even when one candidate exist
 test('SDK CLI status requires a saved project after init even when one candidate exists', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-status-one-unsaved-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-status-one-unsaved-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -492,7 +492,7 @@ function createSdkProjectFile(workspace: string, relativeDir: string): string {
 }
 
 test('SDK CLI status reports missing project without failing', async () => {
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-status-empty-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-status-empty-'));
     _tmpDirs.push(ws);
 
     const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
@@ -507,7 +507,7 @@ test('SDK CLI status reports missing project without failing', async () => {
 });
 
 test('SDK CLI status reports candidate projects when workspace has multiple projects', async () => {
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-status-multi-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-status-multi-'));
     _tmpDirs.push(ws);
     createSdkProjectFile(ws, 'app');
     createSdkProjectFile(ws, 'lib');
@@ -537,7 +537,7 @@ after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force:
 
 test('scanProjects finds .sln files on Windows', () => {
     if (os.platform() !== 'win32') { return; } // Windows-only
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-scan-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-scan-'));
     _tmpDirs.push(ws);
     fs.writeFileSync(path.join(ws, 'MyApp.sln'), '', 'utf-8');
     fs.mkdirSync(path.join(ws, 'sub'));
@@ -549,7 +549,7 @@ test('scanProjects finds .sln files on Windows', () => {
 });
 
 test('scanProjects excludes node_modules and .git dirs', () => {
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-scan-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-scan-'));
     _tmpDirs.push(ws);
     fs.mkdirSync(path.join(ws, 'node_modules'));
     fs.writeFileSync(path.join(ws, 'node_modules', 'pkg.sln'), '', 'utf-8');
@@ -560,6 +560,6 @@ test('scanProjects excludes node_modules and .git dirs', () => {
 });
 
 test('scanProjects returns empty for non-existent dir', () => {
-    const results = scanProjects(path.join(os.tmpdir(), 'compilot-nonexist-' + Date.now()));
+    const results = scanProjects(path.join(os.tmpdir(), 'forja-nonexist-' + Date.now()));
     assert.deepEqual(results, []);
 });

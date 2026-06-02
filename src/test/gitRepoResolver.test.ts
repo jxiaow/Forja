@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { isGitRepo, resolveGitRoots } from '../core/gitRepoResolver';
 
-const tmpBase = path.join(os.tmpdir(), 'compilot-test-gitresolver-' + process.pid);
+const tmpBase = path.join(os.tmpdir(), 'forja-test-gitresolver-' + process.pid);
 
 function setup() {
     fs.mkdirSync(tmpBase, { recursive: true });

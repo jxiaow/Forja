@@ -1,5 +1,5 @@
 /**
- * 统一配置存储 — 配置文件位于 ~/.compilot/projects/
+ * 统一配置存储 — 配置文件位于 ~/.forja/projects/
  *
  * 纯 IO 逻辑在 settingsIO.ts 中，本模块负责 vscode 集成（workspace 路径、文件监听）。
  * 对外暴露 Qt / SDK / Sync 三个子模块的读写 API。
@@ -7,10 +7,10 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { createLogger } from './logger';
-import { CompilotSettings, QtSettings, SdkSettings, SyncSettings, DEFAULT_SETTINGS, loadQtSettings, loadSdkSettings, loadSyncSettings, saveQtSettings, saveSdkSettings, saveSyncSettings, projectsDir } from '../core/settingsIO';
+import { ForjaSettings, QtSettings, SdkSettings, SyncSettings, DEFAULT_SETTINGS, loadQtSettings, loadSdkSettings, loadSyncSettings, saveQtSettings, saveSdkSettings, saveSyncSettings, projectsDir } from '../core/settingsIO';
 import { resolveProjectRoot } from './workspaceResolver';
 
-export type { CompilotSettings, QtSettings, SdkSettings, SyncSettings } from '../core/settingsIO';
+export type { ForjaSettings, QtSettings, SdkSettings, SyncSettings } from '../core/settingsIO';
 export { DEFAULT_SETTINGS, DEFAULT_QT, DEFAULT_SDK, DEFAULT_SYNC, resolveVsDevShellPath, resolveVsDevCmdPath } from '../core/settingsIO';
 
 const logger = createLogger('SettingsStore');
@@ -18,9 +18,9 @@ const logger = createLogger('SettingsStore');
 type QtKey = keyof QtSettings;
 type SdkKey = keyof SdkSettings;
 type SyncKey = keyof SyncSettings;
-type SettingsListener = (section: 'qt' | 'sdk' | 'sync', key: string, settings: CompilotSettings) => void;
+type SettingsListener = (section: 'qt' | 'sdk' | 'sync', key: string, settings: ForjaSettings) => void;
 
-let _settings: CompilotSettings = { ...DEFAULT_SETTINGS, qt: { ...DEFAULT_SETTINGS.qt }, sdk: { ...DEFAULT_SETTINGS.sdk }, sync: { ...DEFAULT_SETTINGS.sync } };
+let _settings: ForjaSettings = { ...DEFAULT_SETTINGS, qt: { ...DEFAULT_SETTINGS.qt }, sdk: { ...DEFAULT_SETTINGS.sdk }, sync: { ...DEFAULT_SETTINGS.sync } };
 let _loaded = false;
 let _watcher: vscode.FileSystemWatcher | null = null;
 const _listeners: SettingsListener[] = [];
@@ -31,7 +31,7 @@ function _getWorkspace(module: 'qt' | 'sdk' | 'sync' = 'qt'): string | null {
     return root || null;
 }
 
-function _load(): CompilotSettings {
+function _load(): ForjaSettings {
     const qtWs = _getWorkspace('qt');
     const sdkWs = _getWorkspace('sdk');
     const syncWs = _getWorkspace('sync');
@@ -68,7 +68,7 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
     _settings = _load();
     _loaded = true;
 
-    // 监听 ~/.compilot/projects/ 目录下的配置文件变化
+    // 监听 ~/.forja/projects/ 目录下的配置文件变化
     const configDir = projectsDir();
     // 确保目录存在，否则 watcher 无法注册，首次写入不会触发 reload
     if (!fs.existsSync(configDir)) {
@@ -147,7 +147,7 @@ export function setSyncSetting<K extends SyncKey>(key: K, value: SyncSettings[K]
 
 // ── 通用 API ──
 
-export function getAllSettings(): Readonly<CompilotSettings> {
+export function getAllSettings(): Readonly<ForjaSettings> {
     if (!_loaded) { _settings = _load(); _loaded = true; }
     return _settings;
 }

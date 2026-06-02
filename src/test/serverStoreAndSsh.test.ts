@@ -20,18 +20,18 @@ test('createAskpassEnv creates script and returns env with cleanup', () => {
     assert.ok(result, 'should return AskpassEnv');
     assert.ok(result.env.SSH_ASKPASS, 'should set SSH_ASKPASS');
     assert.equal(result.env.SSH_ASKPASS_REQUIRE, 'force');
-    assert.equal(result.env.COMPILOT_SSH_PASS, 'testpass123', 'should set password env var');
+    assert.equal(result.env.FORJA_SSH_PASS, 'testpass123', 'should set password env var');
 
     // Cleanup should remove the script file
     result.cleanup();
-    const scriptPath = path.join(os.tmpdir(), `compilot-askpass-unit-test${process.platform === 'win32' ? '.ps1' : '.sh'}`);
+    const scriptPath = path.join(os.tmpdir(), `forja-askpass-unit-test${process.platform === 'win32' ? '.ps1' : '.sh'}`);
     assert.equal(fs.existsSync(scriptPath), false, 'script should be cleaned up');
 });
 
 test('createAskpassEnv script file exists before cleanup', () => {
     const result = createAskpassEnv('mypass', 'exist-test');
     assert.ok(result);
-    const scriptPath = path.join(os.tmpdir(), `compilot-askpass-exist-test${process.platform === 'win32' ? '.ps1' : '.sh'}`);
+    const scriptPath = path.join(os.tmpdir(), `forja-askpass-exist-test${process.platform === 'win32' ? '.ps1' : '.sh'}`);
     assert.equal(fs.existsSync(scriptPath), true, 'script should exist before cleanup');
     result.cleanup();
 });

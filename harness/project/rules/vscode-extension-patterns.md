@@ -24,7 +24,7 @@ Ensure extension lifecycle, command registration, and resource management follow
 
 ## Design Checklist
 
-- [ ] New command has a unique ID following `compilot.{module}.{action}` pattern
+- [ ] New command has a unique ID following `forja.{module}.{action}` pattern
 - [ ] Webview content uses CSP-compliant inline styles/scripts
 - [ ] Long-running operations show progress via `vscode.window.withProgress`
 
