@@ -41,13 +41,10 @@ test('pre-run kill command fails when the target process is still alive', () => 
     const winKill = winConfig.killCommand('demo');
     const linuxKill = linuxConfig.killCommand('demo');
 
-    assert.match(winKill, /powershell -NoProfile -ExecutionPolicy Bypass -Command/);
-    assert.match(winKill, /\$name='demo'/);
-    assert.match(winKill, /Get-Process -Name \$name/);
-    assert.match(winKill, /Stop-Process -Force/);
-    assert.match(winKill, /Wait-Process -Timeout 5/);
-    assert.match(winKill, /exit 1/);
-    assert.doesNotMatch(winKill, /taskkill \/F \/IM/);
+    assert.match(winKill, /^taskkill \/F \/IM demo\.exe/);
+    assert.match(winKill, /2>nul/);
+    assert.match(winKill, /\|\| ver>nul$/);
+    assert.doesNotMatch(winKill, /powershell/);
     assert.doesNotMatch(winKill, /projectDir/);
     assert.deepEqual(winConfig.stopCommands('demo'), [winKill]);
 
