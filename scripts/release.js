@@ -18,7 +18,7 @@ const version = newPkg.version;
 // 3. commit + tag
 execSync('git add -A', { cwd: root, stdio: 'inherit' });
 execSync(`git commit -m "chore: bump version to ${version}"`, { cwd: root, stdio: 'inherit' });
-execSync(`git tag v${version}`, { cwd: root, stdio: 'inherit' });
+execSync(`git tag -a v${version} -m "v${version}"`, { cwd: root, stdio: 'inherit' });
 
 // 4. push both remotes
 execSync('git push origin master --follow-tags', { cwd: root, stdio: 'inherit' });
