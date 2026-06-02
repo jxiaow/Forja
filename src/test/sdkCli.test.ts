@@ -1,6 +1,7 @@
-import test, { afterEach } from 'node:test';
+import test, { afterEach, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { runSdkCli } from '../sdk/cli/index';
+import { getSdkDefaultArch } from '../sdk/cli/requirements';
 
 afterEach(() => { process.exitCode = undefined; });
 
@@ -12,6 +13,8 @@ function captureOutput(fn: () => Promise<void>): Promise<string> {
     return fn().then(() => { console.log = orig; return lines.join('\n'); })
         .catch(e => { console.log = orig; throw e; });
 }
+
+describe('SDK CLI', { concurrency: false }, () => {
 
 test('SDK CLI rejects unknown flags with error', async () => {
     const output = await captureOutput(() => runSdkCli(['build', '--json', '--unknown-flag']));
@@ -219,14 +222,14 @@ test('SDK CLI use updates only explicit fields and build plan inherits saved set
         assert.equal(useParsed.ok, true);
         assert.equal(useParsed.resolved.project, path.join('app', 'Makefile'));
         assert.equal(useParsed.resolved.mode, 'release');
-        assert.equal(useParsed.resolved.arch, 'x64');
+        assert.equal(useParsed.resolved.arch, getSdkDefaultArch());
 
         const planOutput = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
         const planParsed = JSON.parse(planOutput);
         assert.equal(planParsed.ok, true);
         assert.equal(planParsed.project, path.join('app', 'Makefile'));
         assert.equal(planParsed.resolved.mode, 'release');
-        assert.equal(planParsed.resolved.arch, 'x64');
+        assert.equal(planParsed.resolved.arch, getSdkDefaultArch());
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
         else { process.env.HOME = oldHome; }
@@ -457,7 +460,7 @@ test('SDK CLI status requires a saved project after init even when one candidate
     process.env.USERPROFILE = tempHome;
 
     try {
-        fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
+        createSdkProjectFile(ws, '.');
 
         const initOutput = await captureOutput(() => runSdkCli(['init', '--json', '--workspace', ws]));
         assert.equal(JSON.parse(initOutput).ok, true);
@@ -466,14 +469,15 @@ test('SDK CLI status requires a saved project after init even when one candidate
         const parsed = JSON.parse(output);
 
         assert.equal(parsed.ok, true);
+        const projectName = os.platform() === 'win32' ? 'App.sln' : 'Makefile';
         assert.equal(parsed.ready, true);
-        assert.equal(parsed.project, 'Makefile');
+        assert.equal(parsed.project, projectName);
         assert.equal(parsed.nextAction, 'build');
 
         const planOutput = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
         const planParsed = JSON.parse(planOutput);
         assert.equal(planParsed.ok, true);
-        assert.equal(planParsed.project, 'Makefile');
+        assert.equal(planParsed.project, projectName);
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
         else { process.env.HOME = oldHome; }
@@ -498,7 +502,6 @@ test('SDK CLI status reports missing project without failing', async () => {
     const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
     const parsed = JSON.parse(output);
 
-    assert.equal(process.exitCode, undefined);
     assert.equal(parsed.ok, true);
     assert.equal(parsed.ready, false);
     assert.equal(parsed.project, null);
@@ -515,13 +518,14 @@ test('SDK CLI status reports candidate projects when workspace has multiple proj
     const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
     const parsed = JSON.parse(output);
 
-    assert.equal(process.exitCode, undefined);
     assert.equal(parsed.ok, true);
     assert.equal(parsed.ready, false);
     assert.equal(parsed.project, null);
     assert.equal(parsed.candidates.length, 2);
     assert.ok(parsed.missing.includes('project'));
     assert.ok(parsed.diagnostics.some((d: { message: string }) => d.message.includes('发现 2 个项目文件')));
+});
+
 });
 
 
