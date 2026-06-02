@@ -56,6 +56,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: forja-dist
@@ -65,6 +68,7 @@ jobs:
           mv -f *.vsix *.tgz *.tar.gz _release/ 2>/dev/null || true
       - name: Build release body
         run: |
+          PREV_TAG=$(git tag --sort=-v:refname | head -2 | tail -1)
           cat > _release/body.md << 'BODYEOF'
           ## 下载说明
 
@@ -77,9 +81,11 @@ jobs:
           ## 更新内容
 
           BODYEOF
-          gh api --method POST repos/${{ github.repository }}/releases/generate-notes \
-            --field tag_name=${{ github.ref_name }} \
-            --jq '.body' >> _release/body.md
+          if [ -n "$PREV_TAG" ]; then
+            git log "$PREV_TAG"..HEAD --oneline --no-decorate \
+              --grep='^fix:' --grep='^feat:' --grep='^refactor:' \
+              --grep='^ci:' --grep='^docs:' --grep='^perf:' >> _release/body.md
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Create release
