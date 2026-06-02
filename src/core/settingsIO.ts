@@ -113,30 +113,33 @@ export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'
     return path.join(projectsDir(), `${hash}.json`);
 }
 
+/**
+ * 从当前 workspace 开始向上查找存在的配置文件。
+ * 子目录没有自己的配置时，自动继承父目录的。
+ * 返回找到的第一个配置文件路径，没找到则返回当前 workspace 路径（用于新建）。
+ */
+export function resolveConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string {
+    let current = workspace;
+    for (;;) {
+        const filePath = projectConfigPath(current, type);
+        if (fs.existsSync(filePath)) { return filePath; }
+        const parent = path.dirname(current);
+        if (parent === current) { break; }
+        current = parent;
+    }
+    return projectConfigPath(workspace, type);
+}
+
 // ── Qt 配置读写 ──
 
 export function loadQtSettings(workspace: string): QtSettings {
-    // 先找当前 workspace
-    const filePath = projectConfigPath(workspace, 'qt');
+    const filePath = resolveConfigPath(workspace, 'qt');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeQt(raw);
         }
     } catch { /* file missing or malformed */ }
-
-    // 向上一级查找（子项目继承父目录的 Qt 配置）
-    const parent = path.dirname(workspace);
-    if (parent !== workspace) {
-        const parentPath = projectConfigPath(parent, 'qt');
-        try {
-            if (fs.existsSync(parentPath)) {
-                const raw = JSON.parse(fs.readFileSync(parentPath, 'utf8'));
-                return sanitizeQt(raw);
-            }
-        } catch { /* file missing or malformed */ }
-    }
-
     return { ...DEFAULT_QT };
 }
 
@@ -154,27 +157,13 @@ export function saveQtSettings(workspace: string, settings: QtSettings): void {
 // ── SDK 配置读写 ──
 
 export function loadSdkSettings(workspace: string): SdkSettings {
-    // 先找当前 workspace
-    const filePath = projectConfigPath(workspace, 'sdk');
+    const filePath = resolveConfigPath(workspace, 'sdk');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeSdk(raw);
         }
     } catch { /* file missing or malformed */ }
-
-    // 向上一级查找（子项目继承父目录的 SDK 配置）
-    const parent = path.dirname(workspace);
-    if (parent !== workspace) {
-        const parentPath = projectConfigPath(parent, 'sdk');
-        try {
-            if (fs.existsSync(parentPath)) {
-                const raw = JSON.parse(fs.readFileSync(parentPath, 'utf8'));
-                return sanitizeSdk(raw);
-            }
-        } catch { /* file missing or malformed */ }
-    }
-
     return { ...DEFAULT_SDK };
 }
 
@@ -192,31 +181,16 @@ export function saveSdkSettings(workspace: string, settings: SdkSettings): void 
 // ── Sync 配置读写 ──
 
 /**
- * 加载 sync 配置。向上一级查找：如果当前 workspace 没有 sync 配置，
- * 尝试父目录。
+ * 加载 sync 配置（自动向上查找父目录）。
  */
 export function loadSyncSettings(workspace: string): SyncSettings {
-    // 先找当前 workspace
-    const filePath = projectConfigPath(workspace, 'sync');
+    const filePath = resolveConfigPath(workspace, 'sync');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeSync(raw);
         }
     } catch { /* file missing or malformed */ }
-
-    // 向上一级查找（monorepo 场景：子项目继承父目录的 sync 配置）
-    const parent = path.dirname(workspace);
-    if (parent !== workspace) {
-        const parentPath = projectConfigPath(parent, 'sync');
-        try {
-            if (fs.existsSync(parentPath)) {
-                const raw = JSON.parse(fs.readFileSync(parentPath, 'utf8'));
-                return sanitizeSync(raw);
-            }
-        } catch { /* file missing or malformed */ }
-    }
-
     return { ...DEFAULT_SYNC };
 }
 

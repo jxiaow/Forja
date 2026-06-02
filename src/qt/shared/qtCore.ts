@@ -10,7 +10,7 @@ import { scanProFiles, parseProFile } from './projectScanner';
 import {
     ensureLocalStateDir,
 } from './localState';
-import { loadQtSettings, saveQtSettings, projectConfigPath, QtSettings, resolveVsDevShellPath, inferVsInstall } from '../../core/settingsIO';
+import { loadQtSettings, saveQtSettings, resolveConfigPath, QtSettings, resolveVsDevShellPath, inferVsInstall } from '../../core/settingsIO';
 import { buildRunCommand } from './commandRunner';
 import { resolveRuntimeTarget, validateMakefile } from './runtimeTarget';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from './rccResolver';
@@ -297,11 +297,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const effectiveOptions = options.action === 'init' ? withoutConfigOptions(options) : options;
 
     if (options.action === 'status') {
-        const hasSettings = fs.existsSync(projectConfigPath(workspace, 'qt'))
-            || (() => {
-                const parent = path.dirname(workspace);
-                return parent !== workspace && fs.existsSync(projectConfigPath(parent, 'qt'));
-            })();
+        const hasSettings = fs.existsSync(resolveConfigPath(workspace, 'qt'));
         const selectedProj = settings.pinnedProject;
         const projectRel = selectedProj ? selectedProj.relative : null;
         const projectFull = selectedProj ? path.join(selectedProj.root, selectedProj.relative) : null;
