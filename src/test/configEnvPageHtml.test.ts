@@ -139,8 +139,8 @@ test('environment page is rerendered after async environment detection', () => {
 
 test('environment path selection updates incrementally without replacing dropdown DOM', () => {
     const messageSource = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'messageHandler.ts'), 'utf8');
-    const saveVsCase = messageSource.match(/case 'saveVsPath': \{[\s\S]*?\n        \}/)?.[0] ?? '';
-    const saveQtCase = messageSource.match(/case 'saveQtPath': \{[\s\S]*?\n        \}/)?.[0] ?? '';
+    const saveVsCase = messageSource.match(/case 'saveVsPath': \{[\s\S]*?\n {8}\}/)?.[0] ?? '';
+    const saveQtCase = messageSource.match(/case 'saveQtPath': \{[\s\S]*?\n {8}\}/)?.[0] ?? '';
 
     assert.match(saveVsCase, /setState\('envInfo', env\);[\s\S]*pushEnvUpdate\(\);/);
     assert.match(saveQtCase, /setState\('envInfo', env2\);[\s\S]*pushEnvUpdate\(\);/);
