@@ -3,7 +3,7 @@
   "displayName": "Forja",
   "publisher": "forja",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.45",
+  "version": "0.7.46",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -147,7 +147,7 @@
     "package": "npm run compile && node scripts/package-vs.js",
     "package:cli": "npm run build:cli",
     "package:all": "node scripts/bump-version.js && npm run package && npm run package:cli",
-    "release": "node scripts/bump-version.js && git add -A && git commit -m 'chore: bump version' && git tag v$(node -p \"require('./package.json').version\") && git push origin master --follow-tags && git push github master --follow-tags",
+    "release": "node scripts/release.js",
     "vsix": "vsce package --allow-missing-repository",
     "harness:check": "node harness/core/automation/check-harness.js",
     "harness:ops:init": "node harness/core/operations/create-operation-docs.js"
