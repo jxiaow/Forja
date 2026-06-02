@@ -1,4 +1,4 @@
-name: Package VSIX
+name: Package
 
 on:
   push:
@@ -33,11 +33,20 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
-      - run: npm run package
+      - run: npm run compile
+      - run: node scripts/package-vs.js
+      - run: node scripts/build-cli.js
+      - name: Gather artifacts
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          mkdir -p _release
+          cp dist/forja-${VER}/vs/*.vsix _release/
+          cp dist/forja-${VER}/cli/forja-cli-*.tgz _release/
+          tar czf _release/forja-skills-${VER}.tar.gz skills/
       - uses: actions/upload-artifact@v4
         with:
-          name: forja-vsix
-          path: dist/forja-*/vs/*.vsix
+          name: forja-dist
+          path: _release/*
           if-no-files-found: error
 
   release:
@@ -49,8 +58,21 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: forja-vsix
+          name: forja-dist
       - uses: softprops/action-gh-release@v2
         with:
-          files: "*.vsix"
+          files: |
+            **/*.vsix
+            **/*.tgz
+            **/*.tar.gz
           generate_release_notes: true
+          body: |
+            ## 下载说明
+
+            | 文件 | 用途 |
+            | --- | --- |
+            | `*.vsix` | **VSCode 扩展** — 下载后双击安装，或 VSCode 中 "Install from VSIX" |
+            | `*-cli-*.tgz` | **CLI 命令行工具** — `npm install -g ./forja-cli-*.tgz` |
+            | `*-skills-*.tar.gz` | **AI 助手技能文件** — 解压后复制到 AI 工具的 skills 目录 |
+
+            ## 更新内容

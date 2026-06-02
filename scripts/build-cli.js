@@ -199,9 +199,10 @@ execSync('npm pack', { cwd: tmpBuild, stdio: 'inherit' });
 const tgzFiles = fs.readdirSync(tmpBuild).filter(f => f.endsWith('.tgz'));
 for (const tgz of tgzFiles) {
     const src = path.join(tmpBuild, tgz);
-    const dst = path.join(distCli, tgz);
+    const dstName = `forja-cli-${version}.tgz`;
+    const dst = path.join(distCli, dstName);
     fs.renameSync(src, dst);
-    console.log(`Packed: dist/forja-${version}/cli/${tgz}`);
+    console.log(`Packed: dist/forja-${version}/cli/${dstName}`);
 }
 
 // Remove temp build directory
