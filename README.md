@@ -8,8 +8,8 @@ C++ 项目构建工具链，包含 VSCode 扩展和独立 CLI 两种使用方式
 
 | 组件 | 说明 | 文档 |
 |------|------|------|
-| **VSCode 扩展** | 图形化构建、调试、远程同步 | [docs/README-vscode.md](docs/README-vscode.md) |
-| **CLI** | 命令行构建工具，支持本地构建和远程文件同步 | [docs/README-cli.md](docs/README-cli.md) |
+| **VSCode 扩展** | 图形化构建、调试、同步 | [docs/README-vscode.md](docs/README-vscode.md) |
+| **CLI** | 命令行构建工具，支持本地构建和文件同步 | [docs/README-cli.md](docs/README-cli.md) |
 | **AI Skill** | 为 AI 助手提供构建能力的指令文件 | [skills/forja/README.md](skills/forja/README.md) |
 
 ## 安装
