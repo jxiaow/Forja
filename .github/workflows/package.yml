@@ -59,24 +59,30 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: forja-dist
-      - name: Delete existing release (if any)
+      - name: Build release body
         run: |
-          gh release delete "${{ github.ref_name }}" --yes --repo "${{ github.repository }}" 2>/dev/null || true
+          cat > _release/body.md << 'BODYEOF'
+          ## 下载说明
+
+          | 文件 | 用途 |
+          | --- | --- |
+          | `*.vsix` | **VSCode 扩展** — 下载后双击安装，或 VSCode 中 "Install from VSIX" |
+          | `*-cli-*.tgz` | **CLI 命令行工具** — `npm install -g ./forja-cli-*.tgz` |
+          | `*-skills-*.tar.gz` | **AI 助手技能文件** — 解压后复制到 AI 工具的 skills 目录 |
+
+          ## 更新内容
+
+          BODYEOF
+          gh api repos/${{ github.repository }}/releases/generate-notes \
+            --field tag_name=${{ github.ref_name }} \
+            --jq '.body' >> _release/body.md
         env:
           GH_TOKEN: ${{ github.token }}
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            **/*.vsix
-            **/*.tgz
-            **/*.tar.gz
-          body: |
-            ## 下载说明
-
-            | 文件 | 用途 |
-            | --- | --- |
-            | `*.vsix` | **VSCode 扩展** — 下载后双击安装，或 VSCode 中 "Install from VSIX" |
-            | `*-cli-*.tgz` | **CLI 命令行工具** — `npm install -g ./forja-cli-*.tgz` |
-            | `*-skills-*.tar.gz` | **AI 助手技能文件** — 解压后复制到 AI 工具的 skills 目录 |
-
-            ## 更新内容
+      - name: Create release
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            _release/*.vsix _release/*.tgz _release/*.tar.gz \
+            --repo "${{ github.repository }}" \
+            --notes-file _release/body.md
+        env:
+          GH_TOKEN: ${{ github.token }}
