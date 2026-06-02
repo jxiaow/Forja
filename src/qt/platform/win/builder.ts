@@ -10,8 +10,9 @@ function buildProcessKillCommand(exeName: string): string {
     const imageName = exeName.replace(/\.exe$/i, '') + '.exe';
     // taskkill /F /IM <exe> — 强制终止目标进程
     // 2>nul — 进程不存在时屏蔽错误信息
-    // || ver>nul — 进程不存在时 taskkill 返回非零，确保链继续
-    return `taskkill /F /IM ${imageName} 2>nul || ver>nul`;
+    // ( ... || ver>nul) — 括号强制 CMD 先求值此组，
+    //   避免 || 与 && 同级左结合导致 taskkill 成功时跳过后续整条链
+    return `(taskkill /F /IM ${imageName} 2>nul || ver>nul)`;
 }
 
 export const winConfig: PlatformConfig = {

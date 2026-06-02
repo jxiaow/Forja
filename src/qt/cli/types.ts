@@ -57,6 +57,8 @@ export interface CliResult {
     /** Warning summary: total count and deduplicated breakdown */
     warningSummary?: { total: number; summary: string };
     logFile: string | null;
+    /** build/run --detach 编译步骤的日志路径（成功时也有） */
+    buildLogFile?: string;
     /** run 成功时解析出的可执行文件绝对路径 */
     executablePath?: string;
     /** run --detach 成功时解析出的目标进程 PID */

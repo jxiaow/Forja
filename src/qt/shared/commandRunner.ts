@@ -23,8 +23,9 @@ function cleanDetachScripts(dir: string): void {
 }
 
 /**
- * 将 GBK Buffer 解码为 UTF-8 字符串。
- * MSVC/jom 输出的中文是 GBK 编码，Node.js 默认以 UTF-8 读取会乱码。
+ * 将系统 locale 编码（中文系统 = GBK）的 Buffer 解码为 UTF-8 字符串。
+ * MSVC/jom 输出使用系统默认代码页（无需 chcp 65001），
+ * Node.js 直接读会乱码，此处先按 GBK 解码。
  */
 function decodeWinOutput(buffer: Buffer): string {
     try {
@@ -36,13 +37,11 @@ function decodeWinOutput(buffer: Buffer): string {
 }
 
 /**
- * On Windows, wrap with `chcp 65001` to let MSVC/jom know we prefer UTF-8,
- * but also decode output as GBK as a fallback for tools that ignore the code page.
+ * No-op wrapper kept for compatibility (previously set chcp 65001).
+ * MSVC/jom output encoding is handled by decodeWinOutput using the system
+ * locale encoding (e.g. GBK on zh-CN systems).
  */
 function wrapForUtf8(commandLine: string): string {
-    if (process.platform === 'win32') {
-        return `chcp 65001 >nul && ${commandLine}`;
-    }
     return commandLine;
 }
 
@@ -251,13 +250,15 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         const exec = options.streaming ? executeStreaming : execute;
         const buildResult = await exec(buildLine, result.workspace);
 
+        // Write build log (both on success and failure)
+        ensureLocalStateDir(result.workspace);
+        const buildLogFilePath = logFileFor(result.workspace, 'build');
+        fs.writeFileSync(buildLogFilePath, [`$ ${buildLine}`, '', buildResult.stdout, buildResult.stderr].join('\n'), 'utf8');
+        const combinedOutput = buildResult.stdout + '\n' + buildResult.stderr;
+        const ws = summarizeWarnings(combinedOutput);
+
         if (buildResult.exitCode !== 0) {
             const durationMs = Date.now() - started;
-            ensureLocalStateDir(result.workspace);
-            const filePath = logFileFor(result.workspace, result.action);
-            fs.writeFileSync(filePath, [`$ ${buildLine}`, '', buildResult.stdout, buildResult.stderr].join('\n'), 'utf8');
-            const combinedOutput = buildResult.stdout + '\n' + buildResult.stderr;
-            const ws = summarizeWarnings(combinedOutput);
             return {
                 ...result,
                 ok: false,
@@ -267,7 +268,8 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 stderr: buildResult.stderr,
                 errors: extractErrors(combinedOutput),
                 warningSummary: ws.total > 0 ? ws : undefined,
-                logFile: filePath,
+                logFile: buildLogFilePath,
+                buildLogFile: buildLogFilePath,
                 commands: commandParts,
                 diagnostics: [...result.diagnostics, { level: 'error', message: '编译失败' }]
             };
@@ -347,9 +349,14 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             stdout: buildResult.stdout,
             stderr: '',
             logFile,
+            buildLogFile: buildLogFilePath,
+            warningSummary: ws.total > 0 ? ws : undefined,
             pid,
             commands: commandParts,
-            diagnostics: [{ level: 'info', message: `程序已后台启动 (PID: ${pid})，日志: ${logFile}` }]
+            diagnostics: [
+                { level: 'info', message: `编译日志: ${buildLogFilePath}` },
+                { level: 'info', message: `程序已后台启动 (PID: ${pid})，日志: ${logFile}` }
+            ]
         };
     }
 

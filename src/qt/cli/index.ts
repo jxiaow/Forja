@@ -30,6 +30,8 @@ function compactResult(result: CliResult): Record<string, unknown> {
         && ['run', 'build', 'clean'].includes(result.action);
     if (isDetachSuccess) {
         if (result.resolved) { out.resolved = { mode: result.resolved.mode, arch: result.resolved.arch }; }
+        if (result.buildLogFile) { out.buildLogFile = result.buildLogFile; }
+        if (result.warningSummary) { out.warningSummary = result.warningSummary; }
         return out;
     }
 
