@@ -1,6 +1,6 @@
 ---
 name: forja
-description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run, clean, environment status, or remote sync work through the forja CLI.
+description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run, clean, environment status, or sync work through the forja CLI.
 ---
 
 # forja
@@ -12,7 +12,7 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
 - 基于 qmake 的 Qt/C++ 项目的构建、运行、清理
 - .sln 或 Makefile（含 makefile、GNUmakefile）的 SDK/库项目的构建
 - 需要检测 Qt/VS 环境或项目状态
-- 需要同步变更文件到远程服务器
+- 需要同步变更文件到服务器
 
 ## 不适用
 
@@ -70,7 +70,7 @@ debug/release、x86/x64）且用户未设置过时，必须展示选项让用户
 | `stop` | 停止运行中的程序 | |
 | `ps` | 查看 detach 模式的运行状态 | |
 | `clean` | 清理构建产物 | `--plan` |
-| `sync` | 同步变更文件到远程服务器 | `--server` |
+| `sync` | 同步变更文件到服务器 | `--server` |
 | `rcc` | 编译 .qrc 资源文件 | `--plan` |
 
 ### Qt 通用参数

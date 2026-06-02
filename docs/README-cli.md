@@ -2,7 +2,7 @@
 
 命令行工具用于 C++ 项目的构建、运行和环境管理。
 
-当前 CLI 已实现子命令：`qt`、`sdk`、`cleanup`。`remote` 相关流程仍是设计稿，尚未接入 CLI dispatcher。
+当前 CLI 已实现子命令：`qt`、`sdk`、`cleanup`。
 
 ## 安装
 
@@ -168,7 +168,7 @@ forja qt clean
 
 ### `forja qt sync`
 
-按 git 变更文件同步到已配置的远程服务器。
+按 git 变更文件同步到已配置的服务器。
 
 ```bash
 forja qt sync
@@ -177,11 +177,11 @@ forja qt sync --plan --json
 
 | 选项 | 说明 |
 | --- | --- |
-| `--plan`, `--dry-run` | 预览待同步文件、目标服务器和远程路径，不执行上传 |
+| `--plan`, `--dry-run` | 预览待同步文件、目标服务器和路径，不执行上传 |
 | `--server <name>` | 指定服务器名称，对应 `~/.forja/servers.json` 中的 `name` |
 | `--repo <name>` | 多 git 仓库 workspace 时只同步指定仓库 |
 
-同步配置目前通过 VSCode 配置面板「远程同步」初始化：服务器列表存储在 `~/.forja/servers.json`，当前 workspace 的同步开关、选中服务器、远程路径和忽略列表存储在 `~/.forja/projects/<hash>.json`。
+同步配置目前通过 VSCode 配置面板「同步」初始化：服务器列表存储在 `~/.forja/servers.json`，当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/projects/<hash>.json`。
 
 ### `forja qt rcc`
 
@@ -265,16 +265,6 @@ forja sdk clean
 ```bash
 forja cleanup --json
 ```
-
-## Remote 命令（设计稿，暂未实现）
-
-`forja remote ...`、`qt build --remote`、`sdk build --remote`、远程部署和分阶段远程流水线目前只存在于设计文档中，当前 CLI 入口不会路由这些命令。
-
-已实现的远程相关能力仅限：
-
-- VSCode 配置面板维护服务器列表
-- `forja qt sync` 按本地配置执行文件同步
-- 同步状态写入 `.forja/sync-state.json`
 
 ## 本地状态
 
