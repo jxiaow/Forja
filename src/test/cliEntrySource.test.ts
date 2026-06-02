@@ -23,9 +23,7 @@ test('cli interface spec lists only implemented subcommands as available', () =>
 
 test('cli user guide does not document draft remote commands as implemented', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
-    assert.match(guide, /Remote 命令（设计稿，暂未实现）/);
-    assert.doesNotMatch(guide, /forja remote test --json/);
-    assert.doesNotMatch(guide, /sync-config\.json/);
+    assert.doesNotMatch(guide, /forja remote/);
     assert.doesNotMatch(guide, /\uFFFD/);
 });
 
