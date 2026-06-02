@@ -297,10 +297,14 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const effectiveOptions = options.action === 'init' ? withoutConfigOptions(options) : options;
 
     if (options.action === 'status') {
-        const hasSettings = fs.existsSync(projectConfigPath(workspace, 'qt'));
+        const hasSettings = fs.existsSync(projectConfigPath(workspace, 'qt'))
+            || (() => {
+                const parent = path.dirname(workspace);
+                return parent !== workspace && fs.existsSync(projectConfigPath(parent, 'qt'));
+            })();
         const selectedProj = settings.pinnedProject;
         const projectRel = selectedProj ? selectedProj.relative : null;
-        const projectFull = projectRel ? path.join(workspace, projectRel) : null;
+        const projectFull = selectedProj ? path.join(selectedProj.root, selectedProj.relative) : null;
         const projectExists = projectFull ? fs.existsSync(projectFull) : false;
 
         const unconfirmedBuildConfig = getUnconfirmedBuildConfig(settings);
@@ -717,6 +721,25 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     } else if (options.action === 'run') {
         const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
 
+        // 检查 Makefile 是否最新，过期则先自动跑 qmake
+        let qmakeCmds: string[] = [];
+        if (buildConfig.projectDir && buildConfig.proFile) {
+            const validation = validateMakefile(buildConfig.projectDir, {
+                mode: buildConfig.mode,
+                arch: buildConfig.arch,
+                qtPath: buildConfig.qtPath,
+                proFile: buildConfig.proFile,
+                target: buildConfig.target
+            });
+            if (!validation.exists || !validation.matches) {
+                const reason = !validation.exists
+                    ? '未找到 Makefile'
+                    : `Makefile 与当前配置不匹配（${validation.mismatch!.join(', ')}）`;
+                result.diagnostics.push({ level: 'info', message: `自动 QMake：${reason}` });
+                qmakeCmds = shellBuilder.qmakeCommands(buildConfig).commands;
+            }
+        }
+
         // 检查 rcc 是否需要重编，需要则在 build 前插入 rcc 命令
         let rccCmds: string[] = [];
         const rccPath = resolveRccProjectPath(settings.rccProjectPath || '', workspace);
@@ -741,13 +764,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
                 const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : (target || path.basename(project, '.pro')));
                 const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
-                commands = [killCmd, ...rccCmds, ...buildCmds, runCmd];
+                commands = [killCmd, ...qmakeCmds, ...rccCmds, ...buildCmds, runCmd];
                 result.executablePath = runtimeTarget?.exePath;
             } else {
                 // Makefile not yet generated or mismatched — return build commands with hint to run status
                 const fallbackExeName = runtimeProcessName || target || path.basename(project, '.pro');
                 const fallbackKillCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(fallbackExeName);
-                const fallbackCmds = [fallbackKillCmd, ...buildCmds];
+                const fallbackCmds = [fallbackKillCmd, ...qmakeCmds, ...buildCmds];
                 return {
                     ...result,
                     ok: true,

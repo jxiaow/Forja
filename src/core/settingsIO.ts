@@ -116,6 +116,7 @@ export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'
 // ── Qt 配置读写 ──
 
 export function loadQtSettings(workspace: string): QtSettings {
+    // 先找当前 workspace
     const filePath = projectConfigPath(workspace, 'qt');
     try {
         if (fs.existsSync(filePath)) {
@@ -123,6 +124,19 @@ export function loadQtSettings(workspace: string): QtSettings {
             return sanitizeQt(raw);
         }
     } catch { /* file missing or malformed */ }
+
+    // 向上一级查找（子项目继承父目录的 Qt 配置）
+    const parent = path.dirname(workspace);
+    if (parent !== workspace) {
+        const parentPath = projectConfigPath(parent, 'qt');
+        try {
+            if (fs.existsSync(parentPath)) {
+                const raw = JSON.parse(fs.readFileSync(parentPath, 'utf8'));
+                return sanitizeQt(raw);
+            }
+        } catch { /* file missing or malformed */ }
+    }
+
     return { ...DEFAULT_QT };
 }
 
@@ -140,6 +154,7 @@ export function saveQtSettings(workspace: string, settings: QtSettings): void {
 // ── SDK 配置读写 ──
 
 export function loadSdkSettings(workspace: string): SdkSettings {
+    // 先找当前 workspace
     const filePath = projectConfigPath(workspace, 'sdk');
     try {
         if (fs.existsSync(filePath)) {
@@ -147,6 +162,19 @@ export function loadSdkSettings(workspace: string): SdkSettings {
             return sanitizeSdk(raw);
         }
     } catch { /* file missing or malformed */ }
+
+    // 向上一级查找（子项目继承父目录的 SDK 配置）
+    const parent = path.dirname(workspace);
+    if (parent !== workspace) {
+        const parentPath = projectConfigPath(parent, 'sdk');
+        try {
+            if (fs.existsSync(parentPath)) {
+                const raw = JSON.parse(fs.readFileSync(parentPath, 'utf8'));
+                return sanitizeSdk(raw);
+            }
+        } catch { /* file missing or malformed */ }
+    }
+
     return { ...DEFAULT_SDK };
 }
 
