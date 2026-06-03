@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forja</title>
+<link rel="icon" href="./media/icon.png">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<header>
+<div class="container nav">
+    <a class="brand" href="./index.html">
+        <img src="./media/icon.png" alt="Forja">
+        <span>Forja</span>
+    </a>
+    <nav class="nav-links">
+        <a href="https://github.com/jxiaow/Forja">GitHub</a>
+        <a href="https://github.com/jxiaow/Forja/blob/master/docs/README-vscode.md">VSCode</a>
+        <a href="https://github.com/jxiaow/Forja/blob/master/docs/README-cli.md">CLI</a>
+    </nav>
+</div>
+</header>
+
+<main>
+<section class="hero container">
+    <div class="kicker">VSCode Extension · CLI · AI Skill</div>
+
+    <h1>Build. Sync. Automate.</h1>
+
+    <p>
+        Forja 将 Qt / SDK 项目的构建、环境同步与开发流程收拢到统一入口，
+        让 VSCode、命令行与 AI 助手使用同一套项目能力。
+    </p>
+
+    <div class="buttons">
+        <a class="btn primary" href="https://github.com/jxiaow/Forja">View on GitHub</a>
+        <a class="btn" href="https://github.com/jxiaow/Forja/blob/master/docs/README-vscode.md">VSCode 文档</a>
+        <a class="btn" href="https://github.com/jxiaow/Forja/blob/master/docs/README-cli.md">CLI 文档</a>
+    </div>
+</section>
+
+<section class="workflow-wrap container">
+    <div class="workflow-head">
+        <h2>Real workflow commands</h2>
+        <p>Qt 与 SDK 项目的常用流程，来自 Forja CLI 文档。</p>
+    </div>
+
+    <div class="workflow-section">
+        <div class="terminal-card">
+            <div class="terminal-title">
+                <span class="dots"><i></i><i></i><i></i></span>
+                Qt Project
+            </div>
+<pre><span class="comment"># check environment</span>
+$ forja qt status
+
+<span class="comment"># initialize project config</span>
+$ forja qt init
+
+<span class="comment"># switch build mode</span>
+$ forja qt use --mode release
+
+<span class="comment"># build and run</span>
+$ forja qt build
+$ forja qt run</pre>
+        </div>
+
+        <div class="terminal-card">
+            <div class="terminal-title">
+                <span class="dots"><i></i><i></i><i></i></span>
+                SDK Project
+            </div>
+<pre><span class="comment"># check SDK configuration</span>
+$ forja sdk status
+
+<span class="comment"># initialize SDK project</span>
+$ forja sdk init
+
+<span class="comment"># build SDK project</span>
+$ forja sdk build
+
+<span class="comment"># inspect available projects</span>
+$ forja qt projects</pre>
+        </div>
+    </div>
+</section>
+
+<section class="section container">
+    <div class="section-title">
+        <h2>核心模块</h2>
+        <p>围绕项目构建与开发流程打造。</p>
+    </div>
+
+    <div class="grid">
+        <a class="card" href="https://github.com/jxiaow/Forja/blob/master/docs/README-vscode.md">
+            <div class="icon">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M4 6.5 9 4l10 5v6l-10 5-5-2.5v-11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M9 4v16" stroke="currentColor" stroke-width="2"/>
+                </svg>
+            </div>
+            <h3>VSCode Extension</h3>
+            <p>图形化构建、调试与环境同步，让常用流程可以在编辑器里完成。</p>
+        </a>
+
+        <a class="card" href="https://github.com/jxiaow/Forja/blob/master/docs/README-cli.md">
+            <div class="icon">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
+                    <path d="M7 10l3 2.5L7 15M13 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <h3>CLI</h3>
+            <p>提供统一命令入口，适合自动化构建、脚本集成与批量操作。</p>
+        </a>
+
+        <a class="card" href="https://github.com/jxiaow/Forja/blob/master/skills/forja/README.md">
+            <div class="icon">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8L18 15Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <h3>AI Skill</h3>
+            <p>为 AI 助手提供统一的项目操作说明，减少构建流程里的猜测。</p>
+        </a>
+    </div>
+</section>
+</main>
+
+<footer>
+<div class="container">
+    Forja · MIT License · © 2026
+</div>
+</footer>
+
+</body>
+</html>
