@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-lang="zh">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,36 +15,74 @@
         <img src="./media/icon.png" alt="Forja">
         <span>Forja</span>
     </a>
+
     <nav class="nav-links">
         <a href="https://github.com/jxiaow/Forja">GitHub</a>
         <a href="https://github.com/jxiaow/Forja/blob/master/docs/README-vscode.md">VSCode</a>
         <a href="https://github.com/jxiaow/Forja/blob/master/docs/README-cli.md">CLI</a>
     </nav>
+
+    <div class="lang-switch" aria-label="Language switch">
+        <button type="button" data-set-lang="zh" class="active">中文</button>
+        <button type="button" data-set-lang="en">EN</button>
+    </div>
 </div>
 </header>
 
 <main>
 <section class="hero container">
-    <div class="kicker">VSCode Extension · CLI · AI Skill</div>
+    <div class="kicker">
+        <span class="zh">VSCode 扩展 · CLI · AI Skill</span>
+        <span class="en">VSCode Extension · CLI · AI Skill</span>
+    </div>
 
     <h1>Build. Sync. Automate.</h1>
 
     <p>
-        Forja 将 Qt / SDK 项目的构建、环境同步与开发流程收拢到统一入口，
-        让 VSCode、命令行与 AI 助手使用同一套项目能力。
+        <span class="zh">Forja 将 Qt / SDK 项目的构建、环境同步与开发流程收拢到统一入口，让 VSCode、命令行与 AI 助手使用同一套项目能力。</span>
+        <span class="en">Forja unifies build, environment synchronization, and project automation for Qt / SDK projects across VSCode, CLI, and AI assistants.</span>
     </p>
 
     <div class="buttons">
         <a class="btn primary" href="https://github.com/jxiaow/Forja">View on GitHub</a>
-        <a class="btn" href="https://github.com/jxiaow/Forja/blob/master/docs/README-vscode.md">VSCode 文档</a>
-        <a class="btn" href="https://github.com/jxiaow/Forja/blob/master/docs/README-cli.md">CLI 文档</a>
+        <a class="btn" href="https://github.com/jxiaow/Forja/blob/master/docs/README-vscode.md">
+            <span class="zh">VSCode 文档</span>
+            <span class="en">VSCode Docs</span>
+        </a>
+        <a class="btn" href="https://github.com/jxiaow/Forja/blob/master/docs/README-cli.md">
+            <span class="zh">CLI 文档</span>
+            <span class="en">CLI Docs</span>
+        </a>
+    </div>
+</section>
+
+<section class="container">
+    <div class="harness-card">
+        <div class="label">
+            <span class="zh">开发流程说明</span>
+            <span class="en">Development workflow</span>
+        </div>
+        <h2>
+            <span class="zh">Forja 基于 agent-harness 流程开发</span>
+            <span class="en">Forja is developed with the agent-harness workflow</span>
+        </h2>
+        <p>
+            <span class="zh">项目开发过程参考并实践了 <a href="https://github.com/jxiaow/agent-harness">agent-harness</a> 中的 AI 编程流程：通过明确需求、约束、构建验证与自动化检查，让 AI 辅助开发更可控、更容易复现。</span>
+            <span class="en">The project follows the AI-assisted development workflow from <a href="https://github.com/jxiaow/agent-harness">agent-harness</a>, using explicit requirements, constraints, build verification, and automated checks to make AI-assisted development more controllable and reproducible.</span>
+        </p>
     </div>
 </section>
 
 <section class="workflow-wrap container">
     <div class="workflow-head">
-        <h2>Real workflow commands</h2>
-        <p>Qt 与 SDK 项目的常用流程，来自 Forja CLI 文档。</p>
+        <h2>
+            <span class="zh">真实工作流命令</span>
+            <span class="en">Real workflow commands</span>
+        </h2>
+        <p>
+            <span class="zh">Qt 与 SDK 项目的常用流程，来自 Forja CLI 文档。</span>
+            <span class="en">Common Qt and SDK workflows from the Forja CLI documentation.</span>
+        </p>
     </div>
 
     <div class="workflow-section">
@@ -89,8 +127,14 @@ $ forja qt projects</pre>
 
 <section class="section container">
     <div class="section-title">
-        <h2>核心模块</h2>
-        <p>围绕项目构建与开发流程打造。</p>
+        <h2>
+            <span class="zh">核心模块</span>
+            <span class="en">Core modules</span>
+        </h2>
+        <p>
+            <span class="zh">围绕项目构建与开发流程打造。</span>
+            <span class="en">Designed around project build and development workflows.</span>
+        </p>
     </div>
 
     <div class="grid">
@@ -102,7 +146,10 @@ $ forja qt projects</pre>
                 </svg>
             </div>
             <h3>VSCode Extension</h3>
-            <p>图形化构建、调试与环境同步，让常用流程可以在编辑器里完成。</p>
+            <p>
+                <span class="zh">图形化构建、调试与环境同步，让常用流程可以在编辑器里完成。</span>
+                <span class="en">Graphical build, debugging, and environment synchronization directly inside the editor.</span>
+            </p>
         </a>
 
         <a class="card" href="https://github.com/jxiaow/Forja/blob/master/docs/README-cli.md">
@@ -113,7 +160,10 @@ $ forja qt projects</pre>
                 </svg>
             </div>
             <h3>CLI</h3>
-            <p>提供统一命令入口，适合自动化构建、脚本集成与批量操作。</p>
+            <p>
+                <span class="zh">提供统一命令入口，适合自动化构建、脚本集成与批量操作。</span>
+                <span class="en">A unified command entry for automated builds, script integration, and batch operations.</span>
+            </p>
         </a>
 
         <a class="card" href="https://github.com/jxiaow/Forja/blob/master/skills/forja/README.md">
@@ -124,7 +174,10 @@ $ forja qt projects</pre>
                 </svg>
             </div>
             <h3>AI Skill</h3>
-            <p>为 AI 助手提供统一的项目操作说明，减少构建流程里的猜测。</p>
+            <p>
+                <span class="zh">为 AI 助手提供统一的项目操作说明，减少构建流程里的猜测。</span>
+                <span class="en">Provides consistent project instructions for AI assistants and reduces guesswork in build workflows.</span>
+            </p>
         </a>
     </div>
 </section>
@@ -135,6 +188,24 @@ $ forja qt projects</pre>
     Forja · MIT License · © 2026
 </div>
 </footer>
+
+<script>
+const root = document.documentElement;
+const buttons = document.querySelectorAll("[data-set-lang]");
+const saved = localStorage.getItem("forja-lang");
+const browserZh = navigator.language && navigator.language.toLowerCase().startsWith("zh");
+const initial = saved || (browserZh ? "zh" : "en");
+
+function setLang(lang){
+    root.setAttribute("data-lang", lang);
+    root.setAttribute("lang", lang === "zh" ? "zh-CN" : "en");
+    localStorage.setItem("forja-lang", lang);
+    buttons.forEach(btn => btn.classList.toggle("active", btn.dataset.setLang === lang));
+}
+
+buttons.forEach(btn => btn.addEventListener("click", () => setLang(btn.dataset.setLang)));
+setLang(initial);
+</script>
 
 </body>
 </html>
