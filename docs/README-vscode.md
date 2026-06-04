@@ -51,7 +51,7 @@ code --install-extension forja-x.x.x.vsix
 | Forja Qt: 调试 | 编译并调试 |
 | Forja Qt: RCC 编译 | 编译 .qrc 资源 |
 | Forja Qt: 用 Qt Designer 打开 | 打开 .ui 文件 |
-| Forja Qt: 同步变更文件 | SCP 上传变更 |
+| Forja: 同步变更文件 | SCP 上传变更（workspace 通用） |
 | Forja Qt: 测试连接 | 测试 SSH 连接 |
 | Forja SDK: Build | 编译 SDK 项目 |
 | Forja SDK: Rebuild | 重新编译 |

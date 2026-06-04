@@ -6,6 +6,12 @@ import { createLoggerBase } from './loggerBase';
 
 const logger = createLoggerBase('SyncState');
 
+export interface SyncTargetContext {
+    serverId: string;
+    serverName?: string;
+    remotePath: string;
+}
+
 interface SyncRecord {
     /** 上次同步成功时文件的 mtime (ms) */
     mtime: number;
@@ -23,6 +29,28 @@ function _stateFilePath(workspaceRoot: string): string {
     const normalized = workspaceRoot.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
     return path.join(os.homedir(), '.forja', 'sync', `${hash}.json`);
+}
+
+function _normalizeRemotePath(remotePath: string): string {
+    return remotePath.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+function _targetPrefix(context: SyncTargetContext): string {
+    return `target:${encodeURIComponent(context.serverId)}:${encodeURIComponent(_normalizeRemotePath(context.remotePath))}:`;
+}
+
+function _stateKey(relativePath: string, context?: SyncTargetContext): string {
+    if (!context) { return relativePath; }
+    return `${_targetPrefix(context)}${relativePath}`;
+}
+
+function _relativePathFromStateKey(key: string): string {
+    if (!key.startsWith('target:')) { return key; }
+    const first = key.indexOf(':', 'target:'.length);
+    if (first < 0) { return key; }
+    const second = key.indexOf(':', first + 1);
+    if (second < 0) { return key; }
+    return key.slice(second + 1);
 }
 
 function _readState(workspaceRoot: string): SyncStateData {
@@ -55,9 +83,9 @@ function _writeState(workspaceRoot: string, state: SyncStateData): void {
 /**
  * 判断文件是否需要同步：当前 mtime 比上次同步记录的 mtime 新
  */
-export function needsSync(workspaceRoot: string, relativePath: string): boolean {
+export function needsSync(workspaceRoot: string, relativePath: string, context?: SyncTargetContext): boolean {
     const state = _readState(workspaceRoot);
-    const record = state.files[relativePath];
+    const record = state.files[_stateKey(relativePath, context)];
     if (!record) {
         return true;
     }
@@ -75,12 +103,12 @@ export function needsSync(workspaceRoot: string, relativePath: string): boolean 
 /**
  * 批量过滤：返回需要同步的文件列表
  */
-export function filterNeedsSync(workspaceRoot: string, files: string[]): string[] {
+export function filterNeedsSync(workspaceRoot: string, files: string[], context?: SyncTargetContext): string[] {
     const state = _readState(workspaceRoot);
     const result: string[] = [];
 
     for (const relativePath of files) {
-        const record = state.files[relativePath];
+        const record = state.files[_stateKey(relativePath, context)];
         if (!record) {
             result.push(relativePath);
             continue;
@@ -103,12 +131,12 @@ export function filterNeedsSync(workspaceRoot: string, files: string[]): string[
 /**
  * 标记文件已同步成功
  */
-export function markSynced(workspaceRoot: string, relativePath: string): void {
+export function markSynced(workspaceRoot: string, relativePath: string, context?: SyncTargetContext): void {
     const state = _readState(workspaceRoot);
     const absPath = path.join(workspaceRoot, relativePath);
     try {
         const stat = fs.statSync(absPath);
-        state.files[relativePath] = {
+        state.files[_stateKey(relativePath, context)] = {
             mtime: stat.mtimeMs,
             syncedAt: new Date().toISOString()
         };
@@ -121,7 +149,7 @@ export function markSynced(workspaceRoot: string, relativePath: string): void {
 /**
  * 批量标记已同步
  */
-export function markSyncedBatch(workspaceRoot: string, files: string[]): void {
+export function markSyncedBatch(workspaceRoot: string, files: string[], context?: SyncTargetContext): void {
     const state = _readState(workspaceRoot);
     const now = new Date().toISOString();
 
@@ -129,7 +157,7 @@ export function markSyncedBatch(workspaceRoot: string, files: string[]): void {
         const absPath = path.join(workspaceRoot, relativePath);
         try {
             const stat = fs.statSync(absPath);
-            state.files[relativePath] = {
+            state.files[_stateKey(relativePath, context)] = {
                 mtime: stat.mtimeMs,
                 syncedAt: now
             };
@@ -140,7 +168,7 @@ export function markSyncedBatch(workspaceRoot: string, files: string[]): void {
 
     // 清理本地已不存在的文件条目
     for (const key of Object.keys(state.files)) {
-        const absPath = path.join(workspaceRoot, key);
+        const absPath = path.join(workspaceRoot, _relativePathFromStateKey(key));
         if (!fs.existsSync(absPath)) {
             delete state.files[key];
         }

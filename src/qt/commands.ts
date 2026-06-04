@@ -11,7 +11,7 @@ import { getWorkspaceRoot, getManualProPath, getDesignerPath, getQtPath } from '
 import { selectProject, parseProFile } from './project/projectManager';
 import { startDebug } from './build/debugger';
 import { showUnifiedActions } from '../ui/unifiedStatusBar';
-import { executeSyncChangedFiles, executeTestConnection } from './sync/syncWatcher';
+import { executeSyncChangedFiles, executeTestConnection } from '../sync/syncWatcher';
 import { ensureLocalStateDir } from './shared/localState';
 import { createLogger } from '../vscode/logger';
 import { ConfigPageManager } from '../ui/configPanel/configPagePanel';
@@ -96,8 +96,8 @@ export function registerQtCommands(context: vscode.ExtensionContext, panel: Conf
             });
             proc.unref();
         }],
-        ['forja.qt.syncTestConnection', () => executeTestConnection()],
-        ['forja.qt.syncChangedFiles', () => executeSyncChangedFiles()],
+        ['forja.syncTestConnection', () => executeTestConnection()],
+        ['forja.syncChangedFiles', () => executeSyncChangedFiles()],
         ['forja.qt.rcc', () => buildManager.rcc()],
         ['forja.qt.runCustomCommand', (name: string, command: string) => buildManager.runCustomCommand(name, command)]
     ];

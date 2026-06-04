@@ -21,6 +21,31 @@ jobs:
       - run: npm run lint
       - run: npm test
 
+  artifact-package:
+    if: github.event_name == 'workflow_dispatch'
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run package:all
+      - name: Gather artifact package
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          mkdir -p _artifact
+          cp dist/forja-${VER}/vs/*.vsix _artifact/
+          cp dist/forja-${VER}/cli/forja-cli-*.tgz _artifact/
+          tar czf _artifact/forja-skills-${VER}.tar.gz skills/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forja-package-${{ github.run_number }}
+          path: _artifact/*
+          if-no-files-found: error
+
   build:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest

@@ -1,6 +1,6 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'ps', 'rcc'];
+const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'ps', 'rcc'];
 
 const helpText = `Forja Qt CLI — qmake 项目构建工具
 
@@ -18,7 +18,6 @@ const helpText = `Forja Qt CLI — qmake 项目构建工具
   run         构建并运行
   stop        停止运行中的程序
   ps          查看后台运行状态
-  sync        同步变更文件到远程服务器（基于 git diff）
   rcc         编译 .qrc 资源文件为 .rcc 二进制
 
 通用选项:
@@ -35,13 +34,9 @@ use 选项:
   --target <name>        指定 QMake TARGET 覆盖
 
 执行选项:
-  --plan                 仅生成命令计划，不执行（init/use/qmake/build/run/clean/sync/rcc）
+  --plan                 仅生成命令计划，不执行（init/use/qmake/build/run/clean/rcc）
   --dry-run              （兼容旧版，等同于 --plan）
   --detach               run 成功构建后后台启动程序
-
-sync 选项:
-  --server <name>        同步时指定服务器名称
-  --repo <name>          同步时指定子仓库名称（多仓库工作区）
 
 示例:
   forja qt status --json            查看配置状态和下一步
@@ -51,7 +46,6 @@ sync 选项:
   forja qt build --plan             查看构建命令（不执行）
   forja qt run --detach             后台构建并运行
   forja qt ps --json                查看后台运行状态
-  forja qt sync                     同步变更文件到远程
   forja qt status                   查看当前状态
 `;
 
@@ -77,8 +71,6 @@ const knownFlags = new Set([
     '--qt-path',
     '--vs-dev-shell',
     '--target',
-    '--server',
-    '--repo',
     '--detach',
     '--json'
 ]);
@@ -97,7 +89,6 @@ const actionAllowedFlags: Record<CliAction, Set<string>> = {
     clean: new Set([...commonFlags, ...planFlags]),
     run: new Set([...commonFlags, ...planFlags, '--detach']),
     stop: new Set(commonFlags),
-    sync: new Set([...commonFlags, ...planFlags, '--server', '--repo']),
     ps: new Set(commonFlags),
     rcc: new Set([...commonFlags, ...planFlags])
 };
@@ -151,8 +142,6 @@ export function parseCliArgs(args: string[]): CliOptions {
         qtPath: null,
         vsDevShell: null,
         target: null,
-        server: null,
-        repo: null,
         detach: false,
         saveLocal: false,
         json: false
@@ -196,14 +185,6 @@ export function parseCliArgs(args: string[]): CliOptions {
                 break;
             case '--target':
                 options.target = readValue(args, i, arg);
-                i++;
-                break;
-            case '--server':
-                options.server = readValue(args, i, arg);
-                i++;
-                break;
-            case '--repo':
-                options.repo = readValue(args, i, arg);
                 i++;
                 break;
             case '--detach':

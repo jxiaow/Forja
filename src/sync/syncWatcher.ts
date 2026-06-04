@@ -1,18 +1,22 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getResolvedConfig, ResolvedSyncConfig } from './resolver';
-import { readServers, readProjectSyncConfig, ServerConfig } from '../../core/serverStore';
+import { readServers, readProjectSyncConfig, ServerConfig } from '../core/serverStore';
 import { syncChangedFiles, askPassword, clearPasswordCache } from './sftpClient';
 import { testConnection } from './transport';
-import { getWorkspaceRoot } from '../services/configService';
-import { createLogger } from '../../vscode/logger';
-import { resolveGitRoots } from '../../core/gitRepoResolver';
-import { onSettingsChange } from '../../vscode/settingsStore';
+import { resolveProjectRoot } from '../vscode/workspaceResolver';
+import { createLogger } from '../vscode/logger';
+import { resolveGitRoots } from '../core/gitRepoResolver';
+import { onSettingsChange } from '../vscode/settingsStore';
 
 const logger = createLogger('SyncManager');
 
 let _statusItem: vscode.StatusBarItem | null = null;
 const _hostKeyWarningShown = new Set<string>();
+
+function getWorkspaceRoot(): string {
+    return resolveProjectRoot('sync');
+}
 
 /** 首次连接时提示用户 StrictHostKeyChecking 状态（已禁用） */
 function _warnHostKeyCheckingIfNeeded(_server: ServerConfig): void {
@@ -64,11 +68,11 @@ function _refreshStatusBar(): void {
     if (resolved) {
         _statusItem.text = '$(cloud-upload)';
         _statusItem.tooltip = `Forja: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
-        _statusItem.command = 'forja.qt.syncChangedFiles';
+        _statusItem.command = 'forja.syncChangedFiles';
     } else {
         _statusItem.text = '$(cloud)';
         _statusItem.tooltip = 'Forja: 同步未就绪，点击配置远程服务器';
-        _statusItem.command = 'forja.qt.showSyncTab';
+        _statusItem.command = 'forja.showSyncTab';
     }
     _statusItem.show();
 }
@@ -148,6 +152,12 @@ export async function executeSyncChangedFiles(): Promise<void> {
                 totalUploaded += result.uploaded.length;
                 totalSkipped += result.skipped.length;
                 totalFailed.push(...result.failed.map(f => ({ file: `${gitName}/${f.file}`, error: f.error })));
+            }
+
+            if (token.isCancellationRequested) {
+                vscode.window.showWarningMessage(`同步已取消: ${totalUploaded} 个文件已上传${totalSkipped > 0 ? `，${totalSkipped} 个已跳过` : ''}`);
+                logger.info(`同步已取消: 上传=${totalUploaded}, 跳过=${totalSkipped}, 失败=${totalFailed.length}`);
+                return;
             }
 
             if (totalUploaded === 0 && totalFailed.length === 0 && totalSkipped === 0) {

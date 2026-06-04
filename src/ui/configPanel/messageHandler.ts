@@ -6,7 +6,7 @@ import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig } from '../../core/serverStore';
-import { executeTestConnection, refreshSyncStatusBar } from '../../qt/sync/syncWatcher';
+import { executeTestConnection, refreshSyncStatusBar } from '../../sync/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
 import { setSdkSetting } from '../../vscode/settingsStore';
 import { getDefaultArch, isWindows } from '../../sdk/platform';
@@ -329,7 +329,7 @@ export async function handleMessage(
         }
         case 'syncNow': {
             logger.info('手动触发同步');
-            await vscode.commands.executeCommand('forja.qt.syncChangedFiles');
+            await vscode.commands.executeCommand('forja.syncChangedFiles');
             break;
         }
         case 'testSyncConnection': {
@@ -349,7 +349,7 @@ export async function handleMessage(
                 password: msg.server.password || ''
             };
             try {
-                const { testConnection } = await import('../../qt/sync/transport');
+                const { testConnection } = await import('../../sync/transport');
                 const tempServerConfig = {
                     id: '', name: 'test', ...testServer, strictHostKeyChecking: false
                 };

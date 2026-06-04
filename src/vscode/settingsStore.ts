@@ -26,8 +26,7 @@ let _watcher: vscode.FileSystemWatcher | null = null;
 const _listeners: SettingsListener[] = [];
 
 function _getWorkspace(module: 'qt' | 'sdk' | 'sync' = 'qt'): string | null {
-    // sync 跟随 qt 的 workspace
-    const root = resolveProjectRoot(module === 'sync' ? 'qt' : module);
+    const root = resolveProjectRoot(module);
     return root || null;
 }
 

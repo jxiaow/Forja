@@ -166,13 +166,13 @@ forja qt stop
 forja qt clean
 ```
 
-### `forja qt sync`
+### `forja sync`
 
 按 git 变更文件同步到已配置的服务器。
 
 ```bash
-forja qt sync
-forja qt sync --plan --json
+forja sync
+forja sync --plan --json
 ```
 
 | 选项 | 说明 |

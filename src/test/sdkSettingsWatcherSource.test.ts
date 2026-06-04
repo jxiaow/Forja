@@ -21,7 +21,7 @@ test('workspace resolver watches unified project config files instead of old wor
 });
 
 test('sync watcher refreshes status from unified settings changes', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'sync', 'syncWatcher.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'sync', 'syncWatcher.ts'), 'utf8');
 
     assert.match(source, /onSettingsChange/);
     assert.match(source, /section === 'sync'/);

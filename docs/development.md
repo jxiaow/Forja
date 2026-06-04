@@ -112,19 +112,23 @@ npm run package:cli
 由 `scripts/build-cli.js` 从 `out/` 中提取 CLI 所需文件，组装为独立 npm 包。
 
 包含内容：
-- `cli/` — 统一入口（forja qt/sdk 分发）
+- `cli/` — 统一入口（forja qt/sdk/sync 分发）
 - `qt/cli/` — Qt CLI 逻辑
 - `qt/shared/` — 核心逻辑（命令规划、环境检测、配置解析）
 - `qt/env/` — 环境检测
 - `qt/platform/` — 平台配置（仅 CLI 可用的 win/linux 子模块和纯函数）
-- `qt/sync/` — 远程同步（不依赖 vscode）
+- `sync/` — 通用远程同步（VSCode 编排 + 纯 Node CLI sync 入口）
 - `sdk/cli/` — SDK CLI 逻辑
 - `core/` — 纯 Node 日志、配置 IO、同步状态和 SSH 工具
 
 分发方式：
 - 全局安装：`npm install -g dist/forja-cli-x.x.x.tgz`
 
-安装后提供 `forja` 命令，支持 `forja qt ...` 和 `forja sdk ...` 子命令。
+安装后提供 `forja` 命令，支持 `forja qt ...`、`forja sdk ...` 和 `forja sync ...` 子命令。
+
+### 3. GitHub Actions Artifact（不发布 Release）
+
+需要给测试人员下载预览包时，手动触发 GitHub Actions 的 `Package` workflow（`workflow_dispatch`）。该流程会运行检查并执行 `npm run package:all`，然后把 VSIX、CLI tgz 和 skills 压缩包上传为 Actions Artifact；不会创建 GitHub Release。
 
 ---
 
@@ -192,7 +196,6 @@ forja/
 │   │   ├── env/                # Qt/VS 环境检测
 │   │   ├── platform/           # 平台抽象（win/linux）、ShellPlan 构建
 │   │   ├── shared/             # 不依赖 vscode 的逻辑（供 CLI 复用）
-│   │   ├── sync/               # 远程同步（SCP + git diff）
 │   │   └── cli/                # Qt CLI 入口和参数解析
 │   ├── sdk/                    # SDK 模块
 │   │   ├── sdkExtension.ts     # SDK 模块入口（activateSdk）
@@ -204,7 +207,8 @@ forja/
 │   │   ├── statusBar.ts        # 状态栏按钮
 │   │   ├── statusBarLabels.ts  # 状态栏标签文本
 │   │   └── configPanel/        # Webview 配置面板
-│   ├── cli/                    # 统一 CLI 入口（forja qt/sdk 分发）
+│   ├── sync/                   # 通用远程同步（VSCode 编排 + CLI sync）
+│   ├── cli/                    # 统一 CLI 入口（forja qt/sdk/sync 分发）
 │   └── test/                   # 单元测试（node:test）
 ├── out/                        # 编译输出（gitignored）
 ├── dist/                       # 打包产物（gitignored）
@@ -229,22 +233,24 @@ forja/
 
 ## 远程同步模块
 
-`src/qt/sync/` 目录实现远程同步功能：
+`src/sync/` 目录实现通用远程同步功能，VSCode 编排和 CLI 同步入口都在这里，CLI 文件保持纯 Node、不能依赖 `vscode`：
 
 | 文件 | 职责 |
 |------|------|
 | `syncWatcher.ts` | 扩展侧：状态栏按钮、配置监听、触发同步 |
 | `sftpClient.ts` | 编排层：re-export serverStore + resolver |
-| `transport.ts` | SSH/SCP 传输操作 |
-| `syncState.ts` | 同步状态记录，跟踪文件 mtime 避免重复上传 |
+| `transport.ts` | VSCode 侧连接测试 + re-export 共享传输 |
+| `cli.ts` | CLI 侧：独立同步逻辑（不依赖 vscode） |
+| `core/syncState.ts` | 同步状态记录，跟踪文件 mtime 避免重复上传 |
 
 核心存储已迁移到 `src/core/`：
 
 | 文件 | 职责 |
 |------|------|
 | `core/serverStore.ts` | 服务器配置存储（全局 `~/.forja/servers.json`） |
-| `core/syncCli.ts` | CLI 侧：独立同步逻辑（不依赖 vscode） |
+| `sync/cli.ts` | CLI 侧：独立同步逻辑（不依赖 vscode） |
 | `core/ssh.ts` | SSH/SCP 参数构建 + ASKPASS 认证 |
+| `core/sshTransport.ts` | CLI/VSCode 共用 SSH/SCP 传输 |
 
 ### 数据流
 

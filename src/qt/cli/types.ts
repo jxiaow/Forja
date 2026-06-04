@@ -1,4 +1,4 @@
-export type CliAction = 'init' | 'use' | 'status' | 'env' | 'projects' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'ps' | 'rcc';
+export type CliAction = 'init' | 'use' | 'status' | 'env' | 'projects' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'ps' | 'rcc';
 export type CliExecutionMode = 'dryRun' | 'execute';
 export type CliBuildMode = 'debug' | 'release';
 export type CliArch = 'x86' | 'x64';
@@ -14,8 +14,6 @@ export interface CliOptions {
     qtPath: string | null;
     vsDevShell: string | null;
     target: string | null;
-    server?: string | null;
-    repo?: string | null;
     detach?: boolean;
     saveLocal: boolean;
     json: boolean;

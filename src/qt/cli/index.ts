@@ -2,7 +2,6 @@ import { parseCliArgs, isHelpRequest, getHelpText } from './args';
 import { CliResult } from './types';
 import { createActionPlan } from '../shared/qtCore';
 import { runCliResult } from '../shared/commandRunner';
-import { executeSyncCli, planSyncCli } from '../shared/syncCli';
 import { readRunState, resolveRunProcessStatus } from '../shared/localState';
 import { getPlatformEnvFields, buildEnvCurrent } from '../platform/requirements';
 import * as path from 'path';
@@ -171,36 +170,6 @@ async function main(argv: string[]): Promise<void> {
                 if (status.logFile) { console.log(`Log: ${status.logFile}`); }
             }
             process.exitCode = 0;
-            return;
-        }
-
-        // sync 走独立路径
-        if (options.action === 'sync') {
-            if (options.executionMode === 'dryRun') {
-                const output = await planSyncCli(workspace, options.server || undefined, options.repo || undefined);
-                if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
-                else {
-                    if (output.ok) {
-                        console.log(`Sync (plan): ${output.pending.length} 个文件待同步到 ${output.server}:${output.remotePath}`);
-                    } else {
-                        console.log(`Sync (plan) 失败: ${output.failed.map(f => f.error).join(', ')}`);
-                    }
-                }
-                process.exitCode = output.ok ? 0 : 1;
-                return;
-            }
-            const result = await executeSyncCli(workspace, options.server || undefined, options.repo || undefined);
-            if (wantsJson) {
-                console.log(JSON.stringify(result, null, 2));
-            } else {
-                if (result.ok) {
-                    console.log(`同步完成: ${result.uploaded.length} 个文件已上传`);
-                    if (result.skipped.length > 0) { console.log(`跳过: ${result.skipped.length} 个`); }
-                } else {
-                    console.error(`同步失败: ${result.failed.map(f => f.error).join(', ')}`);
-                }
-            }
-            process.exitCode = result.ok ? 0 : 1;
             return;
         }
 

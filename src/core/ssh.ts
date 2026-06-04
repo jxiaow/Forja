@@ -1,7 +1,7 @@
 /**
  * SSH/SCP 公共工具。
  * 纯 Node 模块，不依赖 vscode。
- * 被 qt/sync/transport、qt/shared/syncCli 共用。
+ * 被 sync/transport、sync/cli 共用。
  */
 import { ServerConfig } from './serverStore';
 
