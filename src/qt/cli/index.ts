@@ -74,7 +74,7 @@ function compactResult(result: CliResult): Record<string, unknown> {
 function textOutput(result: CliResult): string {
     const status = result.ok ? '成功' : '失败';
     const lines = [
-        `Qt Pilot ${result.action} ${status}`,
+        `Forja Qt ${result.action} ${status}`,
         `执行模式: ${result.mode}`,
         `工作区: ${result.workspace}`
     ];
