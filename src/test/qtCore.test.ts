@@ -126,6 +126,7 @@ test('createActionPlan status returns checks and resolved config', async () => {
     assert.equal(result.ok, true);
     assert.equal(result.resolved?.mode, 'debug');
     assert.equal(result.resolved?.arch, process.platform === 'win32' ? 'x86' : 'x64');
+    assert.equal(result.resolved?.target, 'demo');
     // stdout contains custom status structure
     const statusData = JSON.parse(result.stdout);
     assert.equal(statusData.checks.settings, true);
@@ -136,6 +137,28 @@ test('createActionPlan status returns checks and resolved config', async () => {
     }
     assert.equal(typeof statusData.ready, 'boolean');
     assert.ok(statusData.nextAction);
+});
+
+test('createActionPlan status prefers configured target override', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, readyQtSettings(workspace, { target: 'OverrideApp' }));
+
+    const result = await createActionPlan({
+        action: 'status',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.resolved?.target, 'OverrideApp');
 });
 
 test('status points to init before local qt settings exist', async () => {
