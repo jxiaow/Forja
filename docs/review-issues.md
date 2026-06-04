@@ -31,7 +31,7 @@
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
 | E1 | 🟡 中 | `serverStore.ts` 读取 JSON 失败时空 `catch {}`，配置损坏无任何反馈 | src/core/serverStore.ts readServers/readProjectSyncConfig | 待修 |
-| E2 | 🟡 中 | `syncCli.ts` 的 `ensureRemoteDir` 永远 resolve，mkdir 失败时后续 scp 报错信息不清晰 | src/core/syncCli.ts | 待修 |
+| E2 | 🟡 中 | `sync/cli.ts` 的 `ensureRemoteDir` 永远 resolve，mkdir 失败时后续 scp 报错信息不清晰 | src/sync/cli.ts | 待修 |
 | E3 | 🟢 低 | `ssh.ts` 的 `createAskpassEnv` 写临时文件无 try/catch，tmpdir 不可写时直接抛异常 | src/core/ssh.ts | 待修 |
 | E4 | 🟢 低 | remote/core/index.ts build 阶段 JSON.parse 失败时丢失原始 stdout | src/remote/core/index.ts | 可选 |
 
@@ -39,7 +39,7 @@
 
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
-| O1 | 🟢 低 | `sftpClient.ts` 大量 re-export 是历史遗留，syncWatcher.ts 可直接从 core/ 导入 | src/qt/sync/sftpClient.ts | 可选 |
+| O1 | 🟢 低 | `sftpClient.ts` 大量 re-export 是历史遗留，syncWatcher.ts 可直接从 core/ 导入 | src/sync/sftpClient.ts | 可选 |
 | O2 | 🟢 低 | remote/core/index.ts 25KB，锁管理可提取到 lock.ts | src/remote/core/index.ts | 可选 |
 | O3 | 🟢 低 | `DeployResult` 等类型定义散落在各文件而非集中在 types.ts | src/remote/core/ | 可选 |
 | O4 | 🟢 低 | 远程部署无取消机制，vscode 的 CancellationToken 未传递到 orchestrator | src/remote/ | 可选 |
@@ -72,17 +72,17 @@
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
 | S1 | 🔴 高 | XSS：`configPanel.html` 中 `showPassword` 使用 innerHTML — 已改为 DOM API（textContent + createElement） | src/ui/configPanel/configPanel.html | ✅ 已修 |
-| S2 | 🟡 中 | Shell 注入：`transport.ts` 中 `remoteDir`/`remoteFile` 直接拼入 SSH/SCP 命令 — 已改为单引号包裹 + 内部转义 | src/qt/sync/transport.ts | ✅ 已修 |
+| S2 | 🟡 中 | Shell 注入：`transport.ts` 中 `remoteDir`/`remoteFile` 直接拼入 SSH/SCP 命令 — 已改为单引号包裹 + 内部转义 | src/sync/transport.ts | ✅ 已修 |
 | S3 | 🟡 中 | 密码暴露：`_pushServerList` 已使用 `'••••••••'` mask，无需额外修复 | src/ui/configPanel/messageHandler.ts | ✅ 已修 |
 
 ## 测试覆盖
 
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
-| V1 | 🟡 中 | `core/syncCli.ts`、`core/ssh.ts`、`core/serverStore.ts` 无专属测试 | src/core/ | 待补 |
+| V1 | 🟡 中 | `sync/cli.ts`、`core/ssh.ts`、`core/serverStore.ts` 无专属测试 | src/core/ | 待补 |
 | V2 | 🟡 中 | SDK 模块测试覆盖不足；CLI、projectScanner source、settings watcher、stale project 已有覆盖，Extension Host 交互仍缺 | src/sdk/ | 部分已补 |
 | V3 | 🟡 中 | remote/core/index.ts（25KB 编排逻辑）无测试 | src/remote/core/index.ts | 待补 |
-| V4 | 🟢 低 | qt/build/、qt/sync/、cli/ 入口无测试 | src/qt/build/, src/qt/sync/, src/cli/ | 可选 |
+| V4 | 🟢 低 | qt/build/、sync/、cli/ 入口无测试 | src/qt/build/, src/sync/, src/cli/ | 可选 |
 
 ## 工程配置
 

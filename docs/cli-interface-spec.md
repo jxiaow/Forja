@@ -5,10 +5,10 @@
 ## 调用约定
 
 ```
-forja <subcommand> <action> [options]
+forja <subcommand> [action] [options]
 ```
 
-- 当前已实现子命令：`qt` | `sdk` | `cleanup`
+- 当前已实现子命令：`qt` | `sdk` | `sync` | `cleanup`
 - `remote` 相关内容是远程部署设计稿，当前 CLI dispatcher 尚未实现 `forja remote ...`
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
@@ -42,10 +42,15 @@ forja <subcommand> <action> [options]
 | `clean` | `--workspace`, `--json`, `--plan`, `--dry-run` |
 | `stop` | `--workspace`, `--json` |
 | `ps` | `--workspace`, `--json` |
-| `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo` |
 | `rcc` | `--workspace`, `--json`, `--plan`, `--dry-run` |
 
-`sync --plan` / `sync --dry-run` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
+## Sync 命令参数矩阵
+
+`forja sync --plan` / `forja sync --dry-run` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
+
+| 命令 | 允许参数 |
+|------|----------|
+| `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo` |
 
 ## Qt use 配置参数
 
@@ -127,7 +132,7 @@ interface QtCliResult {
   rccProjectPath: string | null;  // RCC 项目路径
 }
 
-type CliAction = "init" | "use" | "status" | "env" | "projects" | "qmake" | "build" | "clean" | "run" | "stop" | "sync" | "ps" | "rcc";
+type CliAction = "init" | "use" | "status" | "env" | "projects" | "qmake" | "build" | "clean" | "run" | "stop" | "ps" | "rcc";
 
 interface Diagnostic {
   level: "info" | "warning" | "error";
@@ -409,7 +414,7 @@ interface StageResult {
   durationMs: number;
 }
 
-type DeployStage = "preCheck" | "branchSync" | "sync" | "baselineCheck" | "build" | "transfer" | "stop" | "launch";
+type DeployStage = "preCheck" | "branchSync" | "baselineCheck" | "build" | "transfer" | "stop" | "launch";
 ```
 
 ### 成功

@@ -13,7 +13,7 @@ import { generateCppProperties } from './qt/build/configGenerator';
 import { createLogger, initLogger } from './vscode/logger';
 import { detectEnv } from './qt/env/envDetector';
 import { ensureLocalStateDir } from './qt/shared/localState';
-import { registerSyncWatcher } from './qt/sync/syncWatcher';
+import { registerSyncWatcher } from './sync/syncWatcher';
 import { initSettingsStore } from './vscode/settingsStore';
 import { registerWorkspaceWatcher } from './vscode/workspaceResolver';
 import { activateSdk } from './sdk/sdkExtension';
@@ -72,7 +72,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
     context.subscriptions.push(
-        vscode.commands.registerCommand('forja.qt.showSyncTab', () => pageManager.switchTab('remote'))
+        vscode.commands.registerCommand('forja.showSyncTab', () => pageManager.switchTab('remote'))
     );
 
     registerPriWatcher(context);

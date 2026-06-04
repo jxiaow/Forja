@@ -27,10 +27,9 @@ const dirs = [
     'sdk/cli'
 ];
 
-// Individual files from qt/sync/ needed by CLI (only non-vscode ones)
+// Individual files from sync/ needed by CLI (only pure Node files)
 const syncFiles = [
-    'qt/sync/resolver.js',
-    'qt/sync/transport.js'
+    'sync/cli.js'
 ];
 
 // Individual files needed from core/
@@ -41,6 +40,7 @@ const coreFiles = [
     'core/syncState.js',
     'core/serverStore.js',
     'core/ssh.js',
+    'core/sshTransport.js',
     'core/gitChangedFiles.js',
     'core/gitRepoResolver.js'
 ];
@@ -181,6 +181,7 @@ const cliPkg = {
         'cli/**',
         'qt/**',
         'sdk/**',
+        'sync/**',
         'core/**',
         'version.js'
     ],

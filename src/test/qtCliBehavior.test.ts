@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { runQtCli } from '../qt/cli';
+import { runSyncCli } from '../sync/cli';
 import { runLogPath, writeRunState } from '../qt/shared/localState';
 import { saveSyncSettings, DEFAULT_SYNC } from '../core/settingsIO';
 import { writeServers } from '../core/serverStore';
@@ -32,7 +33,7 @@ async function captureStdout(fn: () => Promise<void>): Promise<string> {
     return chunks.join('\n');
 }
 
-test('qt sync --plan returns target server and pending files', async () => {
+test('forja sync --plan returns target server and pending files', async () => {
     const workspace = makeWorkspace();
     cp.execFileSync('git', ['init'], { cwd: workspace, stdio: 'ignore' });
     fs.writeFileSync(path.join(workspace, 'main.cpp'), 'int main() { return 0; }\n', 'utf8');
@@ -55,7 +56,7 @@ test('qt sync --plan returns target server and pending files', async () => {
         ignore: []
     });
 
-    const output = await captureStdout(() => runQtCli(['sync', '--workspace', workspace, '--plan', '--json']));
+    const output = await captureStdout(() => runSyncCli(['--workspace', workspace, '--plan', '--json']));
     const data = JSON.parse(output);
 
     assert.equal(data.ok, true);
@@ -67,10 +68,10 @@ test('qt sync --plan returns target server and pending files', async () => {
     assert.equal(process.exitCode, 0);
 });
 
-test('qt sync --plan sets exit code when planning fails', async () => {
+test('forja sync --plan sets exit code when planning fails', async () => {
     const workspace = makeWorkspace();
 
-    const output = await captureStdout(() => runQtCli(['sync', '--workspace', workspace, '--plan', '--json']));
+    const output = await captureStdout(() => runSyncCli(['--workspace', workspace, '--plan', '--json']));
     const data = JSON.parse(output);
 
     assert.equal(data.ok, false);

@@ -45,7 +45,7 @@ test('parseCliArgs accepts use config options', () => {
 
 test('parseCliArgs rejects build config options on execution and read-only actions', () => {
     const restrictedFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
-    for (const action of ['init', 'build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'ps', 'stop', 'rcc']) {
+    for (const action of ['init', 'build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'ps', 'stop', 'rcc']) {
         for (const flag of restrictedFlags) {
             assert.throws(
                 () => parseCliArgs([action, flag, 'value']),
@@ -62,14 +62,10 @@ test('parseCliArgs rejects removed init-only save-local flag', () => {
     );
 });
 
-test('parseCliArgs only accepts sync flags on sync', () => {
-    const opts = parseCliArgs(['sync', '--server', 'dev', '--repo', 'app', '--dry-run']);
-
-    assert.equal(opts.action, 'sync');
-    assert.equal(opts.server, 'dev');
-    assert.equal(opts.repo, 'app');
-    assert.equal(opts.executionMode, 'dryRun');
-    assert.throws(() => parseCliArgs(['build', '--server', 'dev']), /--server 不能用于 build/);
+test('parseCliArgs rejects sync action and sync-only flags in qt cli', () => {
+    assert.throws(() => parseCliArgs(['sync']), /未知命令/);
+    assert.throws(() => parseCliArgs(['build', '--server', 'dev']), /未知参数: --server/);
+    assert.throws(() => parseCliArgs(['build', '--repo', 'app']), /未知参数: --repo/);
 });
 
 test('parseCliArgs only accepts detach on run', () => {

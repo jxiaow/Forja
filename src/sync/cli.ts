@@ -4,10 +4,10 @@
  */
 import * as path from 'path';
 import * as cp from 'child_process';
-import { filterNeedsSync, markSyncedBatch } from '../../core/syncState';
-import { readProjectSyncConfig, getServerById, getServerByName, ServerConfig } from '../../core/serverStore';
-import { buildScpArgs, buildSshArgs, sshTarget, createAskpassEnv } from '../../core/ssh';
-import { resolveGitRoots } from '../../core/gitRepoResolver';
+import { filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
+import { readProjectSyncConfig, getServerById, getServerByName, ServerConfig } from '../core/serverStore';
+import { ensureRemoteDir, scpUpload } from '../core/sshTransport';
+import { resolveGitRoots } from '../core/gitRepoResolver';
 
 export interface SyncResult {
     ok: boolean;
@@ -110,64 +110,6 @@ async function resolveCliPassword(server: ServerConfig): Promise<string | null> 
     return null;
 }
 
-// ── SCP 上传 ──
-
-function scpUpload(server: ServerConfig, localFile: string, remoteFile: string, password: string | null): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const baseArgs = buildScpArgs(server);
-        const escapedRemote = remoteFile.replace(/'/g, "'\\''");
-        const dest = `${sshTarget(server)}:'${escapedRemote}'`;
-        const args = [...baseArgs, localFile, dest];
-
-        const askpass = createAskpassEnv(
-            server.authMode === 'password' ? password : null, `sync-${process.pid}`
-        );
-
-        const proc = cp.spawn('scp', args, {
-            windowsHide: true,
-            env: askpass?.env,
-            stdio: ['pipe', 'pipe', 'pipe']
-        });
-        let stderr = '';
-        proc.stderr.on('data', (d) => { stderr += d.toString(); });
-        proc.on('close', (code) => {
-            askpass?.cleanup();
-            code === 0 ? resolve() : reject(new Error(stderr.trim() || `exit ${code}`)); // eslint-disable-line @typescript-eslint/no-unused-expressions
-        });
-        proc.on('error', (e) => {
-            askpass?.cleanup();
-            reject(new Error(`scp: ${e.message}`));
-        });
-    });
-}
-
-function ensureRemoteDir(server: ServerConfig, remoteDir: string, password: string | null): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const sshArgs = buildSshArgs(server);
-        const escaped = remoteDir.replace(/'/g, "'\\''");
-        const cmd = `mkdir -p '${escaped}'`;
-        const args = [...sshArgs, sshTarget(server), cmd];
-
-        const askpass = createAskpassEnv(
-            server.authMode === 'password' ? password : null, `sync-${process.pid}`
-        );
-
-        const proc = cp.spawn('ssh', args, {
-            windowsHide: true,
-            env: askpass?.env,
-            stdio: ['pipe', 'pipe', 'pipe']
-        });
-        let stderr = '';
-        proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
-        proc.on('close', (code) => {
-            askpass?.cleanup();
-            if (code === 0) { resolve(); }
-            else { reject(new Error(`ensureRemoteDir 失败 (exit ${code}): ${stderr.trim() || 'mkdir -p failed'}`)); }
-        });
-        proc.on('error', (err) => { askpass?.cleanup(); reject(err); });
-    });
-}
-
 // ── 主入口 ──
 
 /**
@@ -221,6 +163,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string,
 
     for (const { dir: gitDir, name: gitName } of gitRoots) {
         const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
+        const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
 
         const changedFiles = await getGitChangedFiles(gitDir);
         if (changedFiles.length === 0) { continue; }
@@ -231,7 +174,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string,
             else { notIgnored.push(f); }
         }
 
-        const needSync = filterNeedsSync(gitDir, notIgnored);
+        const needSync = filterNeedsSync(gitDir, notIgnored, syncTarget);
         result.skipped.push(...notIgnored.filter(f => !needSync.includes(f)).map(f => `${gitName}/${f}`));
 
         if (needSync.length === 0) { continue; }
@@ -266,7 +209,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string,
         }
 
         if (successFiles.length > 0) {
-            markSyncedBatch(gitDir, successFiles);
+            markSyncedBatch(gitDir, successFiles, syncTarget);
         }
     }
 
@@ -328,6 +271,8 @@ export async function planSyncCli(workspaceRoot: string, serverName?: string, re
     };
 
     for (const { dir: gitDir, name: gitName } of gitRoots) {
+        const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
+        const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
         const changedFiles = await getGitChangedFiles(gitDir);
         if (changedFiles.length === 0) { continue; }
 
@@ -337,10 +282,148 @@ export async function planSyncCli(workspaceRoot: string, serverName?: string, re
             else { notIgnored.push(f); }
         }
 
-        const needSync = filterNeedsSync(gitDir, notIgnored);
+        const needSync = filterNeedsSync(gitDir, notIgnored, syncTarget);
         plan.skipped.push(...notIgnored.filter(f => !needSync.includes(f)).map(f => `${gitName}/${f}`));
         plan.pending.push(...needSync.map(f => `${gitName}/${f}`));
     }
 
     return plan;
+}
+
+export interface SyncCliOptions {
+    executionMode: 'dryRun' | 'execute';
+    workspace: string;
+    server: string | null;
+    repo: string | null;
+    json: boolean;
+}
+
+const syncHelpText = `Forja Sync CLI — 通用远程文件同步
+
+用法: forja sync [options]
+
+选项:
+  --workspace <path>     工作区路径（默认当前目录）
+  --server <name>        指定服务器名称或 ID
+  --repo <name>          指定子仓库名称（多仓库工作区）
+  --plan                 仅预览待同步文件，不执行 SSH/SCP
+  --dry-run              （兼容旧版，等同于 --plan）
+  --json                 输出 JSON 格式（适合 AI 工具解析）
+  --help, -h             显示此帮助信息
+
+示例:
+  forja sync                         同步变更文件到远程
+  forja sync --plan --json           JSON 预览待同步文件
+  forja sync --server dev --repo app 同步指定服务器和子仓库
+`;
+
+export function isSyncHelpRequest(args: string[]): boolean {
+    return args.includes('--help') || args.includes('-h');
+}
+
+export function getSyncHelpText(): string {
+    return syncHelpText;
+}
+
+function readSyncValue(args: string[], index: number, flag: string): string {
+    const value = args[index + 1];
+    if (!value || value.startsWith('--')) {
+        throw new Error(`${flag} 需要一个值`);
+    }
+    return value;
+}
+
+export function parseSyncCliArgs(args: string[]): SyncCliOptions {
+    const options: SyncCliOptions = {
+        executionMode: 'execute',
+        workspace: process.cwd(),
+        server: null,
+        repo: null,
+        json: false
+    };
+
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        switch (arg) {
+            case '--plan':
+            case '--dry-run':
+                options.executionMode = 'dryRun';
+                break;
+            case '--workspace':
+                options.workspace = readSyncValue(args, i, arg);
+                i++;
+                break;
+            case '--server':
+                options.server = readSyncValue(args, i, arg);
+                i++;
+                break;
+            case '--repo':
+                options.repo = readSyncValue(args, i, arg);
+                i++;
+                break;
+            case '--json':
+                options.json = true;
+                break;
+            case '--help':
+            case '-h':
+                break;
+            default:
+                if (arg.startsWith('--')) {
+                    throw new Error(`未知参数: ${arg}`);
+                }
+                throw new Error(`forja sync 不接受子命令或位置参数: ${arg}`);
+        }
+    }
+
+    return options;
+}
+
+export async function runSyncCli(argv: string[]): Promise<void> {
+    if (isSyncHelpRequest(argv)) {
+        console.log(getSyncHelpText());
+        return;
+    }
+
+    let wantsJson = argv.includes('--json');
+    try {
+        const options = parseSyncCliArgs(argv);
+        wantsJson = options.json;
+        const workspace = path.resolve(options.workspace);
+
+        if (options.executionMode === 'dryRun') {
+            const output = await planSyncCli(workspace, options.server || undefined, options.repo || undefined);
+            if (wantsJson) {
+                console.log(JSON.stringify(output, null, 2));
+            } else if (output.ok) {
+                console.log(`Sync (plan): ${output.pending.length} 个文件待同步到 ${output.server}:${output.remotePath}`);
+            } else {
+                console.log(`Sync (plan) 失败: ${output.failed.map(f => f.error).join(', ')}`);
+            }
+            process.exitCode = output.ok ? 0 : 1;
+            return;
+        }
+
+        const result = await executeSyncCli(workspace, options.server || undefined, options.repo || undefined);
+        if (wantsJson) {
+            console.log(JSON.stringify(result, null, 2));
+        } else if (result.ok) {
+            console.log(`同步完成: ${result.uploaded.length} 个文件已上传`);
+            if (result.skipped.length > 0) { console.log(`跳过: ${result.skipped.length} 个`); }
+        } else {
+            console.error(`同步失败: ${result.failed.map(f => f.error).join(', ')}`);
+        }
+        process.exitCode = result.ok ? 0 : 1;
+    } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (wantsJson) {
+            console.log(JSON.stringify({
+                ok: false,
+                action: 'sync',
+                diagnostics: [{ level: 'error', message }]
+            }, null, 2));
+        } else {
+            console.error(message);
+        }
+        process.exitCode = 1;
+    }
 }

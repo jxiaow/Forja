@@ -3,24 +3,27 @@
  *
  * 解析策略（Qt 和 SDK 统一）：
  *   1. 查找 ~/.forja/projects/ 下已有的配置文件，匹配当前 workspaceFolders
- *   2. Qt fallback：浅层扫描找 .pro 文件
- *   3. SDK fallback：等待 sdkExtension 激活后通过 setSdkProjectRoot 设置
- *   4. 未识别到项目 → 返回空字符串
+ *   2. Sync fallback：单 workspace folder 时直接使用该 folder
+ *   3. Qt fallback：浅层扫描找 .pro 文件
+ *   4. SDK fallback：等待 sdkExtension 激活后通过 setSdkProjectRoot 设置
+ *   5. 未识别到项目 → 返回空字符串
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { listProjectConfigs, projectsDir } from '../core/settingsIO';
 
-export type ModuleType = 'qt' | 'sdk';
+export type ModuleType = 'qt' | 'sdk' | 'sync';
 
 let _resolvedQt: string | null = null;
 let _resolvedSdk: string | null = null;
+let _resolvedSync: string | null = null;
 let _watcherRegistered = false;
 
 function _resetResolvedRoots(): void {
     _resolvedQt = null;
     _resolvedSdk = null;
+    _resolvedSync = null;
 }
 
 /** 注册 workspace folder 变化监听，自动重置缓存 */
@@ -50,6 +53,7 @@ export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void
  */
 export function resolveProjectRoot(module: ModuleType = 'qt'): string {
     if (module === 'sdk') { return _resolveSdk(); }
+    if (module === 'sync') { return _resolveSync(); }
     return _resolveQt();
 }
 
@@ -74,7 +78,7 @@ export function resetProjectRoot(): void {
  * 在 ~/.forja/projects/ 下查找指定类型的配置文件，
  * 如果其中记录的 workspace 路径匹配当前打开的某个 folder，返回该路径。
  */
-function _findFromExistingConfig(type: 'qt' | 'sdk'): string | null {
+function _findFromExistingConfig(type: 'qt' | 'sdk' | 'sync'): string | null {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) { return null; }
 
@@ -140,6 +144,28 @@ function _resolveSdk(): string {
     }
 
     // 2. 不做文件系统扫描，等待 sdkExtension 激活后通过 setSdkProjectRoot 设置
+    return '';
+}
+
+// ── Sync 解析 ──
+
+function _resolveSync(): string {
+    if (_resolvedSync) { return _resolvedSync; }
+
+    // 1. 从已有 sync 配置文件反查
+    const fromConfig = _findFromExistingConfig('sync');
+    if (fromConfig) {
+        _resolvedSync = fromConfig;
+        return _resolvedSync;
+    }
+
+    // 2. 单 workspace folder 时，sync 作为 workspace 通用能力直接归属该 folder
+    const folders = vscode.workspace.workspaceFolders;
+    if (folders && folders.length === 1) {
+        _resolvedSync = folders[0].uri.fsPath;
+        return _resolvedSync;
+    }
+
     return '';
 }
 

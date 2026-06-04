@@ -3,7 +3,7 @@
   "displayName": "Forja",
   "publisher": "forja",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.48",
+  "version": "0.7.49",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -68,12 +68,12 @@
         "title": "Forja Qt: 用 Qt Designer 打开"
       },
       {
-        "command": "forja.qt.syncTestConnection",
-        "title": "Forja Qt: 测试远程连接"
+        "command": "forja.syncTestConnection",
+        "title": "Forja: 测试远程连接"
       },
       {
-        "command": "forja.qt.syncChangedFiles",
-        "title": "Forja Qt: 同步变更文件到远程"
+        "command": "forja.syncChangedFiles",
+        "title": "Forja: 同步变更文件到远程"
       },
       {
         "command": "forja.qt.rcc",

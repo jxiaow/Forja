@@ -5,11 +5,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cp from 'child_process';
-import { createLogger } from '../../vscode/logger';
-import { filterNeedsSync, markSyncedBatch } from '../../core/syncState';
-import { ServerConfig } from '../../core/serverStore';
+import { createLogger } from '../vscode/logger';
+import { filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
+import { ServerConfig } from '../core/serverStore';
 import { ResolvedSyncConfig } from './resolver';
-import { scpUpload, ensureRemoteDir } from './transport';
+import { scpUpload, ensureRemoteDir, isCancellationError } from './transport';
 
 const logger = createLogger('SftpClient');
 
@@ -115,6 +115,8 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
         }
     }
 
+    const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath };
+
     const changedFiles = await getGitChangedFiles(workspaceRoot);
     if (changedFiles.length === 0) { return result; }
 
@@ -124,7 +126,7 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
         else { notIgnored.push(f); }
     }
 
-    const needSync = filterNeedsSync(workspaceRoot, notIgnored);
+    const needSync = filterNeedsSync(workspaceRoot, notIgnored, syncTarget);
     const alreadySynced = notIgnored.filter(f => !needSync.includes(f));
     result.skipped.push(...alreadySynced);
 
@@ -141,10 +143,11 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
 
         if (!remoteDirs.has(remoteDir)) {
             try {
-                await ensureRemoteDir(server, remoteDir, password);
+                await ensureRemoteDir(server, remoteDir, password, token);
                 remoteDirs.add(remoteDir);
             } catch (e) {
                 const dirErr = e instanceof Error ? e.message : String(e);
+                if (isCancellationError(e) || token?.isCancellationRequested) { break; }
                 logger.error(`创建远程目录失败: ${remoteDir} - ${dirErr}`);
                 result.failed.push({ file: relativePath, error: `mkdir 失败: ${dirErr}` });
                 continue;
@@ -152,11 +155,12 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
         }
 
         try {
-            await scpUpload(server, localFile, remoteFile, password);
+            await scpUpload(server, localFile, remoteFile, password, token);
             result.uploaded.push(relativePath);
             successFiles.push(relativePath);
             logger.info(`已上传: ${relativePath}`);
         } catch (e) {
+            if (isCancellationError(e) || token?.isCancellationRequested) { break; }
             const msg = e instanceof Error ? e.message : String(e);
             result.failed.push({ file: relativePath, error: msg });
             logger.error(`上传失败: ${relativePath} - ${msg}`);
@@ -164,7 +168,7 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
     }
 
     if (successFiles.length > 0) {
-        markSyncedBatch(workspaceRoot, successFiles);
+        markSyncedBatch(workspaceRoot, successFiles, syncTarget);
     }
 
     return result;

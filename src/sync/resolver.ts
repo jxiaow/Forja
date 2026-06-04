@@ -1,7 +1,7 @@
 /**
  * 同步配置解析 — 从 serverStore 和 projectSyncConfig 组装最终配置。
  */
-import { readProjectSyncConfig, getServerById, getServerByName, ServerConfig } from '../../core/serverStore';
+import { readProjectSyncConfig, getServerById, getServerByName, ServerConfig } from '../core/serverStore';
 
 export interface ResolvedSyncConfig {
     server: ServerConfig;
