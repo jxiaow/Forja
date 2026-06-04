@@ -313,7 +313,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const jomPath = settings.jomPath || '';
         const targetOverride = settings.target || '';
         const projectInfo = projectFull && projectExists ? parseProFile(projectFull) : null;
-        const target = targetOverride || projectInfo?.target || (projectRel ? path.basename(projectRel, '.pro') : '');
+        const target = projectExists ? (targetOverride || projectInfo?.target || (projectRel ? path.basename(projectRel, '.pro') : '')) : '';
 
         // 快速文件系统检查（不跑环境检测）
         const projectDir = projectFull ? path.dirname(projectFull) : null;

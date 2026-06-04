@@ -161,6 +161,29 @@ test('createActionPlan status prefers configured target override', async () => {
     assert.equal(result.resolved?.target, 'OverrideApp');
 });
 
+test('createActionPlan status omits target when selected project is missing', async () => {
+    const workspace = makeWorkspace();
+    fs.unlinkSync(path.join(workspace, 'demo.pro'));
+    saveQtSettings(workspace, readyQtSettings(workspace));
+
+    const result = await createActionPlan({
+        action: 'status',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.resolved?.target, '');
+});
+
 test('status points to init before local qt settings exist', async () => {
     const workspace = makeWorkspace();
 
