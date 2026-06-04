@@ -18,6 +18,14 @@ export function setSilent(silent: boolean): void {
     _silent = silent;
 }
 
+/** 日志输出重定向（VSCode 扩展用：桥接到 OutputChannel） */
+type OutputWriter = (line: string) => void;
+let _outputWriter: OutputWriter | null = null;
+
+export function setOutputWriter(writer: OutputWriter | null): void {
+    _outputWriter = writer;
+}
+
 function _timestamp(): string {
     const now = new Date();
     const pad = (n: number): string => n.toString().padStart(2, '0');
@@ -27,7 +35,11 @@ function _timestamp(): string {
 function _write(level: LogLevel, message: string): void {
     if (_silent && level !== 'ERROR') { return; }
     const line = `[${_timestamp()}] [${level}] ${message}`;
-    process.stderr.write(line + '\n');
+    if (_outputWriter) {
+        _outputWriter(line);
+    } else {
+        process.stderr.write(line + '\n');
+    }
 }
 
 export function log(message: string): void {

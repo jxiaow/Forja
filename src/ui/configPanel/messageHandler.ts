@@ -66,7 +66,9 @@ export async function handleMessage(
             break;
         }
         case 'refreshEnv': {
+            logger.info('开始检测环境...');
             const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
+            logger.info('环境检测完成');
             setState('envInfo', env);
             updateHtml();
             pushEnvUpdate();
@@ -348,21 +350,27 @@ export async function handleMessage(
                 privateKeyPath: msg.server.privateKeyPath || '',
                 password: msg.server.password || ''
             };
-            try {
-                const { testConnection } = await import('../../sync/transport');
-                const tempServerConfig = {
-                    id: '', name: 'test', ...testServer, strictHostKeyChecking: false
-                };
-                const pwd = testServer.authMode === 'password' ? testServer.password : null;
-                const result = await testConnection(tempServerConfig as import('../../core/serverStore').ServerConfig, pwd);
-                if (result.ok) {
-                    vscode.window.showInformationMessage(`连接成功: ${testServer.username}@${testServer.host}:${testServer.port}`);
-                } else {
-                    vscode.window.showErrorMessage(`连接失败: ${result.error || '未知错误'}`);
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `正在测试连接 ${testServer.host}...`,
+                cancellable: false
+            }, async () => {
+                try {
+                    const { testConnection } = await import('../../sync/transport');
+                    const tempServerConfig = {
+                        id: '', name: 'test', ...testServer, strictHostKeyChecking: false
+                    };
+                    const pwd = testServer.authMode === 'password' ? testServer.password : null;
+                    const result = await testConnection(tempServerConfig as import('../../core/serverStore').ServerConfig, pwd);
+                    if (result.ok) {
+                        vscode.window.showInformationMessage(`连接成功: ${testServer.username}@${testServer.host}:${testServer.port}`);
+                    } else {
+                        vscode.window.showErrorMessage(`连接失败: ${result.error || '未知错误'}`);
+                    }
+                } catch (e) {
+                    vscode.window.showErrorMessage(`连接失败: ${e instanceof Error ? e.message : e}`);
                 }
-            } catch (e) {
-                vscode.window.showErrorMessage(`连接失败: ${e instanceof Error ? e.message : e}`);
-            }
+            });
             break;
         }
         case 'viewPassword': {

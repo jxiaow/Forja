@@ -9,6 +9,8 @@ import { getSdkSetting, resolveVsDevCmdPath } from '../../vscode/settingsStore';
 
 export class ConfigService implements vscode.Disposable {
   private _vsDevCmdPath: string | null = null;
+  /** vsInstall 快照，用于缓存失效判断 */
+  private _cachedVsInstall: string = '';
 
   /** 获取 VsDevCmd.bat 路径 */
   async getVsDevCmdPath(): Promise<string | null> {
@@ -16,8 +18,18 @@ export class ConfigService implements vscode.Disposable {
       return null;
     }
 
-    // 从统一配置读取 vsInstall 并推导 VsDevCmd.bat 路径
     const vsInstall = getSdkSetting('vsInstall');
+
+    // 缓存命中：vsInstall 未变且已有检测结果
+    if (this._vsDevCmdPath !== null && this._cachedVsInstall === vsInstall) {
+      return this._vsDevCmdPath;
+    }
+
+    // 缓存失效，重置
+    this._vsDevCmdPath = null;
+    this._cachedVsInstall = vsInstall;
+
+    // 从统一配置读取 vsInstall 并推导 VsDevCmd.bat 路径
     const userPath = resolveVsDevCmdPath(vsInstall);
 
     if (userPath) {

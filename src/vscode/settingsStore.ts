@@ -85,20 +85,30 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
 }
 
 function _reload(): void {
-    const oldSettings = JSON.stringify(_settings);
+    const oldQt = JSON.stringify(_settings.qt);
+    const oldSdk = JSON.stringify(_settings.sdk);
+    const oldSync = JSON.stringify(_settings.sync);
     _settings = _load();
-    const newSettings = JSON.stringify(_settings);
-    if (oldSettings === newSettings) { return; }
+    const newQt = JSON.stringify(_settings.qt);
+    const newSdk = JSON.stringify(_settings.sdk);
+    const newSync = JSON.stringify(_settings.sync);
+    if (oldQt === newQt && oldSdk === newSdk && oldSync === newSync) { return; }
 
-    // 通知变化
-    for (const key of Object.keys(_settings.qt) as QtKey[]) {
-        _listeners.forEach(fn => fn('qt', key, _settings));
+    // 只通知实际有变化的 section
+    if (oldQt !== newQt) {
+        for (const key of Object.keys(_settings.qt) as QtKey[]) {
+            _listeners.forEach(fn => fn('qt', key, _settings));
+        }
     }
-    for (const key of Object.keys(_settings.sdk) as SdkKey[]) {
-        _listeners.forEach(fn => fn('sdk', key, _settings));
+    if (oldSdk !== newSdk) {
+        for (const key of Object.keys(_settings.sdk) as SdkKey[]) {
+            _listeners.forEach(fn => fn('sdk', key, _settings));
+        }
     }
-    for (const key of Object.keys(_settings.sync) as SyncKey[]) {
-        _listeners.forEach(fn => fn('sync', key, _settings));
+    if (oldSync !== newSync) {
+        for (const key of Object.keys(_settings.sync) as SyncKey[]) {
+            _listeners.forEach(fn => fn('sync', key, _settings));
+        }
     }
 }
 

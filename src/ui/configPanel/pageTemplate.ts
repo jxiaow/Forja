@@ -28,6 +28,13 @@ const BUILDERS: Record<ConfigPageId, B> = {
 /** Custom select component JS — initializes all .csel elements on the page */
 const CSEL_JS = [
     '(function(){',
+    // Fix: VSCode webview 焦点丢失 — 切换到其他应用再回来时，ifrmae 吞掉第一次点击
+    // 用 pointerdown + setTimeout 确保 input 在 iframe 获得焦点后重新获取焦点
+    'document.addEventListener("pointerdown",function(e){',
+    'var el=e.target;',
+    'if(el.tagName==="INPUT"||el.tagName==="TEXTAREA"){',
+    'setTimeout(function(){el.focus()},0)}});',
+    // 关闭自定义下拉
     'document.addEventListener("click",function(e){',
     'var all=document.querySelectorAll(".csel.open");',
     'all.forEach(function(el){if(!el.contains(e.target))el.classList.remove("open")})});',
