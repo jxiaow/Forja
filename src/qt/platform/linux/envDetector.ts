@@ -24,8 +24,14 @@ async function detectQt(manualPath?: string): Promise<{ qt: QtInfo | null; candi
     if (whichOut && fs.existsSync(whichOut)) {
         const qtRoot = path.dirname(path.dirname(whichOut));
         if (hasQmake(qtRoot) && !candidates.some(c => c.path === qtRoot)) {
-            log(`[Linux] PATH 找到 Qt: "${qtRoot}"`);
-            candidates.unshift(await parseQtInfo(qtRoot, detectCompiler(qtRoot)));
+            const info = await parseQtInfo(qtRoot, detectCompiler(qtRoot));
+            // qmake --version 返回不了版本号说明是 stub/无效安装，跳过
+            if (info.version !== 'unknown') {
+                log(`[Linux] PATH 找到 Qt: "${qtRoot}" (${info.version})`);
+                candidates.unshift(info);
+            } else {
+                log(`[Linux] PATH 找到 qmake 但版本未知，跳过: "${qtRoot}"`);
+            }
         }
     }
 
