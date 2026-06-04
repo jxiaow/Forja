@@ -280,6 +280,9 @@ function formatStatusText(data: Record<string, unknown>): string {
     if (resolved.project) {
         lines.push(`  项目: ${resolved.project}`);
     }
+    if (resolved.target) {
+        lines.push(`  Target: ${resolved.target}`);
+    }
     lines.push(`  模式: ${resolved.mode}/${resolved.arch}`);
     if (resolved.qtPath) {
         lines.push(`  Qt: ${resolved.qtPath}${resolved.qtVersion ? ' (v' + resolved.qtVersion + ')' : ''}`);

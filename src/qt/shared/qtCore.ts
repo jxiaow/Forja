@@ -311,11 +311,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const qtPath = settings.qtPath || '';
         const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || '';
         const jomPath = settings.jomPath || '';
-        const target = settings.target || '';
+        const targetOverride = settings.target || '';
+        const projectInfo = projectFull && projectExists ? parseProFile(projectFull) : null;
+        const target = projectExists ? (targetOverride || projectInfo?.target || (projectRel ? path.basename(projectRel, '.pro') : '')) : '';
 
         // 快速文件系统检查（不跑环境检测）
         const projectDir = projectFull ? path.dirname(projectFull) : null;
-        const makefileValidation = projectDir ? validateMakefile(projectDir, { mode, arch, qtPath, proFile: projectFull || '', target }) : { exists: false, matches: false };
+        const makefileValidation = projectDir ? validateMakefile(projectDir, { mode, arch, qtPath, proFile: projectFull || '', target: targetOverride }) : { exists: false, matches: false };
         const hasMakefile = makefileValidation.exists && makefileValidation.matches;
         const runtimeTarget = (hasMakefile && projectDir) ? resolveRuntimeTarget(projectDir, mode, arch) : null;
         const hasExecutable = runtimeTarget ? fs.existsSync(runtimeTarget.exePath) : false;
