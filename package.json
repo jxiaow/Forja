@@ -3,7 +3,7 @@
   "displayName": "Forja",
   "publisher": "forja",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.49",
+  "version": "0.7.50",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
