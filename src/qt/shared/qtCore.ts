@@ -49,7 +49,8 @@ function withoutConfigOptions(options: CliOptions): CliOptions {
         arch: null,
         qtPath: null,
         vsDevShell: null,
-        target: null
+        target: null,
+        qmakeArgs: null
     };
 }
 
@@ -312,10 +313,11 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || '';
         const jomPath = settings.jomPath || '';
         const target = settings.target || '';
+        const qmakeArgs = settings.qmakeArgs || '';
 
         // 快速文件系统检查（不跑环境检测）
         const projectDir = projectFull ? path.dirname(projectFull) : null;
-        const makefileValidation = projectDir ? validateMakefile(projectDir, { mode, arch, qtPath, proFile: projectFull || '', target }) : { exists: false, matches: false };
+        const makefileValidation = projectDir ? validateMakefile(projectDir, { mode, arch, qtPath, proFile: projectFull || '', target, qmakeArgs }) : { exists: false, matches: false };
         const hasMakefile = makefileValidation.exists && makefileValidation.matches;
         const runtimeTarget = (hasMakefile && projectDir) ? resolveRuntimeTarget(projectDir, mode, arch) : null;
         const hasExecutable = runtimeTarget ? fs.existsSync(runtimeTarget.exePath) : false;
@@ -507,6 +509,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             updatedQt.target = options.target;
             updated.target = options.target;
         }
+        if (options.qmakeArgs !== undefined && options.qmakeArgs !== null) {
+            updatedQt.qmakeArgs = options.qmakeArgs;
+            updated.qmakeArgs = options.qmakeArgs;
+        }
 
         if (Object.keys(updated).length === 0) {
             result.diagnostics.push({ level: 'error', message: 'use 需要至少指定一个配置参数' });
@@ -571,6 +577,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const qtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
     const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
     const target = settings.target || '';
+    const qmakeArgs = settings.qmakeArgs || '';
     const jomPath = settings.jomPath || '';
     const runtimeProcessName = settings.runtimeProcessName || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
@@ -697,6 +704,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         qtPath,
         vsDevShell,
         target,
+        qmakeArgs,
         jomPath
     });
     let commands: string[] = [];
@@ -725,7 +733,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 arch: buildConfig.arch,
                 qtPath: buildConfig.qtPath,
                 proFile: buildConfig.proFile,
-                target: buildConfig.target
+                target: buildConfig.target,
+                qmakeArgs: buildConfig.qmakeArgs
             });
             if (!validation.exists || !validation.matches) {
                 const reason = !validation.exists

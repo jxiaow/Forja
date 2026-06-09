@@ -59,7 +59,7 @@ export interface MakefileValidation {
  * 校验 Makefile 是否和当前配置匹配。
  * 检查 qmake 命令行注释中的 mode、arch、Qt 路径、.pro 文件、target。
  */
-export function validateMakefile(projectDir: string, config: { mode: string; arch: string; qtPath: string; proFile: string; target: string }): MakefileValidation {
+export function validateMakefile(projectDir: string, config: { mode: string; arch: string; qtPath: string; proFile: string; target: string; qmakeArgs?: string }): MakefileValidation {
     const makefilePath = path.join(projectDir, 'Makefile');
     const content = readFile(makefilePath);
     if (!content) {
@@ -96,6 +96,9 @@ export function validateMakefile(projectDir: string, config: { mode: string; arc
     } else {
         // 当前未指定 target，但 Makefile 里有 TARGET= 覆盖，说明旧的有覆盖新的没有
         if (/TARGET=/.test(cmd)) { mismatch.push('target'); }
+    }
+    if (config.qmakeArgs && !cmd.includes(config.qmakeArgs)) {
+        mismatch.push('qmakeArgs');
     }
 
     return { exists: true, matches: mismatch.length === 0, mismatch: mismatch.length > 0 ? mismatch : undefined };

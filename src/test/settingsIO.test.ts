@@ -72,6 +72,7 @@ test('loadQtSettings reads from ~/.forja/projects/<hash>.json', () => {
     assert.equal(settings.fileSyncPromptEnabled, true);
     assert.equal(settings.pinnedProject, null);
     assert.equal(settings.runtimeProcessName, '');
+    assert.equal(settings.qmakeArgs, '');
 });
 
 test('loadQtSettings preserves all field types correctly', () => {
@@ -88,6 +89,7 @@ test('loadQtSettings preserves all field types correctly', () => {
         arch: 'x64',
         mode: 'release',
         runtimeProcessName: 'XYWinQTPri',
+        qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug',
         scanExcludeDirs: ['vendor'],
         pinnedProject: { root: 'C:/ws', relative: 'app.pro' },
         fileSyncPromptEnabled: false,
@@ -99,6 +101,7 @@ test('loadQtSettings preserves all field types correctly', () => {
     assert.equal(settings.arch, 'x64');
     assert.equal(settings.mode, 'release');
     assert.equal(settings.runtimeProcessName, 'XYWinQTPri');
+    assert.equal(settings.qmakeArgs, 'DEFINES+=FEATURE_X CONFIG+=qml_debug');
     assert.deepEqual(settings.scanExcludeDirs, ['vendor']);
     assert.deepEqual(settings.pinnedProject, { root: 'C:/ws', relative: 'app.pro' });
     assert.equal(settings.fileSyncPromptEnabled, false);
@@ -145,6 +148,7 @@ test('saveQtSettings round-trips with loadQtSettings', () => {
         qtPath: 'D:/Qt',
         pinnedProject: { root: 'C:/workspace', relative: 'app/demo.pro' },
         scanExcludeDirs: ['vendor', 'third_party'],
+        qmakeArgs: 'DEFINES+=FEATURE_X',
         fileSyncPromptEnabled: false,
         qmakeReminderEnabled: false
     };
@@ -155,6 +159,7 @@ test('saveQtSettings round-trips with loadQtSettings', () => {
     assert.equal(loaded.qtPath, 'D:/Qt');
     assert.deepEqual(loaded.pinnedProject, { root: 'C:/workspace', relative: 'app/demo.pro' });
     assert.deepEqual(loaded.scanExcludeDirs, ['vendor', 'third_party']);
+    assert.equal(loaded.qmakeArgs, 'DEFINES+=FEATURE_X');
     assert.equal(loaded.fileSyncPromptEnabled, false);
     assert.equal(loaded.qmakeReminderEnabled, false);
 });

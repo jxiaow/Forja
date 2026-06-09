@@ -74,6 +74,12 @@ function buildQtSection(data: TemplateData): string {
     h += ' placeholder="留空使用默认"';
     h += " onblur=\"vscode.postMessage({command:'saveQmakeTarget',";
     h += "value:this.value.trim()})\"/></div></div>";
+    h += '<div class="ci"><div class="cii"><div class="cil">QMake 参数</div>';
+    h += '<div class="cid">追加到 qmake 命令末尾，留空不追加</div></div>';
+    h += `<div class="cic"><input id="qmakeArgs" value="${esc(data.qmakeArgs || '')}"`;
+    h += ' placeholder="例如 DEFINES+=FEATURE_X CONFIG+=qml_debug"';
+    h += " onblur=\"vscode.postMessage({command:'saveQmakeArgs',";
+    h += "value:this.value.trim()})\"/></div></div>";
     h += '<div class="ci"><div class="cii"><div class="cil">停止进程名</div>';
     h += '<div class="cid">运行前先停止的进程名，留空使用输出名称</div></div>';
     h += `<div class="cic"><input id="runtimeProcessName" value="${esc(data.runtimeProcessName)}"`;

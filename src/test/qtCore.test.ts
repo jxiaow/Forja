@@ -7,7 +7,16 @@ import { createActionPlan } from '../qt/shared/qtCore';
 import { saveQtSettings, loadQtSettings, DEFAULT_QT, QtSettings } from '../core/settingsIO';
 
 const _tmpDirs: string[] = [];
-after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
+const _oldConfigDir = process.env.FORJA_CONFIG_DIR;
+const _testConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-core-config-'));
+process.env.FORJA_CONFIG_DIR = _testConfigDir;
+_tmpDirs.push(_testConfigDir);
+
+after(() => {
+    if (_oldConfigDir === undefined) { delete process.env.FORJA_CONFIG_DIR; }
+    else { process.env.FORJA_CONFIG_DIR = _oldConfigDir; }
+    for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); }
+});
 
 function makeWorkspace(): string {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-core-'));
@@ -46,6 +55,7 @@ test('createActionPlan uses settings.json when CLI args are omitted', async () =
         qtPath: null,
         vsDevShell: null,
         target: null,
+        qmakeArgs: null,
         saveLocal: false,
         json: true
     });
@@ -54,6 +64,47 @@ test('createActionPlan uses settings.json when CLI args are omitted', async () =
     assert.equal(result.workspace, workspace);
     assert.equal(result.project, project);
     assert.match(result.commands.join('\n'), process.platform === 'win32' ? /jom/ : /make/);
+});
+
+test('createActionPlan use persists qmake args and qmake appends them', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, readyQtSettings(workspace));
+
+    const useResult = await createActionPlan({
+        action: 'use',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug',
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(useResult.ok, true);
+    assert.deepEqual(useResult.data?.updated, { qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug' });
+
+    const qmakeResult = await createActionPlan({
+        action: 'qmake',
+        executionMode: 'dryRun',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        qmakeArgs: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(qmakeResult.ok, true);
+    assert.match(qmakeResult.commands.join('\n'), /DEFINES\+=FEATURE_X CONFIG\+=qml_debug/);
 });
 
 test('execution actions require a saved project even when a single pro file exists', async () => {

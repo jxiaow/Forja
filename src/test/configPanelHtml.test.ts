@@ -16,6 +16,7 @@ function createTemplateData(): TemplateData {
         cppStandard: 'c++17',
         scanExcludeDirs: '',
         target: '',
+        qmakeArgs: '',
         runtimeProcessName: '',
         isWin: true,
         autoDevShell: '',
@@ -57,6 +58,17 @@ test('qmake target input saves after editing is committed', () => {
         /<input id="target"[^>]*oninput="saveTarget\(\)"/,
         'target input should not write configuration for each typed character'
     );
+});
+
+test('config panel exposes qmake custom arguments', () => {
+    const html = getHtml({
+        ...createTemplateData(),
+        qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug'
+    });
+
+    assert.match(html, /id="qmakeArgs"/);
+    assert.match(html, /value="DEFINES\+=FEATURE_X CONFIG\+=qml_debug"/);
+    assert.match(html, /saveQmakeArgs/);
 });
 
 test('config panel exposes runtime process name override', () => {

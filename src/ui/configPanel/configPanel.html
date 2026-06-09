@@ -457,6 +457,10 @@ details[open] .arrow { transform: rotate(90deg); }
       <input id="target" value="{{effectiveTarget}}" data-default-target="{{defaultTarget}}" data-saved-target="{{savedTarget}}" placeholder="留空使用 .pro 默认值" onchange="saveTarget()" />
     </div>
     <div class="field">
+      <label>QMake 参数</label>
+      <input id="qmakeArgs" value="{{qmakeArgs}}" placeholder="例如 DEFINES+=FEATURE_X CONFIG+=qml_debug" onchange="saveQmakeArgs()" />
+    </div>
+    <div class="field">
       <label>停止进程名</label>
       <input id="runtimeProcessName" value="{{runtimeProcessName}}" placeholder="例如 XYWinQTPri，留空使用 TARGET" onchange="saveRuntimeProcessName()" />
     </div>
@@ -791,6 +795,10 @@ function saveTarget() {
 function saveRuntimeProcessName() {
   const val = document.getElementById('runtimeProcessName').value.trim().replace(/\.exe$/i, '');
   vscode.postMessage({ command: 'saveRuntimeProcessName', value: val });
+}
+function saveQmakeArgs() {
+  const val = document.getElementById('qmakeArgs').value.trim();
+  vscode.postMessage({ command: 'saveQmakeArgs', value: val });
 }
 function saveFileSyncPromptEnabled() { vscode.postMessage({ command: 'saveFileSyncPromptEnabled', value: document.getElementById('fileSyncPromptEnabled').checked }); }
 function saveQmakeReminderEnabled() { vscode.postMessage({ command: 'saveQmakeReminderEnabled', value: document.getElementById('qmakeReminderEnabled').checked }); }

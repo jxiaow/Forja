@@ -14,6 +14,7 @@ export interface CliOptions {
     qtPath: string | null;
     vsDevShell: string | null;
     target: string | null;
+    qmakeArgs?: string | null;
     detach?: boolean;
     saveLocal: boolean;
     json: boolean;

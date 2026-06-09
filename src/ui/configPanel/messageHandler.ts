@@ -148,6 +148,11 @@ export async function handleMessage(
             await updateConfig('target', String(msg.value || ''));
             break;
         }
+        case 'saveQmakeArgs': {
+            logger.info(`保存 QMake 自定义参数: "${msg.value}"`);
+            await updateConfig('qmakeArgs', String(msg.value || '').trim());
+            break;
+        }
         case 'saveRuntimeProcessName': {
             const value = String(msg.value || '').replace(/\.exe$/i, '');
             logger.info(`保存运行前停止进程名: "${value}"`);

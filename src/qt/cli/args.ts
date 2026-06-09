@@ -32,6 +32,7 @@ use 选项:
   --qt-path <path>       指定 Qt 安装路径
   --vs-dev-shell <path>  指定 Launch-VsDevShell.ps1 路径
   --target <name>        指定 QMake TARGET 覆盖
+  --qmake-args <args>    指定追加到 qmake 命令末尾的自定义参数
 
 执行选项:
   --plan                 仅生成命令计划，不执行（init/use/qmake/build/run/clean/rcc）
@@ -71,12 +72,13 @@ const knownFlags = new Set([
     '--qt-path',
     '--vs-dev-shell',
     '--target',
+    '--qmake-args',
     '--detach',
     '--json'
 ]);
 
 const commonFlags = ['--workspace', '--json'];
-const configFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
+const configFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target', '--qmake-args'];
 const planFlags = ['--plan', '--dry-run'];
 const actionAllowedFlags: Record<CliAction, Set<string>> = {
     init: new Set([...commonFlags, ...planFlags]),
@@ -142,6 +144,7 @@ export function parseCliArgs(args: string[]): CliOptions {
         qtPath: null,
         vsDevShell: null,
         target: null,
+        qmakeArgs: null,
         detach: false,
         saveLocal: false,
         json: false
@@ -185,6 +188,10 @@ export function parseCliArgs(args: string[]): CliOptions {
                 break;
             case '--target':
                 options.target = readValue(args, i, arg);
+                i++;
+                break;
+            case '--qmake-args':
+                options.qmakeArgs = readValue(args, i, arg);
                 i++;
                 break;
             case '--detach':
