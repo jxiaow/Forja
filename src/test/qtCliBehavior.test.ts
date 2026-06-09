@@ -7,7 +7,7 @@ import * as path from 'path';
 import { runQtCli } from '../qt/cli';
 import { runSyncCli } from '../sync/cli';
 import { runLogPath, writeRunState } from '../qt/shared/localState';
-import { saveSyncSettings, DEFAULT_SYNC } from '../core/settingsIO';
+import { saveQtSettings, saveSyncSettings, DEFAULT_QT, DEFAULT_SYNC } from '../core/settingsIO';
 import { writeServers } from '../core/serverStore';
 
 const _tmpDirs: string[] = [];
@@ -41,6 +41,27 @@ async function captureStdout(fn: () => Promise<void>): Promise<string> {
     }
     return chunks.join('\n');
 }
+
+
+test('qt status reports current target in json and text output', async () => {
+    const workspace = makeWorkspace();
+    fs.writeFileSync(path.join(workspace, 'demo.pro'), 'TARGET = demo\nQT += core\n', 'utf8');
+    saveQtSettings(workspace, {
+        ...DEFAULT_QT,
+        pinnedProject: { root: workspace, relative: 'demo.pro' },
+        mode: 'debug',
+        arch: process.platform === 'win32' ? 'x86' : 'x64',
+        qtPath: 'D:/Qt'
+    });
+
+    const jsonOutput = await captureStdout(() => runQtCli(['status', '--workspace', workspace, '--json']));
+    const data = JSON.parse(jsonOutput);
+    assert.equal(data.ok, true);
+    assert.equal(data.resolved.target, 'demo');
+
+    const textOutput = await captureStdout(() => runQtCli(['status', '--workspace', workspace]));
+    assert.match(textOutput, /Target: demo/);
+});
 
 test('forja sync --plan returns target server and pending files', async () => {
     const workspace = makeWorkspace();
