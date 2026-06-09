@@ -198,7 +198,7 @@ export async function executeTestConnection(): Promise<void> {
 
     let server: ServerConfig | undefined;
     if (project?.selectedServer) {
-        server = servers.find(s => s.id === project.selectedServer) || servers.find(s => s.name === project.selectedServer);
+        server = servers.find(s => s.id === project.selectedServer);
     }
     if (!server) {
         if (servers.length === 0) {
@@ -206,11 +206,11 @@ export async function executeTestConnection(): Promise<void> {
             return;
         }
         const pick = await vscode.window.showQuickPick(
-            servers.map(s => ({ label: s.name, description: `${s.username}@${s.host}:${s.port}` })),
+            servers.map(s => ({ label: s.name, description: `${s.username}@${s.host}:${s.port}`, serverId: s.id })),
             { placeHolder: '选择要测试的服务器' }
         );
         if (!pick) { return; }
-        server = servers.find(s => s.name === pick.label);
+        server = servers.find(s => s.id === pick.serverId);
         if (!server) { return; }
     }
 

@@ -2,7 +2,7 @@
 
 命令行工具用于 C++ 项目的构建、运行和环境管理。
 
-当前 CLI 已实现子命令：`qt`、`sdk`、`cleanup`。
+当前 CLI 已实现子命令：`qt`、`sdk`、`sync`、`cleanup`。
 
 ## 安装
 
@@ -180,8 +180,8 @@ forja sync --file src/main.cpp --json
 | 选项 | 说明 |
 | --- | --- |
 | `status` | 查看同步配置是否就绪、缺哪些配置项，不执行上传 |
-| `--plan`, `--dry-run` | 预览待同步文件、目标服务器和路径，不执行上传 |
-| `--server <name>` | 指定服务器名称，对应 `~/.forja/servers.json` 中的 `name` |
+| `--plan` | 预览待同步文件、目标服务器和路径，不执行上传 |
+| `--server <id>` | 指定服务器 ID，对应 `~/.forja/servers.json` 中的 `id` |
 | `--repo <name>` | 多 git 仓库 workspace 时只同步指定仓库 |
 | `--file <path>` | 单文件同步；可重复，路径可相对 workspace、仓库根目录或使用绝对路径 |
 

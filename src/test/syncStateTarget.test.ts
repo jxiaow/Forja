@@ -42,13 +42,13 @@ test('sync state is isolated by server target and remote path', () => {
     }
 });
 
-test('sync state keeps legacy non-target behavior for callers without target context', () => {
+test('sync state requires target context for sync markers', () => {
     const workspace = createWorkspace();
     try {
         clearSyncState(workspace);
         markSyncedBatch(workspace, ['main.cpp']);
 
-        assert.deepEqual(filterNeedsSync(workspace, ['main.cpp']), []);
+        assert.deepEqual(filterNeedsSync(workspace, ['main.cpp']), ['main.cpp']);
         assert.deepEqual(filterNeedsSync(workspace, ['main.cpp'], targetA), ['main.cpp']);
     } finally {
         clearSyncState(workspace);

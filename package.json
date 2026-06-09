@@ -3,7 +3,7 @@
   "displayName": "Forja",
   "publisher": "forja",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.50",
+  "version": "0.7.51",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -144,7 +144,8 @@
   },
   "scripts": {
     "copy-html": "node scripts/copy-html.js",
-    "compile": "tsc -p ./ && npm run copy-html",
+    "clean-out": "node scripts/clean-out.js",
+    "compile": "npm run clean-out && tsc -p ./ && npm run copy-html",
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test --test-reporter=spec out/test",
     "lint": "eslint src/",

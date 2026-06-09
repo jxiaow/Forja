@@ -134,7 +134,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         log('执行命令: Select Project');
         const projects = projectScanner.projects;
         if (projects.length === 0) {
-            vscode.window.showInformationMessage('SDK Pilot: 未找到可用的 SDK 项目');
+            vscode.window.showInformationMessage('Forja SDK: 未找到可用的 SDK 项目');
             return;
         }
         const currentPath = stateManager.currentProject?.path;

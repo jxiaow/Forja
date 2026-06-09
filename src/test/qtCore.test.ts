@@ -745,6 +745,84 @@ test('project error branch fills resolved with current config', async () => {
     assert.equal(result.resolved?.qtPath, '');
 });
 
+test('project error branch reads Forja environment variables', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-env-alias-'));
+    _tmpDirs.push(workspace);
+    const oldQtPath = process.env.FORJA_QT_PATH;
+    const oldVsDevShell = process.env.FORJA_VS_DEV_SHELL;
+
+    process.env.FORJA_QT_PATH = 'D:/ForjaQt';
+    process.env.FORJA_VS_DEV_SHELL = 'C:/ForjaVS/Launch-VsDevShell.ps1';
+
+    try {
+        const result = await createActionPlan({
+            action: 'build',
+            executionMode: 'dryRun',
+            workspace,
+            project: null,
+            mode: null,
+            arch: null,
+            qtPath: null,
+            vsDevShell: null,
+            target: null,
+            saveLocal: false,
+            json: true
+        });
+
+        assert.equal(result.ok, false);
+        assert.equal(result.resolved?.qtPath, 'D:/ForjaQt');
+        assert.equal(result.resolved?.vsDevShell, 'C:/ForjaVS/Launch-VsDevShell.ps1');
+    } finally {
+        if (oldQtPath === undefined) { delete process.env.FORJA_QT_PATH; }
+        else { process.env.FORJA_QT_PATH = oldQtPath; }
+        if (oldVsDevShell === undefined) { delete process.env.FORJA_VS_DEV_SHELL; }
+        else { process.env.FORJA_VS_DEV_SHELL = oldVsDevShell; }
+    }
+});
+
+test('project error branch ignores legacy Qt Pilot environment variables', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-env-legacy-'));
+    _tmpDirs.push(workspace);
+    const oldQtPath = process.env.FORJA_QT_PATH;
+    const oldVsDevShell = process.env.FORJA_VS_DEV_SHELL;
+    const oldLegacyQtPath = process.env.QT_PILOT_QT_PATH;
+    const oldLegacyVsDevShell = process.env.QT_PILOT_VS_DEV_SHELL;
+
+    delete process.env.FORJA_QT_PATH;
+    delete process.env.FORJA_VS_DEV_SHELL;
+    process.env.QT_PILOT_QT_PATH = 'D:/LegacyQt';
+    process.env.QT_PILOT_VS_DEV_SHELL = 'C:/LegacyVS/Launch-VsDevShell.ps1';
+
+    try {
+        const result = await createActionPlan({
+            action: 'build',
+            executionMode: 'dryRun',
+            workspace,
+            project: null,
+            mode: null,
+            arch: null,
+            qtPath: null,
+            vsDevShell: null,
+            target: null,
+            saveLocal: false,
+            json: true
+        });
+
+        assert.equal(result.ok, false);
+        assert.equal(result.resolved?.qtPath, '');
+        assert.equal(result.resolved?.vsDevShell, '');
+    } finally {
+        if (oldQtPath === undefined) { delete process.env.FORJA_QT_PATH; }
+        else { process.env.FORJA_QT_PATH = oldQtPath; }
+        if (oldVsDevShell === undefined) { delete process.env.FORJA_VS_DEV_SHELL; }
+        else { process.env.FORJA_VS_DEV_SHELL = oldVsDevShell; }
+        if (oldLegacyQtPath === undefined) { delete process.env.QT_PILOT_QT_PATH; }
+        else { process.env.QT_PILOT_QT_PATH = oldLegacyQtPath; }
+        if (oldLegacyVsDevShell === undefined) { delete process.env.QT_PILOT_VS_DEV_SHELL; }
+        else { process.env.QT_PILOT_VS_DEV_SHELL = oldLegacyVsDevShell; }
+    }
+});
+
 test('run with Makefile generates full command chain including executable', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, readyQtSettings(workspace));
@@ -782,7 +860,7 @@ test('run with Makefile generates full command chain including executable', asyn
 
 test('run uses configured runtime process name only for pre-run stop', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'XYWinQTPri' }));
+    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'DemoAppWorker' }));
     const projectDir = workspace;
     if (process.platform === 'win32') {
         fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
@@ -806,7 +884,7 @@ test('run uses configured runtime process name only for pre-run stop', async () 
     });
 
     assert.equal(result.ok, true);
-    assert.match(result.commands[0], /XYWinQTPri/);
+    assert.match(result.commands[0], /DemoAppWorker/);
     assert.equal(result.executablePath, path.join(workspace, process.platform === 'win32' ? 'debug\\demo.exe' : 'debug/demo'));
 });
 
@@ -841,7 +919,7 @@ test('stop uses runtime executable name when Makefile is available', async () =>
 
 test('stop prefers configured runtime process name over Makefile target', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'XYWinQTPri' }));
+    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'DemoAppWorker' }));
     if (process.platform === 'win32') {
         fs.writeFileSync(path.join(workspace, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
         fs.writeFileSync(path.join(workspace, 'Makefile.Debug'), 'DESTDIR_TARGET = debug\\realapp.exe\n', 'utf8');
@@ -864,7 +942,7 @@ test('stop prefers configured runtime process name over Makefile target', async 
     });
 
     assert.equal(result.ok, true);
-    assert.ok(result.commands.some(c => /XYWinQTPri/.test(c)));
+    assert.ok(result.commands.some(c => /DemoAppWorker/.test(c)));
     assert.ok(!result.commands.some(c => /realapp/.test(c)));
 });
 

@@ -47,6 +47,13 @@ test('parseSyncCliArgs accepts generic sync flags', () => {
     assert.equal(parsed.json, true);
 });
 
+test('parseSyncCliArgs rejects removed --dry-run alias', () => {
+    assert.throws(
+        () => parseSyncCliArgs(['--dry-run']),
+        /未知参数: --dry-run/
+    );
+});
+
 test('parseSyncCliArgs accepts repeated file filters', () => {
     const parsed = parseSyncCliArgs(['--file', 'src/main.cpp', '--file', 'include/app.h']);
 

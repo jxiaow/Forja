@@ -32,26 +32,26 @@ forja <subcommand> [action] [options]
 | 命令 | 允许参数 |
 |------|----------|
 | `status` | `--workspace`, `--json` |
-| `init` | `--workspace`, `--json`, `--plan`, `--dry-run` |
-| `use` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--project`, `--mode`, `--arch`, `--qt-path`, `--vs-dev-shell`, `--target` |
+| `init` | `--workspace`, `--json`, `--plan` |
+| `use` | `--workspace`, `--json`, `--plan`, `--project`, `--mode`, `--arch`, `--qt-path`, `--vs-dev-shell`, `--target` |
 | `env` | `--workspace`, `--json` |
 | `projects` | `--workspace`, `--json` |
-| `qmake` | `--workspace`, `--json`, `--plan`, `--dry-run` |
-| `build` | `--workspace`, `--json`, `--plan`, `--dry-run` |
-| `run` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--detach` |
-| `clean` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `qmake` | `--workspace`, `--json`, `--plan` |
+| `build` | `--workspace`, `--json`, `--plan` |
+| `run` | `--workspace`, `--json`, `--plan`, `--detach` |
+| `clean` | `--workspace`, `--json`, `--plan` |
 | `stop` | `--workspace`, `--json` |
 | `ps` | `--workspace`, `--json` |
-| `rcc` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `rcc` | `--workspace`, `--json`, `--plan` |
 
 ## Sync 命令参数矩阵
 
-`forja sync status` 只读取本地同步配置，返回启用状态、服务器选择、远程路径和缺失项，不执行 SSH/SCP，也不扫描 git。`forja sync --plan` / `forja sync --dry-run` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
+`forja sync status` 只读取本地同步配置，返回启用状态、服务器选择、远程路径和缺失项，不执行 SSH/SCP，也不扫描 git。`forja sync --plan` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
 
 | 命令 | 允许参数 |
 |------|----------|
 | `status` | `--workspace`, `--json`, `--server` |
-| `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo`, `--file` |
+| `sync` | `--workspace`, `--json`, `--plan`, `--server`, `--repo`, `--file` |
 
 `--file <path>` 可重复使用，用于单文件或少量指定文件同步。路径可以是相对 workspace 的路径、相对仓库根目录的路径，或绝对路径；未指定时仍同步 git diff / 暂存区 / 未跟踪文件中需要上传的变更。
 
@@ -79,9 +79,9 @@ forja <subcommand> [action] [options]
 | `use` | `--workspace`, `--json`, `--project`, `--mode`, `--arch`, `--vs-dev-cmd` |
 | `env` | `--workspace`, `--json` |
 | `projects` | `--workspace`, `--json` |
-| `build` | `--workspace`, `--json`, `--plan`, `--dry-run` |
-| `rebuild` | `--workspace`, `--json`, `--plan`, `--dry-run` |
-| `clean` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `build` | `--workspace`, `--json`, `--plan` |
+| `rebuild` | `--workspace`, `--json`, `--plan` |
+| `clean` | `--workspace`, `--json`, `--plan` |
 
 ## SDK use 配置参数
 
@@ -250,7 +250,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "exitCode": 0,
   "pid": 13228,
   "logFile": "C:/Users/.../forja-logs/workspace/run.log",
-  "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
+  "executablePath": "C:/workspace/release/x86/DemoApp.exe",
   "resolved": { "mode": "release", "arch": "x86" }
 }
 ```
@@ -265,7 +265,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "action": "ps",
   "running": true,
   "pid": 13228,
-  "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
+  "executablePath": "C:/workspace/release/x86/DemoApp.exe",
   "logFile": "C:/Users/.../forja-logs/workspace/run.log"
 }
 ```

@@ -39,8 +39,8 @@ function _targetPrefix(context: SyncTargetContext): string {
     return `target:${encodeURIComponent(context.serverId)}:${encodeURIComponent(_normalizeRemotePath(context.remotePath))}:`;
 }
 
-function _stateKey(relativePath: string, context?: SyncTargetContext): string {
-    if (!context) { return relativePath; }
+function _stateKey(relativePath: string, context?: SyncTargetContext): string | null {
+    if (!context) { return null; }
     return `${_targetPrefix(context)}${relativePath}`;
 }
 
@@ -84,8 +84,10 @@ function _writeState(workspaceRoot: string, state: SyncStateData): void {
  * 判断文件是否需要同步：当前 mtime 比上次同步记录的 mtime 新
  */
 export function needsSync(workspaceRoot: string, relativePath: string, context?: SyncTargetContext): boolean {
+    const key = _stateKey(relativePath, context);
+    if (!key) { return true; }
     const state = _readState(workspaceRoot);
-    const record = state.files[_stateKey(relativePath, context)];
+    const record = state.files[key];
     if (!record) {
         return true;
     }
@@ -108,7 +110,12 @@ export function filterNeedsSync(workspaceRoot: string, files: string[], context?
     const result: string[] = [];
 
     for (const relativePath of files) {
-        const record = state.files[_stateKey(relativePath, context)];
+        const key = _stateKey(relativePath, context);
+        if (!key) {
+            result.push(relativePath);
+            continue;
+        }
+        const record = state.files[key];
         if (!record) {
             result.push(relativePath);
             continue;
@@ -132,11 +139,13 @@ export function filterNeedsSync(workspaceRoot: string, files: string[], context?
  * 标记文件已同步成功
  */
 export function markSynced(workspaceRoot: string, relativePath: string, context?: SyncTargetContext): void {
+    const key = _stateKey(relativePath, context);
+    if (!key) { return; }
     const state = _readState(workspaceRoot);
     const absPath = path.join(workspaceRoot, relativePath);
     try {
         const stat = fs.statSync(absPath);
-        state.files[_stateKey(relativePath, context)] = {
+        state.files[key] = {
             mtime: stat.mtimeMs,
             syncedAt: new Date().toISOString()
         };
@@ -150,6 +159,7 @@ export function markSynced(workspaceRoot: string, relativePath: string, context?
  * 批量标记已同步
  */
 export function markSyncedBatch(workspaceRoot: string, files: string[], context?: SyncTargetContext): void {
+    if (!context) { return; }
     const state = _readState(workspaceRoot);
     const now = new Date().toISOString();
 
@@ -157,7 +167,7 @@ export function markSyncedBatch(workspaceRoot: string, files: string[], context?
         const absPath = path.join(workspaceRoot, relativePath);
         try {
             const stat = fs.statSync(absPath);
-            state.files[_stateKey(relativePath, context)] = {
+            state.files[_stateKey(relativePath, context)!] = {
                 mtime: stat.mtimeMs,
                 syncedAt: now
             };

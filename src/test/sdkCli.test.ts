@@ -135,6 +135,15 @@ test('SDK CLI build accepts --plan and routes missing config to status', async (
     assert.deepEqual(parsed.nextActions, ['forja sdk status --json']);
 });
 
+test('SDK CLI rejects removed --dry-run alias', async () => {
+    const output = await captureOutput(() => runSdkCli(['build', '--json', '--dry-run']));
+    const parsed = JSON.parse(output);
+
+    assert.equal(process.exitCode, 1);
+    assert.equal(parsed.ok, false);
+    assert.ok(parsed.diagnostics[0].message.includes('未知参数: --dry-run'));
+});
+
 test('SDK CLI build plan inherits mode and arch saved by use', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
@@ -537,7 +546,18 @@ import { scanProjects } from '../sdk/cli/index';
 
 const _tmpDirs: string[] = [];
 import { after } from 'node:test';
-after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
+async function rmTmpDir(dir: string): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+            fs.rmSync(dir, { recursive: true, force: true });
+            return;
+        } catch (e) {
+            if (attempt === 4) { throw e; }
+            await new Promise(resolve => setTimeout(resolve, 50 * (attempt + 1)));
+        }
+    }
+}
+after(async () => { for (const d of _tmpDirs) { await rmTmpDir(d); } });
 
 test('scanProjects finds .sln files on Windows', () => {
     if (os.platform() !== 'win32') { return; } // Windows-only

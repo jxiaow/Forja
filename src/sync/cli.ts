@@ -5,7 +5,7 @@
 import * as path from 'path';
 import * as cp from 'child_process';
 import { filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
-import { readProjectSyncConfig, getServerById, getServerByName, readServers, ServerConfig } from '../core/serverStore';
+import { readProjectSyncConfig, getServerById, readServers, ServerConfig } from '../core/serverStore';
 import { ensureRemoteDir, scpUpload } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
 import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
@@ -133,19 +133,19 @@ async function resolveCliPassword(server: ServerConfig): Promise<string | null> 
 /**
  * CLI 同步入口。
  * @param workspaceRoot 工作区根目录
- * @param serverName 可选，指定服务器名称或 ID
+ * @param serverId 可选，指定服务器 ID
  * @param repoFilter 可选，指定只同步某个子仓库名称
  */
-export async function executeSyncCli(workspaceRoot: string, serverName?: string, repoFilter?: string, fileFilters: string[] = []): Promise<SyncResult> {
+export async function executeSyncCli(workspaceRoot: string, serverId?: string, repoFilter?: string, fileFilters: string[] = []): Promise<SyncResult> {
     const project = readProjectSyncConfig(workspaceRoot);
     if (!project.enabled) {
         return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '远程同步未启用' }], server: '', remotePath: '' };
     }
 
-    const targetName = serverName || project.selectedServer;
-    const server = getServerById(targetName) || getServerByName(targetName);
+    const targetId = serverId || project.selectedServer;
+    const server = getServerById(targetId);
     if (!server) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetName}" 未找到，请检查 ~/.forja/servers.json` }], server: targetName, remotePath: '' };
+        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json` }], server: targetId, remotePath: '' };
     }
 
     const remotePath = project.remotePaths[server.id] || '';
@@ -237,7 +237,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string,
     return result;
 }
 
-export async function planSyncCli(workspaceRoot: string, serverName?: string, repoFilter?: string, fileFilters: string[] = []): Promise<SyncPlanResult> {
+export async function planSyncCli(workspaceRoot: string, serverId?: string, repoFilter?: string, fileFilters: string[] = []): Promise<SyncPlanResult> {
     const project = readProjectSyncConfig(workspaceRoot);
     const empty = (error: string, server = '', remotePath = ''): SyncPlanResult => ({
         ok: false,
@@ -255,10 +255,10 @@ export async function planSyncCli(workspaceRoot: string, serverName?: string, re
         return empty('远程同步未启用');
     }
 
-    const targetName = serverName || project.selectedServer;
-    const server = getServerById(targetName) || getServerByName(targetName);
+    const targetId = serverId || project.selectedServer;
+    const server = getServerById(targetId);
     if (!server) {
-        return empty(`服务器 "${targetName}" 未找到，请检查 ~/.forja/servers.json`, targetName, '');
+        return empty(`服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json`, targetId, '');
     }
 
     const remotePath = project.remotePaths[server.id] || '';
@@ -312,17 +312,17 @@ export async function planSyncCli(workspaceRoot: string, serverName?: string, re
     return plan;
 }
 
-export function statusSyncCli(workspaceRoot: string, serverName?: string): SyncStatusResult {
+export function statusSyncCli(workspaceRoot: string, serverId?: string): SyncStatusResult {
     const project = readProjectSyncConfig(workspaceRoot);
     const servers = readServers();
-    const targetName = serverName || project.selectedServer;
-    const server = targetName ? (getServerById(targetName) || getServerByName(targetName)) : null;
+    const targetId = serverId || project.selectedServer;
+    const server = targetId ? getServerById(targetId) : null;
     const remotePath = server ? (project.remotePaths[server.id] || '') : '';
 
     const checks = {
         enabled: project.enabled,
         servers: servers.length > 0,
-        selectedServer: targetName.length > 0,
+        selectedServer: targetId.length > 0,
         serverExists: !!server,
         remotePath: remotePath.length > 0
     };
@@ -339,7 +339,7 @@ export function statusSyncCli(workspaceRoot: string, serverName?: string): SyncS
             enabled: '远程同步未启用',
             servers: '未添加同步服务器',
             selectedServer: '未选择同步服务器',
-            server: `服务器 "${targetName}" 未找到`,
+            server: `服务器 "${targetId}" 未找到`,
             remotePath: '未配置远程路径'
         };
         return { level: 'error' as const, message: messages[key] || key };
@@ -383,11 +383,10 @@ const syncHelpText = `Forja Sync CLI — 通用远程文件同步
 
 选项:
   --workspace <path>     工作区路径（默认当前目录）
-  --server <name>        指定服务器名称或 ID
+  --server <id>          指定服务器 ID
   --repo <name>          指定子仓库名称（多仓库工作区）
   --file <path>          指定单个文件路径；可重复，路径可相对 workspace 或仓库根目录
   --plan                 仅预览待同步文件，不执行 SSH/SCP
-  --dry-run              （兼容旧版，等同于 --plan）
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
 
@@ -436,9 +435,8 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
                 options.action = 'status';
                 break;
             case '--plan':
-            case '--dry-run':
                 if (options.action === 'status') {
-                    throw new Error('forja sync status 不支持 --plan/--dry-run');
+                    throw new Error('forja sync status 不支持 --plan');
                 }
                 options.executionMode = 'dryRun';
                 break;

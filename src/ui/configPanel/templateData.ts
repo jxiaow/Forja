@@ -19,14 +19,15 @@ import type { ServerConfig, ProjectSyncConfig } from '../../core/serverStore';
 
 function buildSyncReadinessIssues(sync: ProjectSyncConfig, servers: ServerConfig[]): string[] {
     const issues: string[] = [];
+    const selectedServerExists = !!sync.selectedServer && servers.some(s => s.id === sync.selectedServer);
     if (!sync.enabled) { issues.push('未启用远程同步'); }
     if (servers.length === 0) { issues.push('未添加服务器'); }
     if (!sync.selectedServer) {
         issues.push('未选择同步服务器');
-    } else if (!servers.some(s => s.id === sync.selectedServer || s.name === sync.selectedServer)) {
+    } else if (!selectedServerExists) {
         issues.push('已选择服务器不存在');
     }
-    if (!sync.selectedServer || !sync.remotePaths[sync.selectedServer]) {
+    if (!selectedServerExists || !sync.remotePaths[sync.selectedServer]) {
         issues.push('未设置远程路径');
     }
     return issues;
@@ -41,6 +42,7 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         ? readProjectSyncConfig(wsRoot)
         : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release'], remotePaths: {} };
     const servers = readServers();
+    const selectedServerExists = !!sync.selectedServer && servers.some(s => s.id === sync.selectedServer);
     const pendingInfo = wsRoot ? getSyncPendingInfo(wsRoot, sync.ignore) : { count: 0, lastTime: '' };
 
     return {
@@ -75,7 +77,7 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
             privateKeyPath: s.privateKeyPath, password: s.password
         })),
         syncIgnore: sync.ignore.join(', '),
-        syncRemotePath: sync.remotePaths[sync.selectedServer] || '',
+        syncRemotePath: selectedServerExists ? (sync.remotePaths[sync.selectedServer] || '') : '',
         syncPendingCount: pendingInfo.count,
         syncLastTime: pendingInfo.lastTime,
         syncReadinessIssues: buildSyncReadinessIssues(sync, servers),

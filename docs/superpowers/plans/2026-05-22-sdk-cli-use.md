@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add `compilot sdk use` and make SDK execution commands read only saved configuration.
+**Goal:** Add `forja sdk use` and make SDK execution commands read only saved configuration.
 
 **Architecture:** Keep implementation inside `src/sdk/cli/index.ts` without introducing new cross-module dependencies. Reuse existing SDK settings helpers and project validation helpers. Tests stay in `src/test/sdkCli.test.ts`.
 
-**Tech Stack:** TypeScript, Node `node:test`, existing Compilot CLI settings storage.
+**Tech Stack:** TypeScript, Node `node:test`, existing Forja CLI settings storage.
 
 ---
 
@@ -38,7 +38,7 @@
 - Modify: `src/sdk/cli/index.ts`
 - Test: `src/test/sdkCli.test.ts`
 
-- [ ] Add failing tests that `build --plan` with no SDK settings returns `ok: false` and `nextActions: ["compilot sdk status --json"]` even when exactly one SDK project exists.
+- [ ] Add failing tests that `build --plan` with no SDK settings returns `ok: false` and `nextActions: ["forja sdk status --json"]` even when exactly one SDK project exists.
 - [ ] Update execution path to require a settings file and saved project before command generation.
 - [ ] Keep stale pinned-project rejection behavior from the existing tests.
 - [ ] Run the SDK CLI test file; expected pass.

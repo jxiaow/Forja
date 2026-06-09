@@ -207,3 +207,29 @@ test('sync page shows specific readiness hints when configuration is incomplete'
     assert.match(html, /未选择同步服务器/);
     assert.match(html, /未设置远程路径/);
 });
+
+test('sync page does not render stale remote path or fallback server when selected id is invalid', () => {
+    const html = getPageHtml('sync', {
+        ...createTemplateData(),
+        syncEnabled: true,
+        syncSelectedServer: 'legacy-name',
+        syncServers: [{
+            id: 'server-1',
+            name: 'dev',
+            host: 'dev.example.com',
+            port: 22,
+            username: 'dev',
+            authMode: 'key',
+            privateKeyPath: '~/.ssh/id_rsa',
+            password: ''
+        }],
+        syncRemotePath: '/legacy/path',
+        syncReadinessIssues: ['已选择服务器不存在', '未设置远程路径']
+    });
+
+    assert.match(html, /已选择服务器不存在/);
+    assert.match(html, /选择服务器/);
+    assert.match(html, /data-value="server-1"/);
+    assert.doesNotMatch(html, /\/legacy\/path/);
+    assert.doesNotMatch(html, /confirmRemoveServer\(this,'server-1'\)/);
+});

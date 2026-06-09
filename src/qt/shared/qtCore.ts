@@ -41,6 +41,14 @@ function resolveWorkspace(input: string | null): string {
     return path.resolve(input || process.cwd());
 }
 
+function getQtPathEnv(): string {
+    return process.env.FORJA_QT_PATH || '';
+}
+
+function getVsDevShellEnv(): string {
+    return process.env.FORJA_VS_DEV_SHELL || '';
+}
+
 function withoutConfigOptions(options: CliOptions): CliOptions {
     return {
         ...options,
@@ -562,8 +570,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     if (projectResult.error && options.action !== 'init') {
         const errMode = settings.mode || 'debug';
         const errArch = settings.arch || getDefaultArch();
-        const errQtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-        const errVsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+        const errQtPath = settings.qtPath || getQtPathEnv();
+        const errVsDevShell = resolveVsDevShellPath(settings.vsInstall) || getVsDevShellEnv();
         const errQmakeTarget = settings.target || '';
         result.resolved = buildResolvedConfig(errMode, errArch, errQtPath, errVsDevShell, errQmakeTarget, undefined, undefined, settings.jomPath || undefined);
         result.diagnostics.push({ level: 'error', message: projectResult.error });
@@ -576,8 +584,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const mode = settings.mode || 'debug';
     const autoArch = getAvailableArch().length === 1 ? getDefaultArch() : '';
     const arch = settings.arch || autoArch || getDefaultArch();
-    const qtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const qtPath = settings.qtPath || getQtPathEnv();
+    const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || getVsDevShellEnv();
     const target = settings.target || '';
     const qmakeArgs = settings.qmakeArgs || '';
     const jomPath = settings.jomPath || '';

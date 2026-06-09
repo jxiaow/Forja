@@ -152,7 +152,7 @@ export class ProjectScanner {
 
     const selected = await vscode.window.showQuickPick(items, {
       placeHolder: '检测到多个 SDK 项目，请选择一个作为当前编译目标',
-      title: 'SDK Pilot: 选择项目'
+      title: 'Forja SDK: 选择项目'
     });
 
     if (selected) {

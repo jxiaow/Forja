@@ -2,7 +2,7 @@
  * Package the VSCode extension into dist/<version>/vs/.
  *
  * Generates dist/<version>/vs/ containing:
- *   - compilot-x.x.x.vsix
+ *   - forja-x.x.x.vsix
  *   - README.md (VSCode extension documentation)
  *
  * Note: vsce always reads root README.md for the extension page,

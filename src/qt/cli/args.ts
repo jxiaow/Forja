@@ -36,7 +36,6 @@ use 选项:
 
 执行选项:
   --plan                 仅生成命令计划，不执行（init/use/qmake/build/run/clean/rcc）
-  --dry-run              （兼容旧版，等同于 --plan）
   --detach               run 成功构建后后台启动程序
 
 示例:
@@ -64,7 +63,6 @@ function isCliAction(value: string): value is CliAction {
 
 const knownFlags = new Set([
     '--plan',
-    '--dry-run',
     '--workspace',
     '--project',
     '--mode',
@@ -79,7 +77,7 @@ const knownFlags = new Set([
 
 const commonFlags = ['--workspace', '--json'];
 const configFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target', '--qmake-args'];
-const planFlags = ['--plan', '--dry-run'];
+const planFlags = ['--plan'];
 const actionAllowedFlags: Record<CliAction, Set<string>> = {
     init: new Set([...commonFlags, ...planFlags]),
     use: new Set([...commonFlags, ...planFlags, ...configFlags]),
@@ -158,8 +156,6 @@ export function parseCliArgs(args: string[]): CliOptions {
 
         switch (arg) {
             case '--plan':
-            case '--dry-run':
-                // 兼容旧版，等同于 --plan
                 options.executionMode = 'dryRun';
                 break;
             case '--workspace':

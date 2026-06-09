@@ -40,3 +40,11 @@ test('extension registers only generic sync tab command', () => {
     assert.match(extension, /forja\.showSyncTab/);
     assert.doesNotMatch(extension, /forja\.qt\.showSyncTab/);
 });
+
+test('sync test connection quick pick resolves duplicate server names by id', () => {
+    const watcher = fs.readFileSync(path.join(repoRoot, 'src', 'sync', 'syncWatcher.ts'), 'utf-8');
+
+    assert.match(watcher, /servers\.map\(s => \(\{[\s\S]*?serverId: s\.id[\s\S]*?\}\)\)/);
+    assert.match(watcher, /servers\.find\(s => s\.id === pick\.serverId\)/);
+    assert.doesNotMatch(watcher, /servers\.find\(s => s\.name === pick\.label\)/);
+});

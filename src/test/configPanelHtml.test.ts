@@ -74,11 +74,11 @@ test('config panel exposes qmake custom arguments', () => {
 test('config panel exposes runtime process name override', () => {
     const html = getHtml({
         ...createTemplateData(),
-        runtimeProcessName: 'XYWinQTPri'
+        runtimeProcessName: 'DemoAppWorker'
     });
 
     assert.match(html, /id="runtimeProcessName"/);
-    assert.match(html, /value="XYWinQTPri"/);
+    assert.match(html, /value="DemoAppWorker"/);
     assert.match(html, /saveRuntimeProcessName/);
 });
 

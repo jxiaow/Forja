@@ -36,12 +36,12 @@ export class SdkBuilder {
     // 前置检查：是否有项目
     if (!this.stateManager.currentProject) {
       log(`${action}: 无当前项目，提示用户选择`);
-      vscode.window.showWarningMessage('SDK Pilot: 请先选择一个 SDK 项目');
+      vscode.window.showWarningMessage('Forja SDK: 请先选择一个 SDK 项目');
       return;
     }
     if (!fs.existsSync(this.stateManager.currentProject.path)) {
       log(`${action}: 当前项目文件不存在: ${this.stateManager.currentProject.path}`);
-      vscode.window.showWarningMessage('SDK Pilot: 当前 SDK 项目文件不存在，请重新选择项目');
+      vscode.window.showWarningMessage('Forja SDK: 当前 SDK 项目文件不存在，请重新选择项目');
       this.stateManager.currentProject = null;
       await this.stateManager.persistToConfig();
       return;
@@ -50,7 +50,7 @@ export class SdkBuilder {
     // 前置检查：是否正在编译
     if (this.stateManager.isBuilding) {
       log(`${action}: 当前有编译任务正在执行，拒绝`);
-      vscode.window.showWarningMessage('SDK Pilot: 当前有编译任务正在执行');
+      vscode.window.showWarningMessage('Forja SDK: 当前有编译任务正在执行');
       return;
     }
 
@@ -64,7 +64,7 @@ export class SdkBuilder {
       if (!vsDevCmdPath) {
         logError(`${action}: 未检测到 VS 环境`);
         vscode.window.showErrorMessage(
-          'SDK Pilot: 未检测到 Visual Studio 环境，请安装 Visual Studio 或在设置中配置 sdkPilot.vsDevCmdPath'
+          'Forja SDK: 未检测到 Visual Studio 环境，请安装 Visual Studio，或在 Forja 配置面板中配置 VS 安装路径'
         );
         return;
       }
@@ -127,7 +127,7 @@ export class SdkBuilder {
     } catch (error) {
       this.stateManager.isBuilding = false;
       logError('任务启动失败', error);
-      vscode.window.showErrorMessage(`SDK Pilot: 任务启动失败 - ${error}`);
+      vscode.window.showErrorMessage(`Forja SDK: 任务启动失败 - ${error}`);
     }
   }
 }

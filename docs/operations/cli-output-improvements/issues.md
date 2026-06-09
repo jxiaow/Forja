@@ -156,7 +156,7 @@ if (isDetachSuccess) { return out; }
 | 单个候选项目的提示文本 | 中 |
 | 无 .pro 文件的提示文本 | 中 |
 | project 在 workspace 外的报错 | 中 |
-| env var fallback (QT_PILOT_QT_PATH) | 低 |
+| env var fallback (FORJA_QT_PATH / FORJA_VS_DEV_SHELL) | 低 |
 | stop/rcc action | 低 |
 
 ---

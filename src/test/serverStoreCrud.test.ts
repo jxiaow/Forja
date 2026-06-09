@@ -5,7 +5,7 @@ import * as path from 'path';
 import { tmpdir } from 'os';
 import {
     readServers, addServer, removeServer,
-    updateServer, getServerById, getServerByName
+    updateServer, getServerById
 } from '../core/serverStore';
 
 // 用临时目录，不碰用户真实的 ~/.forja/servers.json
@@ -42,12 +42,6 @@ test('getServerById finds added server', () => {
     assert.equal(found.name, 'test-srv');
 });
 
-test('getServerByName finds by name', () => {
-    const found = getServerByName('test-srv');
-    assert.ok(found);
-    assert.equal(found.host, '10.0.0.1');
-});
-
 test('updateServer modifies fields', () => {
     const servers = readServers();
     const id = servers[0].id;
@@ -77,15 +71,12 @@ test('readServers handles malformed JSON gracefully', () => {
     assert.deepEqual(servers, []);
 });
 
-test('readServers migrates servers without id', () => {
+test('readServers ignores servers without id', () => {
     fs.writeFileSync(SERVERS_PATH, JSON.stringify([
         { name: 'legacy', host: '1.2.3.4', port: 22, username: 'u', authMode: 'key', privateKeyPath: '' }
     ]), 'utf-8');
     const servers = readServers();
-    assert.equal(servers.length, 1);
-    assert.ok(servers[0].id, 'should have auto-generated id');
-    assert.equal(servers[0].name, 'legacy');
-    // File should be rewritten with id
+    assert.deepEqual(servers, []);
     const raw = JSON.parse(fs.readFileSync(SERVERS_PATH, 'utf-8'));
-    assert.ok(raw[0].id);
+    assert.equal(raw[0].id, undefined);
 });

@@ -35,10 +35,10 @@ interface SdkDiagnostic {
 
 function parseArgs(argv: string[]): SdkCliOptions {
     const VALID_ACTIONS = ['init', 'use', 'env', 'projects', 'status', 'build', 'rebuild', 'clean'];
-    const knownFlags = new Set(['--workspace', '--project', '--mode', '--arch', '--vs-dev-cmd', '--plan', '--dry-run', '--json']);
+    const knownFlags = new Set(['--workspace', '--project', '--mode', '--arch', '--vs-dev-cmd', '--plan', '--json']);
     const commonFlags = ['--workspace', '--json'];
     const configFlags = ['--project', '--mode', '--arch', '--vs-dev-cmd'];
-    const planFlags = ['--plan', '--dry-run'];
+    const planFlags = ['--plan'];
     const allowedFlags: Record<string, Set<string>> = {
         init: new Set(commonFlags),
         use: new Set([...commonFlags, ...configFlags]),
@@ -114,7 +114,6 @@ function parseArgs(argv: string[]): SdkCliOptions {
                 break;
             }
             case '--plan':
-            case '--dry-run':
                 options.execute = false;
                 break;
             case '--json':
