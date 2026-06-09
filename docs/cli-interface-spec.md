@@ -46,11 +46,14 @@ forja <subcommand> [action] [options]
 
 ## Sync 命令参数矩阵
 
-`forja sync --plan` / `forja sync --dry-run` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
+`forja sync status` 只读取本地同步配置，返回启用状态、服务器选择、远程路径和缺失项，不执行 SSH/SCP，也不扫描 git。`forja sync --plan` / `forja sync --dry-run` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
 
 | 命令 | 允许参数 |
 |------|----------|
-| `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo` |
+| `status` | `--workspace`, `--json`, `--server` |
+| `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo`, `--file` |
+
+`--file <path>` 可重复使用，用于单文件或少量指定文件同步。路径可以是相对 workspace 的路径、相对仓库根目录的路径，或绝对路径；未指定时仍同步 git diff / 暂存区 / 未跟踪文件中需要上传的变更。
 
 ## Qt use 配置参数
 

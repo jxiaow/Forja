@@ -40,6 +40,39 @@ test('forja skill documents current status init use flow', () => {
     assert.doesNotMatch(skill, /sdk build --mode/);
 });
 
+test('sync help and docs describe file-scoped sync', () => {
+    const cliSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sync', 'cli.ts'), 'utf8');
+    const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
+    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
+
+    assert.match(cliSource, /--file <path>/);
+    assert.match(cliSource, /forja sync --file src\/main\.cpp/);
+    assert.match(spec, /--file <path>/);
+    assert.match(skill, /--file <path>/);
+    assert.match(skill, /单文件同步/);
+});
+
+test('sync help and docs describe top-level sync status', () => {
+    const cliSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sync', 'cli.ts'), 'utf8');
+    const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
+    const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
+    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
+
+    assert.match(cliSource, /forja sync status --json/);
+    assert.match(spec, /`status` \| `--workspace`, `--json`, `--server`/);
+    assert.match(guide, /forja sync status --json/);
+    assert.match(skill, /## Sync 命令/);
+    assert.match(skill, /forja sync status --json/);
+});
+
+test('forja skill keeps sync outside the Qt command table', () => {
+    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
+    const qtSection = skill.slice(skill.indexOf('## Qt 命令'), skill.indexOf('## SDK 命令'));
+
+    assert.doesNotMatch(qtSection, /\| `sync` \|/);
+    assert.match(skill, /## Sync 命令/);
+});
+
 test('qt cli entry handles parse errors as json when requested', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'cli', 'index.ts'), 'utf8');
     assert.match(source, /parseCliArgs/);

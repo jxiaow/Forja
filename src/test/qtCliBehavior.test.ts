@@ -11,7 +11,16 @@ import { saveSyncSettings, DEFAULT_SYNC } from '../core/settingsIO';
 import { writeServers } from '../core/serverStore';
 
 const _tmpDirs: string[] = [];
-after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
+const _oldConfigDir = process.env.FORJA_CONFIG_DIR;
+const _testConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cli-config-'));
+process.env.FORJA_CONFIG_DIR = _testConfigDir;
+_tmpDirs.push(_testConfigDir);
+
+after(() => {
+    if (_oldConfigDir === undefined) { delete process.env.FORJA_CONFIG_DIR; }
+    else { process.env.FORJA_CONFIG_DIR = _oldConfigDir; }
+    for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); }
+});
 beforeEach(() => { process.exitCode = undefined; });
 afterEach(() => { process.exitCode = undefined; });
 
@@ -68,6 +77,44 @@ test('forja sync --plan returns target server and pending files', async () => {
     assert.equal(process.exitCode, 0);
 });
 
+test('forja sync --plan --file only returns the selected file', async () => {
+    const workspace = makeWorkspace();
+    cp.execFileSync('git', ['init'], { cwd: workspace, stdio: 'ignore' });
+    fs.mkdirSync(path.join(workspace, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(workspace, 'src', 'main.cpp'), 'int main() { return 0; }\n', 'utf8');
+    fs.writeFileSync(path.join(workspace, 'src', 'other.cpp'), 'int other() { return 1; }\n', 'utf8');
+
+    writeServers([{
+        id: 'server-1',
+        name: 'dev',
+        host: '127.0.0.1',
+        port: 22,
+        username: 'dev',
+        authMode: 'key',
+        privateKeyPath: '/tmp/nonexistent-key',
+        password: ''
+    }]);
+    saveSyncSettings(workspace, {
+        ...DEFAULT_SYNC,
+        enabled: true,
+        selectedServer: 'server-1',
+        remotePaths: { 'server-1': '/remote/app' },
+        ignore: []
+    });
+
+    const output = await captureStdout(() => runSyncCli([
+        '--workspace', workspace,
+        '--plan',
+        '--json',
+        '--file', path.join('src', 'main.cpp')
+    ]));
+    const data = JSON.parse(output);
+
+    assert.equal(data.ok, true);
+    assert.deepEqual(data.pending, [path.basename(workspace) + '/src/main.cpp']);
+    assert.equal(process.exitCode, 0);
+});
+
 test('forja sync --plan sets exit code when planning fails', async () => {
     const workspace = makeWorkspace();
 
@@ -77,6 +124,58 @@ test('forja sync --plan sets exit code when planning fails', async () => {
     assert.equal(data.ok, false);
     assert.equal(data.action, 'sync');
     assert.equal(process.exitCode, 1);
+});
+
+test('forja sync status --json reports missing sync configuration', async () => {
+    const workspace = makeWorkspace();
+    writeServers([]);
+
+    const output = await captureStdout(() => runSyncCli(['status', '--workspace', workspace, '--json']));
+    const data = JSON.parse(output);
+
+    assert.equal(data.ok, false);
+    assert.equal(data.action, 'status');
+    assert.equal(data.ready, false);
+    assert.equal(data.checks.enabled, false);
+    assert.equal(data.checks.servers, false);
+    assert.equal(data.checks.selectedServer, false);
+    assert.equal(data.checks.remotePath, false);
+    assert.deepEqual(data.missing, ['enabled', 'servers', 'selectedServer', 'remotePath']);
+    assert.equal(process.exitCode, 1);
+});
+
+test('forja sync status --json reports ready sync target without git repository', async () => {
+    const workspace = makeWorkspace();
+
+    writeServers([{
+        id: 'server-1',
+        name: 'dev',
+        host: '127.0.0.1',
+        port: 22,
+        username: 'dev',
+        authMode: 'key',
+        privateKeyPath: '/tmp/nonexistent-key',
+        password: ''
+    }]);
+    saveSyncSettings(workspace, {
+        ...DEFAULT_SYNC,
+        enabled: true,
+        selectedServer: 'server-1',
+        remotePaths: { 'server-1': '/remote/app' },
+        ignore: []
+    });
+
+    const output = await captureStdout(() => runSyncCli(['status', '--workspace', workspace, '--json']));
+    const data = JSON.parse(output);
+
+    assert.equal(data.ok, true);
+    assert.equal(data.action, 'status');
+    assert.equal(data.ready, true);
+    assert.equal(data.server.id, 'server-1');
+    assert.equal(data.server.name, 'dev');
+    assert.equal(data.remotePath, '/remote/app');
+    assert.deepEqual(data.missing, []);
+    assert.equal(process.exitCode, 0);
 });
 
 test('qt ps --json reports no detached run state', async () => {

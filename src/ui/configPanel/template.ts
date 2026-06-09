@@ -35,6 +35,7 @@ export interface TemplateData {
     syncRemotePath: string;
     syncPendingCount: number;
     syncLastTime: string;
+    syncReadinessIssues?: string[];
     // SDK
     sdkProjectName: string;
     sdkMode: string;

@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { getResolvedConfig, ResolvedSyncConfig } from './resolver';
 import { readServers, readProjectSyncConfig, ServerConfig } from '../core/serverStore';
 import { syncChangedFiles, askPassword, clearPasswordCache } from './sftpClient';
@@ -8,6 +7,8 @@ import { resolveProjectRoot } from '../vscode/workspaceResolver';
 import { createLogger } from '../vscode/logger';
 import { resolveGitRoots } from '../core/gitRepoResolver';
 import { onSettingsChange } from '../vscode/settingsStore';
+import { forjaConfigDir } from '../core/settingsIO';
+import { isPathInside } from '../core/syncFileSelection';
 
 const logger = createLogger('SyncManager');
 
@@ -30,9 +31,8 @@ export function registerSyncWatcher(context: vscode.ExtensionContext): void {
         }
     }));
 
-    // 监听全局 servers.json（位于 ~/.forja/）
-    const os = require('os') as typeof import('os');
-    const globalServersDir = path.join(os.homedir(), '.forja');
+    // 监听全局 servers.json（位于 Forja 配置目录）
+    const globalServersDir = forjaConfigDir();
     const globalPattern = new vscode.RelativePattern(vscode.Uri.file(globalServersDir), 'servers.json');
     const globalWatcher = vscode.workspace.createFileSystemWatcher(globalPattern);
     globalWatcher.onDidChange(() => _refreshStatusBar());
@@ -82,12 +82,14 @@ export function refreshSyncStatusBar(): void {
     _refreshStatusBar();
 }
 
-export async function executeSyncChangedFiles(): Promise<void> {
+export async function executeSyncChangedFiles(uri?: vscode.Uri): Promise<void> {
     const wsRoot = getWorkspaceRoot();
     if (!wsRoot) {
         vscode.window.showWarningMessage('无工作区');
         return;
     }
+
+    const requestedFile = uri?.scheme === 'file' ? uri.fsPath : null;
 
     const resolved = getResolvedConfig(wsRoot);
     if (!resolved) {
@@ -113,9 +115,17 @@ export async function executeSyncChangedFiles(): Promise<void> {
         return;
     }
 
-    // 多个仓库时让用户选择
     let selectedRoots = allGitRoots;
-    if (allGitRoots.length > 1) {
+    if (requestedFile) {
+        selectedRoots = allGitRoots.filter(r => isPathInside(r.dir, requestedFile));
+        if (selectedRoots.length === 0) {
+            vscode.window.showWarningMessage('请选择工作区 git 仓库内的文件');
+            return;
+        }
+    }
+
+    // 多个仓库时让用户选择
+    if (!requestedFile && allGitRoots.length > 1) {
         const ALL_LABEL = '$(sync) 全部同步';
         const items = [
             { label: ALL_LABEL, description: `${allGitRoots.length} 个仓库`, _all: true },
@@ -133,7 +143,7 @@ export async function executeSyncChangedFiles(): Promise<void> {
 
     await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
-        title: `正在同步到 ${resolved.server.name}...`,
+        title: requestedFile ? `正在同步文件到 ${resolved.server.name}...` : `正在同步到 ${resolved.server.name}...`,
         cancellable: true
     }, async (_progress, token) => {
         _warnHostKeyCheckingIfNeeded(resolved.server);
@@ -148,7 +158,7 @@ export async function executeSyncChangedFiles(): Promise<void> {
                     ...resolved,
                     remotePath: resolved.remotePath.replace(/\/$/, '') + '/' + gitName
                 };
-                const result = await syncChangedFiles(repoResolved, gitDir, token);
+                const result = await syncChangedFiles(repoResolved, gitDir, token, requestedFile ? [requestedFile] : []);
                 totalUploaded += result.uploaded.length;
                 totalSkipped += result.skipped.length;
                 totalFailed.push(...result.failed.map(f => ({ file: `${gitName}/${f.file}`, error: f.error })));

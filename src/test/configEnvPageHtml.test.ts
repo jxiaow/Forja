@@ -192,3 +192,18 @@ test('environment page allows reopened custom select lists to overflow expanded 
     assert.match(html, /\.env-expand\.open\{[^}]*overflow:visible/);
     assert.match(html, /\.csel-list\{[^}]*position:absolute/);
 });
+
+test('sync page shows specific readiness hints when configuration is incomplete', () => {
+    const html = getPageHtml('sync', {
+        ...createTemplateData(),
+        syncEnabled: true,
+        syncSelectedServer: '',
+        syncServers: [],
+        syncRemotePath: ''
+    });
+
+    assert.match(html, /同步未就绪/);
+    assert.match(html, /未添加服务器/);
+    assert.match(html, /未选择同步服务器/);
+    assert.match(html, /未设置远程路径/);
+});

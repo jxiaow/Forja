@@ -19,8 +19,14 @@ import {
 
 const _tmpDirs: string[] = [];
 const _createdFiles: string[] = [];
+const _oldConfigDir = process.env.FORJA_CONFIG_DIR;
+const _testConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-settings-config-'));
+process.env.FORJA_CONFIG_DIR = _testConfigDir;
+_tmpDirs.push(_testConfigDir);
 
 after(() => {
+    if (_oldConfigDir === undefined) { delete process.env.FORJA_CONFIG_DIR; }
+    else { process.env.FORJA_CONFIG_DIR = _oldConfigDir; }
     for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); }
     for (const f of _createdFiles) { try { fs.unlinkSync(f); } catch { /* ok */ } }
 });
@@ -234,9 +240,35 @@ test('loadSyncSettings prefers current directory over parent', () => {
 
 // ── projectConfigPath ──
 
-test('projectConfigPath returns path under ~/.forja/projects/', () => {
+test('projectConfigPath returns path under configured projects dir', () => {
     const result = projectConfigPath('C:/workspace/dev/qt_client', 'qt');
-    assert.match(result, /\.forja[/\\]projects[/\\][a-f0-9]{12}\.json$/);
+    assert.match(result, /[/\\]projects[/\\][a-f0-9]{12}\.json$/);
+    assert.equal(path.dirname(result), path.join(_testConfigDir, 'projects'));
+});
+
+test('projectConfigPath falls back to ~/.forja/projects/', () => {
+    delete process.env.FORJA_CONFIG_DIR;
+    try {
+        const result = projectConfigPath('C:/workspace/dev/qt_client', 'qt');
+        assert.match(result, /\.forja[/\\]projects[/\\][a-f0-9]{12}\.json$/);
+    } finally {
+        process.env.FORJA_CONFIG_DIR = _testConfigDir;
+    }
+});
+
+test('projectConfigPath honors FORJA_CONFIG_DIR for test isolation', () => {
+    const oldConfigDir = process.env.FORJA_CONFIG_DIR;
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-config-dir-'));
+    _tmpDirs.push(configDir);
+    process.env.FORJA_CONFIG_DIR = configDir;
+
+    try {
+        const result = projectConfigPath('C:/workspace/dev/qt_client', 'sync');
+        assert.equal(path.dirname(result), path.join(configDir, 'projects'));
+    } finally {
+        if (oldConfigDir === undefined) { delete process.env.FORJA_CONFIG_DIR; }
+        else { process.env.FORJA_CONFIG_DIR = oldConfigDir; }
+    }
 });
 
 test('projectConfigPath generates different hashes for different types', () => {

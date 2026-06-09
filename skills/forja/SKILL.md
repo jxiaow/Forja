@@ -70,7 +70,6 @@ debug/release、x86/x64）且用户未设置过时，必须展示选项让用户
 | `stop` | 停止运行中的程序 | |
 | `ps` | 查看 detach 模式的运行状态 | |
 | `clean` | 清理构建产物 | `--plan` |
-| `sync` | 同步变更文件到服务器 | `--server` |
 | `rcc` | 编译 .qrc 资源文件 | `--plan` |
 
 ### Qt 通用参数
@@ -122,6 +121,26 @@ SDK 配置参数只允许用于 `forja sdk use`：
 | `--mode debug\|release` | 编译模式 |
 | `--arch x86\|x64` | 目标架构（非 Windows 只支持 x64） |
 | `--vs-dev-cmd <path>` | VsDevCmd.bat 路径 |
+
+## Sync 命令
+
+`sync` 是顶层命令：使用 `forja sync ...`，不属于 `forja qt` 或 `forja sdk`。
+
+| 命令 | 用途 | 关键参数 |
+|------|------|----------|
+| `status` | 查看同步配置是否就绪 | `--server` |
+| `sync` | 同步 git 变更文件到服务器 | `--server`, `--repo`, `--file <path>`, `--plan` |
+
+### Sync 参数
+
+| 参数 | 说明 |
+|------|------|
+| `--workspace <path>` | 工作区路径，默认当前目录 |
+| `--server <name-or-id>` | 指定同步目标服务器，默认读取项目同步配置 |
+| `--repo <name>` | 多仓库工作区中只同步指定子仓库；仅同步/预览可用 |
+| `--file <path>` | 单文件同步；可重复，路径可相对 workspace、相对仓库根目录或使用绝对路径 |
+| `--plan` / `--dry-run` | 仅预览待同步文件，不执行 SSH/SCP |
+| `--json` | 结构化 JSON 输出 |
 
 ## JSON 输出关键字段
 
@@ -193,6 +212,11 @@ forja qt stop --json
 
 # 只看编译计划不执行
 forja qt build --plan --json
+
+# 同步：先看状态，再预览或单文件同步
+forja sync status --json
+forja sync --plan --json
+forja sync --file src/main.cpp --json
 
 # SDK 编译：配置先用 use，build 只读保存配置
 forja sdk status --json

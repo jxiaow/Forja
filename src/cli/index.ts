@@ -6,7 +6,7 @@
  * Usage:
  *   forja qt <action> [options]
  *   forja sdk <action> [options]
- *   forja sync [options]
+ *   forja sync [status] [options]
  */
 
 import { runQtCli } from '../qt/cli/index';
@@ -27,7 +27,7 @@ Forja v${VERSION} — C++ 项目构建工具
 子命令:
   qt       Qt/qmake 项目操作 (init, env, projects, status, qmake, build, run, clean, stop, rcc, logs)
   sdk      SDK/库项目操作 (build, rebuild, clean, status)
-  sync     同步变更文件到远程服务器（基于 git diff）
+  sync     同步状态检查与变更文件上传（基于 git diff）
   cleanup  清理已删除/移动项目的残留配置
 
 全局选项:
@@ -40,6 +40,7 @@ Forja v${VERSION} — C++ 项目构建工具
   forja sdk build --workspace ./my-sdk
   forja qt status --json
   forja qt build --plan --json      查看计划（不执行）
+  forja sync status --json          查看同步配置状态
   forja sync --plan --json          预览待同步文件
 `.trim();
     console.log(help);

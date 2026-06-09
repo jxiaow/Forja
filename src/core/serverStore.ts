@@ -11,7 +11,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import { forjaConfigDir, loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
 
 function atomicWriteJson(filePath: string, data: unknown): void {
     const tmp = filePath + `.tmp.${process.pid}`;
@@ -51,7 +51,7 @@ export interface ProjectSyncConfig {
 // ── 路径 ──
 
 function _globalDir(): string {
-    return process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja');
+    return forjaConfigDir();
 }
 
 /** 清理 ~/.forja/ 下残留的 .tmp 文件（原子写入失败时遗留） */
@@ -182,8 +182,6 @@ export function getServerByName(name: string): ServerConfig | null {
 }
 
 // ── 项目同步配置（读写统一 settingsIO 的 sync 配置） ──
-
-import { loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
 
 const DEFAULT_IGNORE = DEFAULT_SYNC.ignore;
 

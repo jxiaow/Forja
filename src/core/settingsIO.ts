@@ -102,8 +102,12 @@ export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
 // ── 路径 ──
 
 /** 用户数据目录下的 projects 配置目录 */
+export function forjaConfigDir(): string {
+    return process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja');
+}
+
 export function projectsDir(): string {
-    return path.join(os.homedir(), '.forja', 'projects');
+    return path.join(forjaConfigDir(), 'projects');
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */

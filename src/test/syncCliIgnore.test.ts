@@ -36,12 +36,29 @@ test('isIgnored handles multiple patterns', () => {
 
 
 test('parseSyncCliArgs accepts generic sync flags', () => {
-    const parsed = parseSyncCliArgs(['--workspace', '/tmp/app', '--server', 'dev', '--repo', 'frontend', '--plan', '--json']);
+    const parsed = parseSyncCliArgs(['--workspace', '/tmp/app', '--server', 'dev', '--repo', 'frontend', '--file', 'src/main.cpp', '--plan', '--json']);
 
+    assert.equal(parsed.action, 'sync');
     assert.equal(parsed.workspace, '/tmp/app');
     assert.equal(parsed.server, 'dev');
     assert.equal(parsed.repo, 'frontend');
+    assert.deepEqual(parsed.files, ['src/main.cpp']);
     assert.equal(parsed.executionMode, 'dryRun');
+    assert.equal(parsed.json, true);
+});
+
+test('parseSyncCliArgs accepts repeated file filters', () => {
+    const parsed = parseSyncCliArgs(['--file', 'src/main.cpp', '--file', 'include/app.h']);
+
+    assert.deepEqual(parsed.files, ['src/main.cpp', 'include/app.h']);
+});
+
+test('parseSyncCliArgs accepts sync status action', () => {
+    const parsed = parseSyncCliArgs(['status', '--workspace', '/tmp/app', '--server', 'dev', '--json']);
+
+    assert.equal(parsed.action, 'status');
+    assert.equal(parsed.workspace, '/tmp/app');
+    assert.equal(parsed.server, 'dev');
     assert.equal(parsed.json, true);
 });
 

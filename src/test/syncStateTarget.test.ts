@@ -1,9 +1,19 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { clearSyncState, filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
+
+const _oldConfigDir = process.env.FORJA_CONFIG_DIR;
+const _testConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sync-state-config-'));
+process.env.FORJA_CONFIG_DIR = _testConfigDir;
+
+after(() => {
+    if (_oldConfigDir === undefined) { delete process.env.FORJA_CONFIG_DIR; }
+    else { process.env.FORJA_CONFIG_DIR = _oldConfigDir; }
+    fs.rmSync(_testConfigDir, { recursive: true, force: true });
+});
 
 function createWorkspace(): string {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sync-state-'));

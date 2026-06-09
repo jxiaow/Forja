@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import * as crypto from 'crypto';
 import { createLoggerBase } from './loggerBase';
+import { forjaConfigDir } from './settingsIO';
 
 const logger = createLoggerBase('SyncState');
 
@@ -28,7 +28,7 @@ interface SyncStateData {
 function _stateFilePath(workspaceRoot: string): string {
     const normalized = workspaceRoot.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
-    return path.join(os.homedir(), '.forja', 'sync', `${hash}.json`);
+    return path.join(forjaConfigDir(), 'sync', `${hash}.json`);
 }
 
 function _normalizeRemotePath(remotePath: string): string {
@@ -257,7 +257,7 @@ export function getSyncPendingInfo(workspaceRoot: string, ignore: string[]): { c
 
 /** 列出所有 sync state 文件（用于 cleanup 命令） */
 export function listSyncStates(): Array<{ filePath: string; workspace: string }> {
-    const dir = path.join(os.homedir(), '.forja', 'sync');
+    const dir = path.join(forjaConfigDir(), 'sync');
     if (!fs.existsSync(dir)) { return []; }
     const results: Array<{ filePath: string; workspace: string }> = [];
     try {

@@ -5,9 +5,10 @@
 import * as path from 'path';
 import * as cp from 'child_process';
 import { filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
-import { readProjectSyncConfig, getServerById, getServerByName, ServerConfig } from '../core/serverStore';
+import { readProjectSyncConfig, getServerById, getServerByName, readServers, ServerConfig } from '../core/serverStore';
 import { ensureRemoteDir, scpUpload } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
+import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
 
 export interface SyncResult {
     ok: boolean;
@@ -28,6 +29,23 @@ export interface SyncPlanResult {
     server: string;
     remotePath: string;
     repos: string[];
+}
+
+export interface SyncStatusResult {
+    ok: boolean;
+    action: 'status';
+    ready: boolean;
+    checks: {
+        enabled: boolean;
+        servers: boolean;
+        selectedServer: boolean;
+        serverExists: boolean;
+        remotePath: boolean;
+    };
+    missing: string[];
+    server: Pick<ServerConfig, 'id' | 'name' | 'host' | 'port' | 'username' | 'authMode'> | null;
+    remotePath: string;
+    diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[];
 }
 
 // ── Git diff ──
@@ -118,7 +136,7 @@ async function resolveCliPassword(server: ServerConfig): Promise<string | null> 
  * @param serverName 可选，指定服务器名称或 ID
  * @param repoFilter 可选，指定只同步某个子仓库名称
  */
-export async function executeSyncCli(workspaceRoot: string, serverName?: string, repoFilter?: string): Promise<SyncResult> {
+export async function executeSyncCli(workspaceRoot: string, serverName?: string, repoFilter?: string, fileFilters: string[] = []): Promise<SyncResult> {
     const project = readProjectSyncConfig(workspaceRoot);
     if (!project.enabled) {
         return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '远程同步未启用' }], server: '', remotePath: '' };
@@ -165,7 +183,9 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string,
         const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
         const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
 
-        const changedFiles = await getGitChangedFiles(gitDir);
+        const changedFiles = fileFilters.length > 0
+            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters)
+            : await getGitChangedFiles(gitDir);
         if (changedFiles.length === 0) { continue; }
 
         const notIgnored: string[] = [];
@@ -217,7 +237,7 @@ export async function executeSyncCli(workspaceRoot: string, serverName?: string,
     return result;
 }
 
-export async function planSyncCli(workspaceRoot: string, serverName?: string, repoFilter?: string): Promise<SyncPlanResult> {
+export async function planSyncCli(workspaceRoot: string, serverName?: string, repoFilter?: string, fileFilters: string[] = []): Promise<SyncPlanResult> {
     const project = readProjectSyncConfig(workspaceRoot);
     const empty = (error: string, server = '', remotePath = ''): SyncPlanResult => ({
         ok: false,
@@ -273,7 +293,9 @@ export async function planSyncCli(workspaceRoot: string, serverName?: string, re
     for (const { dir: gitDir, name: gitName } of gitRoots) {
         const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
         const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
-        const changedFiles = await getGitChangedFiles(gitDir);
+        const changedFiles = fileFilters.length > 0
+            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters)
+            : await getGitChangedFiles(gitDir);
         if (changedFiles.length === 0) { continue; }
 
         const notIgnored: string[] = [];
@@ -290,31 +312,91 @@ export async function planSyncCli(workspaceRoot: string, serverName?: string, re
     return plan;
 }
 
+export function statusSyncCli(workspaceRoot: string, serverName?: string): SyncStatusResult {
+    const project = readProjectSyncConfig(workspaceRoot);
+    const servers = readServers();
+    const targetName = serverName || project.selectedServer;
+    const server = targetName ? (getServerById(targetName) || getServerByName(targetName)) : null;
+    const remotePath = server ? (project.remotePaths[server.id] || '') : '';
+
+    const checks = {
+        enabled: project.enabled,
+        servers: servers.length > 0,
+        selectedServer: targetName.length > 0,
+        serverExists: !!server,
+        remotePath: remotePath.length > 0
+    };
+
+    const missing: string[] = [];
+    if (!checks.enabled) { missing.push('enabled'); }
+    if (!checks.servers) { missing.push('servers'); }
+    if (!checks.selectedServer) { missing.push('selectedServer'); }
+    else if (!checks.serverExists) { missing.push('server'); }
+    if (!checks.remotePath) { missing.push('remotePath'); }
+
+    const diagnostics = missing.map(key => {
+        const messages: Record<string, string> = {
+            enabled: '远程同步未启用',
+            servers: '未添加同步服务器',
+            selectedServer: '未选择同步服务器',
+            server: `服务器 "${targetName}" 未找到`,
+            remotePath: '未配置远程路径'
+        };
+        return { level: 'error' as const, message: messages[key] || key };
+    });
+
+    const ready = missing.length === 0;
+    return {
+        ok: ready,
+        action: 'status',
+        ready,
+        checks,
+        missing,
+        server: server ? {
+            id: server.id,
+            name: server.name,
+            host: server.host,
+            port: server.port,
+            username: server.username,
+            authMode: server.authMode
+        } : null,
+        remotePath,
+        diagnostics
+    };
+}
+
 export interface SyncCliOptions {
+    action: 'sync' | 'status';
     executionMode: 'dryRun' | 'execute';
     workspace: string;
     server: string | null;
     repo: string | null;
+    files: string[];
     json: boolean;
 }
 
 const syncHelpText = `Forja Sync CLI — 通用远程文件同步
 
-用法: forja sync [options]
+用法:
+  forja sync [options]
+  forja sync status [options]
 
 选项:
   --workspace <path>     工作区路径（默认当前目录）
   --server <name>        指定服务器名称或 ID
   --repo <name>          指定子仓库名称（多仓库工作区）
+  --file <path>          指定单个文件路径；可重复，路径可相对 workspace 或仓库根目录
   --plan                 仅预览待同步文件，不执行 SSH/SCP
   --dry-run              （兼容旧版，等同于 --plan）
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
 
 示例:
+  forja sync status --json           查看同步配置就绪状态
   forja sync                         同步变更文件到远程
   forja sync --plan --json           JSON 预览待同步文件
   forja sync --server dev --repo app 同步指定服务器和子仓库
+  forja sync --file src/main.cpp     单文件同步
 `;
 
 export function isSyncHelpRequest(args: string[]): boolean {
@@ -335,18 +417,29 @@ function readSyncValue(args: string[], index: number, flag: string): string {
 
 export function parseSyncCliArgs(args: string[]): SyncCliOptions {
     const options: SyncCliOptions = {
+        action: 'sync',
         executionMode: 'execute',
         workspace: process.cwd(),
         server: null,
         repo: null,
+        files: [],
         json: false
     };
 
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
         switch (arg) {
+            case 'status':
+                if (i !== 0) {
+                    throw new Error(`forja sync 不接受子命令或位置参数: ${arg}`);
+                }
+                options.action = 'status';
+                break;
             case '--plan':
             case '--dry-run':
+                if (options.action === 'status') {
+                    throw new Error('forja sync status 不支持 --plan/--dry-run');
+                }
                 options.executionMode = 'dryRun';
                 break;
             case '--workspace':
@@ -358,7 +451,17 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
                 i++;
                 break;
             case '--repo':
+                if (options.action === 'status') {
+                    throw new Error('forja sync status 不支持 --repo');
+                }
                 options.repo = readSyncValue(args, i, arg);
+                i++;
+                break;
+            case '--file':
+                if (options.action === 'status') {
+                    throw new Error('forja sync status 不支持 --file');
+                }
+                options.files.push(readSyncValue(args, i, arg));
                 i++;
                 break;
             case '--json':
@@ -390,8 +493,21 @@ export async function runSyncCli(argv: string[]): Promise<void> {
         wantsJson = options.json;
         const workspace = path.resolve(options.workspace);
 
+        if (options.action === 'status') {
+            const output = statusSyncCli(workspace, options.server || undefined);
+            if (wantsJson) {
+                console.log(JSON.stringify(output, null, 2));
+            } else if (output.ok && output.server) {
+                console.log(`Sync status: ready (${output.server.name}:${output.remotePath})`);
+            } else {
+                console.log(`Sync status: not ready (${output.missing.join(', ')})`);
+            }
+            process.exitCode = output.ok ? 0 : 1;
+            return;
+        }
+
         if (options.executionMode === 'dryRun') {
-            const output = await planSyncCli(workspace, options.server || undefined, options.repo || undefined);
+            const output = await planSyncCli(workspace, options.server || undefined, options.repo || undefined, options.files);
             if (wantsJson) {
                 console.log(JSON.stringify(output, null, 2));
             } else if (output.ok) {
@@ -403,7 +519,7 @@ export async function runSyncCli(argv: string[]): Promise<void> {
             return;
         }
 
-        const result = await executeSyncCli(workspace, options.server || undefined, options.repo || undefined);
+        const result = await executeSyncCli(workspace, options.server || undefined, options.repo || undefined, options.files);
         if (wantsJson) {
             console.log(JSON.stringify(result, null, 2));
         } else if (result.ok) {

@@ -97,7 +97,7 @@ export function registerQtCommands(context: vscode.ExtensionContext, panel: Conf
             proc.unref();
         }],
         ['forja.syncTestConnection', () => executeTestConnection()],
-        ['forja.syncChangedFiles', () => executeSyncChangedFiles()],
+        ['forja.syncChangedFiles', (uri?: vscode.Uri) => executeSyncChangedFiles(uri)],
         ['forja.qt.rcc', () => buildManager.rcc()],
         ['forja.qt.runCustomCommand', (name: string, command: string) => buildManager.runCustomCommand(name, command)]
     ];

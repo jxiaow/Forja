@@ -115,6 +115,11 @@
           "command": "forja.qt.openWithQtDesigner",
           "when": "resourceExtname == .ui",
           "group": "navigation@100"
+        },
+        {
+          "command": "forja.syncChangedFiles",
+          "when": "resourceScheme == file",
+          "group": "navigation@101"
         }
       ]
     },

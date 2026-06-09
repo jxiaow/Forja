@@ -15,6 +15,22 @@ import { getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { getSyncPendingInfo } from '../../core/syncState';
+import type { ServerConfig, ProjectSyncConfig } from '../../core/serverStore';
+
+function buildSyncReadinessIssues(sync: ProjectSyncConfig, servers: ServerConfig[]): string[] {
+    const issues: string[] = [];
+    if (!sync.enabled) { issues.push('未启用远程同步'); }
+    if (servers.length === 0) { issues.push('未添加服务器'); }
+    if (!sync.selectedServer) {
+        issues.push('未选择同步服务器');
+    } else if (!servers.some(s => s.id === sync.selectedServer || s.name === sync.selectedServer)) {
+        issues.push('已选择服务器不存在');
+    }
+    if (!sync.selectedServer || !sync.remotePaths[sync.selectedServer]) {
+        issues.push('未设置远程路径');
+    }
+    return issues;
+}
 
 export function buildTemplateData(context: vscode.ExtensionContext): TemplateData {
     const state = getState();
@@ -61,6 +77,7 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         syncRemotePath: sync.remotePaths[sync.selectedServer] || '',
         syncPendingCount: pendingInfo.count,
         syncLastTime: pendingInfo.lastTime,
+        syncReadinessIssues: buildSyncReadinessIssues(sync, servers),
         // SDK
         sdkProjectName: getSdkSetting('pinnedProject') || '未选择',
         sdkMode: getSdkSetting('mode'),

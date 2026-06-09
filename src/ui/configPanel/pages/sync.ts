@@ -6,6 +6,16 @@ function esc(v: string): string {
         .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function syncIssues(data: TemplateData): string[] {
+    if (data.syncReadinessIssues) { return data.syncReadinessIssues; }
+    const issues: string[] = [];
+    if (!data.syncEnabled) { issues.push('未启用远程同步'); }
+    if (data.syncServers.length === 0) { issues.push('未添加服务器'); }
+    if (!data.syncSelectedServer) { issues.push('未选择同步服务器'); }
+    if (!data.syncRemotePath) { issues.push('未设置远程路径'); }
+    return issues;
+}
+
 export function buildSyncPage(data: TemplateData): string {
     // 如果 selectedServer 没匹配到，自动取第一个
     let srv = data.syncServers.find(s => s.id === data.syncSelectedServer);
@@ -30,6 +40,15 @@ export function buildSyncPage(data: TemplateData): string {
     h += `<input type="checkbox" id="syncToggle" ${data.syncEnabled ? 'checked' : ''}`;
     h += " onchange=\"toggleSyncContent(this.checked);vscode.postMessage({command:'saveSyncEnabled',value:this.checked})\"/>";
     h += '<span class="toggle-slider"></span></label></div></div></div>';
+
+    const issues = syncIssues(data);
+    if (issues.length > 0) {
+        h += '<div class="env-card" style="margin-top:8px"><div class="ech">';
+        h += '<span class="sd dwn"></span><span class="ect">同步未就绪</span>';
+        h += `<span class="ecb bwn">${issues.length} 项待配置</span></div>`;
+        h += `<div class="ecp">${issues.map(esc).join(' · ')}</div>`;
+        h += '</div>';
+    }
 
     // ── 同步内容区（开关关闭时隐藏） ──
     h += `<div id="syncContent" style="${data.syncEnabled ? '' : 'display:none'}">`;
