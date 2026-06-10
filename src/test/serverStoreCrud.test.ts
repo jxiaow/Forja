@@ -2,55 +2,32 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import { tmpdir } from 'os';
 import {
     readServers, addServer, removeServer,
-    updateServer, getServerById, getServerByName
+    updateServer, getServerById
 } from '../core/serverStore';
 
-const OLD_COMPILOT_HOME = process.env.COMPILOT_HOME;
-const TEST_COMPILOT_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-server-store-home-'));
-process.env.COMPILOT_HOME = TEST_COMPILOT_HOME;
-const SERVERS_PATH = path.join(TEST_COMPILOT_HOME, 'servers.json');
-
-function resetServers(): void {
-    fs.writeFileSync(SERVERS_PATH, '[]', 'utf-8');
-}
-
-function addTestServer(overrides: Partial<Parameters<typeof addServer>[0]> = {}) {
-    resetServers();
-    return addServer({
-        name: 'test-srv',
-        host: '10.0.0.1',
-        port: 22,
-        username: 'dev',
-        authMode: 'key',
-        privateKeyPath: '/key',
-        password: '',
-        ...overrides
-    });
-}
+// 用临时目录，不碰用户真实的 ~/.forja/servers.json
+const tmpDir = fs.mkdtempSync(path.join(tmpdir(), 'forja-test-'));
+process.env.FORJA_CONFIG_DIR = tmpDir;
+const SERVERS_PATH = path.join(tmpDir, 'servers.json');
 
 before(() => {
-    const dir = path.dirname(SERVERS_PATH);
-    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
-    resetServers();
+    fs.writeFileSync(SERVERS_PATH, '[]', 'utf-8');
 });
 
 after(() => {
-    if (OLD_COMPILOT_HOME === undefined) { delete process.env.COMPILOT_HOME; }
-    else { process.env.COMPILOT_HOME = OLD_COMPILOT_HOME; }
-    fs.rmSync(TEST_COMPILOT_HOME, { recursive: true, force: true });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    delete process.env.FORJA_CONFIG_DIR;
 });
 
 test('readServers returns empty array when file has []', () => {
-    resetServers();
     const servers = readServers();
     assert.deepEqual(servers, []);
 });
 
 test('addServer creates server with generated id', () => {
-    resetServers();
     const s = addServer({ name: 'test-srv', host: '10.0.0.1', port: 22, username: 'dev', authMode: 'key', privateKeyPath: '/key', password: '' });
     assert.ok(s.id, 'should have generated id');
     assert.equal(s.name, 'test-srv');
@@ -58,24 +35,19 @@ test('addServer creates server with generated id', () => {
 });
 
 test('getServerById finds added server', () => {
-    const seeded = addTestServer();
-    const found = getServerById(seeded.id);
+    const servers = readServers();
+    const id = servers[0].id;
+    const found = getServerById(id);
     assert.ok(found);
     assert.equal(found.name, 'test-srv');
 });
 
-test('getServerByName finds by name', () => {
-    addTestServer();
-    const found = getServerByName('test-srv');
-    assert.ok(found);
-    assert.equal(found.host, '10.0.0.1');
-});
-
 test('updateServer modifies fields', () => {
-    const seeded = addTestServer();
-    const ok = updateServer(seeded.id, { host: '10.0.0.2', port: 2222 });
+    const servers = readServers();
+    const id = servers[0].id;
+    const ok = updateServer(id, { host: '10.0.0.2', port: 2222 });
     assert.equal(ok, true);
-    const updated = getServerById(seeded.id)!;
+    const updated = getServerById(id)!;
     assert.equal(updated.host, '10.0.0.2');
     assert.equal(updated.port, 2222);
     assert.equal(updated.name, 'test-srv'); // unchanged
@@ -86,10 +58,11 @@ test('updateServer returns false for non-existent id', () => {
 });
 
 test('removeServer deletes by id', () => {
-    const seeded = addTestServer();
-    removeServer(seeded.id);
-    assert.equal(getServerById(seeded.id), null);
-    assert.equal(readServers().some(server => server.id === seeded.id), false);
+    const servers = readServers();
+    const id = servers[0].id;
+    removeServer(id);
+    assert.equal(getServerById(id), null);
+    assert.equal(readServers().length, 0);
 });
 
 test('readServers handles malformed JSON gracefully', () => {
@@ -98,15 +71,12 @@ test('readServers handles malformed JSON gracefully', () => {
     assert.deepEqual(servers, []);
 });
 
-test('readServers migrates servers without id', () => {
+test('readServers ignores servers without id', () => {
     fs.writeFileSync(SERVERS_PATH, JSON.stringify([
         { name: 'legacy', host: '1.2.3.4', port: 22, username: 'u', authMode: 'key', privateKeyPath: '' }
     ]), 'utf-8');
     const servers = readServers();
-    assert.equal(servers.length, 1);
-    assert.ok(servers[0].id, 'should have auto-generated id');
-    assert.equal(servers[0].name, 'legacy');
-    // File should be rewritten with id
+    assert.deepEqual(servers, []);
     const raw = JSON.parse(fs.readFileSync(SERVERS_PATH, 'utf-8'));
-    assert.ok(raw[0].id);
+    assert.equal(raw[0].id, undefined);
 });

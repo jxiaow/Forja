@@ -14,6 +14,7 @@ export interface ConfigInputs {
     qtPath: string;
     vsDevShell: string;
     target: string;
+    qmakeArgs?: string;
     jomPath?: string;
 }
 
@@ -38,6 +39,7 @@ export function resolveBuildConfig(inputs: ConfigInputs): BuildConfig {
         arch: inputs.arch,
         mode: inputs.mode,
         target: inputs.target,
+        qmakeArgs: inputs.qmakeArgs || '',
         jomPath: inputs.jomPath || ''
     };
 }
@@ -55,6 +57,7 @@ export function mergeConfigInputs(...sources: Partial<ConfigInputs>[]): ConfigIn
         qtPath: '',
         vsDevShell: '',
         target: '',
+        qmakeArgs: '',
         jomPath: ''
     };
 
@@ -66,6 +69,7 @@ export function mergeConfigInputs(...sources: Partial<ConfigInputs>[]): ConfigIn
         if (source.qtPath) { result.qtPath = source.qtPath; }
         if (source.vsDevShell) { result.vsDevShell = source.vsDevShell; }
         if (source.target) { result.target = source.target; }
+        if (source.qmakeArgs) { result.qmakeArgs = source.qmakeArgs; }
         if (source.jomPath) { result.jomPath = source.jomPath; }
     }
 

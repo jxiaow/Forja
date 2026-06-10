@@ -13,29 +13,26 @@ import {
     saveSdkSettings,
     loadSyncSettings,
     saveSyncSettings,
-    loadRemoteSettings,
-    saveRemoteSettings,
     projectConfigPath,
-    projectsDir,
     listProjectConfigs,
 } from '../core/settingsIO';
 
 const _tmpDirs: string[] = [];
 const _createdFiles: string[] = [];
-const _oldCompilotHome = process.env.COMPILOT_HOME;
-const _testCompilotHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-settings-home-'));
-process.env.COMPILOT_HOME = _testCompilotHome;
+const _oldConfigDir = process.env.FORJA_CONFIG_DIR;
+const _testConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-settings-config-'));
+process.env.FORJA_CONFIG_DIR = _testConfigDir;
+_tmpDirs.push(_testConfigDir);
 
 after(() => {
+    if (_oldConfigDir === undefined) { delete process.env.FORJA_CONFIG_DIR; }
+    else { process.env.FORJA_CONFIG_DIR = _oldConfigDir; }
     for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); }
     for (const f of _createdFiles) { try { fs.unlinkSync(f); } catch { /* ok */ } }
-    fs.rmSync(_testCompilotHome, { recursive: true, force: true });
-    if (_oldCompilotHome === undefined) { delete process.env.COMPILOT_HOME; }
-    else { process.env.COMPILOT_HOME = _oldCompilotHome; }
 });
 
 function makeWorkspace(): string {
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-settings-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-settings-'));
     _tmpDirs.push(ws);
     return ws;
 }
@@ -52,7 +49,7 @@ test('loadQtSettings returns defaults when no config exists', () => {
     assert.deepEqual(settings, DEFAULT_QT);
 });
 
-test('loadQtSettings reads from ~/.compilot/projects/<hash>.json', () => {
+test('loadQtSettings reads from ~/.forja/projects/<hash>.json', () => {
     const workspace = makeWorkspace();
     const filePath = projectConfigPath(workspace, 'qt');
     trackFile(filePath);
@@ -75,6 +72,7 @@ test('loadQtSettings reads from ~/.compilot/projects/<hash>.json', () => {
     assert.equal(settings.fileSyncPromptEnabled, true);
     assert.equal(settings.pinnedProject, null);
     assert.equal(settings.runtimeProcessName, '');
+    assert.equal(settings.qmakeArgs, '');
 });
 
 test('loadQtSettings preserves all field types correctly', () => {
@@ -90,7 +88,8 @@ test('loadQtSettings preserves all field types correctly', () => {
         qtPath: 'D:/Qt',
         arch: 'x64',
         mode: 'release',
-        runtimeProcessName: 'XYWinQTPri',
+        runtimeProcessName: 'DemoAppWorker',
+        qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug',
         scanExcludeDirs: ['vendor'],
         pinnedProject: { root: 'C:/ws', relative: 'app.pro' },
         fileSyncPromptEnabled: false,
@@ -101,7 +100,8 @@ test('loadQtSettings preserves all field types correctly', () => {
     assert.equal(settings.qtPath, 'D:/Qt');
     assert.equal(settings.arch, 'x64');
     assert.equal(settings.mode, 'release');
-    assert.equal(settings.runtimeProcessName, 'XYWinQTPri');
+    assert.equal(settings.runtimeProcessName, 'DemoAppWorker');
+    assert.equal(settings.qmakeArgs, 'DEFINES+=FEATURE_X CONFIG+=qml_debug');
     assert.deepEqual(settings.scanExcludeDirs, ['vendor']);
     assert.deepEqual(settings.pinnedProject, { root: 'C:/ws', relative: 'app.pro' });
     assert.equal(settings.fileSyncPromptEnabled, false);
@@ -123,7 +123,7 @@ test('loadQtSettings returns defaults when file is malformed', () => {
 
 // ── saveQtSettings ──
 
-test('saveQtSettings writes to ~/.compilot/projects/ with workspace and type fields', () => {
+test('saveQtSettings writes to ~/.forja/projects/ with workspace and type fields', () => {
     const workspace = makeWorkspace();
     const filePath = projectConfigPath(workspace, 'qt');
     trackFile(filePath);
@@ -148,6 +148,7 @@ test('saveQtSettings round-trips with loadQtSettings', () => {
         qtPath: 'D:/Qt',
         pinnedProject: { root: 'C:/workspace', relative: 'app/demo.pro' },
         scanExcludeDirs: ['vendor', 'third_party'],
+        qmakeArgs: 'DEFINES+=FEATURE_X',
         fileSyncPromptEnabled: false,
         qmakeReminderEnabled: false
     };
@@ -158,6 +159,7 @@ test('saveQtSettings round-trips with loadQtSettings', () => {
     assert.equal(loaded.qtPath, 'D:/Qt');
     assert.deepEqual(loaded.pinnedProject, { root: 'C:/workspace', relative: 'app/demo.pro' });
     assert.deepEqual(loaded.scanExcludeDirs, ['vendor', 'third_party']);
+    assert.equal(loaded.qmakeArgs, 'DEFINES+=FEATURE_X');
     assert.equal(loaded.fileSyncPromptEnabled, false);
     assert.equal(loaded.qmakeReminderEnabled, false);
 });
@@ -241,47 +243,37 @@ test('loadSyncSettings prefers current directory over parent', () => {
     assert.equal(loaded.selectedServer, 'child-server');
 });
 
-// ── Remote ──
-
-test('saveRemoteSettings round-trips sanitized build order', () => {
-    const workspace = makeWorkspace();
-    trackFile(projectConfigPath(workspace, 'remote'));
-
-    saveRemoteSettings(workspace, {
-        remoteCompilotBin: '/opt/compilot/bin/compilot',
-        buildOrder: [
-            { target: 'sdk', action: 'build', args: [] },
-            { target: 'qt', action: 'qmake', args: [] },
-            { target: 'qt', action: 'build', args: ['--verbose'] }
-        ],
-        transfer: {
-            deployServer: 'deploy-1',
-            deployPath: '/opt/app',
-            artifacts: ['qt-app/build/app', 'qt-app/conf/app.ini']
-        }
-    });
-
-    const loaded = loadRemoteSettings(workspace);
-
-    assert.equal(loaded.remoteCompilotBin, '/opt/compilot/bin/compilot');
-    assert.deepEqual(loaded.buildOrder, [
-        { target: 'sdk', action: 'build', args: [] },
-        { target: 'qt', action: 'qmake', args: [] },
-        { target: 'qt', action: 'build', args: ['--verbose'] }
-    ]);
-    assert.deepEqual(loaded.transfer, {
-        deployServer: 'deploy-1',
-        deployPath: '/opt/app',
-        artifacts: ['qt-app/build/app', 'qt-app/conf/app.ini']
-    });
-});
-
 // ── projectConfigPath ──
 
-test('projectConfigPath returns path under ~/.compilot/projects/', () => {
+test('projectConfigPath returns path under configured projects dir', () => {
     const result = projectConfigPath('C:/workspace/dev/qt_client', 'qt');
-    assert.equal(path.dirname(result), projectsDir());
-    assert.match(path.basename(result), /^[a-f0-9]{12}\.json$/);
+    assert.match(result, /[/\\]projects[/\\][a-f0-9]{12}\.json$/);
+    assert.equal(path.dirname(result), path.join(_testConfigDir, 'projects'));
+});
+
+test('projectConfigPath falls back to ~/.forja/projects/', () => {
+    delete process.env.FORJA_CONFIG_DIR;
+    try {
+        const result = projectConfigPath('C:/workspace/dev/qt_client', 'qt');
+        assert.match(result, /\.forja[/\\]projects[/\\][a-f0-9]{12}\.json$/);
+    } finally {
+        process.env.FORJA_CONFIG_DIR = _testConfigDir;
+    }
+});
+
+test('projectConfigPath honors FORJA_CONFIG_DIR for test isolation', () => {
+    const oldConfigDir = process.env.FORJA_CONFIG_DIR;
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-config-dir-'));
+    _tmpDirs.push(configDir);
+    process.env.FORJA_CONFIG_DIR = configDir;
+
+    try {
+        const result = projectConfigPath('C:/workspace/dev/qt_client', 'sync');
+        assert.equal(path.dirname(result), path.join(configDir, 'projects'));
+    } finally {
+        if (oldConfigDir === undefined) { delete process.env.FORJA_CONFIG_DIR; }
+        else { process.env.FORJA_CONFIG_DIR = oldConfigDir; }
+    }
 });
 
 test('projectConfigPath generates different hashes for different types', () => {

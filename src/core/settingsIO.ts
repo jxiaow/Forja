@@ -1,7 +1,7 @@
 /**
  * 统一配置文件读写 — 不依赖 vscode，可独立测试。
  *
- * 配置存储在用户数据目录 ~/.compilot/projects/ 下，
+ * 配置存储在用户数据目录 ~/.forja/projects/ 下，
  * 文件名为 workspace 路径的 hash，内容平铺不加前缀分组。
  *
  * 每个 workspace 目录对应一个配置文件，只存一种配置（qt 或 sdk 或 sync）。
@@ -10,7 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { compilotHomeDir } from './compilotHome';
+import * as os from 'os';
 
 // ── 类型定义 ──
 
@@ -22,6 +22,7 @@ export interface QtSettings {
     jomPath: string;
     pinnedProject: { root: string; relative: string } | null;
     target: string;
+    qmakeArgs: string;
     runtimeProcessName: string;
     cStandard: string;
     cppStandard: string;
@@ -50,29 +51,10 @@ export interface SyncSettings {
     ignore: string[];
 }
 
-export interface RemoteBuildOrderItem {
-    target: 'qt' | 'sdk';
-    action: 'build' | 'rebuild' | 'clean' | 'qmake';
-    args: string[];
-}
-
-export interface RemoteTransferSettings {
-    deployServer: string;
-    deployPath: string;
-    artifacts: string[];
-}
-
-export interface RemoteSettings {
-    remoteCompilotBin: string;
-    buildOrder: RemoteBuildOrderItem[];
-    transfer: RemoteTransferSettings | null;
-}
-
-export interface CompilotSettings {
+export interface ForjaSettings {
     qt: QtSettings;
     sdk: SdkSettings;
     sync: SyncSettings;
-    remote: RemoteSettings;
 }
 
 // ── 默认值 ──
@@ -85,6 +67,7 @@ export const DEFAULT_QT: Readonly<QtSettings> = {
     jomPath: '',
     pinnedProject: null,
     target: '',
+    qmakeArgs: '',
     runtimeProcessName: '',
     cStandard: 'c11',
     cppStandard: 'c++11',
@@ -109,40 +92,54 @@ export const DEFAULT_SYNC: Readonly<SyncSettings> = {
     enabled: false,
     selectedServer: '',
     remotePaths: {},
-    ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release']
+    ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release']
 };
 
-export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
-    remoteCompilotBin: '',
-    buildOrder: [],
-    transfer: null
-};
-
-export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
+export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
     qt: DEFAULT_QT,
     sdk: DEFAULT_SDK,
-    sync: DEFAULT_SYNC,
-    remote: DEFAULT_REMOTE
+    sync: DEFAULT_SYNC
 };
 
 // ── 路径 ──
 
 /** 用户数据目录下的 projects 配置目录 */
+export function forjaConfigDir(): string {
+    return process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja');
+}
+
 export function projectsDir(): string {
-    return path.join(compilotHomeDir(), 'projects');
+    return path.join(forjaConfigDir(), 'projects');
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
-export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync' | 'remote'): string {
+export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string {
     const normalized = workspace.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     const hash = crypto.createHash('sha256').update(`${normalized}:${type}`).digest('hex').slice(0, 12);
     return path.join(projectsDir(), `${hash}.json`);
 }
 
+/**
+ * 从当前 workspace 开始向上查找存在的配置文件。
+ * 子目录没有自己的配置时，自动继承父目录的。
+ * 返回找到的第一个配置文件路径，没找到则返回当前 workspace 路径（用于新建）。
+ */
+export function resolveConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string {
+    let current = workspace;
+    for (;;) {
+        const filePath = projectConfigPath(current, type);
+        if (fs.existsSync(filePath)) { return filePath; }
+        const parent = path.dirname(current);
+        if (parent === current) { break; }
+        current = parent;
+    }
+    return projectConfigPath(workspace, type);
+}
+
 // ── Qt 配置读写 ──
 
 export function loadQtSettings(workspace: string): QtSettings {
-    const filePath = projectConfigPath(workspace, 'qt');
+    const filePath = resolveConfigPath(workspace, 'qt');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -166,7 +163,7 @@ export function saveQtSettings(workspace: string, settings: QtSettings): void {
 // ── SDK 配置读写 ──
 
 export function loadSdkSettings(workspace: string): SdkSettings {
-    const filePath = projectConfigPath(workspace, 'sdk');
+    const filePath = resolveConfigPath(workspace, 'sdk');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -190,31 +187,16 @@ export function saveSdkSettings(workspace: string, settings: SdkSettings): void 
 // ── Sync 配置读写 ──
 
 /**
- * 加载 sync 配置。向上一级查找：如果当前 workspace 没有 sync 配置，
- * 尝试父目录。
+ * 加载 sync 配置（自动向上查找父目录）。
  */
 export function loadSyncSettings(workspace: string): SyncSettings {
-    // 先找当前 workspace
-    const filePath = projectConfigPath(workspace, 'sync');
+    const filePath = resolveConfigPath(workspace, 'sync');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeSync(raw);
         }
     } catch { /* file missing or malformed */ }
-
-    // 向上一级查找（monorepo 场景：子项目继承父目录的 sync 配置）
-    const parent = path.dirname(workspace);
-    if (parent !== workspace) {
-        const parentPath = projectConfigPath(parent, 'sync');
-        try {
-            if (fs.existsSync(parentPath)) {
-                const raw = JSON.parse(fs.readFileSync(parentPath, 'utf8'));
-                return sanitizeSync(raw);
-            }
-        } catch { /* file missing or malformed */ }
-    }
-
     return { ...DEFAULT_SYNC };
 }
 
@@ -224,30 +206,6 @@ export function saveSyncSettings(workspace: string, settings: SyncSettings): voi
     const data: Record<string, unknown> = {
         workspace,
         type: 'sync',
-        ...settings
-    };
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
-}
-
-// ── Remote 配置读写 ──
-
-export function loadRemoteSettings(workspace: string): RemoteSettings {
-    const filePath = projectConfigPath(workspace, 'remote');
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            return sanitizeRemote(raw);
-        }
-    } catch { /* file missing or malformed */ }
-    return { ...DEFAULT_REMOTE };
-}
-
-export function saveRemoteSettings(workspace: string, settings: RemoteSettings): void {
-    const filePath = projectConfigPath(workspace, 'remote');
-    _ensureDir(filePath);
-    const data: Record<string, unknown> = {
-        workspace,
-        type: 'remote',
         ...settings
     };
     fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
@@ -335,6 +293,7 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
         jomPath: isString(raw.jomPath) ? raw.jomPath : d.jomPath,
         pinnedProject,
         target: isString(raw.target) ? raw.target : d.target,
+        qmakeArgs: isString(raw.qmakeArgs) ? raw.qmakeArgs : d.qmakeArgs,
         runtimeProcessName: isString(raw.runtimeProcessName) ? raw.runtimeProcessName : d.runtimeProcessName,
         cStandard: isString(raw.cStandard) ? raw.cStandard : d.cStandard,
         cppStandard: isString(raw.cppStandard) ? raw.cppStandard : d.cppStandard,
@@ -348,7 +307,6 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
         qmakeReminderEnabled: isBool(raw.qmakeReminderEnabled) ? raw.qmakeReminderEnabled : d.qmakeReminderEnabled
     };
 }
-
 function sanitizeSdk(raw: Record<string, unknown>): SdkSettings {
     const d = DEFAULT_SDK;
     return {
@@ -359,7 +317,6 @@ function sanitizeSdk(raw: Record<string, unknown>): SdkSettings {
         ...(isNumber(raw.scanDepth) && raw.scanDepth >= 1 ? { scanDepth: raw.scanDepth } : {})
     };
 }
-
 function sanitizeSync(raw: Record<string, unknown>): SyncSettings {
     const d = DEFAULT_SYNC;
     const remotePaths: Record<string, string> = {};
@@ -375,46 +332,4 @@ function sanitizeSync(raw: Record<string, unknown>): SyncSettings {
         remotePaths,
         ignore: isStringArray(raw.ignore) ? raw.ignore : [...d.ignore]
     };
-}
-
-function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
-    const d = DEFAULT_REMOTE;
-    const buildOrder: RemoteBuildOrderItem[] = [];
-    if (Array.isArray(raw.buildOrder)) {
-        for (const item of raw.buildOrder) {
-            if (!item || typeof item !== 'object') { continue; }
-            const entry = item as Record<string, unknown>;
-            const target = entry.target;
-            const action = entry.action;
-            if ((target !== 'qt' && target !== 'sdk') || !isRemoteBuildOrderAction(target, action)) { continue; }
-            buildOrder.push({
-                target,
-                action,
-                args: isStringArray(entry.args) ? entry.args : []
-            });
-        }
-    }
-    let transfer: RemoteTransferSettings | null = null;
-    if (raw.transfer && typeof raw.transfer === 'object' && !Array.isArray(raw.transfer)) {
-        const rawTransfer = raw.transfer as Record<string, unknown>;
-        if (isString(rawTransfer.deployServer) && isString(rawTransfer.deployPath) && isStringArray(rawTransfer.artifacts)) {
-            transfer = {
-                deployServer: rawTransfer.deployServer,
-                deployPath: rawTransfer.deployPath,
-                artifacts: rawTransfer.artifacts
-            };
-        }
-    }
-    return {
-        remoteCompilotBin: isString(raw.remoteCompilotBin) ? raw.remoteCompilotBin : d.remoteCompilotBin,
-        buildOrder,
-        transfer
-    };
-}
-
-function isRemoteBuildOrderAction(target: 'qt' | 'sdk', action: unknown): action is RemoteBuildOrderItem['action'] {
-    if (target === 'qt') {
-        return action === 'build' || action === 'clean' || action === 'qmake';
-    }
-    return action === 'build' || action === 'rebuild' || action === 'clean';
 }

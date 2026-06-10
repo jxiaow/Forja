@@ -57,6 +57,10 @@ export function getTarget(): string {
     return getQtSetting('target');
 }
 
+export function getQmakeArgs(): string {
+    return getQtSetting('qmakeArgs');
+}
+
 export function getRuntimeProcessName(): string {
     return getQtSetting('runtimeProcessName');
 }
@@ -122,7 +126,8 @@ export function getBuildConfig(): BuildConfig {
             qtPath: getQtPath(),
             vsDevShell: getVsDevShellPath(),
             jomPath: getJomPath(),
-            target: getTarget()
+            target: getTarget(),
+            qmakeArgs: getQmakeArgs()
         }
     );
 

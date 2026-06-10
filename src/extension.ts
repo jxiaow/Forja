@@ -13,12 +13,11 @@ import { generateCppProperties } from './qt/build/configGenerator';
 import { createLogger, initLogger } from './vscode/logger';
 import { detectEnv } from './qt/env/envDetector';
 import { ensureLocalStateDir } from './qt/shared/localState';
-import { registerSyncWatcher } from './qt/sync/syncWatcher';
+import { registerSyncWatcher } from './sync/syncWatcher';
 import { initSettingsStore } from './vscode/settingsStore';
 import { registerWorkspaceWatcher } from './vscode/workspaceResolver';
 import { activateSdk } from './sdk/sdkExtension';
 import { registerQtCommands } from './qt/commands';
-import { registerRemoteCommands } from './remote/vscode/commands';
 import { TASK_SOURCE_QT } from './qt/constants';
 import { normalizeConfigPageId } from './ui/configPanel/pageIds';
 
@@ -48,7 +47,7 @@ function autoCleanupStaleConfigs(): void {
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const channel = initLogger();
     if (channel) { context.subscriptions.push(channel); }
-    logger.info('Compilot 扩展激活');
+    logger.info('Forja 扩展激活');
 
     // 注册 workspace folder 变化监听（多文件夹工作区切换时自动重置缓存）
     registerWorkspaceWatcher(context);
@@ -68,12 +67,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     configTreeView.title = `配置 v${context.extension.packageJSON.version || ''}`;
     context.subscriptions.push(configTreeView);
     context.subscriptions.push(
-        vscode.commands.registerCommand('compilot.config.openPage', (pageId?: string) => {
+        vscode.commands.registerCommand('forja.config.openPage', (pageId?: string) => {
             pageManager.openPage(normalizeConfigPageId(pageId));
         })
     );
     context.subscriptions.push(
-        vscode.commands.registerCommand('compilot.qt.showSyncTab', () => pageManager.switchTab('remote'))
+        vscode.commands.registerCommand('forja.showSyncTab', () => pageManager.switchTab('remote'))
     );
 
     registerPriWatcher(context);
@@ -120,7 +119,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
 
-    // 有项目时确保 .compilot/ 目录存在
+    // 有项目时确保 .forja/ 目录存在
     if (project) {
         const wsRoot = getWorkspaceRoot();
         if (wsRoot) {
@@ -143,13 +142,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Qt 命令注册（提取到 qt/commands.ts）
     registerQtCommands(context, pageManager);
 
-    // Remote 命令注册（VSCode 适配层，不进入 CLI/core）
-    registerRemoteCommands(context);
-
     // 激活 SDK 模块
     await activateSdk(context);
 
-    logger.info('Compilot 扩展激活完成');
+    logger.info('Forja 扩展激活完成');
 }
 
 export function deactivate(): void {

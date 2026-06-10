@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decodePinnedProject, encodePinnedProject } from '../qt/project/pinnedProject';
 
-test('pinnedProject setting is managed in Compilot local settings (not in package.json contributes)', () => {
-    // Configuration is self-managed in Compilot's local settings store.
+test('pinnedProject setting is managed in Forja local settings (not in package.json contributes)', () => {
+    // Configuration is self-managed in Forja's local settings store.
     // This test verifies the codec still works correctly with the expected format
     const encoded = encodePinnedProject('C:/workspace', 'app/demo.pro');
     assert.deepEqual(encoded, { root: 'C:/workspace', relative: 'app/demo.pro' });
@@ -12,15 +12,15 @@ test('pinnedProject setting is managed in Compilot local settings (not in packag
     assert.deepEqual(decoded, { root: 'C:/workspace', relative: 'app/demo.pro' });
 });
 
-test('pinnedProject codec supports object config values and legacy string values', () => {
+test('pinnedProject codec only accepts object config values', () => {
     assert.deepEqual(
         decodePinnedProject({ root: 'C:/workspace', relative: 'app/demo.pro' }),
         { root: 'C:/workspace', relative: 'app/demo.pro' }
     );
 
-    assert.deepEqual(
+    assert.equal(
         decodePinnedProject('{"root":"C:/workspace","relative":"app/demo.pro"}'),
-        { root: 'C:/workspace', relative: 'app/demo.pro' }
+        null
     );
 
     assert.equal(

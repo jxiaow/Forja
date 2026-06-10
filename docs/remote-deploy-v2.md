@@ -136,27 +136,27 @@ SSH 到远程执行编译命令。
 **确定工作目录**：`remotePath/<repoName>/`
 
 **命令选择**：
-1. 先检测远程 compilot 版本：`compilot --version 2>/dev/null`
-2. 有 compilot（≥ 0.7.0）：
-   - Qt：`cd remotePath/qt-app && compilot qt build --json`
-   - SDK：`cd remotePath/sdk-lib && compilot sdk build --json`
-3. 没有 compilot：
+1. 先检测远程 forja 版本：`forja --version 2>/dev/null`
+2. 有 forja（≥ 0.7.0）：
+   - Qt：`cd remotePath/qt-app && forja qt build --json`
+   - SDK：`cd remotePath/sdk-lib && forja sdk build --json`
+3. 没有 forja：
    - `cd remotePath/qt-app && make -j$(nproc)`
-   - 没有 Makefile → 报错"请先运行 qmake 或安装远程 compilot"
+   - 没有 Makefile → 报错"请先运行 qmake 或安装远程 forja"
 
 **超时**：无超时（编译时间不可预测），用户可手动取消。
 
 **编译错误**：
-- 有 compilot：解析 JSON 输出的 errors 字段
-- 没有 compilot：从 stdout/stderr 中正则匹配错误行（`: error` 模式）
+- 有 forja：解析 JSON 输出的 errors 字段
+- 没有 forja：从 stdout/stderr 中正则匹配错误行（`: error` 模式）
 
 #### 阶段 5：transfer（仅跨机器模式）
 
 当配置了 deploy.server（部署机和编译机不是同一台）时执行。
 
 从编译机 SCP 产物到部署机：
-- 产物来源：compilot build --json 输出的 artifacts 字段 + deploy.extraArtifacts glob
-- 没有 compilot 时：只用 deploy.extraArtifacts（用户必须配）
+- 产物来源：forja build --json 输出的 artifacts 字段 + deploy.extraArtifacts glob
+- 没有 forja 时：只用 deploy.extraArtifacts（用户必须配）
 
 **单机模式跳过此阶段。**
 
@@ -165,9 +165,9 @@ SSH 到远程执行编译命令。
 杀掉远程旧进程。
 
 **单机模式**：
-- 有 compilot：`compilot qt stop`（Qt）或用 deploy.stopCommand
-- 没有 compilot 且有 deploy.stopCommand：执行 stopCommand
-- 没有 compilot 且没有 stopCommand：报错"请配置停止命令或安装远程 compilot"
+- 有 forja：`forja qt stop`（Qt）或用 deploy.stopCommand
+- 没有 forja 且有 deploy.stopCommand：执行 stopCommand
+- 没有 forja 且没有 stopCommand：报错"请配置停止命令或安装远程 forja"
 
 **跨机器模式**：
 - SSH 到部署机执行 deploy.stopCommand
@@ -178,8 +178,8 @@ SSH 到远程执行编译命令。
 启动新程序。
 
 **单机 Qt**：
-- 有 compilot：从 build 阶段的 JSON 输出中获取可执行文件路径，SSH 直接执行
-- 没有 compilot：需要 deploy.launchCommand，否则报错
+- 有 forja：从 build 阶段的 JSON 输出中获取可执行文件路径，SSH 直接执行
+- 没有 forja：需要 deploy.launchCommand，否则报错
 
 **单机 SDK**：
 - 必须配 deploy.launchCommand（SDK 没有内置 run 逻辑）
@@ -196,10 +196,10 @@ SSH 到远程执行编译命令。
 
 ### 3.1 存储位置
 
-所有配置在 `~/.compilot/projects/` 下，和现有 qt/sdk/sync 同构：
+所有配置在 `~/.forja/projects/` 下，和现有 qt/sdk/sync 同构：
 
 ```
-~/.compilot/
+~/.forja/
 ├── servers.json                              # 全局服务器列表
 ├── projects/
 │   ├── <hash(workspace:qt)>.json             # Qt 配置
@@ -350,7 +350,7 @@ interface DeployOptions {
 流程结束时（成功或失败）：
 - `ssh -O exit -o ControlPath=<path> <target>`
 
-socket 路径：`~/.compilot/sockets/<md5(user@host:port)前8位>`
+socket 路径：`~/.forja/sockets/<md5(user@host:port)前8位>`
 
 ### Windows
 
@@ -415,7 +415,7 @@ socket 路径：`~/.compilot/sockets/<md5(user@host:port)前8位>`
 
 ### 触发方式
 
-- CLI：`compilot qt run --remote --fast`
+- CLI：`forja qt run --remote --fast`
 - VSCode：自动判断，满足条件时进入快速模式，状态栏显示 ⚡
 
 ---
@@ -425,31 +425,31 @@ socket 路径：`~/.compilot/sockets/<md5(user@host:port)前8位>`
 ### 现有命令加 --remote
 
 ```bash
-compilot qt build --remote              # sync → build
-compilot qt run --remote                # 全流程
-compilot qt run --remote --fast         # 快速模式
-compilot qt stop --remote               # 只 stop
-compilot qt clean --remote              # SSH 远程 clean
-compilot qt qmake --remote              # SSH 远程 qmake
+forja qt build --remote              # sync → build
+forja qt run --remote                # 全流程
+forja qt run --remote --fast         # 快速模式
+forja qt stop --remote               # 只 stop
+forja qt clean --remote              # SSH 远程 clean
+forja qt qmake --remote              # SSH 远程 qmake
 
-compilot sdk build --remote             # sync → build
-compilot sdk rebuild --remote           # sync → clean + build
-compilot sdk clean --remote             # SSH 远程 clean
+forja sdk build --remote             # sync → build
+forja sdk rebuild --remote           # sync → clean + build
+forja sdk clean --remote             # SSH 远程 clean
 ```
 
 ### 新增 remote 子命令
 
 ```bash
-compilot remote test                    # 连接测试
-compilot remote init                    # 远程初始化（clone 或全量推送）
-compilot remote init --push             # 强制全量推送
+forja remote test                    # 连接测试
+forja remote init                    # 远程初始化（clone 或全量推送）
+forja remote init --push             # 强制全量推送
 ```
 
 ### --from 断点续跑
 
 ```bash
-compilot qt run --remote --from build   # 跳过 sync，直接编译+运行
-compilot qt run --remote --from launch  # 跳过编译，直接启动（用上次的产物）
+forja qt run --remote --from build   # 跳过 sync，直接编译+运行
+forja qt run --remote --from launch  # 跳过编译，直接启动（用上次的产物）
 ```
 
 ---
@@ -537,13 +537,13 @@ compilot qt run --remote --from launch  # 跳过编译，直接启动（用上�
 
 - **状态栏**：Run 按钮变为 `$(sync~spin)` + 当前阶段文字
 - **Progress 通知**：`window.withProgress` 显示 "远程部署 (3/5): 编译中..."
-- **Output Channel**：`Compilot: Remote` 输出每个阶段的详细日志
+- **Output Channel**：`Forja: Remote` 输出每个阶段的详细日志
 
 ---
 
 ## 十、初始化流程
 
-### compilot remote init
+### forja remote init
 
 1. 读取 sync 配置获取编译机和 remotePath
 2. SSH 测试连接
@@ -555,7 +555,7 @@ compilot qt run --remote --from launch  # 跳过编译，直接启动（用上�
      - 有 origin → SSH 远程 `git clone <url> <remotePath>/<repoName>`
      - clone 失败或无 origin → 提示用 `--push`
 
-### compilot remote init --push
+### forja remote init --push
 
 对当前工作区每个仓库：
 - `scp -r <localRepo>/ <remote>:<remotePath>/<repoName>/`

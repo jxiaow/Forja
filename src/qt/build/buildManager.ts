@@ -41,7 +41,8 @@ async function _ensureMakefileFresh(cfg: ReturnType<typeof getBuildConfig>): Pro
         arch: cfg.arch,
         qtPath: cfg.qtPath,
         proFile: cfg.proFile,
-        target: cfg.target
+        target: cfg.target,
+        qmakeArgs: cfg.qmakeArgs
     });
     if (validation.exists && validation.matches) { return true; }
 

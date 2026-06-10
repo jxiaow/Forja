@@ -7,10 +7,19 @@ import { createActionPlan } from '../qt/shared/qtCore';
 import { saveQtSettings, loadQtSettings, DEFAULT_QT, QtSettings } from '../core/settingsIO';
 
 const _tmpDirs: string[] = [];
-after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
+const _oldConfigDir = process.env.FORJA_CONFIG_DIR;
+const _testConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-core-config-'));
+process.env.FORJA_CONFIG_DIR = _testConfigDir;
+_tmpDirs.push(_testConfigDir);
+
+after(() => {
+    if (_oldConfigDir === undefined) { delete process.env.FORJA_CONFIG_DIR; }
+    else { process.env.FORJA_CONFIG_DIR = _oldConfigDir; }
+    for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); }
+});
 
 function makeWorkspace(): string {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-core-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-core-'));
     _tmpDirs.push(workspace);
     fs.writeFileSync(path.join(workspace, 'demo.pro'), 'TARGET = demo\nQT += core gui widgets\n', 'utf8');
     return workspace;
@@ -31,10 +40,28 @@ function readyQtSettings(workspace: string, overrides: Partial<QtSettings> = {})
     };
 }
 
+function writeMatchingMakefile(workspace: string, overrides: { mode?: string; arch?: string; qtPath?: string } = {}): void {
+    const mode = overrides.mode || 'debug';
+    const arch = overrides.arch || defaultArch();
+    const qtPath = overrides.qtPath || 'D:/Qt';
+    const qmakeBin = process.platform === 'win32' ? 'qmake.exe' : 'qmake';
+    const qmakePath = qtPath
+        ? `${qtPath.replace(/\\/g, '/')}/bin/${qmakeBin}`
+        : qmakeBin;
+    const spec = process.platform === 'win32' ? 'win32-msvc' : 'linux-g++';
+    const archConfig = process.platform === 'win32' ? ` CONFIG+=${arch}` : '';
+    fs.writeFileSync(
+        path.join(workspace, 'Makefile'),
+        `# Command: "${qmakePath}" demo.pro -spec ${spec} CONFIG+=${mode} CONFIG+=console${archConfig}\n`,
+        'utf8'
+    );
+}
+
 test('createActionPlan uses settings.json when CLI args are omitted', async () => {
     const workspace = makeWorkspace();
     const project = path.join(workspace, 'demo.pro');
     saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, mode: 'release', arch: 'x64', qtPath: 'D:/Qt', vsInstall: 'C:/VS' });
+    writeMatchingMakefile(workspace, { mode: 'release', arch: 'x64', qtPath: 'D:/Qt' });
 
     const result = await createActionPlan({
         action: 'build',
@@ -46,6 +73,7 @@ test('createActionPlan uses settings.json when CLI args are omitted', async () =
         qtPath: null,
         vsDevShell: null,
         target: null,
+        qmakeArgs: null,
         saveLocal: false,
         json: true
     });
@@ -54,6 +82,47 @@ test('createActionPlan uses settings.json when CLI args are omitted', async () =
     assert.equal(result.workspace, workspace);
     assert.equal(result.project, project);
     assert.match(result.commands.join('\n'), process.platform === 'win32' ? /jom/ : /make/);
+});
+
+test('createActionPlan use persists qmake args and qmake appends them', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, readyQtSettings(workspace));
+
+    const useResult = await createActionPlan({
+        action: 'use',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug',
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(useResult.ok, true);
+    assert.deepEqual(useResult.data?.updated, { qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug' });
+
+    const qmakeResult = await createActionPlan({
+        action: 'qmake',
+        executionMode: 'dryRun',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        qmakeArgs: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(qmakeResult.ok, true);
+    assert.match(qmakeResult.commands.join('\n'), /DEFINES\+=FEATURE_X CONFIG\+=qml_debug/);
 });
 
 test('execution actions require a saved project even when a single pro file exists', async () => {
@@ -76,7 +145,7 @@ test('execution actions require a saved project even when a single pro file exis
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未配置项目/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
 });
 
 test('createActionPlan reports missing saved project before scanning multiple projects', async () => {
@@ -101,7 +170,7 @@ test('createActionPlan reports missing saved project before scanning multiple pr
     assert.equal(result.ok, false);
     assert.equal(result.diagnostics[0].level, 'error');
     assert.match(result.diagnostics[0].message, /未配置项目/);
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
 });
 
 test('createActionPlan status returns checks and resolved config', async () => {
@@ -126,6 +195,7 @@ test('createActionPlan status returns checks and resolved config', async () => {
     assert.equal(result.ok, true);
     assert.equal(result.resolved?.mode, 'debug');
     assert.equal(result.resolved?.arch, process.platform === 'win32' ? 'x86' : 'x64');
+    assert.equal(result.resolved?.target, 'demo');
     // stdout contains custom status structure
     const statusData = JSON.parse(result.stdout);
     assert.equal(statusData.checks.settings, true);
@@ -136,6 +206,51 @@ test('createActionPlan status returns checks and resolved config', async () => {
     }
     assert.equal(typeof statusData.ready, 'boolean');
     assert.ok(statusData.nextAction);
+});
+
+test('createActionPlan status prefers configured target override', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, readyQtSettings(workspace, { target: 'OverrideApp' }));
+
+    const result = await createActionPlan({
+        action: 'status',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.resolved?.target, 'OverrideApp');
+});
+
+test('createActionPlan status omits target when selected project is missing', async () => {
+    const workspace = makeWorkspace();
+    fs.unlinkSync(path.join(workspace, 'demo.pro'));
+    saveQtSettings(workspace, readyQtSettings(workspace));
+
+    const result = await createActionPlan({
+        action: 'status',
+        executionMode: 'execute',
+        workspace,
+        project: null,
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.resolved?.target, '');
 });
 
 test('status points to init before local qt settings exist', async () => {
@@ -157,7 +272,7 @@ test('status points to init before local qt settings exist', async () => {
 
     const data = JSON.parse(result.stdout);
     assert.equal(data.nextAction, 'init');
-    assert.deepEqual(data.nextActions, ['compilot qt init --json']);
+    assert.deepEqual(data.nextActions, ['forja qt init --json']);
 });
 
 test('status points to projects/use when settings exist but no project is selected', async () => {
@@ -182,8 +297,8 @@ test('status points to projects/use when settings exist but no project is select
     const data = JSON.parse(result.stdout);
     assert.equal(data.nextAction, 'projects');
     assert.deepEqual(data.nextActions, [
-        'compilot qt projects --json',
-        'compilot qt use --project <path> --json'
+        'forja qt projects --json',
+        'forja qt use --project <path> --json'
     ]);
 });
 
@@ -207,8 +322,8 @@ test('status points to env/use when project exists but toolchain is missing', as
 
     const data = JSON.parse(result.stdout);
     assert.equal(data.nextAction, 'env');
-    assert.ok(data.nextActions.includes('compilot qt env --json'));
-    assert.ok(data.nextActions.some((action: string) => /compilot qt use --qt-path <path> --json/.test(action)));
+    assert.ok(data.nextActions.includes('forja qt env --json'));
+    assert.ok(data.nextActions.some((action: string) => /forja qt use --qt-path <path> --json/.test(action)));
 });
 
 test('status points to use when build config needs confirmation', async () => {
@@ -244,7 +359,7 @@ test('status points to use when build config needs confirmation', async () => {
         ['mode', 'arch']
     );
     assert.equal(data.nextAction, 'use');
-    assert.deepEqual(data.nextActions, [`compilot qt use --mode debug --arch ${defaultArch()} --json`]);
+    assert.deepEqual(data.nextActions, [`forja qt use --mode debug --arch ${defaultArch()} --json`]);
     assert.ok(data.diagnostics.some((d: { message: string }) => /未确认构建模式/.test(d.message)));
     assert.ok(data.diagnostics.some((d: { message: string }) => /未确认目标架构/.test(d.message)));
 });
@@ -275,7 +390,7 @@ test('execution actions require confirmed mode and arch', async () => {
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未确认构建配置/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
 });
 
 test('execution actions require saved arch confirmation', async () => {
@@ -298,7 +413,7 @@ test('execution actions require saved arch confirmation', async () => {
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未确认构建配置: arch/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
 });
 
 test('init writes default arch when the platform has a single architecture option', async () => {
@@ -358,8 +473,8 @@ test('createActionPlan use updates only explicit config fields', async () => {
     assert.equal(result.resolved?.qtPath, 'D:/Qt-old');
     assert.equal(result.resolved?.target, 'demo');
     assert.deepEqual(result.data?.updated, { mode: 'release' });
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
-    assert.deepEqual(result.data?.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
+    assert.deepEqual(result.data?.nextActions, ['forja qt status --json']);
 });
 
 test('createActionPlan use --project switches pinned project', async () => {
@@ -406,7 +521,7 @@ test('createActionPlan use --project rejects missing project files', async () =>
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /项目文件不存在/.test(d.message)));
-    assert.ok(result.nextActions.includes('compilot qt projects --json'));
+    assert.ok(result.nextActions.includes('forja qt projects --json'));
 });
 
 test('createActionPlan qmake warns when Qt and VS environment are unresolved', async () => {
@@ -500,8 +615,8 @@ test('init dry-run points to projects/use when multiple projects prevent auto se
     });
 
     assert.equal(result.ok, true);
-    assert.ok(result.nextActions.includes('compilot qt projects --json'));
-    assert.ok(result.nextActions.includes('compilot qt use --project <path> --json'));
+    assert.ok(result.nextActions.includes('forja qt projects --json'));
+    assert.ok(result.nextActions.includes('forja qt use --project <path> --json'));
 });
 
 test('createActionPlan init ignores explicit config override fields', async () => {
@@ -577,6 +692,7 @@ test('run without Makefile includes status hint when CLI-passed mode/arch', asyn
 test('build action plan ignores config override fields and uses saved settings', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, mode: 'debug', arch: 'x86', qtPath: 'D:/Qt-old', vsInstall: 'C:/VS-old' });
+    writeMatchingMakefile(workspace, { mode: 'debug', arch: 'x86', qtPath: 'D:/Qt-old' });
 
     const result = await createActionPlan({
         action: 'build',
@@ -599,9 +715,43 @@ test('build action plan ignores config override fields and uses saved settings',
     assert.notEqual(result.resolved?.vsDevShell, 'C:/VS-new/Launch-VsDevShell.ps1');
 });
 
-test('nextActions points to status when Qt path is empty', async () => {
+test('build with stale Makefile points to qmake instead of building', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, readyQtSettings(workspace, { mode: 'debug', arch: defaultArch(), qtPath: 'D:/Qt' }));
+    const projectDir = workspace;
+    if (process.platform === 'win32') {
+        fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=release CONFIG+=console CONFIG+=x86\n', 'utf8');
+        fs.writeFileSync(path.join(projectDir, 'Makefile.Release'), 'DESTDIR_TARGET = release\\demo.exe\n', 'utf8');
+    } else {
+        fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake" demo.pro -spec linux-g++ CONFIG+=release CONFIG+=console\nTARGET = release/demo\n', 'utf8');
+    }
+
+    const result = await createActionPlan({
+        action: 'build',
+        executionMode: 'dryRun',
+        workspace,
+        project: path.join(workspace, 'demo.pro'),
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.commands, []);
+    assert.equal(result.shellCommand, '');
+    assert.ok(result.diagnostics.some(d => d.level === 'error' && /Makefile/.test(d.message)));
+    assert.deepEqual(result.nextActions, ['forja qt qmake --json']);
+    assert.equal(result.executablePath, undefined);
+});
+
+test('build with matching Makefile still generates commands when Qt path is empty', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, readyQtSettings(workspace, { qtPath: '' }));
+    writeMatchingMakefile(workspace, { mode: 'debug', arch: 'x86', qtPath: '' });
 
     const result = await createActionPlan({
         action: 'build',
@@ -617,14 +767,13 @@ test('nextActions points to status when Qt path is empty', async () => {
         json: true
     });
 
-    // 执行层不自行诊断环境问题，成功返回命令
     assert.equal(result.ok, true);
     assert.ok(result.commands.length > 0);
 });
 
 test('project error branch fills resolved with current config', async () => {
     // Workspace with no .pro files
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-nopro-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-nopro-'));
     _tmpDirs.push(workspace);
 
     const result = await createActionPlan({
@@ -646,6 +795,84 @@ test('project error branch fills resolved with current config', async () => {
     assert.equal(result.resolved?.mode, 'debug');
     assert.equal(result.resolved?.arch, process.platform === 'win32' ? 'x86' : 'x64');
     assert.equal(result.resolved?.qtPath, '');
+});
+
+test('project error branch reads Forja environment variables', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-env-alias-'));
+    _tmpDirs.push(workspace);
+    const oldQtPath = process.env.FORJA_QT_PATH;
+    const oldVsDevShell = process.env.FORJA_VS_DEV_SHELL;
+
+    process.env.FORJA_QT_PATH = 'D:/ForjaQt';
+    process.env.FORJA_VS_DEV_SHELL = 'C:/ForjaVS/Launch-VsDevShell.ps1';
+
+    try {
+        const result = await createActionPlan({
+            action: 'build',
+            executionMode: 'dryRun',
+            workspace,
+            project: null,
+            mode: null,
+            arch: null,
+            qtPath: null,
+            vsDevShell: null,
+            target: null,
+            saveLocal: false,
+            json: true
+        });
+
+        assert.equal(result.ok, false);
+        assert.equal(result.resolved?.qtPath, 'D:/ForjaQt');
+        assert.equal(result.resolved?.vsDevShell, 'C:/ForjaVS/Launch-VsDevShell.ps1');
+    } finally {
+        if (oldQtPath === undefined) { delete process.env.FORJA_QT_PATH; }
+        else { process.env.FORJA_QT_PATH = oldQtPath; }
+        if (oldVsDevShell === undefined) { delete process.env.FORJA_VS_DEV_SHELL; }
+        else { process.env.FORJA_VS_DEV_SHELL = oldVsDevShell; }
+    }
+});
+
+test('project error branch ignores legacy Qt Pilot environment variables', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-env-legacy-'));
+    _tmpDirs.push(workspace);
+    const oldQtPath = process.env.FORJA_QT_PATH;
+    const oldVsDevShell = process.env.FORJA_VS_DEV_SHELL;
+    const oldLegacyQtPath = process.env.QT_PILOT_QT_PATH;
+    const oldLegacyVsDevShell = process.env.QT_PILOT_VS_DEV_SHELL;
+
+    delete process.env.FORJA_QT_PATH;
+    delete process.env.FORJA_VS_DEV_SHELL;
+    process.env.QT_PILOT_QT_PATH = 'D:/LegacyQt';
+    process.env.QT_PILOT_VS_DEV_SHELL = 'C:/LegacyVS/Launch-VsDevShell.ps1';
+
+    try {
+        const result = await createActionPlan({
+            action: 'build',
+            executionMode: 'dryRun',
+            workspace,
+            project: null,
+            mode: null,
+            arch: null,
+            qtPath: null,
+            vsDevShell: null,
+            target: null,
+            saveLocal: false,
+            json: true
+        });
+
+        assert.equal(result.ok, false);
+        assert.equal(result.resolved?.qtPath, '');
+        assert.equal(result.resolved?.vsDevShell, '');
+    } finally {
+        if (oldQtPath === undefined) { delete process.env.FORJA_QT_PATH; }
+        else { process.env.FORJA_QT_PATH = oldQtPath; }
+        if (oldVsDevShell === undefined) { delete process.env.FORJA_VS_DEV_SHELL; }
+        else { process.env.FORJA_VS_DEV_SHELL = oldVsDevShell; }
+        if (oldLegacyQtPath === undefined) { delete process.env.QT_PILOT_QT_PATH; }
+        else { process.env.QT_PILOT_QT_PATH = oldLegacyQtPath; }
+        if (oldLegacyVsDevShell === undefined) { delete process.env.QT_PILOT_VS_DEV_SHELL; }
+        else { process.env.QT_PILOT_VS_DEV_SHELL = oldLegacyVsDevShell; }
+    }
 });
 
 test('run with Makefile generates full command chain including executable', async () => {
@@ -685,7 +912,7 @@ test('run with Makefile generates full command chain including executable', asyn
 
 test('run uses configured runtime process name only for pre-run stop', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'XYWinQTPri' }));
+    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'DemoAppWorker' }));
     const projectDir = workspace;
     if (process.platform === 'win32') {
         fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
@@ -709,7 +936,7 @@ test('run uses configured runtime process name only for pre-run stop', async () 
     });
 
     assert.equal(result.ok, true);
-    assert.match(result.commands[0], /XYWinQTPri/);
+    assert.match(result.commands[0], /DemoAppWorker/);
     assert.equal(result.executablePath, path.join(workspace, process.platform === 'win32' ? 'debug\\demo.exe' : 'debug/demo'));
 });
 
@@ -744,7 +971,7 @@ test('stop uses runtime executable name when Makefile is available', async () =>
 
 test('stop prefers configured runtime process name over Makefile target', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'XYWinQTPri' }));
+    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'DemoAppWorker' }));
     if (process.platform === 'win32') {
         fs.writeFileSync(path.join(workspace, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
         fs.writeFileSync(path.join(workspace, 'Makefile.Debug'), 'DESTDIR_TARGET = debug\\realapp.exe\n', 'utf8');
@@ -767,7 +994,7 @@ test('stop prefers configured runtime process name over Makefile target', async 
     });
 
     assert.equal(result.ok, true);
-    assert.ok(result.commands.some(c => /XYWinQTPri/.test(c)));
+    assert.ok(result.commands.some(c => /DemoAppWorker/.test(c)));
     assert.ok(!result.commands.some(c => /realapp/.test(c)));
 });
 
@@ -775,7 +1002,7 @@ test('workspace not exist returns error diagnostic', async () => {
     const result = await createActionPlan({
         action: 'build',
         executionMode: 'dryRun',
-        workspace: path.join(os.tmpdir(), 'compilot-nonexistent-' + Date.now()),
+        workspace: path.join(os.tmpdir(), 'forja-nonexistent-' + Date.now()),
         project: null,
         mode: 'debug',
         arch: 'x86',
@@ -812,7 +1039,7 @@ test('init still auto-selects a single candidate project', async () => {
 });
 
 test('execution action without saved project points back to status', async () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-empty-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-empty-'));
     _tmpDirs.push(workspace);
 
     const result = await createActionPlan({
@@ -831,12 +1058,13 @@ test('execution action without saved project points back to status', async () =>
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未配置项目/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['compilot qt status --json']);
+    assert.deepEqual(result.nextActions, ['forja qt status --json']);
 });
 
 test('non-existent qtPath still generates commands (validation delegated to status)', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, readyQtSettings(workspace, { qtPath: 'Z:/nonexistent/qt/path' }));
+    writeMatchingMakefile(workspace, { mode: 'debug', arch: 'x86', qtPath: 'Z:/nonexistent/qt/path' });
 
     const result = await createActionPlan({
         action: 'build',

@@ -1,11 +1,11 @@
-# Compilot
+# Forja
 
 C++ 项目构建扩展，支持 Qt (qmake) 和 SDK (.sln/Makefile) 项目。
 
 ## 安装
 
 ```bash
-code --install-extension compilot-x.x.x.vsix
+code --install-extension forja-x.x.x.vsix
 ```
 
 ## 功能
@@ -15,8 +15,7 @@ code --install-extension compilot-x.x.x.vsix
 - RCC 资源编译（自动增量检测）
 - 自动检测 Visual Studio 和 Qt 环境
 - 配置面板可视化管理构建参数
-- 远程同步：基于 git diff 增量上传变更文件
-- 远程 Phase 1：执行位置切换、Status/Test/Bootstrap、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean
+- 同步：基于 git diff 增量上传变更文件
 - `.pri`/`.pro` 文件监听：删除源文件时提示从工程文件中移除
 - 自动生成 `c_cpp_properties.json` 用于 IntelliSense
 - SDK 模块：.sln / Makefile 项目的 Build / Rebuild / Clean
@@ -32,62 +31,47 @@ code --install-extension compilot-x.x.x.vsix
 
 | 按钮 | 说明 |
 |------|------|
-| `项目名 · Debug x86` | 点击打开操作菜单：切换模式/架构、执行构建、切换项目、切换本地/远程执行 |
-| `Run` | 本地执行时构建并运行；远程执行时启动 `Compilot Remote Qt: Run` 前台 Terminal |
+| `项目名 · Debug x86` | 点击打开操作菜单：切换模式/架构、执行构建、切换项目、切换执行位置 |
+| `Run` | 构建并运行；构建中显示旋转图标 |
 | `Debug` | 构建并启动调试 |
-| `同步` | 远程同步启用时显示，点击上传变更文件 |
+| `同步` | 同步启用时显示，点击上传变更文件 |
 
 ## 命令
 
-命令面板（`Ctrl+Shift+P`）搜索 `Compilot`：
+命令面板（`Ctrl+Shift+P`）搜索 `Forja`：
 
 | 命令 | 说明 |
 |------|------|
-| Compilot Qt: 选择项目 | 选择 .pro 文件作为当前项目 |
-| Compilot Qt: QMake | 生成 Makefile |
-| Compilot Qt: Build | 编译 |
-| Compilot Qt: Run | 编译并运行 |
-| Compilot Qt: Clean | 清理 |
-| Compilot Qt: 停止 | 终止程序 |
-| Compilot Qt: 调试 | 编译并调试 |
-| Compilot Qt: RCC 编译 | 编译 .qrc 资源 |
-| Compilot Qt: 用 Qt Designer 打开 | 打开 .ui 文件 |
-| Compilot Qt: 同步变更文件到远程 | SCP 上传变更 |
-| Compilot Qt: 测试远程连接 | 测试 SSH 连接 |
-| Compilot Remote: Status | 查看远程配置、连通性和 readiness |
-| Compilot Remote: Doctor | 运行远程环境体检并显示阻塞项和下一步 |
-| Compilot Remote: Workbench | 打开远程工作台 QuickPick，查看摘要并触发常用动作 |
-| Compilot Remote: Test | 测试远程通道和远端 compilot 版本 |
-| Compilot Remote: Bootstrap | 上传当前 CLI artifact 并安装远端 compilot |
-| Compilot: Select Execution Location | 切换 VSCode 状态栏和操作菜单的本地/远程执行位置 |
-| Compilot Remote Qt: Build / Clean / QMake / Run | 执行远程 Qt build/run 类动作 |
-| Compilot Remote Qt: Run Detached / Stop / PS | 管理远端 Qt 后台运行 |
-| Compilot Remote SDK: Build / Rebuild / Clean | 执行远程 SDK build 类动作 |
-| Compilot SDK: Build | 编译 SDK 项目 |
-| Compilot SDK: Rebuild | 重新编译 |
-| Compilot SDK: Clean | 清理 |
+| Forja Qt: 选择项目 | 选择 .pro 文件作为当前项目 |
+| Forja Qt: QMake | 生成 Makefile |
+| Forja Qt: Build | 编译 |
+| Forja Qt: Run | 编译并运行 |
+| Forja Qt: Clean | 清理 |
+| Forja Qt: 停止 | 终止程序 |
+| Forja Qt: 调试 | 编译并调试 |
+| Forja Qt: RCC 编译 | 编译 .qrc 资源 |
+| Forja Qt: 用 Qt Designer 打开 | 打开 .ui 文件 |
+| Forja: 同步变更文件 | SCP 上传变更（workspace 通用） |
+| Forja Qt: 测试连接 | 测试 SSH 连接 |
+| Forja SDK: Build | 编译 SDK 项目 |
+| Forja SDK: Rebuild | 重新编译 |
+| Forja SDK: Clean | 清理 |
 
 ## 配置面板
 
-点击活动栏 Compilot 图标打开：
+点击活动栏 Forja 图标打开：
 
 - **概览**：项目名称、环境状态、C/C++ 标准、QMake TARGET、IntelliSense 生成
 - **环境**：Qt VS DevShell、Qt 路径、Designer 路径、Qt 源码路径，以及 SDK Visual Studio 配置
-- **同步**：服务器配置、远程路径、同步开关、忽略规则
+- **同步**：服务器配置、路径、同步开关、忽略规则
 - **高级**：文件提醒和 QMake 提醒等开关
 
-## 远程编译部署（Phase 1）
+## 同步
 
-当前 VSCode 侧已实现执行位置切换、Remote Workbench 和命令面板辅助入口：Remote Status/Doctor/Test/Bootstrap、Qt Build/Clean/QMake/Run/Run Detached/Stop/PS、SDK Build/Rebuild/Clean。Doctor 用于体检远程配置、连通性、远端 compilot、lock 和 baseline，并给出下一步动作。Workbench 先显示 Doctor 摘要，再提供 Status/Test/Bootstrap/Transfer Status/Qt Build/Qt Run/Qt Stop/SDK Build 等常用入口。状态栏和统一操作菜单在远程执行位置下会分流到 remote 命令；build/run-detach 类动作复用 remote core，执行 readiness、baseline、lock、branchSync、overlaySync、baselineCheck，再桥接远端 compilot。配置了 buildOrder 时，VSCode Build 与 CLI 使用同一套用户目录 remote settings 编排。Qt foreground run 通过 VSCode Pseudoterminal 直接调用 remote core，由 pipeline 持有远端 lock，不依赖 CLI 入口。远程 build 类动作会把可安全映射回本地文件的编译错误发布到 Problems。
-
-`Compilot Remote: Bootstrap` 直接复用 remote core 上传并安装当前扩展目录下的 CLI artifact；如果缺少 `dist/compilot-<version>/cli/compilot-cli-<version>.tgz`，命令会失败并提示先执行 `npm run build:cli` / `npm run package:all`，不会在 VSCode 内自动构建。
-
-## 远程同步
-
-适用于本地编辑、远程编译的场景：
+适用于本地编辑、远端编译的场景：
 
 1. 配置面板「同步」Tab 配置服务器（一次配置，所有项目共享）
-2. 设置远程路径并开启同步
+2. 设置路径并开启同步
 3. 点击状态栏「同步」按钮或命令面板执行同步
 4. 基于 git diff 识别变更，仅上传有变化的文件
 
@@ -95,7 +79,7 @@ code --install-extension compilot-x.x.x.vsix
 
 ## 配置项
 
-项目级配置通过 settings store 存储在用户数据目录 `~/.compilot/projects/<hash>.json`，服务器列表存储在 `~/.compilot/servers.json`，同步运行状态存储在 `.compilot/sync-state.json`。
+项目级配置通过 settings store 存储在用户数据目录 `~/.forja/projects/<hash>.json`，服务器列表存储在 `~/.forja/servers.json`，同步运行状态存储在 `.forja/sync-state.json`。
 
 | 配置项 | 说明 |
 |--------|------|
@@ -118,7 +102,7 @@ code --install-extension compilot-x.x.x.vsix
 - **Windows**：Visual Studio（MSVC 工具链）+ Qt（含 jom）
 - **Linux**：gcc/g++ + make + Qt
 - **调试**：需安装 C/C++ 扩展（推荐 [v1.24.3](https://github.com/microsoft/vscode-cpptools/releases/tag/v1.24.3)）
-- **远程同步**：OpenSSH 可用（Windows 10+ 自带）
+- **同步**：OpenSSH 可用（Windows 10+ 自带）
 
 ## License
 

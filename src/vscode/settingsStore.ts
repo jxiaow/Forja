@@ -1,5 +1,5 @@
 /**
- * 统一配置存储 — 配置文件位于 ~/.compilot/projects/
+ * 统一配置存储 — 配置文件位于 ~/.forja/projects/
  *
  * 纯 IO 逻辑在 settingsIO.ts 中，本模块负责 vscode 集成（workspace 路径、文件监听）。
  * 对外暴露 Qt / SDK / Sync 三个子模块的读写 API。
@@ -7,10 +7,10 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { createLogger } from './logger';
-import { CompilotSettings, QtSettings, SdkSettings, SyncSettings, DEFAULT_SETTINGS, loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings, saveQtSettings, saveSdkSettings, saveSyncSettings, projectsDir } from '../core/settingsIO';
+import { ForjaSettings, QtSettings, SdkSettings, SyncSettings, DEFAULT_SETTINGS, loadQtSettings, loadSdkSettings, loadSyncSettings, saveQtSettings, saveSdkSettings, saveSyncSettings, projectsDir } from '../core/settingsIO';
 import { resolveProjectRoot } from './workspaceResolver';
 
-export type { CompilotSettings, QtSettings, SdkSettings, SyncSettings } from '../core/settingsIO';
+export type { ForjaSettings, QtSettings, SdkSettings, SyncSettings } from '../core/settingsIO';
 export { DEFAULT_SETTINGS, DEFAULT_QT, DEFAULT_SDK, DEFAULT_SYNC, resolveVsDevShellPath, resolveVsDevCmdPath } from '../core/settingsIO';
 
 const logger = createLogger('SettingsStore');
@@ -18,28 +18,26 @@ const logger = createLogger('SettingsStore');
 type QtKey = keyof QtSettings;
 type SdkKey = keyof SdkSettings;
 type SyncKey = keyof SyncSettings;
-type SettingsListener = (section: 'qt' | 'sdk' | 'sync', key: string, settings: CompilotSettings) => void;
+type SettingsListener = (section: 'qt' | 'sdk' | 'sync', key: string, settings: ForjaSettings) => void;
 
-let _settings: CompilotSettings = { ...DEFAULT_SETTINGS, qt: { ...DEFAULT_SETTINGS.qt }, sdk: { ...DEFAULT_SETTINGS.sdk }, sync: { ...DEFAULT_SETTINGS.sync }, remote: { ...DEFAULT_SETTINGS.remote } };
+let _settings: ForjaSettings = { ...DEFAULT_SETTINGS, qt: { ...DEFAULT_SETTINGS.qt }, sdk: { ...DEFAULT_SETTINGS.sdk }, sync: { ...DEFAULT_SETTINGS.sync } };
 let _loaded = false;
 let _watcher: vscode.FileSystemWatcher | null = null;
 const _listeners: SettingsListener[] = [];
 
 function _getWorkspace(module: 'qt' | 'sdk' | 'sync' = 'qt'): string | null {
-    // sync 跟随 qt 的 workspace
-    const root = resolveProjectRoot(module === 'sync' ? 'qt' : module);
+    const root = resolveProjectRoot(module);
     return root || null;
 }
 
-function _load(): CompilotSettings {
+function _load(): ForjaSettings {
     const qtWs = _getWorkspace('qt');
     const sdkWs = _getWorkspace('sdk');
     const syncWs = _getWorkspace('sync');
     return {
         qt: qtWs ? loadQtSettings(qtWs) : { ...DEFAULT_SETTINGS.qt },
         sdk: sdkWs ? loadSdkSettings(sdkWs) : { ...DEFAULT_SETTINGS.sdk },
-        sync: syncWs ? loadSyncSettings(syncWs) : { ...DEFAULT_SETTINGS.sync },
-        remote: syncWs ? loadRemoteSettings(syncWs) : { ...DEFAULT_SETTINGS.remote }
+        sync: syncWs ? loadSyncSettings(syncWs) : { ...DEFAULT_SETTINGS.sync }
     };
 }
 
@@ -69,7 +67,7 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
     _settings = _load();
     _loaded = true;
 
-    // 监听 ~/.compilot/projects/ 目录下的配置文件变化
+    // 监听 ~/.forja/projects/ 目录下的配置文件变化
     const configDir = projectsDir();
     // 确保目录存在，否则 watcher 无法注册，首次写入不会触发 reload
     if (!fs.existsSync(configDir)) {
@@ -87,20 +85,30 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
 }
 
 function _reload(): void {
-    const oldSettings = JSON.stringify(_settings);
+    const oldQt = JSON.stringify(_settings.qt);
+    const oldSdk = JSON.stringify(_settings.sdk);
+    const oldSync = JSON.stringify(_settings.sync);
     _settings = _load();
-    const newSettings = JSON.stringify(_settings);
-    if (oldSettings === newSettings) { return; }
+    const newQt = JSON.stringify(_settings.qt);
+    const newSdk = JSON.stringify(_settings.sdk);
+    const newSync = JSON.stringify(_settings.sync);
+    if (oldQt === newQt && oldSdk === newSdk && oldSync === newSync) { return; }
 
-    // 通知变化
-    for (const key of Object.keys(_settings.qt) as QtKey[]) {
-        _listeners.forEach(fn => fn('qt', key, _settings));
+    // 只通知实际有变化的 section
+    if (oldQt !== newQt) {
+        for (const key of Object.keys(_settings.qt) as QtKey[]) {
+            _listeners.forEach(fn => fn('qt', key, _settings));
+        }
     }
-    for (const key of Object.keys(_settings.sdk) as SdkKey[]) {
-        _listeners.forEach(fn => fn('sdk', key, _settings));
+    if (oldSdk !== newSdk) {
+        for (const key of Object.keys(_settings.sdk) as SdkKey[]) {
+            _listeners.forEach(fn => fn('sdk', key, _settings));
+        }
     }
-    for (const key of Object.keys(_settings.sync) as SyncKey[]) {
-        _listeners.forEach(fn => fn('sync', key, _settings));
+    if (oldSync !== newSync) {
+        for (const key of Object.keys(_settings.sync) as SyncKey[]) {
+            _listeners.forEach(fn => fn('sync', key, _settings));
+        }
     }
 }
 
@@ -148,7 +156,7 @@ export function setSyncSetting<K extends SyncKey>(key: K, value: SyncSettings[K]
 
 // ── 通用 API ──
 
-export function getAllSettings(): Readonly<CompilotSettings> {
+export function getAllSettings(): Readonly<ForjaSettings> {
     if (!_loaded) { _settings = _load(); _loaded = true; }
     return _settings;
 }

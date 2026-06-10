@@ -1,15 +1,15 @@
 # CLI 接口规范
 
-本文档定义 compilot CLI 的输入参数、输出结构和数据类型，供 AI 工具和集成方参考。
+本文档定义 forja CLI 的输入参数、输出结构和数据类型，供 AI 工具和集成方参考。
 
 ## 调用约定
 
 ```
-compilot <subcommand> <action> [options]
+forja <subcommand> [action] [options]
 ```
 
-- 当前已实现子命令：`qt` | `sdk` | `remote` | `cleanup`
-- `remote` 当前实现基础命令：`doctor`、`test`、`status`、`bootstrap`、`unlock`、`build-order status/set/clear`、`transfer status/set/clear/run`，配置桥接：`qt|sdk status/init/use`，Qt 动作：`build/clean/qmake/run/stop/ps`，SDK build 类动作：`build/rebuild/clean`，路径级 restore/reset：`qt|sdk restore|reset --repo <repo> -- <paths...>`，以及显式 untracked 清理：`qt|sdk clean-untracked --repo <repo> -- <paths...>`；SDK 不提供 run/stop/ps
+- 当前已实现子命令：`qt` | `sdk` | `sync` | `cleanup`
+- `remote` 相关内容是远程部署设计稿，当前 CLI dispatcher 尚未实现 `forja remote ...`
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -23,33 +23,41 @@ compilot <subcommand> <action> [options]
 | `--workspace <path>` | string | `process.cwd()` | 操作根目录，用于定位本地配置、扫描项目和执行命令 |
 | `--json` | boolean | `false` | JSON 格式输出 |
 
-`--workspace` 不是 `.pro` 文件路径。Qt 多项目仓库中，`--workspace` 指向仓库/工作区根目录，具体 `.pro` 通过 `compilot qt use --project <relative.pro>` 选择；`build` / `run` / `clean` / `qmake` 只读取该 workspace 已保存的项目和构建配置。
+`--workspace` 不是 `.pro` 文件路径。Qt 多项目仓库中，`--workspace` 指向仓库/工作区根目录，具体 `.pro` 通过 `forja qt use --project <relative.pro>` 选择；`build` / `run` / `clean` / `qmake` 只读取该 workspace 已保存的项目和构建配置。
 
 ## Qt 命令参数矩阵
 
-`status` 是推荐第一条命令。`build` / `run` / `clean` / `qmake` / `stop` 只读取已保存配置，不接受构建配置参数；缺项目、mode/arch 未确认或配置不完整时返回 `compilot qt status --json`，由 `status` 统一给出后续动作。
+`status` 是推荐第一条命令。`build` / `run` / `clean` / `qmake` / `stop` 只读取已保存配置，不接受构建配置参数；缺项目、mode/arch 未确认或配置不完整时返回 `forja qt status --json`，由 `status` 统一给出后续动作。
 
 | 命令 | 允许参数 |
 |------|----------|
 | `status` | `--workspace`, `--json` |
-| `init` | `--workspace`, `--json`, `--plan`, `--dry-run` |
-| `use` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--project`, `--mode`, `--arch`, `--qt-path`, `--vs-dev-shell`, `--target` |
+| `init` | `--workspace`, `--json`, `--plan` |
+| `use` | `--workspace`, `--json`, `--plan`, `--project`, `--mode`, `--arch`, `--qt-path`, `--vs-dev-shell`, `--target` |
 | `env` | `--workspace`, `--json` |
 | `projects` | `--workspace`, `--json` |
-| `qmake` | `--workspace`, `--json`, `--plan`, `--dry-run` |
-| `build` | `--workspace`, `--json`, `--plan`, `--dry-run` |
-| `run` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--detach` |
-| `clean` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `qmake` | `--workspace`, `--json`, `--plan` |
+| `build` | `--workspace`, `--json`, `--plan` |
+| `run` | `--workspace`, `--json`, `--plan`, `--detach` |
+| `clean` | `--workspace`, `--json`, `--plan` |
 | `stop` | `--workspace`, `--json` |
 | `ps` | `--workspace`, `--json` |
-| `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo` |
-| `rcc` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `rcc` | `--workspace`, `--json`, `--plan` |
 
-`sync --plan` / `sync --dry-run` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
+## Sync 命令参数矩阵
+
+`forja sync status` 只读取本地同步配置，返回启用状态、服务器选择、远程路径和缺失项，不执行 SSH/SCP，也不扫描 git。`forja sync --plan` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
+
+| 命令 | 允许参数 |
+|------|----------|
+| `status` | `--workspace`, `--json`, `--server` |
+| `sync` | `--workspace`, `--json`, `--plan`, `--server`, `--repo`, `--file` |
+
+`--file <path>` 可重复使用，用于单文件或少量指定文件同步。路径可以是相对 workspace 的路径、相对仓库根目录的路径，或绝对路径；未指定时仍同步 git diff / 暂存区 / 未跟踪文件中需要上传的变更。
 
 ## Qt use 配置参数
 
-以下参数只允许用于 `compilot qt use`。`compilot qt init` 只做自动初始化，不接收显式构建配置：
+以下参数只允许用于 `forja qt use`。`forja qt init` 只做自动初始化，不接收显式构建配置：
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -62,7 +70,7 @@ compilot <subcommand> <action> [options]
 
 ## SDK 命令参数矩阵
 
-`status` 是 SDK 推荐第一条命令。`build` / `rebuild` / `clean` 只读取已保存配置，不接受构建配置参数；缺项目、缺本地配置或配置不完整时返回 `compilot sdk status --json`，由 `status` 统一给出后续动作。
+`status` 是 SDK 推荐第一条命令。`build` / `rebuild` / `clean` 只读取已保存配置，不接受构建配置参数；缺项目、缺本地配置或配置不完整时返回 `forja sdk status --json`，由 `status` 统一给出后续动作。
 
 | 命令 | 允许参数 |
 |------|----------|
@@ -71,13 +79,13 @@ compilot <subcommand> <action> [options]
 | `use` | `--workspace`, `--json`, `--project`, `--mode`, `--arch`, `--vs-dev-cmd` |
 | `env` | `--workspace`, `--json` |
 | `projects` | `--workspace`, `--json` |
-| `build` | `--workspace`, `--json`, `--plan`, `--dry-run` |
-| `rebuild` | `--workspace`, `--json`, `--plan`, `--dry-run` |
-| `clean` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `build` | `--workspace`, `--json`, `--plan` |
+| `rebuild` | `--workspace`, `--json`, `--plan` |
+| `clean` | `--workspace`, `--json`, `--plan` |
 
 ## SDK use 配置参数
 
-以下参数只允许用于 `compilot sdk use`。`compilot sdk init` 只做自动初始化，不接收显式构建配置：
+以下参数只允许用于 `forja sdk use`。`forja sdk init` 只做自动初始化，不接收显式构建配置：
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -86,15 +94,16 @@ compilot <subcommand> <action> [options]
 | `--arch <arch>` | `x86` \| `x64` | 平台默认值 / 已保存值 | 目标架构；非 Windows 只支持 `x64` |
 | `--vs-dev-cmd <path>` | string | 自动检测 / 已保存值 | Windows `VsDevCmd.bat` 路径 |
 
-## 远程入口
+## 远程模式参数（设计稿，暂未实现）
 
-当前远程能力使用独立一级命令 `compilot remote ...`，不支持 `compilot qt ... --remote` 或 `compilot sdk ... --remote`。
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `--remote` | boolean | 启用远程编译部署 |
+| `--fast` | boolean | 跳过 preCheck + branchSync + baselineCheck |
+| `--from <stage>` | string | 从指定阶段开始（见阶段列表） |
+| `--force` | boolean | 忽略基线不一致等非致命错误 |
 
-已实现远程 build 类动作进入固定阶段：
-
-```text
-targetReadiness -> baselinePrecheck -> acquireLock -> branchSync -> overlaySync -> baselineCheck -> remoteAction -> releaseLock
-```
+远程阶段：`preCheck` → `branchSync` → `sync` → `baselineCheck` → `build` → `transfer` → `stop` → `launch`
 
 ---
 
@@ -126,7 +135,7 @@ interface QtCliResult {
   rccProjectPath: string | null;  // RCC 项目路径
 }
 
-type CliAction = "init" | "use" | "status" | "env" | "projects" | "qmake" | "build" | "clean" | "run" | "stop" | "sync" | "ps" | "rcc";
+type CliAction = "init" | "use" | "status" | "env" | "projects" | "qmake" | "build" | "clean" | "run" | "stop" | "ps" | "rcc";
 
 interface Diagnostic {
   level: "info" | "warning" | "error";
@@ -183,7 +192,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "action": "status",
   "resolved": { "mode": "debug", "arch": "x86", "qtPath": "C:/Qt/5.15.2/msvc2019", ... },
   "nextAction": "build",
-  "nextActions": ["compilot qt build --json"],
+  "nextActions": ["forja qt build --json"],
   "candidates": ["app/app.pro", "lib/lib.pro"],
   "rccProjectPath": "XYRcc/XYRcc.pro",
   "diagnostics": []
@@ -240,8 +249,8 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "action": "run",
   "exitCode": 0,
   "pid": 13228,
-  "logFile": "C:/Users/.../compilot-logs/workspace/run.log",
-  "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
+  "logFile": "C:/Users/.../forja-logs/workspace/run.log",
+  "executablePath": "C:/workspace/release/x86/DemoApp.exe",
   "resolved": { "mode": "release", "arch": "x86" }
 }
 ```
@@ -256,8 +265,8 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "action": "ps",
   "running": true,
   "pid": 13228,
-  "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
-  "logFile": "C:/Users/.../compilot-logs/workspace/run.log"
+  "executablePath": "C:/workspace/release/x86/DemoApp.exe",
+  "logFile": "C:/Users/.../forja-logs/workspace/run.log"
 }
 ```
 
@@ -276,7 +285,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "ok": false,
   "action": "build",
   "diagnostics": [{ "level": "error", "message": "未配置项目" }],
-  "nextActions": ["compilot qt status --json"]
+  "nextActions": ["forja qt status --json"]
 }
 
 // Qt 环境未配置
@@ -285,7 +294,7 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "action": "status",
   "diagnostics": [{ "level": "warning", "message": "未配置 Qt" }],
   "nextAction": "env",
-  "nextActions": ["compilot qt env --json", "compilot qt use --qt-path <path> --json"]
+  "nextActions": ["forja qt env --json", "forja qt use --qt-path <path> --json"]
 }
 ```
 
@@ -356,7 +365,7 @@ interface SdkCliResult {
     "arch": "x64",
     "project": "Makefile"
   },
-  "nextActions": ["compilot sdk status --json"]
+  "nextActions": ["forja sdk status --json"]
 }
 ```
 
@@ -383,204 +392,72 @@ interface SdkCliResult {
   "ok": false,
   "action": "build",
   "diagnostics": [{ "level": "error", "message": "尚未初始化" }],
-  "nextActions": ["compilot sdk status --json"]
+  "nextActions": ["forja sdk status --json"]
 }
 ```
 
 ---
 
-## Remote prepared action 输出结构
+## Remote 模式输出结构（设计稿，暂未实现）
 
-`remote qt build/clean/qmake/run` 和 `remote sdk build/rebuild/clean` 当前已接入 CLI。prepared action 返回 remote pipeline result；`remote qt stop/ps` 是直接 bridge 动作，不进入 branchSync/sync。SDK 不提供 run/stop/ps。
-
-当前阶段顺序：
-
-```text
-targetReadiness -> baselinePrecheck -> acquireLock -> branchSync -> overlaySync -> baselineCheck -> remoteAction -> releaseLock
-```
-
-核心字段：
+以下协议尚未接入当前 CLI 入口，不能作为已发布命令调用。`--remote` 模式计划返回 `DeployResult`：
 
 ```typescript
-interface RemotePreparedActionResult {
+interface DeployResult {
   ok: boolean;
-  action: 'preparedAction';
-  target: 'qt' | 'sdk';
-  remoteAction: 'build' | 'clean' | 'qmake' | 'rebuild' | 'run';
-  mode: 'remote';
-  stages: Array<{ stage: string; ok: boolean; message?: string; nextActions?: string[] }>;
-  failedStage?: string;
-  diagnostics: Array<{ level: 'error' | 'warning' | 'info'; message: string }>;
-  nextActions?: string[];
-  remote?: unknown;
-  remoteActions?: unknown[];
+  stages: StageResult[];
+  buildResult?: BuildResult;      // 编译阶段的详细结果
+  error?: string;                 // 失败原因
 }
+
+interface StageResult {
+  stage: DeployStage;             // 阶段名
+  ok: boolean;
+  message: string;
+  durationMs: number;
+}
+
+type DeployStage = "preCheck" | "branchSync" | "baselineCheck" | "build" | "transfer" | "stop" | "launch";
 ```
 
-当用户目录 remote settings 配置了 `buildOrder` 时，`remote qt build`、`remote sdk build` 和 `remote sdk rebuild` 在一次 prepare/lock 周期内按顺序执行多个远端 action。未配置时保持单 action 行为。
-
-完整 readiness、status/test 和 smoke runbook 见 `docs/remote-deploy-status.md`。
-
-## `compilot remote build-order status/set/clear`
-
-buildOrder 存在用户目录 remote settings，不写项目内配置文件：
-
-```bash
-compilot remote build-order status --json
-compilot remote build-order set sdk:build qt:qmake qt:build --json
-compilot remote build-order clear --json
-```
-
-规则：
-
-- 支持 `qt:build`、`qt:qmake`、`qt:clean`
-- 支持 `sdk:build`、`sdk:rebuild`、`sdk:clean`
-- 不支持 Qt run/stop/ps 或 SDK run/stop/ps
-- `remote qt build`、`remote sdk build`、`remote sdk rebuild` 会读取 buildOrder；其他动作不受影响
-
----
-
-## `compilot remote transfer status/set/clear/run`
-
-transfer 用于把编译机上的显式产物复制到部署机，不自动发现产物，也不进入 build pipeline：
-
-```bash
-compilot remote transfer status --json
-compilot remote transfer set --server deploy-1 --path /opt/app --artifact qt-app/build/app --json
-compilot remote transfer run --json
-compilot remote transfer clear --json
-```
-
-规则：
-
-- transfer 配置写入用户目录 remote settings，不写项目内配置
-- `--server <id>` 是 `~/.compilot/servers.json` 中的部署服务器 id
-- `--path <deployPath>` 必须是部署机绝对路径
-- `--artifact <path>` 可重复，路径相对编译机 `remotePath`
-- artifact 拒绝 absolute path、`..` 逃逸、空路径
-- 当前只支持 direct build-host-to-deploy-host SSH/SCP；编译机必须能免密访问部署机
-- direct 模式拒绝部署机 password auth，不在编译机命令中暴露密码
-
-transfer status 只做本地校验，不连接 SSH。它会检查 sync remotePath 是否可用于生成 source、部署服务器 id 是否存在、deployPath/artifact 路径是否合法、部署服务器 auth 是否满足 direct 模式要求，并返回 plan：
+### 成功
 
 ```jsonc
 {
   "ok": true,
-  "action": "transfer",
-  "mode": "remote",
-  "status": {
-    "ready": true,
-    "configured": true,
-    "deployServer": {
-      "id": "deploy-1",
-      "name": "deploy-01",
-      "exists": true,
-      "authMode": "key"
-    },
-    "deployPath": "/opt/app",
-    "artifacts": ["qt-app/build/app"],
-    "plan": [
-      {
-        "source": "/remote/workspace/qt-app/build/app",
-        "destination": "/opt/app/app"
-      }
-    ],
-    "diagnostics": [],
-    "nextActions": []
-  }
+  "stages": [
+    { "stage": "preCheck", "ok": true, "message": "所有仓库 HEAD 已 push", "durationMs": 120 },
+    { "stage": "branchSync", "ok": true, "message": "分支同步完成", "durationMs": 3400 },
+    { "stage": "sync", "ok": true, "message": "同步 12 个文件", "durationMs": 5600 },
+    { "stage": "baselineCheck", "ok": true, "message": "基线一致", "durationMs": 800 },
+    { "stage": "build", "ok": true, "message": "编译成功", "durationMs": 45000 },
+    { "stage": "transfer", "ok": true, "message": "传输完成", "durationMs": 2100 },
+    { "stage": "stop", "ok": true, "message": "已停止旧进程", "durationMs": 500 },
+    { "stage": "launch", "ok": true, "message": "启动成功", "durationMs": 1200 }
+  ]
 }
 ```
 
-`run` 输出摘要：
+### 失败
 
 ```jsonc
 {
-  "ok": true,
-  "action": "transfer",
-  "mode": "remote",
-  "deployPath": "/opt/app",
-  "artifacts": ["qt-app/build/app"],
-  "transferred": ["qt-app/build/app"],
-  "diagnostics": []
+  "ok": false,
+  "stages": [
+    { "stage": "preCheck", "ok": true, "message": "...", "durationMs": 100 },
+    { "stage": "branchSync", "ok": true, "message": "...", "durationMs": 3000 },
+    { "stage": "sync", "ok": true, "message": "...", "durationMs": 4000 },
+    { "stage": "baselineCheck", "ok": true, "message": "...", "durationMs": 600 },
+    { "stage": "build", "ok": false, "message": "编译失败 (.): main.cpp:42 error", "durationMs": 12000 }
+  ],
+  "buildResult": { "ok": false, "errors": ["main.cpp:42: error: ..."], "exitCode": 2 },
+  "error": "编译失败 (.): main.cpp:42 error"
 }
 ```
 
 ---
 
-## `compilot remote qt|sdk restore|reset`
-
-路径级 restore/reset 用于清理远端指定 tracked 文件，不执行大范围 reset，也不清理 untracked 文件。`reset` 是同一安全语义下的命令别名：
-
-```bash
-compilot remote qt restore --repo qt-app -- src/main.cpp generated/version.h --json
-compilot remote qt reset --repo qt-app -- src/main.cpp generated/version.h --json
-compilot remote sdk restore --repo sdk-lib -- include/version.h --json
-compilot remote sdk reset --repo sdk-lib -- include/version.h --json
-```
-
-规则：
-
-- 必须提供 `--repo <repo>`
-- `--` 后必须提供至少一个 repo 内相对路径
-- 拒绝 absolute path、`..` 逃逸、空路径
-- 远端执行 `git ls-files --error-unmatch` 后再 `git restore -- <paths>`
-- 不触发 build/run，不影响本地文件
-
----
-
-## `compilot remote qt|sdk clean-untracked`
-
-显式 untracked 清理用于删除远端某个或某几个 untracked 路径，不提供自动扫描清理：
-
-```bash
-compilot remote qt clean-untracked --repo qt-app -- tmp/generated.txt --json
-compilot remote qt clean-untracked --repo qt-app --recursive -- tmp/generated-dir --json
-compilot remote sdk clean-untracked --repo sdk-lib -- generated/cache.bin --json
-```
-
-规则：
-
-- 必须提供 `--repo <repo>`
-- `--` 后必须提供至少一个 repo 内相对路径
-- 拒绝 absolute path、`..` 逃逸、空路径
-- 远端先执行 `git ls-files --others --exclude-standard -- <paths>` 确认目标是 untracked
-- 只删除被 git 确认为 untracked 的显式路径
-- 目录必须加 `--recursive`
-- 不执行 `git clean`
-- 不触发 build/run，不影响本地文件
-
----
-
-## `compilot remote qt|sdk status/init/use`
-
-配置桥接命令会解析本地 sync server/remotePath，并在远端工作区下执行远端 compilot：
-
-```bash
-compilot remote qt status --json
-compilot remote qt init --json
-compilot remote qt use --mode release --json
-compilot remote qt build --json
-compilot remote qt clean --json
-compilot remote qt qmake --json
-compilot remote qt run
-compilot remote qt run --detach --json
-compilot remote qt stop --json
-compilot remote qt ps --json
-compilot remote sdk status --json
-compilot remote sdk init --json
-compilot remote sdk use --json
-compilot remote sdk build --json
-compilot remote sdk rebuild --json
-compilot remote sdk clean --json
-```
-
-`remote qt build/clean/qmake/run` 和 `remote sdk build/rebuild/clean` 会先执行 targetReadiness，再执行 baseline/lock/branchSync/overlaySync/baselineCheck，最后桥接远端 compilot 执行动作。`remote qt stop/ps` 只做 remote test 后桥接远端 compilot，不触发 branchSync/sync。
-
-`remote qt run --json` 不支持前台模式；需要 JSON 时使用 `remote qt run --detach --json`。不支持 `remote sdk run/stop/ps`。
-
----
-
-## `compilot remote test` 输出结构（Phase 1）
+## `forja remote test` 输出结构（设计稿，暂未实现）
 
 ```typescript
 interface RemoteTestResult {
@@ -590,7 +467,7 @@ interface RemoteTestResult {
 }
 
 interface RemoteCheck {
-  name: string;    // 检查项名称（如 "SSH 连通"、"路径存在"、"compilot 已安装"、"版本兼容"）
+  name: string;    // 检查项名称（如 "SSH 连通"、"路径存在"、"forja 已安装"、"版本兼容"）
   ok: boolean;
   detail: string;  // 成功时为详情，失败时为错误原因
 }
@@ -605,7 +482,7 @@ interface RemoteCheck {
   "checks": [
     { "name": "SSH 连通", "ok": true, "detail": "" },
     { "name": "路径存在", "ok": true, "detail": "/home/dev/project" },
-    { "name": "compilot 已安装", "ok": true, "detail": "v0.6.28" },
+    { "name": "forja 已安装", "ok": true, "detail": "v0.6.28" },
     { "name": "版本兼容", "ok": true, "detail": "远程 v0.6.28" }
   ]
 }
@@ -613,38 +490,9 @@ interface RemoteCheck {
 
 ---
 
-## `compilot remote doctor` 输出结构
-
-`doctor` 是面向人工排障的远程环境体检入口。它复用 `status` 的分层 readiness 检查，并把检查项、可用自动修复和下一步动作聚合到一个结果中。`--bootstrap` 只在 `remoteCompilot` 检查失败时尝试安装远端 CLI。
-
-```typescript
-interface RemoteDoctorResult {
-  ok: boolean;
-  action: "doctor";
-  mode: "remote";
-  overall: "ready" | "degraded" | "blocked" | "unknown";
-  checks: Array<{
-    name: string;
-    ok: boolean | null;
-    message?: string;
-    nextActions: string[];
-  }>;
-  diagnostics: Diagnostic[];
-  nextActions: string[];
-  autoFixes: Array<{
-    name: "bootstrap";
-    available: boolean;
-    command: "compilot remote test --bootstrap";
-    reason?: string;
-  }>;
-}
-```
-
----
-
 ## 配置文件格式
 
-### `~/.compilot/projects/<hash>.json`
+### `~/.forja/projects/<hash>.json`
 
 项目级配置由 `src/core/settingsIO.ts` 管理，按 workspace hash 存储到用户数据目录。文件通过 `type` 区分 Qt、SDK 和 sync 配置。
 
@@ -680,7 +528,7 @@ interface RemoteDoctorResult {
 }
 ```
 
-### `~/.compilot/servers.json`
+### `~/.forja/servers.json`
 
 ```jsonc
 [
@@ -698,9 +546,9 @@ interface RemoteDoctorResult {
 ]
 ```
 
-### `.compilot/sync-state.json`
+### `.forja/sync-state.json`
 
-同步运行状态写入项目目录下的 `.compilot/sync-state.json`。remote 当前复用 sync 配置并已实现 branchSync/overlaySync/baselineCheck 的 build 类流水线；buildOrder 和 transfer 读取用户目录 remote settings，当前实现不读取项目内 deploy 配置文件。
+同步运行状态写入项目目录下的 `.forja/sync-state.json`。远程部署、branchSync 和 buildOrder 仍属于设计稿，当前实现不读取独立 deploy 配置文件。
 
 ---
 

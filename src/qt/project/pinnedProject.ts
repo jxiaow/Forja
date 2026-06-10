@@ -11,19 +11,10 @@ export interface PinnedProjectRef {
 
 /**
  * 解码 pinnedProject 存储值。
- * 接受 { root, relative } 对象、JSON 字符串、或 null。
+ * 接受 { root, relative } 对象或 null。
  */
 export function decodePinnedProject(value: unknown): PinnedProjectRef | null {
     if (!value) { return null; }
-    if (typeof value === 'string') {
-        try {
-            const parsed = JSON.parse(value);
-            if (typeof parsed === 'object' && parsed && typeof parsed.root === 'string' && typeof parsed.relative === 'string') {
-                return { root: parsed.root, relative: parsed.relative };
-            }
-        } catch { /* not valid JSON */ }
-        return null;
-    }
     if (typeof value === 'object') {
         const obj = value as Record<string, unknown>;
         if (typeof obj.root === 'string' && typeof obj.relative === 'string') {

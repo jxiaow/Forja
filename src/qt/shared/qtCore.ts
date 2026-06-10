@@ -10,7 +10,7 @@ import { scanProFiles, parseProFile } from './projectScanner';
 import {
     ensureLocalStateDir,
 } from './localState';
-import { loadQtSettings, saveQtSettings, projectConfigPath, QtSettings, resolveVsDevShellPath, inferVsInstall } from '../../core/settingsIO';
+import { loadQtSettings, saveQtSettings, resolveConfigPath, QtSettings, resolveVsDevShellPath, inferVsInstall } from '../../core/settingsIO';
 import { buildRunCommand } from './commandRunner';
 import { resolveRuntimeTarget, validateMakefile } from './runtimeTarget';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from './rccResolver';
@@ -25,7 +25,6 @@ function emptyResult(options: CliOptions, workspace: string): CliResult {
         project: null,
         commands: [],
         shellCommand: '',
-        candidates: [],
         nextActions: [],
         exitCode: null,
         durationMs: 0,
@@ -42,6 +41,14 @@ function resolveWorkspace(input: string | null): string {
     return path.resolve(input || process.cwd());
 }
 
+function getQtPathEnv(): string {
+    return process.env.FORJA_QT_PATH || '';
+}
+
+function getVsDevShellEnv(): string {
+    return process.env.FORJA_VS_DEV_SHELL || '';
+}
+
 function withoutConfigOptions(options: CliOptions): CliOptions {
     return {
         ...options,
@@ -50,7 +57,8 @@ function withoutConfigOptions(options: CliOptions): CliOptions {
         arch: null,
         qtPath: null,
         vsDevShell: null,
-        target: null
+        target: null,
+        qmakeArgs: null
     };
 }
 
@@ -88,7 +96,7 @@ function resolveSavedProject(workspace: string, settings: QtSettings): { project
     if (settings.manualProPath) {
         return { project: null, error: `已配置项目不存在: ${settings.manualProPath}` };
     }
-    return { project: null, error: '未配置项目。请先运行 compilot qt projects --json 查看候选，再用 compilot qt use --project <path> --json 选择项目。' };
+    return { project: null, error: '未配置项目。请先运行 forja qt projects --json 查看候选，再用 forja qt use --project <path> --json 选择项目。' };
 }
 
 function resolveInitProject(workspace: string, options: CliOptions, settings: QtSettings): { project: string | null; error: string | null } {
@@ -107,9 +115,9 @@ function resolveInitProject(workspace: string, options: CliOptions, settings: Qt
         return { project: found[0], error: null };
     }
     if (found.length > 1) {
-        return { project: null, error: `发现多个 .pro 文件: ${found.join(', ')}。请先运行 compilot qt projects --json 查看候选，再用 compilot qt use --project <path> --json 选择项目。` };
+        return { project: null, error: `发现多个 .pro 文件: ${found.join(', ')}。请先运行 forja qt projects --json 查看候选，再用 forja qt use --project <path> --json 选择项目。` };
     }
-    return { project: null, error: '未找到 .pro 文件。请在工作区中创建 .pro 文件，或用 compilot qt use --project <path> --json 选择已有项目。' };
+    return { project: null, error: '未找到 .pro 文件。请在工作区中创建 .pro 文件，或用 forja qt use --project <path> --json 选择已有项目。' };
 }
 
 function buildResolvedConfig(
@@ -131,16 +139,16 @@ function buildResolvedConfig(
 
 function buildProjectSelectionActions(): string[] {
     return [
-        'compilot qt projects --json',
-        'compilot qt use --project <path> --json'
+        'forja qt projects --json',
+        'forja qt use --project <path> --json'
     ];
 }
 
 function buildToolchainActions(missingTools: ReturnType<typeof getMissingTools>): string[] {
-    const actions = ['compilot qt env --json'];
+    const actions = ['forja qt env --json'];
     for (const tool of missingTools) {
         if (tool.cliFlag) {
-            actions.push(`compilot qt use ${tool.cliFlag.replace(/<[^>]+>/g, '<path>')} --json`);
+            actions.push(`forja qt use ${tool.cliFlag.replace(/<[^>]+>/g, '<path>')} --json`);
         }
     }
     return actions;
@@ -158,7 +166,7 @@ function buildConfigConfirmationActions(unconfirmed: Array<'mode' | 'arch'>): st
     const parts: string[] = [];
     if (unconfirmed.includes('mode')) { parts.push('--mode debug'); }
     if (unconfirmed.includes('arch')) { parts.push(`--arch ${getDefaultArch()}`); }
-    return [`compilot qt use ${parts.join(' ')} --json`];
+    return [`forja qt use ${parts.join(' ')} --json`];
 }
 
 function buildStatusGuidance(
@@ -170,7 +178,7 @@ function buildStatusGuidance(
     hasExecutable: boolean
 ): { nextAction: string; nextActions: string[] } {
     if (!hasSettings) {
-        return { nextAction: 'init', nextActions: ['compilot qt init --json'] };
+        return { nextAction: 'init', nextActions: ['forja qt init --json'] };
     }
     if (!projectExists) {
         return { nextAction: 'projects', nextActions: buildProjectSelectionActions() };
@@ -182,12 +190,12 @@ function buildStatusGuidance(
         return { nextAction: 'env', nextActions: buildToolchainActions(missingTools) };
     }
     if (!hasMakefile) {
-        return { nextAction: 'qmake', nextActions: ['compilot qt qmake --json'] };
+        return { nextAction: 'qmake', nextActions: ['forja qt qmake --json'] };
     }
     if (!hasExecutable) {
-        return { nextAction: 'build', nextActions: ['compilot qt build --json'] };
+        return { nextAction: 'build', nextActions: ['forja qt build --json'] };
     }
-    return { nextAction: 'run', nextActions: ['compilot qt run --json'] };
+    return { nextAction: 'run', nextActions: ['forja qt run --json'] };
 }
 
 interface InitDiagnosticsInput {
@@ -205,14 +213,14 @@ function buildInitDiagnostics(input: InitDiagnosticsInput): CliResult['diagnosti
     const autoSelected: string[] = [];
     if (!input.options.qtPath && input.qtCandidates.length > 1) { autoSelected.push('qtPath'); }
     if (autoSelected.length > 0) {
-        diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 compilot qt env --json 查看可选项` });
+        diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 forja qt env --json 查看可选项` });
     }
 
     // 项目相关提示
     if (!input.project) {
         const proCount = input.projects.length;
         if (proCount > 1) {
-            diagnostics.push({ level: 'warning', message: `发现 ${proCount} 个 .pro 文件，未自动选择，可用 compilot qt projects --json 查看全部` });
+            diagnostics.push({ level: 'warning', message: `发现 ${proCount} 个 .pro 文件，未自动选择，可用 forja qt projects --json 查看全部` });
         } else if (proCount === 0) {
             diagnostics.push({ level: 'warning', message: '未检测到 .pro 文件' });
         }
@@ -241,7 +249,7 @@ function buildInitNextActions(project: string | null, projects: string[], missin
         nextActions.push(...buildToolchainActions(missingTools));
     }
     if (nextActions.length === 0) {
-        nextActions.push('compilot qt status --json');
+        nextActions.push('forja qt status --json');
     }
     return Array.from(new Set(nextActions));
 }
@@ -298,10 +306,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const effectiveOptions = options.action === 'init' ? withoutConfigOptions(options) : options;
 
     if (options.action === 'status') {
-        const hasSettings = fs.existsSync(projectConfigPath(workspace, 'qt'));
+        const hasSettings = fs.existsSync(resolveConfigPath(workspace, 'qt'));
         const selectedProj = settings.pinnedProject;
         const projectRel = selectedProj ? selectedProj.relative : null;
-        const projectFull = projectRel ? path.join(workspace, projectRel) : null;
+        const projectFull = selectedProj ? path.join(selectedProj.root, selectedProj.relative) : null;
         const projectExists = projectFull ? fs.existsSync(projectFull) : false;
 
         const unconfirmedBuildConfig = getUnconfirmedBuildConfig(settings);
@@ -312,11 +320,14 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const qtPath = settings.qtPath || '';
         const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || '';
         const jomPath = settings.jomPath || '';
-        const target = settings.target || '';
+        const targetOverride = settings.target || '';
+        const qmakeArgs = settings.qmakeArgs || '';
+        const projectInfo = projectFull && projectExists ? parseProFile(projectFull) : null;
+        const target = projectExists ? (targetOverride || projectInfo?.target || (projectRel ? path.basename(projectRel, '.pro') : '')) : '';
 
         // 快速文件系统检查（不跑环境检测）
         const projectDir = projectFull ? path.dirname(projectFull) : null;
-        const makefileValidation = projectDir ? validateMakefile(projectDir, { mode, arch, qtPath, proFile: projectFull || '', target }) : { exists: false, matches: false };
+        const makefileValidation = projectDir ? validateMakefile(projectDir, { mode, arch, qtPath, proFile: projectFull || '', target: targetOverride, qmakeArgs }) : { exists: false, matches: false };
         const hasMakefile = makefileValidation.exists && makefileValidation.matches;
         const runtimeTarget = (hasMakefile && projectDir) ? resolveRuntimeTarget(projectDir, mode, arch) : null;
         const hasExecutable = runtimeTarget ? fs.existsSync(runtimeTarget.exePath) : false;
@@ -424,7 +435,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 ...(process.platform === 'win32' ? { vsDevShell: detected.vsCandidates.map(c => ({ path: c.devShellPath, version: c.version, edition: c.edition })) } : {})
             },
             configHints: {
-                usage: 'compilot qt use [options] --json',
+                usage: 'forja qt use --mode <mode> --qt-path <path> [options] --json',
                 mode: '--mode debug|release',
                 ...(getAvailableArch().length > 1 ? { arch: `--arch ${getAvailableArch().join('|')}` } : {}),
                 ...Object.fromEntries(
@@ -457,7 +468,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             current: currentProject,
             available,
             configHints: {
-                usage: 'compilot qt use --project <path> --json'
+                usage: 'forja qt use --project <path> --json'
             }
         };
         if (currentProject && !currentExists) {
@@ -480,7 +491,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             const projectResult = resolveExplicitProject(workspace, options.project);
             if (projectResult.error || !projectResult.project) {
                 result.diagnostics.push({ level: 'error', message: projectResult.error || '项目路径无效' });
-                result.nextActions.push('compilot qt projects --json');
+                result.nextActions.push('forja qt projects --json');
                 return result;
             }
             project = projectResult.project;
@@ -508,10 +519,14 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             updatedQt.target = options.target;
             updated.target = options.target;
         }
+        if (options.qmakeArgs !== undefined && options.qmakeArgs !== null) {
+            updatedQt.qmakeArgs = options.qmakeArgs;
+            updated.qmakeArgs = options.qmakeArgs;
+        }
 
         if (Object.keys(updated).length === 0) {
             result.diagnostics.push({ level: 'error', message: 'use 需要至少指定一个配置参数' });
-            result.nextActions.push('compilot qt use --mode release --json');
+            result.nextActions.push('forja qt use --mode release --json');
             return result;
         }
 
@@ -534,7 +549,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             mode: options.executionMode,
             updated,
             resolved: useResolved,
-            nextActions: ['compilot qt status --json']
+            nextActions: ['forja qt status --json']
         };
 
         return {
@@ -542,7 +557,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             ok: true,
             project,
             diagnostics: options.executionMode === 'dryRun' ? [{ level: 'info', message: '预览配置切换，未写入本地配置' }] : [],
-            nextActions: ['compilot qt status --json'],
+            nextActions: ['forja qt status --json'],
             resolved: useResolved,
             data: useData,
             stdout: JSON.stringify(useData)
@@ -555,12 +570,12 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     if (projectResult.error && options.action !== 'init') {
         const errMode = settings.mode || 'debug';
         const errArch = settings.arch || getDefaultArch();
-        const errQtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-        const errVsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+        const errQtPath = settings.qtPath || getQtPathEnv();
+        const errVsDevShell = resolveVsDevShellPath(settings.vsInstall) || getVsDevShellEnv();
         const errQmakeTarget = settings.target || '';
         result.resolved = buildResolvedConfig(errMode, errArch, errQtPath, errVsDevShell, errQmakeTarget, undefined, undefined, settings.jomPath || undefined);
         result.diagnostics.push({ level: 'error', message: projectResult.error });
-        result.nextActions.push('compilot qt status --json');
+        result.nextActions.push('forja qt status --json');
         return result;
     }
 
@@ -569,9 +584,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const mode = settings.mode || 'debug';
     const autoArch = getAvailableArch().length === 1 ? getDefaultArch() : '';
     const arch = settings.arch || autoArch || getDefaultArch();
-    const qtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const qtPath = settings.qtPath || getQtPathEnv();
+    const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || getVsDevShellEnv();
     const target = settings.target || '';
+    const qmakeArgs = settings.qmakeArgs || '';
     const jomPath = settings.jomPath || '';
     const runtimeProcessName = settings.runtimeProcessName || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
@@ -647,7 +663,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const previewVsDevShell = vsDevShell || detected.detected.vs?.devShellPath || '';
 
         const previewDiagnostics: CliResult['diagnostics'] = [
-            { level: 'info', message: '将写入 Compilot 本地配置' }
+            { level: 'info', message: '将写入 Forja 本地配置' }
         ];
         const previewSettingsForCheck: QtSettings = {
             ...settings,
@@ -663,7 +679,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             effectiveSettings: previewSettingsForCheck
         }));
         const previewNextActions = [
-            '确认无误后运行 compilot qt init --json 写入本地配置',
+            '确认无误后运行 forja qt init --json 写入本地配置',
             ...buildInitNextActions(project, detected.detected.projects, getMissingTools(previewSettingsForCheck))
         ];
 
@@ -683,9 +699,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         result.resolved = resolved;
         result.diagnostics.push({
             level: 'error',
-            message: `未确认构建配置: ${unconfirmedBuildConfig.join(', ')}。请先运行 compilot qt status --json 查看下一步。`
+            message: `未确认构建配置: ${unconfirmedBuildConfig.join(', ')}。请先运行 forja qt status --json 查看下一步。`
         });
-        result.nextActions.push('compilot qt status --json');
+        result.nextActions.push('forja qt status --json');
         return result;
     }
 
@@ -698,6 +714,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         qtPath,
         vsDevShell,
         target,
+        qmakeArgs,
         jomPath
     });
     let commands: string[] = [];
@@ -705,9 +722,59 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     if (options.action === 'qmake') {
         commands = shellBuilder.qmakeCommands(buildConfig).commands;
     } else if (options.action === 'build') {
-        commands = shellBuilder.buildCommands(buildConfig).commands;
+        const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
+        if (project) {
+            if (buildConfig.projectDir && buildConfig.proFile) {
+                const validation = validateMakefile(buildConfig.projectDir, {
+                    mode: buildConfig.mode,
+                    arch: buildConfig.arch,
+                    qtPath: buildConfig.qtPath,
+                    proFile: buildConfig.proFile,
+                    target: buildConfig.target,
+                    qmakeArgs: buildConfig.qmakeArgs
+                });
+                if (!validation.exists || !validation.matches) {
+                    const reason = !validation.exists
+                        ? '未找到 Makefile'
+                        : `Makefile 与当前配置不匹配（${validation.mismatch!.join(', ')}）`;
+                    return {
+                        ...result,
+                        ok: false,
+                        diagnostics: [{ level: 'error', message: `${reason}。请先运行 forja qt qmake --json` }],
+                        nextActions: ['forja qt qmake --json']
+                    };
+                }
+            }
+            const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
+            const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : (target || path.basename(project, '.pro')));
+            const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
+            commands = [killCmd, ...buildCmds];
+            if (runtimeTarget) { result.executablePath = runtimeTarget.exePath; }
+        } else {
+            commands = buildCmds;
+        }
     } else if (options.action === 'run') {
         const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
+
+        // 检查 Makefile 是否最新，过期则先自动跑 qmake
+        let qmakeCmds: string[] = [];
+        if (buildConfig.projectDir && buildConfig.proFile) {
+            const validation = validateMakefile(buildConfig.projectDir, {
+                mode: buildConfig.mode,
+                arch: buildConfig.arch,
+                qtPath: buildConfig.qtPath,
+                proFile: buildConfig.proFile,
+                target: buildConfig.target,
+                qmakeArgs: buildConfig.qmakeArgs
+            });
+            if (!validation.exists || !validation.matches) {
+                const reason = !validation.exists
+                    ? '未找到 Makefile'
+                    : `Makefile 与当前配置不匹配（${validation.mismatch!.join(', ')}）`;
+                result.diagnostics.push({ level: 'info', message: `自动 QMake：${reason}` });
+                qmakeCmds = shellBuilder.qmakeCommands(buildConfig).commands;
+            }
+        }
 
         // 检查 rcc 是否需要重编，需要则在 build 前插入 rcc 命令
         let rccCmds: string[] = [];
@@ -731,15 +798,15 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             if (runCmd) {
                 // Kill existing process before build (use actual exe name from Makefile)
                 const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
-                const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro'));
+                const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : (target || path.basename(project, '.pro')));
                 const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
-                commands = [killCmd, ...rccCmds, ...buildCmds, runCmd];
+                commands = [killCmd, ...qmakeCmds, ...rccCmds, ...buildCmds, runCmd];
                 result.executablePath = runtimeTarget?.exePath;
             } else {
                 // Makefile not yet generated or mismatched — return build commands with hint to run status
-                const fallbackExeName = runtimeProcessName || path.basename(project, '.pro');
+                const fallbackExeName = runtimeProcessName || target || path.basename(project, '.pro');
                 const fallbackKillCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(fallbackExeName);
-                const fallbackCmds = [fallbackKillCmd, ...buildCmds];
+                const fallbackCmds = [fallbackKillCmd, ...qmakeCmds, ...buildCmds];
                 return {
                     ...result,
                     ok: true,
@@ -749,7 +816,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                     diagnostics: [
                         { level: 'warning', message: 'Makefile 不匹配或未生成，无法解析可执行文件路径，仅返回 build 命令' }
                     ],
-                    nextActions: ['compilot qt status --json'],
+                    nextActions: ['forja qt status --json'],
                     resolved
                 };
             }
@@ -766,13 +833,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const rccPath = resolveRccProjectPath(settings.rccProjectPath || '', workspace);
         if (!rccPath) {
             result.diagnostics.push({ level: 'error', message: '未找到 XYRcc 目录，请在 settings.json 中配置 rccProjectPath' });
-            result.nextActions.push('compilot qt status --json');
+            result.nextActions.push('forja qt status --json');
             return result;
         }
         const targets = scanRccTargets(rccPath);
         if (targets.length === 0) {
             result.diagnostics.push({ level: 'warning', message: 'XYRcc 目录下未找到 .qrc 文件' });
-            result.nextActions.push('compilot qt status --json');
+            result.nextActions.push('forja qt status --json');
             return result;
         }
         // 解析可执行文件输出目录

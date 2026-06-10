@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isIgnored } from '../qt/shared/syncCli';
+import { isIgnored, parseSyncCliArgs } from '../sync/cli';
 
 test('isIgnored returns false for empty ignore list', () => {
     assert.equal(isIgnored('src/main.cpp', []), false);
@@ -32,4 +32,43 @@ test('isIgnored handles Windows backslash paths', () => {
 
 test('isIgnored handles multiple patterns', () => {
     assert.equal(isIgnored('node_modules/pkg/index.js', ['build', 'node_modules', '.git']), true);
+});
+
+
+test('parseSyncCliArgs accepts generic sync flags', () => {
+    const parsed = parseSyncCliArgs(['--workspace', '/tmp/app', '--server', 'dev', '--repo', 'frontend', '--file', 'src/main.cpp', '--plan', '--json']);
+
+    assert.equal(parsed.action, 'sync');
+    assert.equal(parsed.workspace, '/tmp/app');
+    assert.equal(parsed.server, 'dev');
+    assert.equal(parsed.repo, 'frontend');
+    assert.deepEqual(parsed.files, ['src/main.cpp']);
+    assert.equal(parsed.executionMode, 'dryRun');
+    assert.equal(parsed.json, true);
+});
+
+test('parseSyncCliArgs rejects removed --dry-run alias', () => {
+    assert.throws(
+        () => parseSyncCliArgs(['--dry-run']),
+        /未知参数: --dry-run/
+    );
+});
+
+test('parseSyncCliArgs accepts repeated file filters', () => {
+    const parsed = parseSyncCliArgs(['--file', 'src/main.cpp', '--file', 'include/app.h']);
+
+    assert.deepEqual(parsed.files, ['src/main.cpp', 'include/app.h']);
+});
+
+test('parseSyncCliArgs accepts sync status action', () => {
+    const parsed = parseSyncCliArgs(['status', '--workspace', '/tmp/app', '--server', 'dev', '--json']);
+
+    assert.equal(parsed.action, 'status');
+    assert.equal(parsed.workspace, '/tmp/app');
+    assert.equal(parsed.server, 'dev');
+    assert.equal(parsed.json, true);
+});
+
+test('parseSyncCliArgs rejects positional args', () => {
+    assert.throws(() => parseSyncCliArgs(['deploy']), /不接受子命令或位置参数/);
 });

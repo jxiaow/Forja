@@ -14,7 +14,7 @@ export function execAsync(cmd: string, args: string[], timeoutMs: number = DEFAU
                 settled = true;
                 proc.kill();
                 // 超时时在 stderr 输出提示（非 --json 模式下可见）
-                process.stderr.write(`[compilot] timeout: ${cmd} ${args.join(' ')} (${timeoutMs}ms)\n`);
+                process.stderr.write(`[forja] timeout: ${cmd} ${args.join(' ')} (${timeoutMs}ms)\n`);
                 resolve('');
             }
         }, timeoutMs);

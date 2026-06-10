@@ -23,20 +23,31 @@ function cleanDetachScripts(dir: string): void {
 }
 
 /**
- * On Windows, prepend `chcp 65001` to force UTF-8 console output from MSVC/jom.
- * Without this, Chinese characters in warnings/errors appear garbled because
- * MSVC outputs GBK (code page 936) but Node.js reads as UTF-8.
+ * 将系统 locale 编码（中文系统 = GBK）的 Buffer 解码为 UTF-8 字符串。
+ * MSVC/jom 输出使用系统默认代码页（无需 chcp 65001），
+ * Node.js 直接读会乱码，此处先按 GBK 解码。
+ */
+function decodeWinOutput(buffer: Buffer): string {
+    try {
+        return new TextDecoder('gbk', { fatal: false }).decode(buffer);
+    } catch {
+        // TextDecoder 不支持 gbk 时退回 UTF-8
+        return buffer.toString('utf-8');
+    }
+}
+
+/**
+ * No-op wrapper kept for compatibility (previously set chcp 65001).
+ * MSVC/jom output encoding is handled by decodeWinOutput using the system
+ * locale encoding (e.g. GBK on zh-CN systems).
  */
 function wrapForUtf8(commandLine: string): string {
-    if (process.platform === 'win32') {
-        return `chcp 65001 >nul && ${commandLine}`;
-    }
     return commandLine;
 }
 
 function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+        cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' }, (error, stdout, stderr) => {
             let exitCode = 0;
             if (error) {
                 const execError = error as cp.ExecException;
@@ -48,7 +59,9 @@ function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; 
                     exitCode = 1;
                 }
             }
-            resolve({ exitCode, stdout, stderr });
+            const decodedStdout = process.platform === 'win32' ? decodeWinOutput(stdout) : stdout.toString('utf-8');
+            const decodedStderr = process.platform === 'win32' ? decodeWinOutput(stderr) : stderr.toString('utf-8');
+            resolve({ exitCode, stdout: decodedStdout, stderr: decodedStderr });
         });
     });
 }
@@ -58,10 +71,11 @@ function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; 
  */
 function executeStreaming(commandLine: string, cwd: string, executablePath?: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        const child = cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 });
+        const child = cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' });
 
         let stdout = '';
         let stderr = '';
+        const isWin = process.platform === 'win32';
 
         const onInterrupt = (): void => {
             terminateExecutable(executablePath);
@@ -77,14 +91,16 @@ function executeStreaming(commandLine: string, cwd: string, executablePath?: str
             process.on('SIGTERM', onInterrupt);
         }
 
-        child.stdout?.on('data', (chunk: string) => {
-            stdout += chunk;
-            process.stdout.write(chunk);
+        child.stdout?.on('data', (chunk: Buffer) => {
+            const text = isWin ? decodeWinOutput(chunk) : chunk.toString('utf-8');
+            stdout += text;
+            process.stdout.write(text);
         });
 
-        child.stderr?.on('data', (chunk: string) => {
-            stderr += chunk;
-            process.stderr.write(chunk);
+        child.stderr?.on('data', (chunk: Buffer) => {
+            const text = isWin ? decodeWinOutput(chunk) : chunk.toString('utf-8');
+            stderr += text;
+            process.stderr.write(text);
         });
 
         child.on('close', (code) => {
@@ -234,13 +250,15 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         const exec = options.streaming ? executeStreaming : execute;
         const buildResult = await exec(buildLine, result.workspace);
 
+        // Write build log (both on success and failure)
+        ensureLocalStateDir(result.workspace);
+        const buildLogFilePath = logFileFor(result.workspace, 'build');
+        fs.writeFileSync(buildLogFilePath, [`$ ${buildLine}`, '', buildResult.stdout, buildResult.stderr].join('\n'), 'utf8');
+        const combinedOutput = buildResult.stdout + '\n' + buildResult.stderr;
+        const ws = summarizeWarnings(combinedOutput);
+
         if (buildResult.exitCode !== 0) {
             const durationMs = Date.now() - started;
-            ensureLocalStateDir(result.workspace);
-            const filePath = logFileFor(result.workspace, result.action);
-            fs.writeFileSync(filePath, [`$ ${buildLine}`, '', buildResult.stdout, buildResult.stderr].join('\n'), 'utf8');
-            const combinedOutput = buildResult.stdout + '\n' + buildResult.stderr;
-            const ws = summarizeWarnings(combinedOutput);
             return {
                 ...result,
                 ok: false,
@@ -250,7 +268,8 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 stderr: buildResult.stderr,
                 errors: extractErrors(combinedOutput),
                 warningSummary: ws.total > 0 ? ws : undefined,
-                logFile: filePath,
+                logFile: buildLogFilePath,
+                buildLogFile: buildLogFilePath,
                 commands: commandParts,
                 diagnostics: [...result.diagnostics, { level: 'error', message: '编译失败' }]
             };
@@ -271,7 +290,11 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             // Use VBScript to launch without visible console window
             const batFile = path.join(path.dirname(logFile), 'run.bat');
             const vbsFile = path.join(path.dirname(logFile), 'run.vbs');
-            fs.writeFileSync(batFile, `@echo off\r\ncd /d "${cwd}"\r\n${runCommand} >"${logFile}" 2>&1\r\n`, 'utf8');
+            // 在 bat 中设置 PATH 让 Qt DLL 和 .qm 文件可被加载
+            const envSetup = result.resolved?.qtPath
+                ? 'set "PATH=' + result.resolved.qtPath + '\\bin;%PATH%"\r\n'
+                : '';
+            fs.writeFileSync(batFile, `@echo off\r\n${envSetup}cd /d "${cwd}"\r\n${runCommand} >"${logFile}" 2>&1\r\n`, 'utf8');
             fs.writeFileSync(vbsFile, `CreateObject("Wscript.Shell").Run "cmd /c ""${batFile}""", 0, False\r\n`, 'utf8');
             child = cp.spawn('wscript', [vbsFile], {
                 cwd,
@@ -326,9 +349,14 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             stdout: buildResult.stdout,
             stderr: '',
             logFile,
+            buildLogFile: buildLogFilePath,
+            warningSummary: ws.total > 0 ? ws : undefined,
             pid,
             commands: commandParts,
-            diagnostics: [{ level: 'info', message: `程序已后台启动 (PID: ${pid})，日志: ${logFile}` }]
+            diagnostics: [
+                { level: 'info', message: `编译日志: ${buildLogFilePath}` },
+                { level: 'info', message: `程序已后台启动 (PID: ${pid})，日志: ${logFile}` }
+            ]
         };
     }
 

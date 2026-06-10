@@ -2,95 +2,34 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawnSync } from 'node:child_process';
 
-test('package exposes compilot bin entry', () => {
+test('package exposes forja bin entry', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
-    assert.equal(pkg.bin['compilot'], './out/cli/index.js');
+    assert.equal(pkg.bin['forja'], './out/cli/index.js');
 });
 
-test('cli dispatcher routes to qt sdk and remote subcommands', () => {
+test('cli dispatcher routes to qt, sdk, and sync subcommands', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'index.ts'), 'utf8');
     assert.match(source, /runQtCli/);
     assert.match(source, /runSdkCli/);
-    assert.match(source, /runRemoteCli/);
-    assert.match(source, /remote   远程命令 .*build/);
-    assert.match(source, /remote   远程命令 .*restore/);
+    assert.match(source, /runSyncCli/);
     assert.match(source, /process\.exitCode = 1/);
-});
-
-test('remote cli wires test bootstrap to artifact upload path', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'cli', 'index.ts'), 'utf8');
-    assert.match(source, /buildRemoteDoctor/);
-    assert.match(source, /options.bootstrap/);
-    assert.match(source, /findBootstrapArtifact/);
-    assert.match(source, /createScpUploader/);
-    assert.match(source, /executeRemoteRestore/);
-    assert.match(source, /executeRemoteTransfer/);
-    assert.match(source, /executeRemoteCleanUntracked/);
-    assert.match(source, /loadRemoteSettings/);
-    assert.match(source, /buildOrder:\s*remoteSettings\.buildOrder/);
-    assert.match(source, /transferAction/);
-    assert.match(source, /options\.action === 'cleanUntracked'/);
-    assert.match(source, /parseBuildOrderItems/);
-    assert.match(source, /buildRemoteTest\(\{\s*workspace: options\.workspace,\s*bootstrap:/);
-    assert.match(source, /buildRemoteDoctor\(\{\s*workspace: options\.workspace,\s*bootstrap:/);
-});
-
-test('remote cli foreground run streams without replaying cached stdout', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'cli', 'index.ts'), 'utf8');
-    assert.match(source, /const streamRemoteRun = options\.target === 'qt' && options\.remoteAction === 'run'/);
-    assert.match(source, /stream: streamRemoteRun/);
-    assert.match(source, /if \(streamRemoteRun && result\.remote\)/);
-    assert.match(source, /return;\s*\}\s*writeOutput\(result, options\.json\);/);
 });
 
 test('cli interface spec lists only implemented subcommands as available', () => {
     const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
-    assert.match(spec, /当前已实现子命令：`qt` \| `sdk` \| `remote` \| `cleanup`/);
-    assert.match(spec, /`compilot remote test` 输出结构（Phase 1）/);
-    assert.match(spec, /`compilot remote doctor`/);
-    assert.match(spec, /`compilot remote qt\|sdk status\/init\/use`/);
-    assert.match(spec, /`compilot remote qt\|sdk restore\|reset`/);
-    assert.match(spec, /`compilot remote build-order status\/set\/clear`/);
-    assert.match(spec, /`compilot remote transfer status\/set\/clear\/run`/);
-    assert.match(spec, /`compilot remote qt\|sdk clean-untracked`/);
-    assert.match(spec, /remote qt build\/clean\/qmake/);
-    assert.match(spec, /remote sdk build\/rebuild\/clean/);
-    assert.match(spec, /direct build-host-to-deploy-host/);
-    assert.match(spec, /transfer status 只做本地校验/);
-    assert.match(spec, /不执行 `git clean`/);
-    assert.match(spec, /Remote prepared action 输出结构/);
-    assert.match(spec, /targetReadiness -> baselinePrecheck -> acquireLock -> branchSync -> overlaySync -> baselineCheck -> remoteAction -> releaseLock/);
-    assert.doesNotMatch(spec, /远程 build\/run 尚未实现/);
-    assert.match(spec, /Qt 动作：`build\/clean\/qmake\/run\/stop\/ps`/);
+    assert.match(spec, /当前已实现子命令：`qt` \| `sdk` \| `sync` \| `cleanup`/);
+    assert.match(spec, /Remote 模式输出结构（设计稿，暂未实现）/);
 });
-test('cli user guide documents remote phase 1 prepared build support without run support', () => {
+
+test('cli user guide does not document draft remote commands as implemented', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
-    assert.match(guide, /Remote 命令（Phase 1）/);
-    assert.match(guide, /compilot remote test --json/);
-    assert.match(guide, /compilot remote doctor --json/);
-    assert.match(guide, /compilot remote qt status --json/);
-    assert.match(guide, /compilot remote sdk use --json/);
-    assert.match(guide, /compilot remote qt build --json/);
-    assert.match(guide, /compilot remote sdk rebuild --json/);
-    assert.match(guide, /compilot remote qt restore --repo qt-app/);
-    assert.match(guide, /compilot remote transfer set --server deploy-1 --path \/opt\/app --artifact qt-app\/build\/app --json/);
-    assert.match(guide, /compilot remote transfer run --json/);
-    assert.match(guide, /remote transfer status --json/);
-    assert.match(guide, /本地校验/);
-    assert.match(guide, /compilot remote qt clean-untracked --repo qt-app -- tmp\/generated\.txt --json/);
-    assert.match(guide, /compilot remote build-order set sdk:build qt:qmake qt:build/);
-    assert.match(guide, /远程 Qt\/SDK build 类动作/);
-    assert.match(guide, /显式 untracked 清理/);
-    assert.match(guide, /remote qt build\/clean\/qmake\/run\/stop\/ps/);
-    assert.doesNotMatch(guide, /远程 build\/run 仍在设计文档中/);
-    assert.doesNotMatch(guide, /sync-config\.json/);
+    assert.doesNotMatch(guide, /forja remote/);
     assert.doesNotMatch(guide, /\uFFFD/);
 });
 
-test('compilot skill documents current status init use flow', () => {
-    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'compilot', 'SKILL.md'), 'utf8');
+test('forja skill documents current status init use flow', () => {
+    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
 
     assert.match(skill, /先 status 再动手/);
     assert.match(skill, /init 只做自动初始化/);
@@ -101,211 +40,42 @@ test('compilot skill documents current status init use flow', () => {
     assert.doesNotMatch(skill, /sdk build --mode/);
 });
 
+test('sync help and docs describe file-scoped sync', () => {
+    const cliSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sync', 'cli.ts'), 'utf8');
+    const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
+    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
+
+    assert.match(cliSource, /--file <path>/);
+    assert.match(cliSource, /forja sync --file src\/main\.cpp/);
+    assert.match(spec, /--file <path>/);
+    assert.match(skill, /--file <path>/);
+    assert.match(skill, /单文件同步/);
+});
+
+test('sync help and docs describe top-level sync status', () => {
+    const cliSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sync', 'cli.ts'), 'utf8');
+    const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
+    const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
+    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
+
+    assert.match(cliSource, /forja sync status --json/);
+    assert.match(spec, /`status` \| `--workspace`, `--json`, `--server`/);
+    assert.match(guide, /forja sync status --json/);
+    assert.match(skill, /## Sync 命令/);
+    assert.match(skill, /forja sync status --json/);
+});
+
+test('forja skill keeps sync outside the Qt command table', () => {
+    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
+    const qtSection = skill.slice(skill.indexOf('## Qt 命令'), skill.indexOf('## SDK 命令'));
+
+    assert.doesNotMatch(qtSection, /\| `sync` \|/);
+    assert.match(skill, /## Sync 命令/);
+});
+
 test('qt cli entry handles parse errors as json when requested', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'cli', 'index.ts'), 'utf8');
     assert.match(source, /parseCliArgs/);
     assert.match(source, /JSON\.stringify/);
     assert.match(source, /process\.exitCode = 1/);
-});
-
-
-test('vscode extension contributes and registers remote phase 1 commands', () => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
-    const commands = pkg.contributes.commands.map((item: { command: string }) => item.command);
-    const expected = [
-        'compilot.remote.execution.pick',
-        'compilot.remote.execution.local',
-        'compilot.remote.execution.remote',
-        'compilot.remote.workbench',
-        'compilot.remote.status',
-        'compilot.remote.doctor',
-        'compilot.remote.test',
-        'compilot.remote.bootstrap',
-        'compilot.remote.transfer.status',
-        'compilot.remote.qt.build',
-        'compilot.remote.qt.clean',
-        'compilot.remote.qt.qmake',
-        'compilot.remote.qt.run',
-        'compilot.remote.qt.runDetached',
-        'compilot.remote.qt.stop',
-        'compilot.remote.qt.ps',
-        'compilot.remote.sdk.build',
-        'compilot.remote.sdk.rebuild',
-        'compilot.remote.sdk.clean'
-    ];
-
-    for (const id of expected) {
-        assert.ok(commands.includes(id), id + ' should be contributed');
-    }
-    assert.equal(commands.includes('compilot.remote.sdk.run'), false);
-
-    const extensionSource = fs.readFileSync(path.join(process.cwd(), 'src', 'extension.ts'), 'utf8');
-    assert.match(extensionSource, /registerRemoteCommands\(context\)/);
-
-    const remoteCommandsPath = path.join(process.cwd(), 'src', 'remote', 'vscode', 'commands.ts');
-    assert.equal(fs.existsSync(remoteCommandsPath), true);
-    const remoteCommandsSource = fs.readFileSync(remoteCommandsPath, 'utf8');
-    assert.match(remoteCommandsSource, /executePreparedRemoteAction/);
-    assert.match(remoteCommandsSource, /loadRemoteSettings/);
-    assert.match(remoteCommandsSource, /buildOrder:\s*remoteSettings\.buildOrder/);
-    assert.match(remoteCommandsSource, /executeRemoteBootstrap/);
-    assert.match(remoteCommandsSource, /kind:\s*'workbench'/);
-    assert.match(remoteCommandsSource, /executeRemoteWorkbench/);
-    assert.match(remoteCommandsSource, /showQuickPick/);
-    assert.match(remoteCommandsSource, /compilot\.remote\.transfer\.status/);
-    assert.match(remoteCommandsSource, /executeCommand\(selected\.command\)/);
-    assert.match(remoteCommandsSource, /buildRemoteDoctor/);
-    assert.match(remoteCommandsSource, /findBootstrapArtifact\(context\.extensionPath\)/);
-    assert.match(remoteCommandsSource, /buildRemoteStatus/);
-    assert.match(remoteCommandsSource, /buildRemoteTest/);
-    assert.match(remoteCommandsSource, /initExecutionLocation\(context\)/);
-    assert.match(remoteCommandsSource, /setExecutionLocation/);
-    assert.match(remoteCommandsSource, /const preflight = await buildRemoteTest/);
-    assert.match(remoteCommandsSource, /remoteAction:\s*'run'/);
-    assert.match(remoteCommandsSource, /args:\s*\['--detach'\]/);
-    assert.match(remoteCommandsSource, /kind:\s*'foregroundTerminal'/);
-    assert.match(remoteCommandsSource, /createTerminal\(\{/);
-    assert.match(remoteCommandsSource, /vscode\.Pseudoterminal/);
-    assert.match(remoteCommandsSource, /executePreparedRemoteAction\(\{/);
-    assert.match(remoteCommandsSource, /stream:\s*true/);
-    assert.match(remoteCommandsSource, /createDiagnosticCollection\('compilot\.remote'\)/);
-    assert.match(remoteCommandsSource, /publishRemoteProblems/);
-    assert.match(remoteCommandsSource, /kind:\s*'bridgeAction'.*remoteAction:\s*'ps'/s);
-    assert.match(remoteCommandsSource, /kind:\s*'bootstrap'/);
-    assert.match(remoteCommandsSource, /createScpUploader/);
-    assert.doesNotMatch(remoteCommandsSource, /runRemoteCli/);
-    assert.doesNotMatch(remoteCommandsSource, /out['"`], ['"`]cli['"`], ['"`]index\.js/);
-    assert.doesNotMatch(remoteCommandsSource, /shellPath:\s*process\.execPath/);
-});
-
-
-test('remote vscode design documents phase 1 command palette scope', () => {
-    const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-vscode.md'), 'utf8');
-    assert.match(doc, /当前 Phase 1 已提供命令面板辅助入口/);
-    assert.match(doc, /## 执行位置/);
-    assert.match(doc, /执行位置切换已在当前 Phase 1 接入/);
-    assert.match(doc, /Phase 1 先接入命令面板辅助入口/);
-    assert.match(doc, /Compilot Remote Qt: Build/);
-    assert.match(doc, /Compilot Remote Qt: Run/);
-    assert.match(doc, /Compilot Remote SDK: Rebuild/);
-    assert.match(doc, /Compilot Remote: Bootstrap/);
-    assert.match(doc, /Compilot Remote: Doctor/);
-    assert.match(doc, /Compilot Remote: Workbench/);
-    assert.match(doc, /不贡献 SDK run\/stop\/ps/);
-
-    const readme = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-vscode.md'), 'utf8');
-    assert.match(readme, /远程编译部署（Phase 1）/);
-    assert.match(readme, /Compilot Remote: Status/);
-    assert.match(readme, /Compilot Remote: Doctor/);
-    assert.match(readme, /Compilot Remote: Workbench/);
-    assert.match(readme, /Compilot Remote Qt: Build \/ Clean \/ QMake \/ Run/);
-    assert.match(readme, /Compilot Remote Qt: Run Detached \/ Stop \/ PS/);
-    assert.match(readme, /当前 VSCode 侧已实现执行位置切换/);
-    assert.match(readme, /Compilot Remote: Bootstrap/);
-    assert.match(readme, /Qt foreground run 通过 VSCode Pseudoterminal 直接调用 remote core/);
-    assert.match(readme, /编译错误发布到 Problems/);
-    assert.doesNotMatch(readme, /尚未接入 VSCode Bootstrap/);
-    assert.doesNotMatch(readme, /Run Deploy/);
-    assert.doesNotMatch(readme, /完整远程编译部署流程.*仍是设计稿/);
-});
-
-
-test('sync cli reports remote mkdir failures before scp', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'shared', 'syncCli.ts'), 'utf8');
-    assert.match(source, /ensureRemoteDir 失败/);
-    assert.match(source, /创建远程目录失败/);
-    assert.match(source, /continue;/);
-    assert.doesNotMatch(source, /code === 0 ? resolve() : resolve()/);
-});
-
-test('remote deploy v3 action policy keeps clean in prepared pipeline', () => {
-    const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-v3.md'), 'utf8');
-    assert.match(doc, /当前实现状态/);
-    assert.match(doc, /已实现 Phase 1：.*remote qt build\/clean\/qmake\/run\/stop\/ps/);
-    assert.match(doc, /VSCode 命令面板中的 remote doctor\/status\/test\/bootstrap/);
-    assert.match(doc, /VSCode 执行位置切换和状态栏\/统一操作菜单远程分流/);
-    assert.match(doc, /Problems 诊断映射/);
-    assert.match(doc, /后续：\s*\n\s*1\. 真实远端 SSH smoke/);
-    assert.match(doc, /remote qt build\/clean\/qmake/);
-    assert.match(doc, /remote sdk build\/rebuild\/clean/);
-    assert.match(doc, /remote transfer status\/set\/clear\/run/);
-    assert.match(doc, /remote qt\/sdk clean-untracked/);
-    assert.match(doc, /buildOrder 已实现/);
-    assert.match(doc, /transfer 和显式 clean-untracked 已实现/);
-    assert.match(doc, /当前 Phase 1 不做/);
-    assert.doesNotMatch(doc, /- Qt run\/stop\/ps/);
-    assert.doesNotMatch(doc, /- 跨机器 transfer/);
-    assert.doesNotMatch(doc, /- untracked 文件自动清理/);
-    assert.doesNotMatch(doc, /remote qt\/sdk clean` \| 必须 \| 必须 \| 否 \| 否 \| 否/);
-});
-
-
-test('remote smoke runner is opt-in and non destructive', () => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
-    assert.equal(pkg.scripts['remote:smoke'], 'node scripts/remote-smoke.js');
-
-    const runner = fs.readFileSync(path.join(process.cwd(), 'scripts', 'remote-smoke.js'), 'utf8');
-    assert.match(runner, /Dry-run only/);
-    assert.match(runner, /--execute/);
-    assert.match(runner, /--yes is required when executing mutating remote smoke steps/);
-    assert.match(runner, /remote', 'doctor'/);
-    assert.match(runner, /remote', 'status'/);
-    assert.match(runner, /remote', 'test'/);
-    assert.match(runner, /remote', 'build-order', 'status'/);
-    assert.match(runner, /remote', 'transfer', 'status'/);
-    assert.match(runner, /remote', target, 'status'/);
-    assert.match(runner, /remote', target, 'build'/);
-    assert.match(runner, /remote', 'qt', 'run', '--detach'/);
-    assert.match(runner, /remote', 'qt', 'ps'/);
-    assert.match(runner, /remote', 'qt', 'stop'/);
-    assert.match(runner, /Remote smoke summary/);
-    assert.doesNotMatch(runner, /git reset/);
-    assert.doesNotMatch(runner, /git clean/);
-    assert.doesNotMatch(runner, /clean-untracked/);
-    assert.doesNotMatch(runner, /unlock/);
-    assert.doesNotMatch(runner, /restore/);
-});
-
-test('remote status doc defines real ssh smoke runbook', () => {
-    const doc = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-status.md'), 'utf8');
-    assert.match(doc, /Real Remote Smoke/);
-    assert.match(doc, /npm run remote:smoke -- --target qt --build --run-detach --stop/);
-    assert.match(doc, /--execute/);
-    assert.match(doc, /--bootstrap --yes/);
-    assert.match(doc, /--json-dir/);
-    assert.match(doc, /当前状态（2026-05-25）/);
-    assert.match(doc, /remoteSettings/);
-    assert.match(doc, /compilot remote doctor --json/);
-    assert.match(doc, /compilot remote qt run --detach --json/);
-    assert.match(doc, /compilot remote qt stop --json/);
-    assert.match(doc, /不执行 .*git reset/);
-    assert.match(doc, /不执行 .*git clean/);
-    assert.match(doc, /不执行 .*remote unlock --force/);
-    assert.match(doc, /失败时停在当前 step/);
-
-    const v3 = fs.readFileSync(path.join(process.cwd(), 'docs', 'remote-deploy-v3.md'), 'utf8');
-    assert.match(v3, /真实远程 smoke 流程/);
-});
-
-
-test('remote smoke runner dry-run and execute guard do not require ssh', () => {
-    const dryRun = spawnSync(process.execPath, ['scripts/remote-smoke.js', '--target', 'qt', '--build', '--run-detach', '--stop'], {
-        cwd: process.cwd(),
-        encoding: 'utf8'
-    });
-    assert.equal(dryRun.status, 0);
-    assert.match(dryRun.stdout, /mode: dry-run/);
-    assert.match(dryRun.stdout, /remote-doctor/);
-    assert.match(dryRun.stdout, /qt-build \[mutates remote\]/);
-    assert.match(dryRun.stdout, /qt-run-detach \[mutates remote\]/);
-    assert.match(dryRun.stdout, /qt-stop \[mutates remote\]/);
-    assert.match(dryRun.stdout, /remote-doctor-final/);
-    assert.match(dryRun.stdout, /Dry-run only/);
-
-    const blocked = spawnSync(process.execPath, ['scripts/remote-smoke.js', '--target', 'qt', '--run-detach', '--execute'], {
-        cwd: process.cwd(),
-        encoding: 'utf8'
-    });
-    assert.notEqual(blocked.status, 0);
-    assert.match(blocked.stderr, /--yes is required when executing mutating remote smoke steps/);
 });

@@ -55,7 +55,7 @@ test('parseCliArgs accepts use config options', () => {
 });
 
 test('parseCliArgs rejects config options outside init and use', () => {
-    for (const action of ['build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'sync', 'ps', 'stop', 'rcc']) {
+    for (const action of ['build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'ps', 'stop', 'rcc']) {
         assert.throws(
             () => parseCliArgs([action, '--mode', 'release']),
             new RegExp(`--mode 不能用于 ${action}`)
@@ -79,10 +79,11 @@ test('parseCliArgs --plan switches to dryRun mode', () => {
     assert.equal(parsed.json, true);
 });
 
-test('parseCliArgs --dry-run is accepted as alias for --plan', () => {
-    const parsed = parseCliArgs(['build', '--dry-run']);
-
-    assert.equal(parsed.executionMode, 'dryRun');
+test('parseCliArgs rejects removed --dry-run alias', () => {
+    assert.throws(
+        () => parseCliArgs(['build', '--dry-run']),
+        /未知参数: --dry-run/
+    );
 });
 
 test('parseCliArgs rejects unknown action', () => {

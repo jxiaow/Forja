@@ -40,7 +40,8 @@ test('CLI and shared source files do not import vscode adapters', () => {
         ...roots.flatMap(readFiles),
         path.join(process.cwd(), 'src', 'qt', 'platform', 'platformConfig.ts'),
         path.join(process.cwd(), 'src', 'qt', 'platform', 'requirements.ts'),
-        path.join(process.cwd(), 'src', 'qt', 'platform', 'shellPlan.ts')
+        path.join(process.cwd(), 'src', 'qt', 'platform', 'shellPlan.ts'),
+        path.join(process.cwd(), 'src', 'sync', 'cli.ts')
     ];
     const offenders = files.filter(file => {
         const source = fs.readFileSync(file, 'utf8');

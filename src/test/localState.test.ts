@@ -15,7 +15,7 @@ const _tmpDirs: string[] = [];
 after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
 
 function makeWorkspace(): string {
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-local-state-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-local-state-'));
     _tmpDirs.push(ws);
     return ws;
 }
@@ -26,8 +26,8 @@ test('ensureLocalStateDir creates logs directory only', () => {
 
     // Logs dir should exist
     assert.equal(fs.existsSync(logsDir(workspace)), true);
-    // .compilot/ should NOT be created in project directory
-    assert.equal(fs.existsSync(path.join(workspace, '.compilot')), false);
+    // .forja/ should NOT be created in project directory
+    assert.equal(fs.existsSync(path.join(workspace, '.forja')), false);
 });
 
 test('isProcessRunning treats non-positive pids as not running', () => {
@@ -37,21 +37,21 @@ test('isProcessRunning treats non-positive pids as not running', () => {
 
 test('parseTasklistPids returns matching executable pids', () => {
     const output = [
-        '"XYWinQT.exe","13228","Console","1","42,000 K"',
+        '"DemoApp.exe","13228","Console","1","42,000 K"',
         '"cmd.exe","9988","Console","1","1,000 K"'
     ].join('\r\n');
 
     assert.deepEqual(
-        parseTasklistPids(output, 'C:\\Code\\workspace\\dev\\qt_client\\qt_linux_pc_client\\release\\x86\\XYWinQT.exe'),
+        parseTasklistPids(output, 'C:\\Code\\workspace\\dev\\qt_client\\qt_linux_pc_client\\release\\x86\\DemoApp.exe'),
         [13228]
     );
 });
 
 test('parsePsPids returns matching executable pids', () => {
     const output = [
-        '13228 /opt/app/XYWinQT /opt/app/XYWinQT --flag',
+        '13228 /opt/app/DemoApp /opt/app/DemoApp --flag',
         '9988 /bin/sh /bin/sh -c test'
     ].join('\n');
 
-    assert.deepEqual(parsePsPids(output, '/opt/app/XYWinQT'), [13228]);
+    assert.deepEqual(parsePsPids(output, '/opt/app/DemoApp'), [13228]);
 });

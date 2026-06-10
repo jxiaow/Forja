@@ -6,7 +6,7 @@ export function logsDir(workspace: string): string {
     const tmpBase = process.env.TEMP || process.env.TMP || require('os').tmpdir();
     // Use a hash-like folder name based on workspace path to avoid collisions
     const folderName = workspace.replace(/[\\/:*?"<>|]/g, '_');
-    return path.join(tmpBase, 'compilot-logs', folderName);
+    return path.join(tmpBase, 'forja-logs', folderName);
 }
 
 export function ensureLocalStateDir(workspace: string): void {

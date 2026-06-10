@@ -1,17 +1,17 @@
 /**
  * 统一的服务器配置存储。
- * 全局服务器列表：~/.compilot/servers.json
- * 项目同步配置：~/.compilot/projects/<hash>.json 中 type=sync 的文件
+ * 全局服务器列表：~/.forja/servers.json
+ * 项目同步配置：~/.forja/projects/<hash>.json 中 type=sync 的文件
  * 
  * 扩展和 CLI 共用，不依赖 vscode。
  *
  * ⚠ 安全警告：密码以明文存储在 servers.json 中。
- * VSCode 扩展场景建议通过 SecretStorage API 存储密码（参见 qt/sync/sftpClient.ts askPassword）。
- * CLI 场景可通过环境变量 COMPILOT_SSH_PASSWORD 注入，避免写入磁盘。
+ * VSCode 扩展场景建议通过 SecretStorage API 存储密码（参见 sync/sftpClient.ts askPassword）。
+ * CLI 场景可通过环境变量 FORJA_SSH_PASSWORD 注入，避免写入磁盘。
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { compilotHomeDir } from './compilotHome';
+import { forjaConfigDir, loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
 
 function atomicWriteJson(filePath: string, data: unknown): void {
     const tmp = filePath + `.tmp.${process.pid}`;
@@ -51,10 +51,10 @@ export interface ProjectSyncConfig {
 // ── 路径 ──
 
 function _globalDir(): string {
-    return compilotHomeDir();
+    return forjaConfigDir();
 }
 
-/** 清理 ~/.compilot/ 下残留的 .tmp 文件（原子写入失败时遗留） */
+/** 清理 ~/.forja/ 下残留的 .tmp 文件（原子写入失败时遗留） */
 let _cleaned = false;
 function _cleanupTmpFiles(): void {
     if (_cleaned) { return; }
@@ -82,7 +82,7 @@ function _generateId(): string {
 // ── 全局服务器列表 ──
 
 interface StoredServer {
-    id?: string;
+    id: string;
     name: string;
     host: string;
     port: number;
@@ -99,11 +99,10 @@ export function readServers(): ServerConfig[] {
     try {
         if (fs.existsSync(filePath)) {
             const raw: StoredServer[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-            let needsMigration = false;
-            const servers = raw.map(s => {
-                if (!s.id) { needsMigration = true; }
-                return {
-                    id: s.id || _generateId(),
+            return raw
+                .filter(s => typeof s.id === 'string' && s.id.length > 0)
+                .map(s => ({
+                    id: s.id,
                     name: s.name || '',
                     host: s.host || '',
                     port: s.port || 22,
@@ -112,13 +111,10 @@ export function readServers(): ServerConfig[] {
                     privateKeyPath: s.privateKeyPath || '',
                     password: s.password || '',
                     strictHostKeyChecking: !!s.strictHostKeyChecking
-                };
-            });
-            if (needsMigration) { writeServers(servers); }
-            return servers;
+                }));
         }
     } catch (e) {
-        console.warn(`[compilot] servers.json 解析失败: ${e instanceof Error ? e.message : e}`);
+        console.warn(`[forja] servers.json 解析失败: ${e instanceof Error ? e.message : e}`);
     }
     return [];
 }
@@ -143,7 +139,7 @@ export function writeServers(servers: ServerConfig[]): void {
     // 收紧文件权限（仅当前用户可读写）— Windows 上 chmod 无效但不报错
     try { fs.chmodSync(_serversFilePath(), 0o600); } catch (e) {
         if (process.platform !== 'win32') {
-            console.warn(`[compilot] chmod servers.json 失败: ${e instanceof Error ? e.message : e}`);
+            console.warn(`[forja] chmod servers.json 失败: ${e instanceof Error ? e.message : e}`);
         }
     }
 }
@@ -175,15 +171,7 @@ export function getServerById(id: string): ServerConfig | null {
     return servers.find(s => s.id === id) || null;
 }
 
-/** @deprecated 兼容旧代码，优先使用 getServerById */
-export function getServerByName(name: string): ServerConfig | null {
-    const servers = readServers();
-    return servers.find(s => s.name === name) || null;
-}
-
 // ── 项目同步配置（读写统一 settingsIO 的 sync 配置） ──
-
-import { loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
 
 const DEFAULT_IGNORE = DEFAULT_SYNC.ignore;
 

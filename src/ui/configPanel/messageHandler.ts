@@ -6,7 +6,7 @@ import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig } from '../../core/serverStore';
-import { executeTestConnection, refreshSyncStatusBar } from '../../qt/sync/syncWatcher';
+import { executeTestConnection, refreshSyncStatusBar } from '../../sync/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
 import { setSdkSetting } from '../../vscode/settingsStore';
 import { getDefaultArch, isWindows } from '../../sdk/platform';
@@ -66,14 +66,16 @@ export async function handleMessage(
             break;
         }
         case 'refreshEnv': {
+            logger.info('开始检测环境...');
             const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
+            logger.info('环境检测完成');
             setState('envInfo', env);
             updateHtml();
             pushEnvUpdate();
             break;
         }
         case 'selectProject': {
-            await vscode.commands.executeCommand('compilot.qt.selectProject');
+            await vscode.commands.executeCommand('forja.qt.selectProject');
             updateHtml();
             break;
         }
@@ -82,7 +84,6 @@ export async function handleMessage(
             await updateConfig('vsInstall', inferVsInstall(String(msg.value || '')));
             const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env);
-            updateHtml();
             pushEnvUpdate();
             break;
         }
@@ -91,7 +92,6 @@ export async function handleMessage(
             await updateConfig('qtPath', String(msg.value || ''));
             const env2 = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env2);
-            updateHtml();
             pushEnvUpdate();
             break;
         }
@@ -148,6 +148,11 @@ export async function handleMessage(
             await updateConfig('target', String(msg.value || ''));
             break;
         }
+        case 'saveQmakeArgs': {
+            logger.info(`保存 QMake 自定义参数: "${msg.value}"`);
+            await updateConfig('qmakeArgs', String(msg.value || '').trim());
+            break;
+        }
         case 'saveRuntimeProcessName': {
             const value = String(msg.value || '').replace(/\.exe$/i, '');
             logger.info(`保存运行前停止进程名: "${value}"`);
@@ -158,7 +163,7 @@ export async function handleMessage(
             logger.info(`手动指定 .pro: "${msg.value}"`);
             await updateConfig('manualProPath', String(msg.value || ''));
             if (msg.value) {
-                await vscode.commands.executeCommand('compilot.qt.loadManualProject');
+                await vscode.commands.executeCommand('forja.qt.loadManualProject');
             }
             updateHtml();
             break;
@@ -331,7 +336,7 @@ export async function handleMessage(
         }
         case 'syncNow': {
             logger.info('手动触发同步');
-            await vscode.commands.executeCommand('compilot.qt.syncChangedFiles');
+            await vscode.commands.executeCommand('forja.syncChangedFiles');
             break;
         }
         case 'testSyncConnection': {
@@ -350,21 +355,27 @@ export async function handleMessage(
                 privateKeyPath: msg.server.privateKeyPath || '',
                 password: msg.server.password || ''
             };
-            try {
-                const { testConnection } = await import('../../qt/sync/transport');
-                const tempServerConfig = {
-                    id: '', name: 'test', ...testServer, strictHostKeyChecking: false
-                };
-                const pwd = testServer.authMode === 'password' ? testServer.password : null;
-                const result = await testConnection(tempServerConfig as import('../../core/serverStore').ServerConfig, pwd);
-                if (result.ok) {
-                    vscode.window.showInformationMessage(`连接成功: ${testServer.username}@${testServer.host}:${testServer.port}`);
-                } else {
-                    vscode.window.showErrorMessage(`连接失败: ${result.error || '未知错误'}`);
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `正在测试连接 ${testServer.host}...`,
+                cancellable: false
+            }, async () => {
+                try {
+                    const { testConnection } = await import('../../sync/transport');
+                    const tempServerConfig = {
+                        id: '', name: 'test', ...testServer, strictHostKeyChecking: false
+                    };
+                    const pwd = testServer.authMode === 'password' ? testServer.password : null;
+                    const result = await testConnection(tempServerConfig as import('../../core/serverStore').ServerConfig, pwd);
+                    if (result.ok) {
+                        vscode.window.showInformationMessage(`连接成功: ${testServer.username}@${testServer.host}:${testServer.port}`);
+                    } else {
+                        vscode.window.showErrorMessage(`连接失败: ${result.error || '未知错误'}`);
+                    }
+                } catch (e) {
+                    vscode.window.showErrorMessage(`连接失败: ${e instanceof Error ? e.message : e}`);
                 }
-            } catch (e) {
-                vscode.window.showErrorMessage(`连接失败: ${e instanceof Error ? e.message : e}`);
-            }
+            });
             break;
         }
         case 'viewPassword': {
@@ -411,7 +422,7 @@ export async function handleMessage(
             break;
         }
         case 'selectSdkProject': {
-            await vscode.commands.executeCommand('compilot.sdk.selectProject');
+            await vscode.commands.executeCommand('forja.sdk.selectProject');
             updateHtml();
             break;
         }

@@ -1,4 +1,4 @@
-export type CliAction = 'init' | 'use' | 'status' | 'env' | 'projects' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'ps' | 'rcc';
+export type CliAction = 'init' | 'use' | 'status' | 'env' | 'projects' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'ps' | 'rcc';
 export type CliExecutionMode = 'dryRun' | 'execute';
 export type CliBuildMode = 'debug' | 'release';
 export type CliArch = 'x86' | 'x64';
@@ -14,8 +14,7 @@ export interface CliOptions {
     qtPath: string | null;
     vsDevShell: string | null;
     target: string | null;
-    server?: string | null;
-    repo?: string | null;
+    qmakeArgs?: string | null;
     detach?: boolean;
     saveLocal: boolean;
     json: boolean;
@@ -47,7 +46,6 @@ export interface CliResult {
     commands: string[];
     /** 拼接好的完整 shell 命令，可直接在 workspace 目录下执行 */
     shellCommand: string;
-    candidates: string[];
     nextActions: string[];
     exitCode: number | null;
     durationMs: number;
@@ -58,6 +56,8 @@ export interface CliResult {
     /** Warning summary: total count and deduplicated breakdown */
     warningSummary?: { total: number; summary: string };
     logFile: string | null;
+    /** build/run --detach 编译步骤的日志路径（成功时也有） */
+    buildLogFile?: string;
     /** run 成功时解析出的可执行文件绝对路径 */
     executablePath?: string;
     /** run --detach 成功时解析出的目标进程 PID */

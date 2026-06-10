@@ -31,7 +31,7 @@ src/
 │   ├── platform/         # 平台命令生成
 │   └── utils/            # 日志委托
 ├── ui/                   # UI 层（状态栏、Webview 配置面板）
-├── cli/                  # 统一 CLI 入口（compilot qt/sdk 分发）
+├── cli/                  # 统一 CLI 入口（forja qt/sdk 分发）
 └── test/                 # 单元测试
 ```
 
@@ -41,7 +41,7 @@ src/
 2. **Qt Sync Chain**: extension → qt/sync/syncWatcher → core/serverStore → qt/sync/transport → SSH/SCP
 3. **SDK Build Chain**: extension → sdk/sdkExtension → sdk/modules/sdkBuilder → task execution
 4. **CLI Chain**: cli/index → qt/cli or sdk/cli → qt/shared or sdk/cli logic → stdout
-5. **Config Panel**: extension → ui/configPanel → vscode/settingsStore → .compilot/ files
+5. **Config Panel**: extension → ui/configPanel → vscode/settingsStore → .forja/ files
 6. **Status Bar**: extension → ui/unifiedStatusBar → qt state + sdk state → display
 
 ## Module Placement

@@ -65,7 +65,7 @@ export class ConfigPageManager {
         }
 
         const panel = vscode.window.createWebviewPanel(
-            `compilot.config.${pageId}`,
+            `forja.config.${pageId}`,
             PAGE_TITLES[pageId],
             vscode.ViewColumn.One,
             { enableScripts: true, retainContextWhenHidden: true }

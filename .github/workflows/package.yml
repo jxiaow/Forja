@@ -1,0 +1,123 @@
+name: Package
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  artifact-package:
+    if: github.event_name == 'workflow_dispatch'
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run package:all
+      - name: Gather artifact package
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          mkdir -p _artifact
+          cp dist/forja-${VER}/vs/*.vsix _artifact/
+          cp dist/forja-${VER}/cli/forja-cli-*.tgz _artifact/
+          tar czf _artifact/forja-skills-${VER}.tar.gz skills/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forja-package-${{ github.run_number }}
+          path: _artifact/*
+          if-no-files-found: error
+
+  build:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run compile
+      - run: node scripts/package-vs.js
+      - run: node scripts/build-cli.js
+      - name: Gather artifacts
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          mkdir -p _release
+          cp dist/forja-${VER}/vs/*.vsix _release/
+          cp dist/forja-${VER}/cli/forja-cli-*.tgz _release/
+          tar czf _release/forja-skills-${VER}.tar.gz skills/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forja-dist
+          path: _release/*
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: forja-dist
+      - name: Prepare release assets
+        run: |
+          mkdir -p _release
+          mv -f *.vsix *.tgz *.tar.gz _release/ 2>/dev/null || true
+      - name: Build release body
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | head -2 | tail -1)
+          cat > _release/body.md << 'BODYEOF'
+          ## Downloads
+
+          | File | Description |
+          | --- | --- |
+          | `*.vsix` | **VSCode Extension** — Double-click to install, or "Install from VSIX" in VSCode |
+          | `*-cli-*.tgz` | **CLI** — `npm install -g ./forja-cli-*.tgz` |
+          | `*-skills-*.tar.gz` | **AI Skills** — Extract and copy to your AI tool's skills directory |
+
+          ## Changelog
+
+          BODYEOF
+          if [ -n "$PREV_TAG" ]; then
+            git log "$PREV_TAG"..HEAD --oneline --no-decorate \
+              --grep='^fix:' --grep='^feat:' --grep='^refactor:' \
+              --grep='^ci:' --grep='^docs:' --grep='^perf:' >> _release/body.md
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Create release
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            _release/*.vsix _release/*.tgz _release/*.tar.gz \
+            --repo "${{ github.repository }}" \
+            --notes-file _release/body.md
+        env:
+          GH_TOKEN: ${{ github.token }}

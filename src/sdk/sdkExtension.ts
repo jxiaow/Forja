@@ -1,6 +1,6 @@
 /**
  * SDK Module extension entry point.
- * Called by the unified Compilot extension.ts when SDK projects are detected.
+ * Called by the unified Forja extension.ts when SDK projects are detected.
  */
 import * as vscode from 'vscode';
 import { StateManager } from './modules/stateManager';
@@ -18,7 +18,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     // 0. 初始化日志
     const outputChannel = initLogger();
     context.subscriptions.push(outputChannel);
-    log('Compilot SDK 模块开始激活...');
+    log('Forja SDK 模块开始激活...');
     log(`平台: ${isWindows ? 'Windows' : 'Linux'}`);
     log(`工作区: ${vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath).join(', ') ?? '无'}`);
 
@@ -103,16 +103,22 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         stateManager.arch = arch as import('./types').Arch;
         stateManager.persistToConfig();
     });
+    let sdkSettingsDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     context.subscriptions.push(onSettingsChange((section) => {
         if (section !== 'sdk') { return; }
-        stateManager.restoreFromConfig()
-            .then(async () => {
-                if (isWindows) {
-                    await configService.getVsDevCmdPath();
-                }
-                updateSdkStatusBar();
-            })
-            .catch((e: Error) => logError('settingsStore 变更后重新加载 SDK 配置失败', e));
+        // 防抖：连续多次 SDK settings 变更只触发一次 VS 检测
+        if (sdkSettingsDebounceTimer) { clearTimeout(sdkSettingsDebounceTimer); }
+        sdkSettingsDebounceTimer = setTimeout(() => {
+            sdkSettingsDebounceTimer = undefined;
+            stateManager.restoreFromConfig()
+                .then(async () => {
+                    if (isWindows) {
+                        await configService.getVsDevCmdPath();
+                    }
+                    updateSdkStatusBar();
+                })
+                .catch((e: Error) => logError('settingsStore 变更后重新加载 SDK 配置失败', e));
+        }, 300);
     }));
     // 有 SDK 项目时激活 SDK 模块
     if (stateManager.currentProject) {
@@ -128,7 +134,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         log('执行命令: Select Project');
         const projects = projectScanner.projects;
         if (projects.length === 0) {
-            vscode.window.showInformationMessage('SDK Pilot: 未找到可用的 SDK 项目');
+            vscode.window.showInformationMessage('Forja SDK: 未找到可用的 SDK 项目');
             return;
         }
         const currentPath = stateManager.currentProject?.path;
@@ -172,7 +178,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
             if (e.exitCode !== undefined && e.exitCode !== 0) {
                 logError(`编译失败，退出码: ${e.exitCode}`);
                 vscode.window.showWarningMessage(
-                    `Compilot SDK: 编译失败，退出码 ${e.exitCode}`
+                    `Forja SDK: 编译失败，退出码 ${e.exitCode}`
                 );
             } else {
                 log('编译任务完成，退出码: 0');
@@ -187,7 +193,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     // 11. 注册 Disposables
     context.subscriptions.push(stateManager, configService);
 
-    log('Compilot SDK 模块激活完成!');
+    log('Forja SDK 模块激活完成!');
 }
 
 /**

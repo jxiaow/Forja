@@ -1,10 +1,10 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'ps', 'rcc'];
+const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'ps', 'rcc'];
 
-const helpText = `Compilot Qt CLI — qmake 项目构建工具
+const helpText = `Forja Qt CLI — qmake 项目构建工具
 
-用法: compilot qt <command> [options]
+用法: forja qt <command> [options]
 
 命令:
   init        自动初始化本地配置（检测环境、保存可自动确定的配置）
@@ -18,7 +18,6 @@ const helpText = `Compilot Qt CLI — qmake 项目构建工具
   run         构建并运行
   stop        停止运行中的程序
   ps          查看后台运行状态
-  sync        同步变更文件到远程服务器（基于 git diff）
   rcc         编译 .qrc 资源文件为 .rcc 二进制
 
 通用选项:
@@ -33,26 +32,21 @@ use 选项:
   --qt-path <path>       指定 Qt 安装路径
   --vs-dev-shell <path>  指定 Launch-VsDevShell.ps1 路径
   --target <name>        指定 QMake TARGET 覆盖
+  --qmake-args <args>    指定追加到 qmake 命令末尾的自定义参数
 
 执行选项:
-  --plan                 仅生成命令计划，不执行（init/use/qmake/build/run/clean/sync/rcc）
-  --dry-run              （兼容旧版，等同于 --plan）
+  --plan                 仅生成命令计划，不执行（init/use/qmake/build/run/clean/rcc）
   --detach               run 成功构建后后台启动程序
 
-sync 选项:
-  --server <name>        同步时指定服务器名称
-  --repo <name>          同步时指定子仓库名称（多仓库工作区）
-
 示例:
-  compilot qt status --json            查看配置状态和下一步
-  compilot qt init --json              初始化并保存可自动确定的配置
-  compilot qt use --mode release       确认/切换到 release 配置
-  compilot qt build                    执行构建
-  compilot qt build --plan             查看构建命令（不执行）
-  compilot qt run --detach             后台构建并运行
-  compilot qt ps --json                查看后台运行状态
-  compilot qt sync                     同步变更文件到远程
-  compilot qt status                   查看当前状态
+  forja qt status --json            查看配置状态和下一步
+  forja qt init --json              初始化并保存可自动确定的配置
+  forja qt use --mode release       确认/切换到 release 配置
+  forja qt build                    执行构建
+  forja qt build --plan             查看构建命令（不执行）
+  forja qt run --detach             后台构建并运行
+  forja qt ps --json                查看后台运行状态
+  forja qt status                   查看当前状态
 `;
 
 export function isHelpRequest(args: string[]): boolean {
@@ -69,7 +63,6 @@ function isCliAction(value: string): value is CliAction {
 
 const knownFlags = new Set([
     '--plan',
-    '--dry-run',
     '--workspace',
     '--project',
     '--mode',
@@ -77,15 +70,14 @@ const knownFlags = new Set([
     '--qt-path',
     '--vs-dev-shell',
     '--target',
-    '--server',
-    '--repo',
+    '--qmake-args',
     '--detach',
     '--json'
 ]);
 
 const commonFlags = ['--workspace', '--json'];
-const configFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
-const planFlags = ['--plan', '--dry-run'];
+const configFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target', '--qmake-args'];
+const planFlags = ['--plan'];
 const actionAllowedFlags: Record<CliAction, Set<string>> = {
     init: new Set([...commonFlags, ...planFlags]),
     use: new Set([...commonFlags, ...planFlags, ...configFlags]),
@@ -97,7 +89,6 @@ const actionAllowedFlags: Record<CliAction, Set<string>> = {
     clean: new Set([...commonFlags, ...planFlags]),
     run: new Set([...commonFlags, ...planFlags, '--detach']),
     stop: new Set(commonFlags),
-    sync: new Set([...commonFlags, ...planFlags, '--server', '--repo']),
     ps: new Set(commonFlags),
     rcc: new Set([...commonFlags, ...planFlags])
 };
@@ -151,8 +142,7 @@ export function parseCliArgs(args: string[]): CliOptions {
         qtPath: null,
         vsDevShell: null,
         target: null,
-        server: null,
-        repo: null,
+        qmakeArgs: null,
         detach: false,
         saveLocal: false,
         json: false
@@ -166,8 +156,6 @@ export function parseCliArgs(args: string[]): CliOptions {
 
         switch (arg) {
             case '--plan':
-            case '--dry-run':
-                // 兼容旧版，等同于 --plan
                 options.executionMode = 'dryRun';
                 break;
             case '--workspace':
@@ -198,12 +186,8 @@ export function parseCliArgs(args: string[]): CliOptions {
                 options.target = readValue(args, i, arg);
                 i++;
                 break;
-            case '--server':
-                options.server = readValue(args, i, arg);
-                i++;
-                break;
-            case '--repo':
-                options.repo = readValue(args, i, arg);
+            case '--qmake-args':
+                options.qmakeArgs = readValue(args, i, arg);
                 i++;
                 break;
             case '--detach':
