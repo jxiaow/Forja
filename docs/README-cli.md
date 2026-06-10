@@ -107,8 +107,11 @@ forja qt init --json
 ```bash
 forja qt use --mode release
 forja qt use --project app.pro
+forja qt use --project app.pro --target MyApp
 forja qt use --qt-path /path/to/Qt
 ```
+
+`--target` 用于多个 `.pro` 指向同名或需要覆盖 QMake `TARGET` 的场景；`projects` 会在文本和 JSON 输出中列出可用 target，便于和 `--project` 一起确认。
 
 ### `forja qt qmake`
 

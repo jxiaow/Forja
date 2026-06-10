@@ -59,15 +59,18 @@ cp -r skills/forja/ ~/.<tool-name>/skills/forja/
 - "运行一下看看效果"
 - "清理重新编译"
 - "同步到服务器"
+- "列出同步服务器"
+- "新增/修改/删除同步服务器"
 - "看看构建环境状态"
 - "初始化构建环境"
 - "切到 release 模式编译"
 - "用 x64 架构重新编译"
+- "选择这个 .pro 的 target"
 - "停掉正在运行的程序"
 - "看看编译日志"
 
 AI 会自动调用对应的 `forja` 命令。首次使用时让 AI "初始化构建环境"即可。
-Skill 会先执行 `forja qt status --json` 或 `forja sdk status --json` 检查当前工作区，再根据状态提示运行 `init` 或 `use`。`init` 只做自动初始化；项目、mode、arch 和工具链路径的显式选择都通过 `use` 写入。
+Skill 会先执行 `forja qt status --json` 或 `forja sdk status --json` 检查当前工作区，再根据状态提示运行 `init` 或 `use`。`init` 只做自动初始化；项目、target、mode、arch 和工具链路径的显式选择都通过 `use` 写入。需要同步时，Skill 会先检查 `forja sync status --json`，服务器管理使用 `servers/add-server/update-server/remove-server`。
 
 ## 支持的项目类型
 
@@ -76,6 +79,7 @@ Skill 会先执行 `forja qt status --json` 或 `forja sdk status --json` 检查
 | Qt (qmake) | `.pro` | `forja qt ...` |
 | SDK (MSBuild) | `.sln` | `forja sdk ...` |
 | SDK (Make) | `Makefile` | `forja sdk ...` |
+| Sync | git workspace | `forja sync ...` |
 
 ## 文件说明
 

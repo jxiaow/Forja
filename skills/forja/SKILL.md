@@ -39,7 +39,7 @@ description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run
   1. forja qt status --json（或 sdk status）
   2. 看 diagnostics / nextActions：
      - 没有本地配置 → 运行 init --json，让 CLI 保存可自动确定的配置
-     - 缺项目 → 运行 projects --json，展示候选，让用户选择后运行 use --project <path> --json
+     - 缺项目或 target → 运行 projects --json，展示候选，让用户选择后运行 use --project <path> [--target <name>] --json
      - 缺 mode/arch 确认 → 按 status 建议运行 use --mode ... --arch ... --json
      - 缺 Qt/VS 工具链 → 运行 env --json，展示候选，让用户选择后运行 use 写入路径
      - 缺 Makefile → 先 qmake --json
@@ -91,6 +91,8 @@ Qt 配置参数只允许用于 `forja qt use`：
 | `--qt-path <path>` | Qt 安装路径 |
 | `--vs-dev-shell <path>` | Launch-VsDevShell.ps1 路径 |
 | `--target <name>` | QMake TARGET 覆盖 |
+
+当 `projects --json` 返回多个 `.pro` 或同名 target 时，向用户展示 `path` 和 `target`，再用 `forja qt use --project <path> --target <name> --json` 写入选择。
 
 ## SDK 命令
 
