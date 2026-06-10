@@ -176,27 +176,36 @@ forja qt clean
 ```bash
 forja sync status --json
 forja sync servers --json
+forja sync server --json
 forja sync add-server --name dev --host 127.0.0.1 --username dev --json
+forja sync use --server server-1 --remote-path /home/dev/workspace --enable --json
+forja sync test-connection --json
+forja sync reset --json
 forja sync update-server --server server-1 --host 10.0.0.2 --json
 forja sync remove-server --server server-1 --json
 forja sync
 forja sync --plan --json
 forja sync --file src/main.cpp --json
+forja sync --server server-1 --repo /home/dev/workspace/app --json
 ```
 
 | 选项 | 说明 |
 | --- | --- |
-| `status` | 查看同步配置是否就绪、缺哪些配置项，不执行上传 |
+| `status` | 查看同步配置是否就绪、缺哪些配置项和下一步建议，不执行上传 |
 | `--plan` | 预览待同步文件、目标服务器和路径，不执行上传 |
-| `--server <id>` | 指定服务器 ID，对应 `~/.forja/servers.json` 中的 `id` |
-| `--repo <name>` | 多 git 仓库 workspace 时只同步指定仓库 |
+| `--server <id>` | 临时指定服务器 ID；在 `sync` / `status` / `test-connection` 中不写入配置 |
+| `--repo <name\|path>` | 多 git 仓库 workspace 时只同步指定仓库；单 git 仓库 workspace 时可传远程绝对仓库路径覆盖目标目录 |
 | `--file <path>` | 单文件同步；可重复，路径可相对 workspace、仓库根目录或使用绝对路径 |
 | `servers` | 列举全局同步服务器 |
+| `server [--server <id>]` | 查看当前选中服务器或指定服务器详情，不输出 password |
 | `add-server` | 增加服务器，常用参数：`--name`、`--host`、`--username`、`--port`、`--auth-mode`、`--private-key-path` |
+| `use --server <id>` | 保存当前 workspace 的选中服务器，可配合 `--remote-path`、`--enable`、`--disable` |
+| `test-connection` | 测试当前选中服务器或 `--server <id>` 指定服务器的 SSH 连接 |
+| `reset` | 清除当前 workspace 的同步状态；中断或误跳过后可用它让下次重新计算 |
 | `update-server --server <id>` | 修改服务器字段 |
 | `remove-server --server <id>` | 删除服务器 |
 
-服务器列表存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/projects/<hash>.json`。服务器管理命令不会自动修改当前 workspace 的选中服务器或远程路径。
+服务器列表存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/projects/<hash>.json`。服务器管理命令不会自动修改当前 workspace 的选中服务器或远程路径；只有 `forja sync use ...` 会保存当前选择。`sync` / `--plan` 的 JSON 输出包含 `skippedDetails`，文本输出会列出跳过文件及原因；失败时会列出文件级错误明细。
 
 ### `forja qt rcc`
 

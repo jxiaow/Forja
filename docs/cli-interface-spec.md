@@ -46,18 +46,32 @@ forja <subcommand> [action] [options]
 
 ## Sync 命令参数矩阵
 
-`forja sync status` 只读取本地同步配置，返回启用状态、服务器选择、远程路径和缺失项，不执行 SSH/SCP，也不扫描 git。`forja sync --plan` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。服务器管理命令只读写全局 `~/.forja/servers.json`，不会自动修改当前 workspace 的 `selectedServer` 或 `remotePaths`。
+`forja sync status` 只读取本地同步配置，返回启用状态、服务器选择、远程路径、缺失项和 `nextActions`，不执行 SSH/SCP，也不扫描 git。`forja sync --plan` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件、跳过文件和 `skippedDetails`，不执行 SSH/SCP。服务器管理命令只读写全局 `~/.forja/servers.json`，不会自动修改当前 workspace 的 `selectedServer` 或 `remotePaths`。当前 workspace 的服务器选择和远程路径只能通过 `forja sync use ...` 持久化。
 
 | 命令 | 允许参数 |
 |------|----------|
 | `status` | `--workspace`, `--json`, `--server` |
 | `sync` | `--workspace`, `--json`, `--plan`, `--server`, `--repo`, `--file` |
+| `use` | `--workspace`, `--json`, `--server`, `--remote-path`, `--enable`, `--disable` |
+| `test-connection` | `--workspace`, `--json`, `--server` |
+| `reset` | `--workspace`, `--json` |
 | `servers` | `--json` |
+| `server` | `--workspace`, `--json`, `--server` |
 | `add-server` | `--json`, `--name`, `--host`, `--port`, `--username`, `--auth-mode`, `--private-key-path`, `--password`, `--strict-host-key-checking`, `--no-strict-host-key-checking` |
 | `update-server` | `--json`, `--server`, `--name`, `--host`, `--port`, `--username`, `--auth-mode`, `--private-key-path`, `--password`, `--strict-host-key-checking`, `--no-strict-host-key-checking` |
 | `remove-server` | `--json`, `--server` |
 
 `--file <path>` 可重复使用，用于单文件或少量指定文件同步。路径可以是相对 workspace 的路径、相对仓库根目录的路径，或绝对路径；未指定时仍同步 git diff / 暂存区 / 未跟踪文件中需要上传的变更。
+
+`--repo <name>` 默认按本地 git 仓库名过滤；当值为 `/` 开头的远程绝对路径且当前 workspace 只有一个本地 git 仓库时，该路径作为该仓库的远程目标目录，不再追加本地仓库名。
+
+`forja sync server [--server <id>]` 查看单个服务器详情；不带 `--server` 时使用当前 workspace 的 `selectedServer`，返回当前服务器对应的 `remotePath` 和是否为当前选中服务器。输出不包含 `password`。
+
+`--server <id>` 在 `status`、`sync`、`--plan`、`server` 和 `test-connection` 中是临时覆盖，不保存到 workspace 配置。`forja sync use --server <id> --remote-path <path> --enable --json` 会保存 `selectedServer`、对应服务器的 `remotePaths[id]` 和启用状态。
+
+`forja sync test-connection` 复用当前选中服务器；也可以通过 `--server <id>` 临时测试其他服务器。password 认证优先读取 `FORJA_SSH_PASSWORD`，其次读取服务器配置中的 `password` 字段。
+
+`forja sync reset` 清除当前 workspace 的本地 sync-state。`sync` 是前台命令，可用 Ctrl+C 打断；中断或同步状态导致文件被 `alreadySynced` 跳过时，可先 `reset` 再 `--plan` 重新确认。
 
 服务器管理示例：
 

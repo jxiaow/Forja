@@ -4,9 +4,9 @@
  */
 import * as path from 'path';
 import * as cp from 'child_process';
-import { filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
-import { addServer, readProjectSyncConfig, getServerById, readServers, removeServer, ServerConfig, updateServer } from '../core/serverStore';
-import { ensureRemoteDir, scpUpload } from '../core/sshTransport';
+import { clearSyncState, filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
+import { addServer, readProjectSyncConfig, getServerById, readServers, removeServer, ServerConfig, updateServer, writeProjectSyncConfig } from '../core/serverStore';
+import { ensureRemoteDir, scpUpload, testConnection } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
 import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
 
@@ -14,9 +14,11 @@ export interface SyncResult {
     ok: boolean;
     uploaded: string[];
     skipped: string[];
+    skippedDetails?: { file: string; reason: string }[];
     failed: { file: string; error: string }[];
     server: string;
     remotePath: string;
+    nextActions?: string[];
 }
 
 export interface SyncPlanResult {
@@ -25,10 +27,13 @@ export interface SyncPlanResult {
     mode: 'dryRun';
     pending: string[];
     skipped: string[];
+    skippedDetails: { file: string; reason: string }[];
     failed: { file: string; error: string }[];
     server: string;
     remotePath: string;
     repos: string[];
+    nextAction?: string;
+    nextActions: string[];
 }
 
 export interface SyncStatusResult {
@@ -46,9 +51,14 @@ export interface SyncStatusResult {
     server: Pick<ServerConfig, 'id' | 'name' | 'host' | 'port' | 'username' | 'authMode'> | null;
     remotePath: string;
     diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[];
+    nextAction: string;
+    nextActions: string[];
 }
 
-type SyncServerAction = 'servers' | 'add-server' | 'update-server' | 'remove-server';
+type SyncServerAction = 'servers' | 'server' | 'add-server' | 'update-server' | 'remove-server';
+type SyncConfigAction = 'use' | 'test-connection' | 'reset';
+type SyncAction = 'sync' | 'status' | SyncServerAction | SyncConfigAction;
+type GitRoot = ReturnType<typeof resolveGitRoots>[number];
 
 type PublicServerConfig = Pick<ServerConfig, 'id' | 'name' | 'host' | 'port' | 'username' | 'authMode' | 'privateKeyPath' | 'strictHostKeyChecking'>;
 
@@ -57,7 +67,47 @@ interface SyncServerResult {
     action: SyncServerAction;
     server?: PublicServerConfig;
     servers?: PublicServerConfig[];
+    selected?: boolean;
+    remotePath?: string;
     diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[];
+    nextActions?: string[];
+}
+
+interface SyncUseResult {
+    ok: boolean;
+    action: 'use';
+    enabled: boolean;
+    selectedServer: string;
+    remotePath: string;
+    diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[];
+    nextActions: string[];
+}
+
+interface SyncTestConnectionResult {
+    ok: boolean;
+    action: 'test-connection';
+    server: Pick<ServerConfig, 'id' | 'name' | 'host' | 'port' | 'username' | 'authMode'> | null;
+    diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[];
+    nextActions: string[];
+}
+
+interface SyncResetResult {
+    ok: boolean;
+    action: 'reset';
+    diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[];
+    nextActions: string[];
+}
+
+interface ResolvedRepoTargets {
+    ok: true;
+    gitRoots: GitRoot[];
+    remotePath: string;
+    remotePathOverrides: Map<string, string>;
+}
+
+interface FailedRepoTargets {
+    ok: false;
+    error: string;
 }
 
 // ── Git diff ──
@@ -91,6 +141,114 @@ function getGitChangedFiles(workspaceRoot: string): Promise<string[]> {
             resolve([...new Set(files)]);
         });
     });
+}
+
+function availableRepoNames(gitRoots: GitRoot[]): string {
+    return gitRoots.map(r => r.name).join(', ');
+}
+
+function isAbsoluteRemoteRepoPath(value: string): boolean {
+    return value.startsWith('/');
+}
+
+function resolveRepoTargets(workspaceRoot: string, remotePath: string, repoFilter?: string): ResolvedRepoTargets | FailedRepoTargets {
+    const allGitRoots = resolveGitRoots(workspaceRoot);
+    if (allGitRoots.length === 0) {
+        return { ok: false, error: `未找到 git 仓库: ${workspaceRoot}` };
+    }
+
+    if (!repoFilter) {
+        return { ok: true, gitRoots: allGitRoots, remotePath, remotePathOverrides: new Map() };
+    }
+
+    const namedRoots = allGitRoots.filter(r => r.name === repoFilter);
+    if (namedRoots.length > 0) {
+        return { ok: true, gitRoots: namedRoots, remotePath, remotePathOverrides: new Map() };
+    }
+
+    if (isAbsoluteRemoteRepoPath(repoFilter)) {
+        const remoteRepoPath = repoFilter.replace(/\/+$/, '');
+        const basenameRoots = allGitRoots.filter(r => r.name === path.posix.basename(remoteRepoPath));
+        const targetRoots = basenameRoots.length > 0 ? basenameRoots : allGitRoots.length === 1 ? allGitRoots : [];
+        if (targetRoots.length > 0) {
+            return {
+                ok: true,
+                gitRoots: targetRoots,
+                remotePath: remoteRepoPath,
+                remotePathOverrides: new Map(targetRoots.map(r => [r.dir, remoteRepoPath]))
+            };
+        }
+        return { ok: false, error: `远程仓库路径 "${repoFilter}" 无法唯一匹配本地仓库，可用: ${availableRepoNames(allGitRoots)}` };
+    }
+
+    return { ok: false, error: `未找到仓库 "${repoFilter}"，可用: ${availableRepoNames(allGitRoots)}` };
+}
+
+function remotePathForRepo(remotePath: string, gitRoot: GitRoot, overrides: Map<string, string>): string {
+    return overrides.get(gitRoot.dir) || remotePath.replace(/\/$/, '') + '/' + gitRoot.name;
+}
+
+function dedupeActions(actions: string[]): string[] {
+    return Array.from(new Set(actions));
+}
+
+function buildSyncNextActions(missing: string[], ready: boolean): { nextAction: string; nextActions: string[] } {
+    if (missing.includes('servers')) {
+        return {
+            nextAction: 'servers',
+            nextActions: [
+                'forja sync servers --json',
+                'forja sync add-server --name <name> --host <host> --username <name> --json'
+            ]
+        };
+    }
+    if (missing.includes('selectedServer') || missing.includes('server')) {
+        return {
+            nextAction: 'use',
+            nextActions: [
+                'forja sync servers --json',
+                'forja sync use --server <id> --remote-path <path> --enable --json'
+            ]
+        };
+    }
+    if (missing.includes('remotePath')) {
+        return {
+            nextAction: 'use',
+            nextActions: ['forja sync use --server <id> --remote-path <path> --enable --json']
+        };
+    }
+    if (missing.includes('enabled')) {
+        return {
+            nextAction: 'use',
+            nextActions: ['forja sync use --enable --json']
+        };
+    }
+    if (ready) {
+        return {
+            nextAction: 'sync',
+            nextActions: [
+                'forja sync --plan --json',
+                'forja sync test-connection --json',
+                'forja sync --json'
+            ]
+        };
+    }
+    return { nextAction: 'status', nextActions: ['forja sync status --json'] };
+}
+
+function syncFailureActions(): string[] {
+    return ['forja sync status --json'];
+}
+
+function publicSyncServer(server: ServerConfig): Pick<ServerConfig, 'id' | 'name' | 'host' | 'port' | 'username' | 'authMode'> {
+    return {
+        id: server.id,
+        name: server.name,
+        host: server.host,
+        port: server.port,
+        username: server.username,
+        authMode: server.authMode
+    };
 }
 
 // ── 忽略判断 ──
@@ -151,18 +309,18 @@ async function resolveCliPassword(server: ServerConfig): Promise<string | null> 
 export async function executeSyncCli(workspaceRoot: string, serverId?: string, repoFilter?: string, fileFilters: string[] = []): Promise<SyncResult> {
     const project = readProjectSyncConfig(workspaceRoot);
     if (!project.enabled) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '远程同步未启用' }], server: '', remotePath: '' };
+        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '远程同步未启用' }], server: '', remotePath: '', nextActions: syncFailureActions() };
     }
 
     const targetId = serverId || project.selectedServer;
     const server = getServerById(targetId);
     if (!server) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json` }], server: targetId, remotePath: '' };
+        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json` }], server: targetId, remotePath: '', nextActions: syncFailureActions() };
     }
 
     const remotePath = project.remotePaths[server.id] || '';
     if (!remotePath) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未配置远程路径' }], server: server.name, remotePath: '' };
+        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未配置远程路径' }], server: server.name, remotePath: '', nextActions: syncFailureActions() };
     }
 
     // 密码解析（password 模式）
@@ -170,29 +328,21 @@ export async function executeSyncCli(workspaceRoot: string, serverId?: string, r
     if (server.authMode === 'password') {
         resolvedPassword = await resolveCliPassword(server);
         if (!resolvedPassword) {
-            return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未提供密码。可通过环境变量 FORJA_SSH_PASSWORD 设置，或在 TTY 中交互输入' }], server: server.name, remotePath };
+            return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未提供密码。可通过环境变量 FORJA_SSH_PASSWORD 设置，或在 TTY 中交互输入' }], server: server.name, remotePath, nextActions: ['设置环境变量 FORJA_SSH_PASSWORD 后重试'] };
         }
     }
 
-    // 解析 git 仓库
-    let gitRoots = resolveGitRoots(workspaceRoot);
-    if (gitRoots.length === 0) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `未找到 git 仓库: ${workspaceRoot}` }], server: server.name, remotePath };
+    const repoTargets = resolveRepoTargets(workspaceRoot, remotePath, repoFilter);
+    if (!repoTargets.ok) {
+        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: repoTargets.error }], server: server.name, remotePath, nextActions: syncFailureActions() };
     }
 
-    // 按名称过滤
-    if (repoFilter) {
-        gitRoots = gitRoots.filter(r => r.name === repoFilter);
-        if (gitRoots.length === 0) {
-            return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `未找到仓库 "${repoFilter}"，可用: ${resolveGitRoots(workspaceRoot).map(r => r.name).join(', ')}` }], server: server.name, remotePath };
-        }
-    }
-
-    const result: SyncResult = { ok: true, uploaded: [], skipped: [], failed: [], server: server.name, remotePath };
+    const result: SyncResult = { ok: true, uploaded: [], skipped: [], skippedDetails: [], failed: [], server: server.name, remotePath: repoTargets.remotePath };
     const ignore = project.ignore;
 
-    for (const { dir: gitDir, name: gitName } of gitRoots) {
-        const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
+    for (const gitRoot of repoTargets.gitRoots) {
+        const { dir: gitDir, name: gitName } = gitRoot;
+        const repoRemotePath = remotePathForRepo(remotePath, gitRoot, repoTargets.remotePathOverrides);
         const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
 
         const changedFiles = fileFilters.length > 0
@@ -202,12 +352,20 @@ export async function executeSyncCli(workspaceRoot: string, serverId?: string, r
 
         const notIgnored: string[] = [];
         for (const f of changedFiles) {
-            if (isIgnored(f, ignore)) { result.skipped.push(`${gitName}/${f}`); }
+            if (isIgnored(f, ignore)) {
+                const file = `${gitName}/${f}`;
+                result.skipped.push(file);
+                result.skippedDetails?.push({ file, reason: 'ignored' });
+            }
             else { notIgnored.push(f); }
         }
 
         const needSync = filterNeedsSync(gitDir, notIgnored, syncTarget);
-        result.skipped.push(...notIgnored.filter(f => !needSync.includes(f)).map(f => `${gitName}/${f}`));
+        for (const f of notIgnored.filter(f => !needSync.includes(f))) {
+            const file = `${gitName}/${f}`;
+            result.skipped.push(file);
+            result.skippedDetails?.push({ file, reason: 'alreadySynced' });
+        }
 
         if (needSync.length === 0) { continue; }
 
@@ -257,10 +415,12 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
         mode: 'dryRun',
         pending: [],
         skipped: [],
+        skippedDetails: [],
         failed: [{ file: '', error }],
         server,
         remotePath,
-        repos: []
+        repos: [],
+        nextActions: syncFailureActions()
     });
 
     if (!project.enabled) {
@@ -278,16 +438,9 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
         return empty('未配置远程路径', server.name, '');
     }
 
-    let gitRoots = resolveGitRoots(workspaceRoot);
-    if (gitRoots.length === 0) {
-        return empty(`未找到 git 仓库: ${workspaceRoot}`, server.name, remotePath);
-    }
-
-    if (repoFilter) {
-        gitRoots = gitRoots.filter(r => r.name === repoFilter);
-        if (gitRoots.length === 0) {
-            return empty(`未找到仓库 "${repoFilter}"，可用: ${resolveGitRoots(workspaceRoot).map(r => r.name).join(', ')}`, server.name, remotePath);
-        }
+    const repoTargets = resolveRepoTargets(workspaceRoot, remotePath, repoFilter);
+    if (!repoTargets.ok) {
+        return empty(repoTargets.error, server.name, remotePath);
     }
 
     const plan: SyncPlanResult = {
@@ -296,14 +449,18 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
         mode: 'dryRun',
         pending: [],
         skipped: [],
+        skippedDetails: [],
         failed: [],
         server: server.name,
-        remotePath,
-        repos: gitRoots.map(r => r.name)
+        remotePath: repoTargets.remotePath,
+        repos: repoTargets.gitRoots.map(r => r.name),
+        nextAction: 'sync',
+        nextActions: ['forja sync --json']
     };
 
-    for (const { dir: gitDir, name: gitName } of gitRoots) {
-        const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
+    for (const gitRoot of repoTargets.gitRoots) {
+        const { dir: gitDir, name: gitName } = gitRoot;
+        const repoRemotePath = remotePathForRepo(remotePath, gitRoot, repoTargets.remotePathOverrides);
         const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
         const changedFiles = fileFilters.length > 0
             ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters)
@@ -312,12 +469,20 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
 
         const notIgnored: string[] = [];
         for (const f of changedFiles) {
-            if (isIgnored(f, project.ignore)) { plan.skipped.push(`${gitName}/${f}`); }
+            if (isIgnored(f, project.ignore)) {
+                const file = `${gitName}/${f}`;
+                plan.skipped.push(file);
+                plan.skippedDetails.push({ file, reason: 'ignored' });
+            }
             else { notIgnored.push(f); }
         }
 
         const needSync = filterNeedsSync(gitDir, notIgnored, syncTarget);
-        plan.skipped.push(...notIgnored.filter(f => !needSync.includes(f)).map(f => `${gitName}/${f}`));
+        for (const f of notIgnored.filter(f => !needSync.includes(f))) {
+            const file = `${gitName}/${f}`;
+            plan.skipped.push(file);
+            plan.skippedDetails.push({ file, reason: 'alreadySynced' });
+        }
         plan.pending.push(...needSync.map(f => `${gitName}/${f}`));
     }
 
@@ -358,22 +523,18 @@ export function statusSyncCli(workspaceRoot: string, serverId?: string): SyncSta
     });
 
     const ready = missing.length === 0;
+    const guidance = buildSyncNextActions(missing, ready);
     return {
         ok: ready,
         action: 'status',
         ready,
         checks,
         missing,
-        server: server ? {
-            id: server.id,
-            name: server.name,
-            host: server.host,
-            port: server.port,
-            username: server.username,
-            authMode: server.authMode
-        } : null,
+        server: server ? publicSyncServer(server) : null,
         remotePath,
-        diagnostics
+        diagnostics,
+        nextAction: guidance.nextAction,
+        nextActions: guidance.nextActions
     };
 }
 
@@ -399,11 +560,45 @@ export function listSyncServersCli(): SyncServerResult {
     };
 }
 
+export function showSyncServerCli(workspaceRoot: string, serverId: string | null): SyncServerResult {
+    const project = readProjectSyncConfig(workspaceRoot);
+    const targetId = serverId || project.selectedServer;
+    if (!targetId) {
+        return {
+            ok: false,
+            action: 'server',
+            diagnostics: [{ level: 'error', message: '未选择同步服务器' }],
+            nextActions: ['forja sync servers --json', 'forja sync use --server <id> --remote-path <path> --enable --json']
+        };
+    }
+
+    const server = getServerById(targetId);
+    if (!server) {
+        return {
+            ok: false,
+            action: 'server',
+            diagnostics: [{ level: 'error', message: `服务器 "${targetId}" 未找到` }],
+            nextActions: ['forja sync servers --json']
+        };
+    }
+
+    return {
+        ok: true,
+        action: 'server',
+        server: publicServer(server),
+        selected: project.selectedServer === server.id,
+        remotePath: project.remotePaths[server.id] || '',
+        diagnostics: [],
+        nextActions: ['forja sync test-connection --json']
+    };
+}
+
 function errorSyncServerResult(action: SyncServerAction, message: string): SyncServerResult {
     return {
         ok: false,
         action,
-        diagnostics: [{ level: 'error', message }]
+        diagnostics: [{ level: 'error', message }],
+        nextActions: ['forja sync servers --json']
     };
 }
 
@@ -445,11 +640,137 @@ export function removeSyncServerCli(serverId: string | null): SyncServerResult {
     return { ok: true, action: 'remove-server', server: publicServer(server), diagnostics: [] };
 }
 
+export function useSyncCli(workspaceRoot: string, serverId: string | null, remotePath: string | null, enabled: boolean | null): SyncUseResult {
+    const current = readProjectSyncConfig(workspaceRoot);
+    const selectedServer = serverId || current.selectedServer;
+    if (!selectedServer && enabled === null) {
+        return {
+            ok: false,
+            action: 'use',
+            enabled: current.enabled,
+            selectedServer,
+            remotePath: '',
+            diagnostics: [{ level: 'error', message: 'use 需要 --server <id>、--enable 或 --disable' }],
+            nextActions: ['forja sync servers --json']
+        };
+    }
+
+    if (selectedServer && !getServerById(selectedServer)) {
+        return {
+            ok: false,
+            action: 'use',
+            enabled: current.enabled,
+            selectedServer,
+            remotePath: '',
+            diagnostics: [{ level: 'error', message: `服务器 "${selectedServer}" 未找到` }],
+            nextActions: ['forja sync servers --json']
+        };
+    }
+
+    const remotePaths = { ...current.remotePaths };
+    if (remotePath !== null) {
+        if (!selectedServer) {
+            return {
+                ok: false,
+                action: 'use',
+                enabled: current.enabled,
+                selectedServer,
+                remotePath,
+                diagnostics: [{ level: 'error', message: '--remote-path 需要同时指定或已有 --server <id>' }],
+                nextActions: ['forja sync use --server <id> --remote-path <path> --json']
+            };
+        }
+        remotePaths[selectedServer] = remotePath;
+    }
+
+    const nextEnabled = enabled ?? current.enabled;
+    writeProjectSyncConfig(workspaceRoot, {
+        enabled: nextEnabled,
+        selectedServer,
+        remotePaths
+    });
+
+    return {
+        ok: true,
+        action: 'use',
+        enabled: nextEnabled,
+        selectedServer,
+        remotePath: selectedServer ? (remotePaths[selectedServer] || '') : '',
+        diagnostics: [],
+        nextActions: [
+            'forja sync status --json',
+            'forja sync test-connection --json',
+            'forja sync --plan --json'
+        ]
+    };
+}
+
+export async function testSyncConnectionCli(workspaceRoot: string, serverId?: string): Promise<SyncTestConnectionResult> {
+    const project = readProjectSyncConfig(workspaceRoot);
+    const targetId = serverId || project.selectedServer;
+    const server = targetId ? getServerById(targetId) : null;
+    if (!targetId) {
+        return {
+            ok: false,
+            action: 'test-connection',
+            server: null,
+            diagnostics: [{ level: 'error', message: '未选择同步服务器' }],
+            nextActions: ['forja sync use --server <id> --remote-path <path> --enable --json']
+        };
+    }
+    if (!server) {
+        return {
+            ok: false,
+            action: 'test-connection',
+            server: null,
+            diagnostics: [{ level: 'error', message: `服务器 "${targetId}" 未找到` }],
+            nextActions: ['forja sync servers --json']
+        };
+    }
+
+    let password: string | null = null;
+    if (server.authMode === 'password') {
+        password = await resolveCliPassword(server);
+        if (!password) {
+            return {
+                ok: false,
+                action: 'test-connection',
+                server: publicSyncServer(server),
+                diagnostics: [{ level: 'error', message: '未提供密码。可通过环境变量 FORJA_SSH_PASSWORD 设置，或在 TTY 中交互输入' }],
+                nextActions: ['设置环境变量 FORJA_SSH_PASSWORD 后重试']
+            };
+        }
+    }
+
+    const result = await testConnection(server, password);
+    return {
+        ok: result.ok,
+        action: 'test-connection',
+        server: publicSyncServer(server),
+        diagnostics: result.ok
+            ? [{ level: 'info', message: `连接成功: ${server.name} (${server.username}@${server.host})` }]
+            : [{ level: 'error', message: `连接失败: ${result.error || '未知错误'}` }],
+        nextActions: result.ok ? ['forja sync --plan --json'] : ['forja sync status --json']
+    };
+}
+
+export function resetSyncCli(workspaceRoot: string): SyncResetResult {
+    clearSyncState(workspaceRoot);
+    return {
+        ok: true,
+        action: 'reset',
+        diagnostics: [{ level: 'info', message: '已清除同步状态；下次同步会重新计算待同步文件' }],
+        nextActions: ['forja sync --plan --json', 'forja sync --json']
+    };
+}
+
 export interface SyncCliOptions {
-    action: 'sync' | 'status' | SyncServerAction;
+    action: SyncAction;
     executionMode: 'dryRun' | 'execute';
     workspace: string;
     server: string | null;
+    remotePath: string | null;
+    enabled: boolean | null;
     repo: string | null;
     files: string[];
     serverFields: Partial<Omit<ServerConfig, 'id'>>;
@@ -461,38 +782,67 @@ const syncHelpText = `Forja Sync CLI — 通用远程文件同步
 用法:
   forja sync [options]
   forja sync status [options]
+  forja sync use --server <id> [--remote-path <path>] [--enable|--disable]
+  forja sync test-connection [--server <id>]
+  forja sync reset [options]
   forja sync servers [options]
+  forja sync server [--server <id>]
   forja sync add-server [options]
   forja sync update-server --server <id> [options]
   forja sync remove-server --server <id> [options]
 
 选项:
-  --workspace <path>     工作区路径（默认当前目录）
-  --server <id>          指定服务器 ID
-  --repo <name>          指定子仓库名称（多仓库工作区）
-  --file <path>          指定单个文件路径；可重复，路径可相对 workspace 或仓库根目录
-  --plan                 仅预览待同步文件，不执行 SSH/SCP
-  --name <name>          服务器名称（add-server/update-server）
-  --host <host>          SSH 主机（add-server/update-server）
-  --port <port>          SSH 端口（add-server/update-server，默认 22）
-  --username <name>      SSH 用户名（add-server/update-server）
-  --auth-mode <mode>     认证方式：key 或 password
-  --private-key-path <p> SSH 私钥路径
-  --password <password>  SSH 密码（会写入 servers.json；建议优先用 FORJA_SSH_PASSWORD）
+  --workspace <path>      工作区路径（默认当前目录），决定读取/写入哪份 sync 配置
+  --server <id>           临时指定服务器；在 sync/status/server/test-connection 中不保存
+  --repo <name|path>      指定子仓库名称；单仓库时也可传远程绝对仓库路径
+  --file <path>           指定单个文件路径；可重复，路径可相对 workspace 或仓库根目录
+  --plan                  仅预览待同步文件，不执行 SSH/SCP
+  --remote-path <path>    use 保存当前服务器的远程父目录或单仓库远程目录
+  --enable                use 保存启用远程同步
+  --disable               use 保存禁用远程同步
+  --name <name>           服务器名称（add-server/update-server）
+  --host <host>           SSH 主机（add-server/update-server）
+  --port <port>           SSH 端口（add-server/update-server，默认 22）
+  --username <name>       SSH 用户名（add-server/update-server）
+  --auth-mode <mode>      认证方式：key 或 password
+  --private-key-path <p>  SSH 私钥路径
+  --password <password>   SSH 密码（会写入 servers.json；建议优先用 FORJA_SSH_PASSWORD）
   --strict-host-key-checking     启用严格主机密钥检查
   --no-strict-host-key-checking  关闭严格主机密钥检查
-  --json                 输出 JSON 格式（适合 AI 工具解析）
-  --help, -h             显示此帮助信息
+  --json                  输出 JSON 格式（适合 AI 工具解析）
+  --help, -h              显示此帮助信息
+
+工作流:
+  1. forja sync status --json
+  2. forja sync servers --json
+  3. forja sync server --server <id> --json
+  4. forja sync add-server --name dev --host 127.0.0.1 --username dev --json
+  5. forja sync use --server <id> --remote-path <path> --enable --json
+  6. forja sync test-connection --json
+  7. forja sync --plan --json
+  8. forja sync --json
+
+说明:
+  use 会保存当前 workspace 的 selectedServer、remotePaths 和 enabled。
+  --server 在 sync/status/server/test-connection 中只是临时覆盖；要缓存选择请用 use。
+  password 认证优先读取 FORJA_SSH_PASSWORD，其次读取服务器配置中的 password。
+  sync 是前台命令，可用 Ctrl+C 打断；中断后可用 reset 清除本地同步状态再预览。
 
 示例:
   forja sync status --json           查看同步配置就绪状态
   forja sync servers --json          列举同步服务器
+  forja sync server --json           查看当前选择的服务器详情
+  forja sync server --server dev --json 查看指定服务器详情
   forja sync add-server --name dev --host 127.0.0.1 --username dev --json
   forja sync update-server --server dev --host 10.0.0.2 --json
   forja sync remove-server --server dev --json
+  forja sync use --server dev --remote-path /remote/app --enable --json
+  forja sync test-connection --json
+  forja sync reset --json           清除同步状态，下次重新计算
   forja sync                         同步变更文件到远程
   forja sync --plan --json           JSON 预览待同步文件
   forja sync --server dev --repo app 同步指定服务器和子仓库
+  forja sync --server dev --repo /remote/app 覆盖单仓库远程目标路径
   forja sync --file src/main.cpp     单文件同步
 `;
 
@@ -535,6 +885,8 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
         executionMode: 'execute',
         workspace: process.cwd(),
         server: null,
+        remotePath: null,
+        enabled: null,
         repo: null,
         files: [],
         serverFields: {},
@@ -546,9 +898,13 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
         switch (arg) {
             case 'status':
             case 'servers':
+            case 'server':
             case 'add-server':
             case 'update-server':
             case 'remove-server':
+            case 'use':
+            case 'test-connection':
+            case 'reset':
                 if (i !== 0) {
                     throw new Error(`forja sync 不接受子命令或位置参数: ${arg}`);
                 }
@@ -570,6 +926,25 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
             case '--server':
                 options.server = readSyncValue(args, i, arg);
                 i++;
+                break;
+            case '--remote-path':
+                if (options.action !== 'use') {
+                    throw new Error(`forja sync ${options.action} 不支持 --remote-path`);
+                }
+                options.remotePath = readSyncValue(args, i, arg);
+                i++;
+                break;
+            case '--enable':
+                if (options.action !== 'use') {
+                    throw new Error(`forja sync ${options.action} 不支持 --enable`);
+                }
+                options.enabled = true;
+                break;
+            case '--disable':
+                if (options.action !== 'use') {
+                    throw new Error(`forja sync ${options.action} 不支持 --disable`);
+                }
+                options.enabled = false;
                 break;
             case '--repo':
                 if (options.action === 'status') {
@@ -642,6 +1017,9 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
     if (Object.keys(options.serverFields).length > 0 && !['add-server', 'update-server'].includes(options.action)) {
         throw new Error(`forja sync ${options.action} 不支持服务器字段参数`);
     }
+    if (options.enabled !== null && options.remotePath === null && options.server === null && options.action !== 'use') {
+        throw new Error(`forja sync ${options.action} 不支持启用状态参数`);
+    }
 
     return options;
 }
@@ -667,6 +1045,31 @@ function printSyncServerText(output: SyncServerResult): void {
     }
 }
 
+function printNextActions(nextActions?: string[]): void {
+    if (!nextActions || nextActions.length === 0) { return; }
+    console.log('下一步:');
+    for (const action of nextActions) {
+        console.log(`  ${action}`);
+    }
+}
+
+function printSkippedDetails(skippedDetails?: { file: string; reason: string }[]): void {
+    if (!skippedDetails || skippedDetails.length === 0) { return; }
+    console.log('跳过明细:');
+    for (const item of skippedDetails) {
+        console.log(`  ${item.file} (${item.reason})`);
+    }
+}
+
+function printFailedDetails(failed: { file: string; error: string }[]): void {
+    if (failed.length === 0) { return; }
+    console.error('失败明细:');
+    for (const item of failed) {
+        const file = item.file || '(global)';
+        console.error(`  ${file}: ${item.error}`);
+    }
+}
+
 export async function runSyncCli(argv: string[]): Promise<void> {
     if (isSyncHelpRequest(argv)) {
         console.log(getSyncHelpText());
@@ -681,6 +1084,14 @@ export async function runSyncCli(argv: string[]): Promise<void> {
 
         if (options.action === 'servers') {
             const output = listSyncServersCli();
+            if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
+            else { printSyncServerText(output); }
+            process.exitCode = output.ok ? 0 : 1;
+            return;
+        }
+
+        if (options.action === 'server') {
+            const output = showSyncServerCli(workspace, options.server);
             if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
             else { printSyncServerText(output); }
             process.exitCode = output.ok ? 0 : 1;
@@ -711,6 +1122,48 @@ export async function runSyncCli(argv: string[]): Promise<void> {
             return;
         }
 
+        if (options.action === 'use') {
+            const output = useSyncCli(workspace, options.server, options.remotePath, options.enabled);
+            if (wantsJson) {
+                console.log(JSON.stringify(output, null, 2));
+            } else if (output.ok) {
+                console.log(`Sync use: ${output.enabled ? 'enabled' : 'disabled'} (${output.selectedServer || 'no server'}:${output.remotePath || 'no remote path'})`);
+                printNextActions(output.nextActions);
+            } else {
+                console.error(`Sync use 失败: ${output.diagnostics.map(d => d.message).join(', ')}`);
+                printNextActions(output.nextActions);
+            }
+            process.exitCode = output.ok ? 0 : 1;
+            return;
+        }
+
+        if (options.action === 'test-connection') {
+            const output = await testSyncConnectionCli(workspace, options.server || undefined);
+            if (wantsJson) {
+                console.log(JSON.stringify(output, null, 2));
+            } else if (output.ok && output.server) {
+                console.log(`连接成功: ${output.server.name} (${output.server.username}@${output.server.host})`);
+                printNextActions(output.nextActions);
+            } else {
+                console.error(`连接失败: ${output.diagnostics.map(d => d.message).join(', ')}`);
+                printNextActions(output.nextActions);
+            }
+            process.exitCode = output.ok ? 0 : 1;
+            return;
+        }
+
+        if (options.action === 'reset') {
+            const output = resetSyncCli(workspace);
+            if (wantsJson) {
+                console.log(JSON.stringify(output, null, 2));
+            } else {
+                console.log(output.diagnostics.map(d => d.message).join(', '));
+                printNextActions(output.nextActions);
+            }
+            process.exitCode = output.ok ? 0 : 1;
+            return;
+        }
+
         if (options.action === 'status') {
             const output = statusSyncCli(workspace, options.server || undefined);
             if (wantsJson) {
@@ -720,6 +1173,7 @@ export async function runSyncCli(argv: string[]): Promise<void> {
             } else {
                 console.log(`Sync status: not ready (${output.missing.join(', ')})`);
             }
+            if (!wantsJson) { printNextActions(output.nextActions); }
             process.exitCode = output.ok ? 0 : 1;
             return;
         }
@@ -730,8 +1184,12 @@ export async function runSyncCli(argv: string[]): Promise<void> {
                 console.log(JSON.stringify(output, null, 2));
             } else if (output.ok) {
                 console.log(`Sync (plan): ${output.pending.length} 个文件待同步到 ${output.server}:${output.remotePath}`);
+                printSkippedDetails(output.skippedDetails);
+                printNextActions(output.nextActions);
             } else {
                 console.log(`Sync (plan) 失败: ${output.failed.map(f => f.error).join(', ')}`);
+                printFailedDetails(output.failed);
+                printNextActions(output.nextActions);
             }
             process.exitCode = output.ok ? 0 : 1;
             return;
@@ -742,9 +1200,15 @@ export async function runSyncCli(argv: string[]): Promise<void> {
             console.log(JSON.stringify(result, null, 2));
         } else if (result.ok) {
             console.log(`同步完成: ${result.uploaded.length} 个文件已上传`);
-            if (result.skipped.length > 0) { console.log(`跳过: ${result.skipped.length} 个`); }
+            if (result.skipped.length > 0) {
+                console.log(`跳过: ${result.skipped.length} 个`);
+                printSkippedDetails(result.skippedDetails);
+            }
         } else {
             console.error(`同步失败: ${result.failed.map(f => f.error).join(', ')}`);
+            printFailedDetails(result.failed);
+            printSkippedDetails(result.skippedDetails);
+            printNextActions(result.nextActions);
         }
         process.exitCode = result.ok ? 0 : 1;
     } catch (e) {

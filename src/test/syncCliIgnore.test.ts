@@ -74,6 +74,11 @@ test('parseSyncCliArgs accepts sync server management actions', () => {
     assert.equal(list.action, 'servers');
     assert.equal(list.json, true);
 
+    const show = parseSyncCliArgs(['server', '--server', 'server-1', '--json']);
+    assert.equal(show.action, 'server');
+    assert.equal(show.server, 'server-1');
+    assert.equal(show.json, true);
+
     const add = parseSyncCliArgs([
         'add-server',
         '--name', 'dev',
@@ -102,6 +107,40 @@ test('parseSyncCliArgs accepts sync server management actions', () => {
     const remove = parseSyncCliArgs(['remove-server', '--server', 'server-1']);
     assert.equal(remove.action, 'remove-server');
     assert.equal(remove.server, 'server-1');
+});
+
+test('parseSyncCliArgs accepts sync use action', () => {
+    const parsed = parseSyncCliArgs([
+        'use',
+        '--workspace', '/tmp/app',
+        '--server', 'server-1',
+        '--remote-path', '/remote/app',
+        '--enable',
+        '--json'
+    ]);
+
+    assert.equal(parsed.action, 'use');
+    assert.equal(parsed.workspace, '/tmp/app');
+    assert.equal(parsed.server, 'server-1');
+    assert.equal(parsed.remotePath, '/remote/app');
+    assert.equal(parsed.enabled, true);
+    assert.equal(parsed.json, true);
+});
+
+test('parseSyncCliArgs accepts sync test-connection action', () => {
+    const parsed = parseSyncCliArgs(['test-connection', '--server', 'server-1', '--json']);
+
+    assert.equal(parsed.action, 'test-connection');
+    assert.equal(parsed.server, 'server-1');
+    assert.equal(parsed.json, true);
+});
+
+test('parseSyncCliArgs accepts sync reset action', () => {
+    const parsed = parseSyncCliArgs(['reset', '--workspace', '/tmp/app', '--json']);
+
+    assert.equal(parsed.action, 'reset');
+    assert.equal(parsed.workspace, '/tmp/app');
+    assert.equal(parsed.json, true);
 });
 
 test('parseSyncCliArgs rejects positional args', () => {

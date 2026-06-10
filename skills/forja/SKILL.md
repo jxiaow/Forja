@@ -131,7 +131,11 @@ SDK 配置参数只允许用于 `forja sdk use`：
 | 命令 | 用途 | 关键参数 |
 |------|------|----------|
 | `status` | 查看同步配置是否就绪 | `--server` |
+| `use` | 保存当前 workspace 的同步服务器、远程路径和启用状态 | `--server`, `--remote-path`, `--enable`, `--disable` |
+| `test-connection` | 测试当前或临时指定服务器的 SSH 连接 | `--server` |
+| `reset` | 清除当前 workspace 的同步状态，下次重新计算 | |
 | `servers` | 列举全局同步服务器 | |
+| `server` | 查看当前或指定服务器详情 | `--server` |
 | `add-server` | 增加同步服务器 | `--name`, `--host`, `--username`, `--port`, `--auth-mode`, `--private-key-path` |
 | `update-server` | 修改同步服务器 | `--server`, `--name`, `--host`, `--username`, `--port`, `--auth-mode`, `--private-key-path` |
 | `remove-server` | 删除同步服务器 | `--server` |
@@ -142,8 +146,10 @@ SDK 配置参数只允许用于 `forja sdk use`：
 | 参数 | 说明 |
 |------|------|
 | `--workspace <path>` | 工作区路径，默认当前目录 |
-| `--server <id>` | 指定同步目标服务器 ID，默认读取项目同步配置 |
-| `--repo <name>` | 多仓库工作区中只同步指定子仓库；仅同步/预览可用 |
+| `--server <id>` | 临时指定同步目标服务器 ID；要保存当前选择请用 `forja sync use --server <id>` |
+| `--remote-path <path>` | `use` 保存当前服务器对应的远程路径 |
+| `--enable` / `--disable` | `use` 保存同步启用状态 |
+| `--repo <name\|path>` | 多仓库工作区中只同步指定子仓库；单仓库时可传远程绝对仓库路径 |
 | `--file <path>` | 单文件同步；可重复，路径可相对 workspace、相对仓库根目录或使用绝对路径 |
 | `--plan` | 仅预览待同步文件，不执行 SSH/SCP |
 | `--name <name>` | 服务器名称；仅服务器管理命令可用 |
@@ -228,7 +234,11 @@ forja qt build --plan --json
 # 同步：先看状态，再预览或单文件同步
 forja sync status --json
 forja sync servers --json
+forja sync server --json
 forja sync add-server --name dev --host 127.0.0.1 --username dev --json
+forja sync use --server server-1 --remote-path /remote/app --enable --json
+forja sync test-connection --json
+forja sync reset --json
 forja sync update-server --server server-1 --host 10.0.0.2 --json
 forja sync remove-server --server server-1 --json
 forja sync --plan --json
