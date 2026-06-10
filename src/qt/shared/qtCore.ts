@@ -724,11 +724,32 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     } else if (options.action === 'build') {
         const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
         if (project) {
+            if (buildConfig.projectDir && buildConfig.proFile) {
+                const validation = validateMakefile(buildConfig.projectDir, {
+                    mode: buildConfig.mode,
+                    arch: buildConfig.arch,
+                    qtPath: buildConfig.qtPath,
+                    proFile: buildConfig.proFile,
+                    target: buildConfig.target,
+                    qmakeArgs: buildConfig.qmakeArgs
+                });
+                if (!validation.exists || !validation.matches) {
+                    const reason = !validation.exists
+                        ? '未找到 Makefile'
+                        : `Makefile 与当前配置不匹配（${validation.mismatch!.join(', ')}）`;
+                    return {
+                        ...result,
+                        ok: false,
+                        diagnostics: [{ level: 'error', message: `${reason}。请先运行 forja qt qmake --json` }],
+                        nextActions: ['forja qt qmake --json']
+                    };
+                }
+            }
             const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
             const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : (target || path.basename(project, '.pro')));
             const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
             commands = [killCmd, ...buildCmds];
-            result.executablePath = runtimeTarget?.exePath;
+            if (runtimeTarget) { result.executablePath = runtimeTarget.exePath; }
         } else {
             commands = buildCmds;
         }

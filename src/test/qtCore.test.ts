@@ -40,10 +40,28 @@ function readyQtSettings(workspace: string, overrides: Partial<QtSettings> = {})
     };
 }
 
+function writeMatchingMakefile(workspace: string, overrides: { mode?: string; arch?: string; qtPath?: string } = {}): void {
+    const mode = overrides.mode || 'debug';
+    const arch = overrides.arch || defaultArch();
+    const qtPath = overrides.qtPath || 'D:/Qt';
+    const qmakeBin = process.platform === 'win32' ? 'qmake.exe' : 'qmake';
+    const qmakePath = qtPath
+        ? `${qtPath.replace(/\\/g, '/')}/bin/${qmakeBin}`
+        : qmakeBin;
+    const spec = process.platform === 'win32' ? 'win32-msvc' : 'linux-g++';
+    const archConfig = process.platform === 'win32' ? ` CONFIG+=${arch}` : '';
+    fs.writeFileSync(
+        path.join(workspace, 'Makefile'),
+        `# Command: "${qmakePath}" demo.pro -spec ${spec} CONFIG+=${mode} CONFIG+=console${archConfig}\n`,
+        'utf8'
+    );
+}
+
 test('createActionPlan uses settings.json when CLI args are omitted', async () => {
     const workspace = makeWorkspace();
     const project = path.join(workspace, 'demo.pro');
     saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, mode: 'release', arch: 'x64', qtPath: 'D:/Qt', vsInstall: 'C:/VS' });
+    writeMatchingMakefile(workspace, { mode: 'release', arch: 'x64', qtPath: 'D:/Qt' });
 
     const result = await createActionPlan({
         action: 'build',
@@ -674,6 +692,7 @@ test('run without Makefile includes status hint when CLI-passed mode/arch', asyn
 test('build action plan ignores config override fields and uses saved settings', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, mode: 'debug', arch: 'x86', qtPath: 'D:/Qt-old', vsInstall: 'C:/VS-old' });
+    writeMatchingMakefile(workspace, { mode: 'debug', arch: 'x86', qtPath: 'D:/Qt-old' });
 
     const result = await createActionPlan({
         action: 'build',
@@ -696,9 +715,43 @@ test('build action plan ignores config override fields and uses saved settings',
     assert.notEqual(result.resolved?.vsDevShell, 'C:/VS-new/Launch-VsDevShell.ps1');
 });
 
-test('nextActions points to status when Qt path is empty', async () => {
+test('build with stale Makefile points to qmake instead of building', async () => {
+    const workspace = makeWorkspace();
+    saveQtSettings(workspace, readyQtSettings(workspace, { mode: 'debug', arch: defaultArch(), qtPath: 'D:/Qt' }));
+    const projectDir = workspace;
+    if (process.platform === 'win32') {
+        fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=release CONFIG+=console CONFIG+=x86\n', 'utf8');
+        fs.writeFileSync(path.join(projectDir, 'Makefile.Release'), 'DESTDIR_TARGET = release\\demo.exe\n', 'utf8');
+    } else {
+        fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake" demo.pro -spec linux-g++ CONFIG+=release CONFIG+=console\nTARGET = release/demo\n', 'utf8');
+    }
+
+    const result = await createActionPlan({
+        action: 'build',
+        executionMode: 'dryRun',
+        workspace,
+        project: path.join(workspace, 'demo.pro'),
+        mode: null,
+        arch: null,
+        qtPath: null,
+        vsDevShell: null,
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.commands, []);
+    assert.equal(result.shellCommand, '');
+    assert.ok(result.diagnostics.some(d => d.level === 'error' && /Makefile/.test(d.message)));
+    assert.deepEqual(result.nextActions, ['forja qt qmake --json']);
+    assert.equal(result.executablePath, undefined);
+});
+
+test('build with matching Makefile still generates commands when Qt path is empty', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, readyQtSettings(workspace, { qtPath: '' }));
+    writeMatchingMakefile(workspace, { mode: 'debug', arch: 'x86', qtPath: '' });
 
     const result = await createActionPlan({
         action: 'build',
@@ -714,7 +767,6 @@ test('nextActions points to status when Qt path is empty', async () => {
         json: true
     });
 
-    // 执行层不自行诊断环境问题，成功返回命令
     assert.equal(result.ok, true);
     assert.ok(result.commands.length > 0);
 });
@@ -1012,6 +1064,7 @@ test('execution action without saved project points back to status', async () =>
 test('non-existent qtPath still generates commands (validation delegated to status)', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, readyQtSettings(workspace, { qtPath: 'Z:/nonexistent/qt/path' }));
+    writeMatchingMakefile(workspace, { mode: 'debug', arch: 'x86', qtPath: 'Z:/nonexistent/qt/path' });
 
     const result = await createActionPlan({
         action: 'build',
