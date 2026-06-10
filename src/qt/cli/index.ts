@@ -23,6 +23,7 @@ function compactResult(result: CliResult): Record<string, unknown> {
     if (result.logFile) { out.logFile = result.logFile; }
     if (result.executablePath) { out.executablePath = result.executablePath; }
     if (typeof result.pid === 'number') { out.pid = result.pid; }
+    if (typeof result.runtimeExitCode === 'number') { out.runtimeExitCode = result.runtimeExitCode; }
 
     // Successful detach launches: minimal output
     const isDetachSuccess = result.ok && result.logFile && result.exitCode === 0
@@ -91,6 +92,9 @@ function textOutput(result: CliResult): string {
     }
     if (result.executablePath) {
         lines.push(`可执行文件: ${result.executablePath}`);
+    }
+    if (typeof result.runtimeExitCode === 'number') {
+        lines.push(`程序退出码: ${result.runtimeExitCode}`);
     }
     if (result.commands.length > 0) {
         lines.push('命令:');
