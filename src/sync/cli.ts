@@ -5,7 +5,7 @@
 import * as path from 'path';
 import * as cp from 'child_process';
 import { filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
-import { readProjectSyncConfig, getServerById, readServers, ServerConfig } from '../core/serverStore';
+import { addServer, readProjectSyncConfig, getServerById, readServers, removeServer, ServerConfig, updateServer } from '../core/serverStore';
 import { ensureRemoteDir, scpUpload } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
 import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
@@ -45,6 +45,18 @@ export interface SyncStatusResult {
     missing: string[];
     server: Pick<ServerConfig, 'id' | 'name' | 'host' | 'port' | 'username' | 'authMode'> | null;
     remotePath: string;
+    diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[];
+}
+
+type SyncServerAction = 'servers' | 'add-server' | 'update-server' | 'remove-server';
+
+type PublicServerConfig = Pick<ServerConfig, 'id' | 'name' | 'host' | 'port' | 'username' | 'authMode' | 'privateKeyPath' | 'strictHostKeyChecking'>;
+
+interface SyncServerResult {
+    ok: boolean;
+    action: SyncServerAction;
+    server?: PublicServerConfig;
+    servers?: PublicServerConfig[];
     diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[];
 }
 
@@ -365,13 +377,82 @@ export function statusSyncCli(workspaceRoot: string, serverId?: string): SyncSta
     };
 }
 
+function publicServer(server: ServerConfig): PublicServerConfig {
+    return {
+        id: server.id,
+        name: server.name,
+        host: server.host,
+        port: server.port,
+        username: server.username,
+        authMode: server.authMode,
+        privateKeyPath: server.privateKeyPath,
+        strictHostKeyChecking: !!server.strictHostKeyChecking
+    };
+}
+
+export function listSyncServersCli(): SyncServerResult {
+    return {
+        ok: true,
+        action: 'servers',
+        servers: readServers().map(publicServer),
+        diagnostics: []
+    };
+}
+
+function errorSyncServerResult(action: SyncServerAction, message: string): SyncServerResult {
+    return {
+        ok: false,
+        action,
+        diagnostics: [{ level: 'error', message }]
+    };
+}
+
+export function addSyncServerCli(fields: Partial<Omit<ServerConfig, 'id'>>): SyncServerResult {
+    if (!fields.name) { return errorSyncServerResult('add-server', '--name 需要一个值'); }
+    if (!fields.host) { return errorSyncServerResult('add-server', '--host 需要一个值'); }
+    if (!fields.username) { return errorSyncServerResult('add-server', '--username 需要一个值'); }
+
+    const server = addServer({
+        name: fields.name,
+        host: fields.host,
+        port: fields.port || 22,
+        username: fields.username,
+        authMode: fields.authMode || 'key',
+        privateKeyPath: fields.privateKeyPath || '',
+        password: fields.password || '',
+        strictHostKeyChecking: !!fields.strictHostKeyChecking
+    });
+    return { ok: true, action: 'add-server', server: publicServer(server), diagnostics: [] };
+}
+
+export function updateSyncServerCli(serverId: string | null, fields: Partial<Omit<ServerConfig, 'id'>>): SyncServerResult {
+    if (!serverId) { return errorSyncServerResult('update-server', 'update-server 需要 --server <id>'); }
+    if (Object.keys(fields).length === 0) { return errorSyncServerResult('update-server', 'update-server 至少需要一个待修改字段'); }
+    if (!getServerById(serverId)) { return errorSyncServerResult('update-server', `服务器 "${serverId}" 未找到`); }
+
+    updateServer(serverId, fields);
+    const updated = getServerById(serverId);
+    if (!updated) { return errorSyncServerResult('update-server', `服务器 "${serverId}" 未找到`); }
+    return { ok: true, action: 'update-server', server: publicServer(updated), diagnostics: [] };
+}
+
+export function removeSyncServerCli(serverId: string | null): SyncServerResult {
+    if (!serverId) { return errorSyncServerResult('remove-server', 'remove-server 需要 --server <id>'); }
+    const server = getServerById(serverId);
+    if (!server) { return errorSyncServerResult('remove-server', `服务器 "${serverId}" 未找到`); }
+
+    removeServer(serverId);
+    return { ok: true, action: 'remove-server', server: publicServer(server), diagnostics: [] };
+}
+
 export interface SyncCliOptions {
-    action: 'sync' | 'status';
+    action: 'sync' | 'status' | SyncServerAction;
     executionMode: 'dryRun' | 'execute';
     workspace: string;
     server: string | null;
     repo: string | null;
     files: string[];
+    serverFields: Partial<Omit<ServerConfig, 'id'>>;
     json: boolean;
 }
 
@@ -380,6 +461,10 @@ const syncHelpText = `Forja Sync CLI — 通用远程文件同步
 用法:
   forja sync [options]
   forja sync status [options]
+  forja sync servers [options]
+  forja sync add-server [options]
+  forja sync update-server --server <id> [options]
+  forja sync remove-server --server <id> [options]
 
 选项:
   --workspace <path>     工作区路径（默认当前目录）
@@ -387,11 +472,24 @@ const syncHelpText = `Forja Sync CLI — 通用远程文件同步
   --repo <name>          指定子仓库名称（多仓库工作区）
   --file <path>          指定单个文件路径；可重复，路径可相对 workspace 或仓库根目录
   --plan                 仅预览待同步文件，不执行 SSH/SCP
+  --name <name>          服务器名称（add-server/update-server）
+  --host <host>          SSH 主机（add-server/update-server）
+  --port <port>          SSH 端口（add-server/update-server，默认 22）
+  --username <name>      SSH 用户名（add-server/update-server）
+  --auth-mode <mode>     认证方式：key 或 password
+  --private-key-path <p> SSH 私钥路径
+  --password <password>  SSH 密码（会写入 servers.json；建议优先用 FORJA_SSH_PASSWORD）
+  --strict-host-key-checking     启用严格主机密钥检查
+  --no-strict-host-key-checking  关闭严格主机密钥检查
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
 
 示例:
   forja sync status --json           查看同步配置就绪状态
+  forja sync servers --json          列举同步服务器
+  forja sync add-server --name dev --host 127.0.0.1 --username dev --json
+  forja sync update-server --server dev --host 10.0.0.2 --json
+  forja sync remove-server --server dev --json
   forja sync                         同步变更文件到远程
   forja sync --plan --json           JSON 预览待同步文件
   forja sync --server dev --repo app 同步指定服务器和子仓库
@@ -414,6 +512,23 @@ function readSyncValue(args: string[], index: number, flag: string): string {
     return value;
 }
 
+function readPortValue(args: string[], index: number, flag: string): number {
+    const raw = readSyncValue(args, index, flag);
+    const port = Number(raw);
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+        throw new Error(`${flag} 需要 1-65535 之间的整数`);
+    }
+    return port;
+}
+
+function readAuthModeValue(args: string[], index: number, flag: string): 'key' | 'password' {
+    const value = readSyncValue(args, index, flag);
+    if (value !== 'key' && value !== 'password') {
+        throw new Error(`${flag} 只支持 key 或 password`);
+    }
+    return value;
+}
+
 export function parseSyncCliArgs(args: string[]): SyncCliOptions {
     const options: SyncCliOptions = {
         action: 'sync',
@@ -422,6 +537,7 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
         server: null,
         repo: null,
         files: [],
+        serverFields: {},
         json: false
     };
 
@@ -429,14 +545,21 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
         const arg = args[i];
         switch (arg) {
             case 'status':
+            case 'servers':
+            case 'add-server':
+            case 'update-server':
+            case 'remove-server':
                 if (i !== 0) {
                     throw new Error(`forja sync 不接受子命令或位置参数: ${arg}`);
                 }
-                options.action = 'status';
+                options.action = arg;
                 break;
             case '--plan':
                 if (options.action === 'status') {
                     throw new Error('forja sync status 不支持 --plan');
+                }
+                if (options.action !== 'sync') {
+                    throw new Error(`forja sync ${options.action} 不支持 --plan`);
                 }
                 options.executionMode = 'dryRun';
                 break;
@@ -452,6 +575,9 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
                 if (options.action === 'status') {
                     throw new Error('forja sync status 不支持 --repo');
                 }
+                if (options.action !== 'sync') {
+                    throw new Error(`forja sync ${options.action} 不支持 --repo`);
+                }
                 options.repo = readSyncValue(args, i, arg);
                 i++;
                 break;
@@ -459,8 +585,45 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
                 if (options.action === 'status') {
                     throw new Error('forja sync status 不支持 --file');
                 }
+                if (options.action !== 'sync') {
+                    throw new Error(`forja sync ${options.action} 不支持 --file`);
+                }
                 options.files.push(readSyncValue(args, i, arg));
                 i++;
+                break;
+            case '--name':
+                options.serverFields.name = readSyncValue(args, i, arg);
+                i++;
+                break;
+            case '--host':
+                options.serverFields.host = readSyncValue(args, i, arg);
+                i++;
+                break;
+            case '--port':
+                options.serverFields.port = readPortValue(args, i, arg);
+                i++;
+                break;
+            case '--username':
+                options.serverFields.username = readSyncValue(args, i, arg);
+                i++;
+                break;
+            case '--auth-mode':
+                options.serverFields.authMode = readAuthModeValue(args, i, arg);
+                i++;
+                break;
+            case '--private-key-path':
+                options.serverFields.privateKeyPath = readSyncValue(args, i, arg);
+                i++;
+                break;
+            case '--password':
+                options.serverFields.password = readSyncValue(args, i, arg);
+                i++;
+                break;
+            case '--strict-host-key-checking':
+                options.serverFields.strictHostKeyChecking = true;
+                break;
+            case '--no-strict-host-key-checking':
+                options.serverFields.strictHostKeyChecking = false;
                 break;
             case '--json':
                 options.json = true;
@@ -476,7 +639,32 @@ export function parseSyncCliArgs(args: string[]): SyncCliOptions {
         }
     }
 
+    if (Object.keys(options.serverFields).length > 0 && !['add-server', 'update-server'].includes(options.action)) {
+        throw new Error(`forja sync ${options.action} 不支持服务器字段参数`);
+    }
+
     return options;
+}
+
+function printSyncServerText(output: SyncServerResult): void {
+    if (!output.ok) {
+        console.error(output.diagnostics.map(d => d.message).join(', '));
+        return;
+    }
+    if (output.action === 'servers') {
+        const servers = output.servers || [];
+        if (servers.length === 0) {
+            console.log('未配置同步服务器');
+            return;
+        }
+        for (const server of servers) {
+            console.log(`${server.id}\t${server.name}\t${server.username}@${server.host}:${server.port}\t${server.authMode}`);
+        }
+        return;
+    }
+    if (output.server) {
+        console.log(`${output.action}: ${output.server.name} (${output.server.id})`);
+    }
 }
 
 export async function runSyncCli(argv: string[]): Promise<void> {
@@ -490,6 +678,38 @@ export async function runSyncCli(argv: string[]): Promise<void> {
         const options = parseSyncCliArgs(argv);
         wantsJson = options.json;
         const workspace = path.resolve(options.workspace);
+
+        if (options.action === 'servers') {
+            const output = listSyncServersCli();
+            if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
+            else { printSyncServerText(output); }
+            process.exitCode = output.ok ? 0 : 1;
+            return;
+        }
+
+        if (options.action === 'add-server') {
+            const output = addSyncServerCli(options.serverFields);
+            if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
+            else { printSyncServerText(output); }
+            process.exitCode = output.ok ? 0 : 1;
+            return;
+        }
+
+        if (options.action === 'update-server') {
+            const output = updateSyncServerCli(options.server, options.serverFields);
+            if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
+            else { printSyncServerText(output); }
+            process.exitCode = output.ok ? 0 : 1;
+            return;
+        }
+
+        if (options.action === 'remove-server') {
+            const output = removeSyncServerCli(options.server);
+            if (wantsJson) { console.log(JSON.stringify(output, null, 2)); }
+            else { printSyncServerText(output); }
+            process.exitCode = output.ok ? 0 : 1;
+            return;
+        }
 
         if (options.action === 'status') {
             const output = statusSyncCli(workspace, options.server || undefined);

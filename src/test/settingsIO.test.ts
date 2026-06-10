@@ -121,6 +121,42 @@ test('loadQtSettings returns defaults when file is malformed', () => {
     assert.deepEqual(settings, DEFAULT_QT);
 });
 
+test('loadQtSettings uses unique child workspace config from parent directory', () => {
+    const parent = makeWorkspace();
+    const child = path.join(parent, 'qt_client');
+    fs.mkdirSync(child, { recursive: true });
+    trackFile(projectConfigPath(child, 'qt'));
+
+    saveQtSettings(child, {
+        ...DEFAULT_QT,
+        qtPath: 'D:/Qt/5.15',
+        mode: 'release',
+        arch: 'x86',
+        pinnedProject: { root: child, relative: 'client.pro' }
+    });
+
+    const loaded = loadQtSettings(parent);
+    assert.equal(loaded.qtPath, 'D:/Qt/5.15');
+    assert.equal(loaded.mode, 'release');
+    assert.deepEqual(loaded.pinnedProject, { root: child, relative: 'client.pro' });
+});
+
+test('loadQtSettings does not guess when parent directory has multiple child configs', () => {
+    const parent = makeWorkspace();
+    const first = path.join(parent, 'qt_client');
+    const second = path.join(parent, 'qt_tool');
+    fs.mkdirSync(first, { recursive: true });
+    fs.mkdirSync(second, { recursive: true });
+    trackFile(projectConfigPath(first, 'qt'));
+    trackFile(projectConfigPath(second, 'qt'));
+
+    saveQtSettings(first, { ...DEFAULT_QT, qtPath: 'D:/Qt/first' });
+    saveQtSettings(second, { ...DEFAULT_QT, qtPath: 'D:/Qt/second' });
+
+    const loaded = loadQtSettings(parent);
+    assert.deepEqual(loaded, DEFAULT_QT);
+});
+
 // ── saveQtSettings ──
 
 test('saveQtSettings writes to ~/.forja/projects/ with workspace and type fields', () => {

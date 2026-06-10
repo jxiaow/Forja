@@ -71,6 +71,14 @@ function compactResult(result: CliResult): Record<string, unknown> {
 
 // 从 requirements.ts 导入：getPlatformEnvFields / buildEnvCurrent
 
+function humanCommand(command: string): string {
+    return command.replace(/\s+--json\b/g, '');
+}
+
+function humanMessage(message: string): string {
+    return message.replace(/\s+--json\b/g, '');
+}
+
 function textOutput(result: CliResult): string {
     const status = result.ok ? '成功' : '失败';
     const lines = [
@@ -107,12 +115,12 @@ function textOutput(result: CliResult): string {
     }
     for (const diagnostic of result.diagnostics) {
         if (diagnostic.level === 'info') { continue; }
-        lines.push(`${diagnostic.level}: ${diagnostic.message}`);
+        lines.push(`${diagnostic.level}: ${humanMessage(diagnostic.message)}`);
     }
     if (result.nextActions.length > 0) {
         lines.push('下一步:');
         for (const action of result.nextActions) {
-            lines.push(`  ${action}`);
+            lines.push(`  ${humanCommand(action)}`);
         }
     }
     return lines.join('\n');
@@ -299,7 +307,7 @@ function formatStatusText(data: Record<string, unknown>): string {
     const nextActions = data.nextActions as string[] | undefined;
     if (nextActions && nextActions.length > 0) {
         for (const action of nextActions) {
-            lines.push(`  ${action}`);
+            lines.push(`  ${humanCommand(action)}`);
         }
     }
 
@@ -307,7 +315,7 @@ function formatStatusText(data: Record<string, unknown>): string {
     if (diagnostics && diagnostics.length > 0) {
         lines.push('');
         for (const d of diagnostics) {
-            lines.push(`${d.level}: ${d.message}`);
+            lines.push(`${d.level}: ${humanMessage(d.message)}`);
         }
     }
 
@@ -326,6 +334,16 @@ function formatEnvText(env: Record<string, unknown>): string {
 
 
     const qtList = available.qt as Array<Record<string, string>>;
+    const modes = available.mode as string[] | undefined;
+    if (modes && modes.length > 0) {
+        lines.push('');
+        lines.push(`可用 mode: ${modes.join(' | ')}`);
+    }
+    const arch = available.arch as string[] | undefined;
+    if (arch && arch.length > 0) {
+        lines.push(`可用 arch: ${arch.join(' | ')}`);
+    }
+
     if (qtList && qtList.length > 1) {
         lines.push('');
         lines.push(`可用 Qt (${qtList.length}):`);
@@ -337,7 +355,7 @@ function formatEnvText(env: Record<string, unknown>): string {
     const configHints = env.configHints as Record<string, string>;
     if (configHints) {
         lines.push('');
-        lines.push(`修改: ${configHints.usage}`);
+        lines.push(`修改: ${humanCommand(configHints.usage)}`);
     }
     return lines.join('\n');
 }
@@ -357,7 +375,7 @@ function formatProjectsText(data: Record<string, unknown>): string {
     const configHints = data.configHints as Record<string, string>;
     if (configHints) {
         lines.push('');
-        lines.push(`修改: ${configHints.usage}`);
+        lines.push(`修改: ${humanCommand(configHints.usage)}`);
     }
     return lines.join('\n');
 }

@@ -172,6 +172,10 @@ forja qt clean
 
 ```bash
 forja sync status --json
+forja sync servers --json
+forja sync add-server --name dev --host 127.0.0.1 --username dev --json
+forja sync update-server --server server-1 --host 10.0.0.2 --json
+forja sync remove-server --server server-1 --json
 forja sync
 forja sync --plan --json
 forja sync --file src/main.cpp --json
@@ -184,8 +188,12 @@ forja sync --file src/main.cpp --json
 | `--server <id>` | 指定服务器 ID，对应 `~/.forja/servers.json` 中的 `id` |
 | `--repo <name>` | 多 git 仓库 workspace 时只同步指定仓库 |
 | `--file <path>` | 单文件同步；可重复，路径可相对 workspace、仓库根目录或使用绝对路径 |
+| `servers` | 列举全局同步服务器 |
+| `add-server` | 增加服务器，常用参数：`--name`、`--host`、`--username`、`--port`、`--auth-mode`、`--private-key-path` |
+| `update-server --server <id>` | 修改服务器字段 |
+| `remove-server --server <id>` | 删除服务器 |
 
-同步配置目前通过 VSCode 配置面板「同步」初始化：服务器列表存储在 `~/.forja/servers.json`，当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/projects/<hash>.json`。
+服务器列表存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/projects/<hash>.json`。服务器管理命令不会自动修改当前 workspace 的选中服务器或远程路径。
 
 ### `forja qt rcc`
 

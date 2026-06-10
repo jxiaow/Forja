@@ -65,6 +65,20 @@ test('sync help and docs describe top-level sync status', () => {
     assert.match(skill, /forja sync status --json/);
 });
 
+test('sync help and docs describe server management commands', () => {
+    const cliSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sync', 'cli.ts'), 'utf8');
+    const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
+    const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
+    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
+
+    for (const source of [cliSource, spec, guide, skill]) {
+        assert.match(source, /forja sync servers --json/);
+        assert.match(source, /forja sync add-server/);
+        assert.match(source, /forja sync update-server/);
+        assert.match(source, /forja sync remove-server/);
+    }
+});
+
 test('forja skill keeps sync outside the Qt command table', () => {
     const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
     const qtSection = skill.slice(skill.indexOf('## Qt 命令'), skill.indexOf('## SDK 命令'));

@@ -133,7 +133,24 @@ export function resolveConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'
         if (parent === current) { break; }
         current = parent;
     }
+    if (type === 'qt') {
+        const descendant = resolveUniqueDescendantConfigPath(workspace, type);
+        if (descendant) { return descendant; }
+    }
     return projectConfigPath(workspace, type);
+}
+
+function isDescendantWorkspace(parentWorkspace: string, childWorkspace: string): boolean {
+    const parent = path.resolve(parentWorkspace);
+    const child = path.resolve(childWorkspace);
+    const relative = path.relative(parent, child);
+    return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function resolveUniqueDescendantConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string | null {
+    const matches = listProjectConfigs()
+        .filter(config => config.type === type && isDescendantWorkspace(workspace, config.workspace));
+    return matches.length === 1 ? matches[0].filePath : null;
 }
 
 // ── Qt 配置读写 ──

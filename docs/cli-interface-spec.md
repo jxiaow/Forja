@@ -46,14 +46,27 @@ forja <subcommand> [action] [options]
 
 ## Sync 命令参数矩阵
 
-`forja sync status` 只读取本地同步配置，返回启用状态、服务器选择、远程路径和缺失项，不执行 SSH/SCP，也不扫描 git。`forja sync --plan` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
+`forja sync status` 只读取本地同步配置，返回启用状态、服务器选择、远程路径和缺失项，不执行 SSH/SCP，也不扫描 git。`forja sync --plan` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。服务器管理命令只读写全局 `~/.forja/servers.json`，不会自动修改当前 workspace 的 `selectedServer` 或 `remotePaths`。
 
 | 命令 | 允许参数 |
 |------|----------|
 | `status` | `--workspace`, `--json`, `--server` |
 | `sync` | `--workspace`, `--json`, `--plan`, `--server`, `--repo`, `--file` |
+| `servers` | `--json` |
+| `add-server` | `--json`, `--name`, `--host`, `--port`, `--username`, `--auth-mode`, `--private-key-path`, `--password`, `--strict-host-key-checking`, `--no-strict-host-key-checking` |
+| `update-server` | `--json`, `--server`, `--name`, `--host`, `--port`, `--username`, `--auth-mode`, `--private-key-path`, `--password`, `--strict-host-key-checking`, `--no-strict-host-key-checking` |
+| `remove-server` | `--json`, `--server` |
 
 `--file <path>` 可重复使用，用于单文件或少量指定文件同步。路径可以是相对 workspace 的路径、相对仓库根目录的路径，或绝对路径；未指定时仍同步 git diff / 暂存区 / 未跟踪文件中需要上传的变更。
+
+服务器管理示例：
+
+```bash
+forja sync servers --json
+forja sync add-server --name dev --host 127.0.0.1 --username dev --json
+forja sync update-server --server server-1 --host 10.0.0.2 --json
+forja sync remove-server --server server-1 --json
+```
 
 ## Qt use 配置参数
 

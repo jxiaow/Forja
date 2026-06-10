@@ -129,6 +129,10 @@ SDK 配置参数只允许用于 `forja sdk use`：
 | 命令 | 用途 | 关键参数 |
 |------|------|----------|
 | `status` | 查看同步配置是否就绪 | `--server` |
+| `servers` | 列举全局同步服务器 | |
+| `add-server` | 增加同步服务器 | `--name`, `--host`, `--username`, `--port`, `--auth-mode`, `--private-key-path` |
+| `update-server` | 修改同步服务器 | `--server`, `--name`, `--host`, `--username`, `--port`, `--auth-mode`, `--private-key-path` |
+| `remove-server` | 删除同步服务器 | `--server` |
 | `sync` | 同步 git 变更文件到服务器 | `--server`, `--repo`, `--file <path>`, `--plan` |
 
 ### Sync 参数
@@ -140,6 +144,12 @@ SDK 配置参数只允许用于 `forja sdk use`：
 | `--repo <name>` | 多仓库工作区中只同步指定子仓库；仅同步/预览可用 |
 | `--file <path>` | 单文件同步；可重复，路径可相对 workspace、相对仓库根目录或使用绝对路径 |
 | `--plan` | 仅预览待同步文件，不执行 SSH/SCP |
+| `--name <name>` | 服务器名称；仅服务器管理命令可用 |
+| `--host <host>` | SSH 主机；仅服务器管理命令可用 |
+| `--port <port>` | SSH 端口；仅服务器管理命令可用 |
+| `--username <name>` | SSH 用户名；仅服务器管理命令可用 |
+| `--auth-mode key\|password` | SSH 认证方式；仅服务器管理命令可用 |
+| `--private-key-path <path>` | SSH 私钥路径；仅服务器管理命令可用 |
 | `--json` | 结构化 JSON 输出 |
 
 ## JSON 输出关键字段
@@ -215,6 +225,10 @@ forja qt build --plan --json
 
 # 同步：先看状态，再预览或单文件同步
 forja sync status --json
+forja sync servers --json
+forja sync add-server --name dev --host 127.0.0.1 --username dev --json
+forja sync update-server --server server-1 --host 10.0.0.2 --json
+forja sync remove-server --server server-1 --json
 forja sync --plan --json
 forja sync --file src/main.cpp --json
 

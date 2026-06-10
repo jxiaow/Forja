@@ -42,6 +42,51 @@ async function captureStdout(fn: () => Promise<void>): Promise<string> {
     return chunks.join('\n');
 }
 
+test('qt env text shows mode and arch candidates without mandatory json hint', async () => {
+    const workspace = makeWorkspace();
+
+    const output = await captureStdout(() => runQtCli(['env', '--workspace', workspace]));
+
+    assert.match(output, /可用 mode:/);
+    assert.match(output, /debug/);
+    assert.match(output, /release/);
+    assert.match(output, /可用 arch:/);
+    assert.match(output, /修改: forja qt use --mode <mode> --qt-path <path> \[options\]/);
+    assert.doesNotMatch(output, /修改: .*--json/);
+});
+
+test('qt projects text use hint includes optional target without mandatory json hint', async () => {
+    const workspace = makeWorkspace();
+    fs.writeFileSync(path.join(workspace, 'demo.pro'), 'TARGET = demo\nQT += core\n', 'utf8');
+
+    const output = await captureStdout(() => runQtCli(['projects', '--workspace', workspace]));
+
+    assert.match(output, /修改: forja qt use --project <path> \[--target <name>\]/);
+    assert.doesNotMatch(output, /修改: .*--json/);
+});
+
+test('qt init text includes env next step for auto-selected Qt path without mandatory json hints', async () => {
+    const workspace = makeWorkspace();
+    fs.writeFileSync(path.join(workspace, 'a.pro'), 'TARGET = a\nQT += core\n', 'utf8');
+    fs.writeFileSync(path.join(workspace, 'b.pro'), 'TARGET = b\nQT += core\n', 'utf8');
+
+    const oldPath = process.env.FORJA_QT_PATH;
+    process.env.FORJA_QT_PATH = 'D:/Qt/auto';
+    try {
+        const output = await captureStdout(() => runQtCli(['init', '--workspace', workspace]));
+
+        assert.match(output, /warning: 部分配置为自动选择/);
+        assert.match(output, /下一步:/);
+        assert.match(output, /forja qt env/);
+        assert.match(output, /forja qt projects/);
+        assert.match(output, /forja qt use --project <path>/);
+        assert.doesNotMatch(output, /下一步:[\s\S]*--json/);
+    } finally {
+        if (oldPath === undefined) { delete process.env.FORJA_QT_PATH; }
+        else { process.env.FORJA_QT_PATH = oldPath; }
+    }
+});
+
 
 test('qt status reports current target in json and text output', async () => {
     const workspace = makeWorkspace();
@@ -197,6 +242,57 @@ test('forja sync status --json reports ready sync target without git repository'
     assert.equal(data.remotePath, '/remote/app');
     assert.deepEqual(data.missing, []);
     assert.equal(process.exitCode, 0);
+});
+
+test('forja sync server management commands update global servers', async () => {
+    writeServers([]);
+
+    const addOutput = await captureStdout(() => runSyncCli([
+        'add-server',
+        '--name', 'dev',
+        '--host', '127.0.0.1',
+        '--port', '2222',
+        '--username', 'alice',
+        '--auth-mode', 'key',
+        '--private-key-path', '/tmp/key',
+        '--json'
+    ]));
+    const added = JSON.parse(addOutput);
+    assert.equal(added.ok, true);
+    assert.equal(added.action, 'add-server');
+    assert.equal(added.server.name, 'dev');
+    assert.equal(added.server.port, 2222);
+
+    const listOutput = await captureStdout(() => runSyncCli(['servers', '--json']));
+    const listed = JSON.parse(listOutput);
+    assert.equal(listed.ok, true);
+    assert.equal(listed.action, 'servers');
+    assert.equal(listed.servers.length, 1);
+    assert.equal(listed.servers[0].id, added.server.id);
+    assert.equal(listed.servers[0].host, '127.0.0.1');
+
+    const updateOutput = await captureStdout(() => runSyncCli([
+        'update-server',
+        '--server', added.server.id,
+        '--host', '10.0.0.2',
+        '--port', '22',
+        '--json'
+    ]));
+    const updated = JSON.parse(updateOutput);
+    assert.equal(updated.ok, true);
+    assert.equal(updated.action, 'update-server');
+    assert.equal(updated.server.host, '10.0.0.2');
+    assert.equal(updated.server.port, 22);
+
+    const removeOutput = await captureStdout(() => runSyncCli([
+        'remove-server',
+        '--server', added.server.id,
+        '--json'
+    ]));
+    const removed = JSON.parse(removeOutput);
+    assert.equal(removed.ok, true);
+    assert.equal(removed.action, 'remove-server');
+    assert.equal(removed.server.id, added.server.id);
 });
 
 test('qt ps --json reports no detached run state', async () => {
