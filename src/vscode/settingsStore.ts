@@ -7,7 +7,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { createLogger } from './logger';
-import { ForjaSettings, QtSettings, SdkSettings, SyncSettings, DEFAULT_SETTINGS, loadQtSettings, loadSdkSettings, loadSyncSettings, saveQtSettings, saveSdkSettings, saveSyncSettings, projectsDir } from '../core/settingsIO';
+import { ForjaSettings, QtSettings, SdkSettings, SyncSettings, DEFAULT_SETTINGS, loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings, saveQtSettings, saveSdkSettings, saveSyncSettings, projectsDir } from '../core/settingsIO';
 import { resolveProjectRoot } from './workspaceResolver';
 
 export type { ForjaSettings, QtSettings, SdkSettings, SyncSettings } from '../core/settingsIO';
@@ -18,9 +18,9 @@ const logger = createLogger('SettingsStore');
 type QtKey = keyof QtSettings;
 type SdkKey = keyof SdkSettings;
 type SyncKey = keyof SyncSettings;
-type SettingsListener = (section: 'qt' | 'sdk' | 'sync', key: string, settings: ForjaSettings) => void;
+type SettingsListener = (section: 'qt' | 'sdk' | 'sync' | 'remote', key: string, settings: ForjaSettings) => void;
 
-let _settings: ForjaSettings = { ...DEFAULT_SETTINGS, qt: { ...DEFAULT_SETTINGS.qt }, sdk: { ...DEFAULT_SETTINGS.sdk }, sync: { ...DEFAULT_SETTINGS.sync } };
+let _settings: ForjaSettings = { ...DEFAULT_SETTINGS, qt: { ...DEFAULT_SETTINGS.qt }, sdk: { ...DEFAULT_SETTINGS.sdk }, sync: { ...DEFAULT_SETTINGS.sync }, remote: { ...DEFAULT_SETTINGS.remote } };
 let _loaded = false;
 let _watcher: vscode.FileSystemWatcher | null = null;
 const _listeners: SettingsListener[] = [];
@@ -37,7 +37,8 @@ function _load(): ForjaSettings {
     return {
         qt: qtWs ? loadQtSettings(qtWs) : { ...DEFAULT_SETTINGS.qt },
         sdk: sdkWs ? loadSdkSettings(sdkWs) : { ...DEFAULT_SETTINGS.sdk },
-        sync: syncWs ? loadSyncSettings(syncWs) : { ...DEFAULT_SETTINGS.sync }
+        sync: syncWs ? loadSyncSettings(syncWs) : { ...DEFAULT_SETTINGS.sync },
+        remote: syncWs ? loadRemoteSettings(syncWs) : { ...DEFAULT_SETTINGS.remote }
     };
 }
 
@@ -88,11 +89,13 @@ function _reload(): void {
     const oldQt = JSON.stringify(_settings.qt);
     const oldSdk = JSON.stringify(_settings.sdk);
     const oldSync = JSON.stringify(_settings.sync);
+    const oldRemote = JSON.stringify(_settings.remote);
     _settings = _load();
     const newQt = JSON.stringify(_settings.qt);
     const newSdk = JSON.stringify(_settings.sdk);
     const newSync = JSON.stringify(_settings.sync);
-    if (oldQt === newQt && oldSdk === newSdk && oldSync === newSync) { return; }
+    const newRemote = JSON.stringify(_settings.remote);
+    if (oldQt === newQt && oldSdk === newSdk && oldSync === newSync && oldRemote === newRemote) { return; }
 
     // 只通知实际有变化的 section
     if (oldQt !== newQt) {
@@ -108,6 +111,11 @@ function _reload(): void {
     if (oldSync !== newSync) {
         for (const key of Object.keys(_settings.sync) as SyncKey[]) {
             _listeners.forEach(fn => fn('sync', key, _settings));
+        }
+    }
+    if (oldRemote !== newRemote) {
+        for (const key of Object.keys(_settings.remote)) {
+            _listeners.forEach(fn => fn('remote', key, _settings));
         }
     }
 }
