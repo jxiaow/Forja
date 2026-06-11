@@ -79,8 +79,7 @@ export interface AskpassEnv {
  * 创建 ASKPASS 环境。密码通过环境变量传入子进程，脚本本身不含密码明文。
  * 返回 spawn 用的 env 和清理函数。password 为 null 时返回 undefined。
  *
- * Windows 注意：旧版 OpenSSH（< 8.6）不支持 SSH_ASKPASS_REQUIRE=force。
- * 若检测到旧版，回退到 GIT_ASKPASS（git-for-windows 的 OpenSSH 通常支持此变量）。
+ * Windows 注意：SSH_ASKPASS 必须是可直接 spawn 的路径，不能包含命令参数。
  */
 export function createAskpassEnv(password: string | null, suffix?: string): AskpassEnv | undefined {
     if (!password) { return undefined; }
@@ -91,16 +90,14 @@ export function createAskpassEnv(password: string | null, suffix?: string): Askp
         let scriptPath: string;
 
         if (process.platform === 'win32') {
-            scriptPath = path.join(tmpDir, `forja-askpass-${tag}.ps1`);
-            fs.writeFileSync(scriptPath, `Write-Host -NoNewline $env:${ASKPASS_ENV_VAR}\n`);
+            scriptPath = path.join(tmpDir, `forja-askpass-${tag}.cmd`);
+            fs.writeFileSync(scriptPath, `@echo off\r\n<nul set /p _=%${ASKPASS_ENV_VAR}%\r\nexit /b 0\r\n`, 'utf8');
         } else {
             scriptPath = path.join(tmpDir, `forja-askpass-${tag}.sh`);
             fs.writeFileSync(scriptPath, `#!/bin/sh\nprintf '%s' "$${ASKPASS_ENV_VAR}"\n`, { mode: 0o700 });
         }
 
-        const sshAskpass = process.platform === 'win32'
-            ? `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`
-            : scriptPath;
+        const sshAskpass = scriptPath;
 
         const env: NodeJS.ProcessEnv = {
             ...process.env,
