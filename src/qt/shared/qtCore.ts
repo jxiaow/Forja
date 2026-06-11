@@ -236,8 +236,11 @@ function buildInitDiagnostics(input: InitDiagnosticsInput): CliResult['diagnosti
     return diagnostics;
 }
 
-function buildInitNextActions(project: string | null, projects: string[], missingTools: ReturnType<typeof getMissingTools>): string[] {
+function buildInitNextActions(project: string | null, projects: string[], missingTools: ReturnType<typeof getMissingTools>, autoSelected: string[] = []): string[] {
     const nextActions: string[] = [];
+    if (autoSelected.includes('qtPath')) {
+        nextActions.push('forja qt env --json');
+    }
     if (!project) {
         if (projects.length > 1) {
             nextActions.push(...buildProjectSelectionActions());
@@ -468,7 +471,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             current: currentProject,
             available,
             configHints: {
-                usage: 'forja qt use --project <path> --json'
+                usage: 'forja qt use --project <path> [--target <name>] --json'
             }
         };
         if (currentProject && !currentExists) {
@@ -649,6 +652,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 effectiveSettings: effectiveSettingsForCheck
             });
             const initNextActions = buildInitNextActions(project, detected.detected.projects, getMissingTools(effectiveSettingsForCheck));
+            if (!effectiveOptions.qtPath && allQtCandidates.length > 1 && !initNextActions.includes('forja qt env --json')) {
+                initNextActions.unshift('forja qt env --json');
+            }
 
             const initResolved = buildResolvedConfig(mode, arch, effectiveQtPath, effectiveVsDevShell, effectiveTarget, detected.detected.qt?.version, detected.detected.vs?.version, detected.detected.jom || undefined);
             if (project) {
@@ -682,6 +688,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             '确认无误后运行 forja qt init --json 写入本地配置',
             ...buildInitNextActions(project, detected.detected.projects, getMissingTools(previewSettingsForCheck))
         ];
+        if (!effectiveOptions.qtPath && detected.qtCandidates.length > 1 && !previewNextActions.includes('forja qt env --json')) {
+            previewNextActions.splice(1, 0, 'forja qt env --json');
+        }
 
         const previewResolved = buildResolvedConfig(mode, arch, previewQtPath, previewVsDevShell, target, detected.detected.qt?.version, detected.detected.vs?.version, detected.detected.jom || undefined);
 

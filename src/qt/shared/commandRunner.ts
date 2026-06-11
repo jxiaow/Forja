@@ -360,6 +360,69 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         };
     }
 
+    // Foreground run: build first, then start the app. Once the build succeeds,
+    // the app exiting later is normal user/runtime behavior, not a Forja failure.
+    if (!effectiveDetach && result.action === 'run' && commandParts.length > 1) {
+        const buildCommands = commandParts.slice(0, -1);
+        const runCommand = commandParts[commandParts.length - 1];
+        const buildLine = buildCommands.join(' && ');
+        const exec = options?.streaming ? executeStreaming : execute;
+        const buildResult = await exec(buildLine, result.workspace);
+        const buildOutput = buildResult.stdout + '\n' + buildResult.stderr;
+        const ws = summarizeWarnings(buildOutput);
+
+        ensureLocalStateDir(result.workspace);
+        const filePath = logFileFor(result.workspace, result.action);
+
+        if (buildResult.exitCode !== 0) {
+            const durationMs = Date.now() - started;
+            fs.writeFileSync(filePath, [`$ ${buildLine}`, '', buildResult.stdout, buildResult.stderr].join('\n'), 'utf8');
+            return {
+                ...result,
+                ok: false,
+                exitCode: buildResult.exitCode,
+                durationMs,
+                stdout: buildResult.stdout,
+                stderr: buildResult.stderr,
+                errors: extractErrors(buildOutput),
+                warningSummary: ws.total > 0 ? ws : undefined,
+                logFile: filePath,
+                commands: commandParts,
+                diagnostics: [...result.diagnostics, { level: 'error', message: '编译失败' }]
+            };
+        }
+
+        const runResult = await exec(runCommand, result.project ? path.dirname(result.project) : result.workspace, result.executablePath);
+        const durationMs = Date.now() - started;
+        fs.writeFileSync(filePath, [
+            `$ ${buildLine}`,
+            '',
+            buildResult.stdout,
+            buildResult.stderr,
+            `$ ${runCommand}`,
+            '',
+            runResult.stdout,
+            runResult.stderr
+        ].join('\n'), 'utf8');
+
+        return {
+            ...result,
+            ok: true,
+            exitCode: 0,
+            durationMs,
+            stdout: buildResult.stdout + runResult.stdout,
+            stderr: buildResult.stderr + runResult.stderr,
+            errors: [],
+            warningSummary: ws.total > 0 ? ws : undefined,
+            logFile: filePath,
+            commands: commandParts,
+            runtimeExitCode: runResult.exitCode,
+            diagnostics: runResult.exitCode === 0
+                ? result.diagnostics
+                : [...result.diagnostics, { level: 'warning', message: `程序已退出 (退出码: ${runResult.exitCode})` }]
+        };
+    }
+
     // Detach mode for build/clean/rebuild: run entire command sequence in background
     if (effectiveDetach && result.action !== 'run' && commandParts.length > 0) {
         ensureLocalStateDir(result.workspace);

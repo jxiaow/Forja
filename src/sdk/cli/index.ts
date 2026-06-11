@@ -147,6 +147,47 @@ function requireExistingProjectPath(workspace: string, project: string): string 
     return projectPath;
 }
 
+function readSolutionPlatforms(projectPath: string, configuration: string): string[] {
+    let content = '';
+    try {
+        content = fs.readFileSync(projectPath, 'utf-8');
+    } catch {
+        return [];
+    }
+
+    const platforms: string[] = [];
+    let inSection = false;
+    for (const line of content.split(/\r?\n/)) {
+        if (/GlobalSection\(SolutionConfigurationPlatforms\)/.test(line)) {
+            inSection = true;
+            continue;
+        }
+        if (inSection && /EndGlobalSection/.test(line)) {
+            break;
+        }
+        if (!inSection) { continue; }
+
+        const match = line.match(/^\s*([^|=]+)\|([^=]+?)\s*=/);
+        if (!match) { continue; }
+        if (match[1].trim().toLowerCase() !== configuration.toLowerCase()) { continue; }
+        platforms.push(match[2].trim());
+    }
+    return platforms;
+}
+
+function resolveSolutionPlatform(projectPath: string, configuration: string, arch: 'x86' | 'x64'): string {
+    const fallback = arch === 'x64' ? 'x64' : 'Win32';
+    const platforms = readSolutionPlatforms(projectPath, configuration);
+    if (platforms.length === 0) { return fallback; }
+
+    const preferred = arch === 'x64' ? ['x64'] : ['x86', 'Win32'];
+    for (const candidate of preferred) {
+        const found = platforms.find(p => p.toLowerCase() === candidate.toLowerCase());
+        if (found) { return found; }
+    }
+    return fallback;
+}
+
 export function scanProjects(workspace: string, depth: number = DEFAULT_SCAN_DEPTH): string[] {
     const results: string[] = [];
     const isWindows = os.platform() === 'win32';
@@ -190,7 +231,7 @@ function buildCommand(options: EffectiveSdkCliOptions, projectPath: string, vsDe
             : options.action === 'rebuild' ? 'Rebuild'
             : 'Build';
         const config = options.mode === 'release' ? 'Release' : 'Debug';
-        const platform = options.arch === 'x64' ? 'x64' : 'Win32';
+        const platform = resolveSolutionPlatform(projectPath, config, options.arch);
         commands.push(`msbuild "${projectPath}" /t:${msbuildAction} /p:Configuration=${config} /p:Platform=${platform} /m`);
     } else {
         const makefileDir = path.dirname(projectPath);
@@ -217,9 +258,66 @@ function executeAsync(commandLine: string, cwd: string): Promise<{ exitCode: num
     });
 }
 
-function extractErrors(output: string): string[] {
-    const errorPattern = /\): error |: error:|: fatal error |: fatal error:/i;
+export function extractErrors(output: string): string[] {
+    const errorPattern = /\): error |:\s+error\s+[A-Z]+\d+:|: error:|: fatal error |: fatal error:/i;
     return output.split(/\r?\n/).filter(l => errorPattern.test(l)).slice(0, 20);
+}
+
+function appendDiagnosticsAndNextActions(lines: string[], diagnostics?: SdkDiagnostic[], nextActions?: string[]): void {
+    if (diagnostics && diagnostics.length > 0) {
+        lines.push('');
+        for (const diagnostic of diagnostics) {
+            lines.push(`${diagnostic.level}: ${diagnostic.message}`);
+        }
+    }
+    if (nextActions && nextActions.length > 0) {
+        lines.push('');
+        lines.push('下一步:');
+        for (const action of nextActions) {
+            lines.push(`  ${action}`);
+        }
+    }
+}
+
+function formatSdkInitText(resolved: Record<string, unknown>, diagnostics: SdkDiagnostic[], nextActions: string[]): string {
+    const lines = [
+        `SDK 配置已保存: mode=${resolved.mode}, arch=${resolved.arch}`
+    ];
+    if (resolved.project) { lines.push(`项目: ${resolved.project}`); }
+    if (resolved.vsDevCmdPath) { lines.push(`VS Dev Cmd: ${resolved.vsDevCmdPath}`); }
+    appendDiagnosticsAndNextActions(lines, diagnostics, nextActions);
+    return lines.join('\n');
+}
+
+function formatSdkProjectsText(available: Array<Record<string, string>>, currentProject: string | null, configHints: Record<string, string>): string {
+    const lines: string[] = ['SDK 项目列表:'];
+    if (available.length === 0) {
+        lines.push('  未检测到项目文件');
+    } else {
+        for (const project of available) {
+            const marker = project.path === currentProject ? ' ← 当前' : '';
+            lines.push(`  ${project.path} (${project.type})${marker}`);
+        }
+    }
+    if (configHints.usage) {
+        lines.push('');
+        lines.push(`修改: ${configHints.usage}`);
+    }
+    return lines.join('\n');
+}
+
+function formatSdkFailureText(action: string, diagnostics: SdkDiagnostic[], nextActions: string[], errors: string[] = [], exitCode?: number): string {
+    const lines = exitCode === undefined
+        ? [`SDK ${action} 失败`]
+        : [`SDK ${action} 失败 (退出码: ${exitCode})`];
+    if (errors.length > 0) {
+        lines.push('错误:');
+        for (const error of errors) {
+            lines.push(`  ${error}`);
+        }
+    }
+    appendDiagnosticsAndNextActions(lines, diagnostics, nextActions);
+    return lines.join('\n');
 }
 
 function getHelpText(): string {
@@ -306,16 +404,20 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                     diagnostics.push({ level: 'warning', message: '未检测到项目文件' });
                 }
             }
+            diagnostics.unshift({ level: 'warning', message: `mode/arch 使用默认值 ${mode}/${arch}，可用 forja sdk use --mode <mode> --arch <arch> --json 修改` });
 
+            const resolved = { mode, arch, vsDevCmdPath: vsDevCmd || undefined, project: project || undefined };
+            const nextActions = ['forja sdk status --json'];
             const out: Record<string, unknown> = {
                 ok: true,
                 action: 'init',
-                resolved: { mode, arch, vsDevCmdPath: vsDevCmd || undefined, project: project || undefined }
+                resolved,
+                nextActions
             };
             if (diagnostics.length > 0) { out.diagnostics = diagnostics; }
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else { console.log(`SDK 配置已保存: mode=${mode}, arch=${arch}`); }
+            else { console.log(formatSdkInitText(resolved, diagnostics, nextActions)); }
             return;
         }
 
@@ -407,9 +509,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
-                console.log('SDK 项目列表:');
-                if (available.length === 0) { console.log('  未检测到项目文件'); }
-                else { available.forEach(p => console.log(`  ${p.path} (${p.type})${p.path === currentProject ? ' ← 当前' : ''}`)); }
+                console.log(formatSdkProjectsText(available, currentProject, out.configHints as Record<string, string>));
             }
             return;
         }
@@ -501,14 +601,16 @@ export async function runSdkCli(argv: string[]): Promise<void> {
 
         const hasSettings = fs.existsSync(sdkSettingsFilePath(options.workspace));
         if (!hasSettings) {
+            const diagnostics: SdkDiagnostic[] = [{ level: 'error', message: '尚未初始化' }];
+            const nextActions = ['forja sdk status --json'];
             const out = {
                 ok: false,
                 action: options.action,
-                diagnostics: [{ level: 'error', message: '尚未初始化' }],
-                nextActions: ['forja sdk status --json']
+                diagnostics,
+                nextActions
             };
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else { console.error('SDK 尚未初始化，请先执行 forja sdk status'); }
+            else { console.error(formatSdkFailureText(options.action, diagnostics, nextActions)); }
             process.exitCode = 1;
             return;
         }
@@ -587,8 +689,13 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         else {
             if (out.ok) { console.log(`SDK ${options.action} 成功 (${durationMs}ms)`); }
             else {
-                console.error(`SDK ${options.action} 失败 (退出码: ${executed.exitCode})`);
-                if (errors.length > 0) { errors.forEach(e => console.error(`  ${e}`)); }
+                console.error(formatSdkFailureText(
+                    options.action,
+                    out.diagnostics as SdkDiagnostic[],
+                    out.nextActions as string[],
+                    errors,
+                    executed.exitCode
+                ));
             }
         }
         process.exitCode = (out.ok as boolean) ? 0 : 1;

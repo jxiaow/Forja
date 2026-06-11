@@ -69,6 +69,80 @@ test('parseSyncCliArgs accepts sync status action', () => {
     assert.equal(parsed.json, true);
 });
 
+test('parseSyncCliArgs accepts sync server management actions', () => {
+    const list = parseSyncCliArgs(['servers', '--json']);
+    assert.equal(list.action, 'servers');
+    assert.equal(list.json, true);
+
+    const show = parseSyncCliArgs(['server', '--server', 'server-1', '--json']);
+    assert.equal(show.action, 'server');
+    assert.equal(show.server, 'server-1');
+    assert.equal(show.json, true);
+
+    const add = parseSyncCliArgs([
+        'add-server',
+        '--name', 'dev',
+        '--host', '127.0.0.1',
+        '--port', '2222',
+        '--username', 'alice',
+        '--auth-mode', 'key',
+        '--private-key-path', '/tmp/key',
+        '--strict-host-key-checking',
+        '--json'
+    ]);
+    assert.equal(add.action, 'add-server');
+    assert.equal(add.serverFields.name, 'dev');
+    assert.equal(add.serverFields.host, '127.0.0.1');
+    assert.equal(add.serverFields.port, 2222);
+    assert.equal(add.serverFields.username, 'alice');
+    assert.equal(add.serverFields.authMode, 'key');
+    assert.equal(add.serverFields.privateKeyPath, '/tmp/key');
+    assert.equal(add.serverFields.strictHostKeyChecking, true);
+
+    const update = parseSyncCliArgs(['update-server', '--server', 'server-1', '--host', '10.0.0.2']);
+    assert.equal(update.action, 'update-server');
+    assert.equal(update.server, 'server-1');
+    assert.equal(update.serverFields.host, '10.0.0.2');
+
+    const remove = parseSyncCliArgs(['remove-server', '--server', 'server-1']);
+    assert.equal(remove.action, 'remove-server');
+    assert.equal(remove.server, 'server-1');
+});
+
+test('parseSyncCliArgs accepts sync use action', () => {
+    const parsed = parseSyncCliArgs([
+        'use',
+        '--workspace', '/tmp/app',
+        '--server', 'server-1',
+        '--remote-path', '/remote/app',
+        '--enable',
+        '--json'
+    ]);
+
+    assert.equal(parsed.action, 'use');
+    assert.equal(parsed.workspace, '/tmp/app');
+    assert.equal(parsed.server, 'server-1');
+    assert.equal(parsed.remotePath, '/remote/app');
+    assert.equal(parsed.enabled, true);
+    assert.equal(parsed.json, true);
+});
+
+test('parseSyncCliArgs accepts sync test-connection action', () => {
+    const parsed = parseSyncCliArgs(['test-connection', '--server', 'server-1', '--json']);
+
+    assert.equal(parsed.action, 'test-connection');
+    assert.equal(parsed.server, 'server-1');
+    assert.equal(parsed.json, true);
+});
+
+test('parseSyncCliArgs accepts sync reset action', () => {
+    const parsed = parseSyncCliArgs(['reset', '--workspace', '/tmp/app', '--json']);
+
+    assert.equal(parsed.action, 'reset');
+    assert.equal(parsed.workspace, '/tmp/app');
+    assert.equal(parsed.json, true);
+});
+
 test('parseSyncCliArgs rejects positional args', () => {
     assert.throws(() => parseSyncCliArgs(['deploy']), /不接受子命令或位置参数/);
 });

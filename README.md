@@ -4,6 +4,13 @@ C++ 项目构建工具链，包含 VSCode 扩展和独立 CLI 两种使用方式
 
 支持 Qt (qmake) 项目和 SDK (.sln/Makefile) 项目，覆盖 Windows（MSVC）和 Linux 平台。
 
+## 能力概览
+
+- Qt：`status/init/env/projects/use/qmake/build/run/ps/stop/clean/rcc`
+- SDK：`status/init/env/projects/use/build/rebuild/clean`
+- Sync：`status/servers/add-server/update-server/remove-server`，并支持按 git 变更、子仓库或单文件同步
+- CLI 文本输出适合人工操作，`--json` 输出适合 AI/脚本解析；两种输出都会给出必要的下一步提示
+
 ## 组件
 
 | 组件 | 说明 | 文档 |

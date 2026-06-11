@@ -1,6 +1,6 @@
 import test, { afterEach, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { runSdkCli } from '../sdk/cli/index';
+import { extractErrors, runSdkCli } from '../sdk/cli/index';
 import { getSdkDefaultArch } from '../sdk/cli/requirements';
 
 afterEach(() => { process.exitCode = undefined; });
@@ -14,6 +14,23 @@ function captureOutput(fn: () => Promise<void>): Promise<string> {
         .catch(e => { console.log = orig; throw e; });
 }
 
+function captureConsole(fn: () => Promise<void>): Promise<string> {
+    const lines: string[] = [];
+    const origLog = console.log;
+    const origError = console.error;
+    console.log = (...args: unknown[]) => { lines.push(args.map(String).join(' ')); };
+    console.error = (...args: unknown[]) => { lines.push(args.map(String).join(' ')); };
+    return fn().then(() => {
+        console.log = origLog;
+        console.error = origError;
+        return lines.join('\n');
+    }).catch(e => {
+        console.log = origLog;
+        console.error = origError;
+        throw e;
+    });
+}
+
 describe('SDK CLI', { concurrency: false }, () => {
 
 test('SDK CLI rejects unknown flags with error', async () => {
@@ -22,6 +39,12 @@ test('SDK CLI rejects unknown flags with error', async () => {
     const parsed = JSON.parse(output);
     assert.equal(parsed.ok, false);
     assert.ok(parsed.diagnostics[0].message.includes('未知参数'));
+});
+
+test('SDK CLI extracts MSBuild solution-level errors', () => {
+    const output = 'C:\\Code\\workspace\\dev\\cpp-sdk\\build\\win\\NemoSDK\\NemoSDK.sln.metaproj : error MSB4126: 指定的解决方案配置“Release|Win32”无效。 [C:\\Code\\workspace\\dev\\cpp-sdk\\build\\win\\NemoSDK\\NemoSDK.sln]';
+
+    assert.deepEqual(extractErrors(output), [output]);
 });
 
 test('SDK CLI rejects invalid --mode value', async () => {
@@ -186,6 +209,132 @@ test('SDK CLI build plan inherits mode and arch saved by use', async () => {
         assert.equal(parsed.ok, true);
         assert.equal(parsed.resolved.mode, 'release');
         assert.equal(parsed.resolved.arch, 'x64');
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI projects text includes use hint', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-projects-text-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        createSdkProjectFile(ws, 'app');
+
+        const output = await captureOutput(() => runSdkCli(['projects', '--workspace', ws]));
+
+        assert.match(output, /SDK 项目列表:/);
+        assert.match(output, /修改: forja sdk use --project <path> --json/);
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI init text includes default warnings and next action', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-init-text-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        const output = await captureOutput(() => runSdkCli(['init', '--workspace', ws]));
+
+        assert.match(output, /SDK 配置已保存/);
+        assert.match(output, /warning: mode\/arch 使用默认值/);
+        assert.match(output, /下一步:/);
+        assert.match(output, /forja sdk status --json/);
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI build text includes next action when config is missing', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-build-text-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        const output = await captureConsole(() => runSdkCli(['build', '--workspace', ws]));
+
+        assert.equal(process.exitCode, 1);
+        assert.match(output, /error: 尚未初始化/);
+        assert.match(output, /下一步:/);
+        assert.match(output, /forja sdk status --json/);
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI build plan uses x86 solution platform when sln declares x86', async () => {
+    if (os.platform() !== 'win32') { return; }
+
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-sln-platform-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        fs.writeFileSync(path.join(ws, 'App.sln'), [
+            'Microsoft Visual Studio Solution File, Format Version 12.00',
+            'Global',
+            '\tGlobalSection(SolutionConfigurationPlatforms) = preSolution',
+            '\t\tRelease|x86 = Release|x86',
+            '\tEndGlobalSection',
+            'EndGlobal',
+            ''
+        ].join('\n'), 'utf-8');
+
+        const useOutput = await captureOutput(() => runSdkCli([
+            'use',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'App.sln',
+            '--mode',
+            'release',
+            '--arch',
+            'x86'
+        ]));
+        assert.equal(JSON.parse(useOutput).ok, true);
+
+        const planOutput = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const planParsed = JSON.parse(planOutput);
+
+        assert.equal(planParsed.ok, true);
+        assert.match(planParsed.shellCommand, /\/p:Configuration=Release/);
+        assert.match(planParsed.shellCommand, /\/p:Platform=x86/);
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
         else { process.env.HOME = oldHome; }

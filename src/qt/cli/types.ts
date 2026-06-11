@@ -62,6 +62,8 @@ export interface CliResult {
     executablePath?: string;
     /** run --detach 成功时解析出的目标进程 PID */
     pid?: number;
+    /** foreground run 的目标程序退出码；不用于判定 Forja run 成败 */
+    runtimeExitCode?: number;
     diagnostics: CliDiagnostic[];
     resolved: CliResolvedConfig | null;
     /** RCC 项目路径（status 时返回） */

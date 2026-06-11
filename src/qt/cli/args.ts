@@ -42,6 +42,9 @@ use 选项:
   forja qt status --json            查看配置状态和下一步
   forja qt init --json              初始化并保存可自动确定的配置
   forja qt use --mode release       确认/切换到 release 配置
+  forja qt use --project app.pro --target MyApp
+  forja qt use --qt-path /usr/local/qt5.15.2
+  forja qt use --mode release --arch x64
   forja qt build                    执行构建
   forja qt build --plan             查看构建命令（不执行）
   forja qt run --detach             后台构建并运行
