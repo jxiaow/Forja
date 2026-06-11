@@ -3,16 +3,17 @@
  * Reads config from ~/.forja/servers.json and ~/.forja/projects/<hash>.json (type=sync)
  */
 import * as path from 'path';
-import * as cp from 'child_process';
-import { filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
+import { filterNeedsDelete, filterNeedsSync, markDeletedBatch, markSyncedBatch, SyncTargetContext } from '../core/syncState';
 import { readProjectSyncConfig, getServerById, readServers, ServerConfig } from '../core/serverStore';
-import { ensureRemoteDir, scpUpload } from '../core/sshTransport';
+import { deleteRemoteFile, ensureRemoteDir, scpUpload } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
 import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
+import { getGitChangedEntries, GitChangedFile, isIgnored } from '../core/gitChangedFiles';
 
 export interface SyncResult {
     ok: boolean;
     uploaded: string[];
+    deleted: string[];
     skipped: string[];
     failed: { file: string; error: string }[];
     server: string;
@@ -24,6 +25,7 @@ export interface SyncPlanResult {
     action: 'sync';
     mode: 'dryRun';
     pending: string[];
+    deleted: string[];
     skipped: string[];
     failed: { file: string; error: string }[];
     server: string;
@@ -48,54 +50,7 @@ export interface SyncStatusResult {
     diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[];
 }
 
-// ── Git diff ──
-
-function getGitChangedFiles(workspaceRoot: string): Promise<string[]> {
-    return new Promise((resolve, reject) => {
-        const isWin = process.platform === 'win32';
-        const separator = isWin ? ' & ' : ' ; ';
-        const cmd = `git diff --name-only HEAD${separator}git diff --name-only --cached${separator}git ls-files --others --exclude-standard`;
-        cp.exec(cmd, { cwd: workspaceRoot }, (err, stdout) => {
-            if (err) {
-                cp.exec('git status --porcelain -uall', { cwd: workspaceRoot }, (err2, stdout2) => {
-                    if (err2) {
-                        // 非 git 仓库时返回空数组而非报错
-                        if (err2.message.includes('not a git repository')) {
-                            resolve([]);
-                            return;
-                        }
-                        reject(new Error(`git 命令失败: ${err2.message}`));
-                        return;
-                    }
-                    const files = stdout2.trim().split('\n')
-                        .filter(line => line.length > 3)
-                        .map(line => line.substring(3).trim())
-                        .filter(f => f.length > 0);
-                    resolve([...new Set(files)]);
-                });
-                return;
-            }
-            const files = stdout.trim().split('\n').map(f => f.trim()).filter(f => f.length > 0);
-            resolve([...new Set(files)]);
-        });
-    });
-}
-
-// ── 忽略判断 ──
-
-export function isIgnored(relativePath: string, ignoreList: string[]): boolean {
-    const parts = relativePath.split(/[\\/]/);
-    for (const pattern of ignoreList) {
-        for (const part of parts) {
-            if (part === pattern) { return true; }
-            if (pattern.includes('*')) {
-                const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-                if (regex.test(part)) { return true; }
-            }
-        }
-    }
-    return false;
-}
+export { isIgnored };
 
 // ── 密码解析（CLI 侧） ──
 
@@ -139,18 +94,18 @@ async function resolveCliPassword(server: ServerConfig): Promise<string | null> 
 export async function executeSyncCli(workspaceRoot: string, serverId?: string, repoFilter?: string, fileFilters: string[] = []): Promise<SyncResult> {
     const project = readProjectSyncConfig(workspaceRoot);
     if (!project.enabled) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '远程同步未启用' }], server: '', remotePath: '' };
+        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: '远程同步未启用' }], server: '', remotePath: '' };
     }
 
     const targetId = serverId || project.selectedServer;
     const server = getServerById(targetId);
     if (!server) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json` }], server: targetId, remotePath: '' };
+        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json` }], server: targetId, remotePath: '' };
     }
 
     const remotePath = project.remotePaths[server.id] || '';
     if (!remotePath) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未配置远程路径' }], server: server.name, remotePath: '' };
+        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: '未配置远程路径' }], server: server.name, remotePath: '' };
     }
 
     // 密码解析（password 模式）
@@ -158,49 +113,66 @@ export async function executeSyncCli(workspaceRoot: string, serverId?: string, r
     if (server.authMode === 'password') {
         resolvedPassword = await resolveCliPassword(server);
         if (!resolvedPassword) {
-            return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未提供密码。可通过环境变量 FORJA_SSH_PASSWORD 设置，或在 TTY 中交互输入' }], server: server.name, remotePath };
+            return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: '未提供密码。可通过环境变量 FORJA_SSH_PASSWORD 设置，或在 TTY 中交互输入' }], server: server.name, remotePath };
         }
     }
 
     // 解析 git 仓库
     let gitRoots = resolveGitRoots(workspaceRoot);
     if (gitRoots.length === 0) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `未找到 git 仓库: ${workspaceRoot}` }], server: server.name, remotePath };
+        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: `未找到 git 仓库: ${workspaceRoot}` }], server: server.name, remotePath };
     }
 
     // 按名称过滤
     if (repoFilter) {
         gitRoots = gitRoots.filter(r => r.name === repoFilter);
         if (gitRoots.length === 0) {
-            return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `未找到仓库 "${repoFilter}"，可用: ${resolveGitRoots(workspaceRoot).map(r => r.name).join(', ')}` }], server: server.name, remotePath };
+            return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: `未找到仓库 "${repoFilter}"，可用: ${resolveGitRoots(workspaceRoot).map(r => r.name).join(', ')}` }], server: server.name, remotePath };
         }
     }
 
-    const result: SyncResult = { ok: true, uploaded: [], skipped: [], failed: [], server: server.name, remotePath };
+    const result: SyncResult = { ok: true, uploaded: [], deleted: [], skipped: [], failed: [], server: server.name, remotePath };
     const ignore = project.ignore;
 
     for (const { dir: gitDir, name: gitName } of gitRoots) {
         const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
         const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
 
-        const changedFiles = fileFilters.length > 0
-            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters)
-            : await getGitChangedFiles(gitDir);
-        if (changedFiles.length === 0) { continue; }
+        const changedEntries: GitChangedFile[] = fileFilters.length > 0
+            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters).map(file => ({ path: file, kind: 'upload', status: '??' }))
+            : await getGitChangedEntries(gitDir);
+        if (changedEntries.length === 0) { continue; }
 
-        const notIgnored: string[] = [];
-        for (const f of changedFiles) {
-            if (isIgnored(f, ignore)) { result.skipped.push(`${gitName}/${f}`); }
-            else { notIgnored.push(f); }
+        const uploadCandidates: string[] = [];
+        const deleteCandidates: string[] = [];
+        for (const change of changedEntries) {
+            if (isIgnored(change.path, ignore)) { result.skipped.push(`${gitName}/${change.path}`); }
+            else if (change.kind === 'delete') { deleteCandidates.push(change.path); }
+            else { uploadCandidates.push(change.path); }
         }
 
-        const needSync = filterNeedsSync(gitDir, notIgnored, syncTarget);
-        result.skipped.push(...notIgnored.filter(f => !needSync.includes(f)).map(f => `${gitName}/${f}`));
+        const needSync = filterNeedsSync(gitDir, uploadCandidates, syncTarget);
+        const needDelete = filterNeedsDelete(gitDir, deleteCandidates, syncTarget);
+        result.skipped.push(...uploadCandidates.filter(f => !needSync.includes(f)).map(f => `${gitName}/${f}`));
+        result.skipped.push(...deleteCandidates.filter(f => !needDelete.includes(f)).map(f => `${gitName}/${f}`));
 
-        if (needSync.length === 0) { continue; }
+        if (needSync.length === 0 && needDelete.length === 0) { continue; }
 
         const remoteDirs = new Set<string>();
         const successFiles: string[] = [];
+        const deletedFiles: string[] = [];
+
+        for (const relativePath of needDelete) {
+            const remoteFile = repoRemotePath + '/' + relativePath.replace(/\\/g, '/');
+            try {
+                await deleteRemoteFile(server, remoteFile, resolvedPassword);
+                result.deleted.push(`${gitName}/${relativePath}`);
+                deletedFiles.push(relativePath);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                result.failed.push({ file: `${gitName}/${relativePath}`, error: msg });
+            }
+        }
 
         for (const relativePath of needSync) {
             const localFile = path.join(gitDir, relativePath);
@@ -231,6 +203,9 @@ export async function executeSyncCli(workspaceRoot: string, serverId?: string, r
         if (successFiles.length > 0) {
             markSyncedBatch(gitDir, successFiles, syncTarget);
         }
+        if (deletedFiles.length > 0) {
+            markDeletedBatch(gitDir, deletedFiles, syncTarget);
+        }
     }
 
     result.ok = result.failed.length === 0;
@@ -244,6 +219,7 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
         action: 'sync',
         mode: 'dryRun',
         pending: [],
+        deleted: [],
         skipped: [],
         failed: [{ file: '', error }],
         server,
@@ -283,6 +259,7 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
         action: 'sync',
         mode: 'dryRun',
         pending: [],
+        deleted: [],
         skipped: [],
         failed: [],
         server: server.name,
@@ -293,20 +270,25 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
     for (const { dir: gitDir, name: gitName } of gitRoots) {
         const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
         const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
-        const changedFiles = fileFilters.length > 0
-            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters)
-            : await getGitChangedFiles(gitDir);
-        if (changedFiles.length === 0) { continue; }
+        const changedEntries: GitChangedFile[] = fileFilters.length > 0
+            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters).map(file => ({ path: file, kind: 'upload', status: '??' }))
+            : await getGitChangedEntries(gitDir);
+        if (changedEntries.length === 0) { continue; }
 
-        const notIgnored: string[] = [];
-        for (const f of changedFiles) {
-            if (isIgnored(f, project.ignore)) { plan.skipped.push(`${gitName}/${f}`); }
-            else { notIgnored.push(f); }
+        const uploadCandidates: string[] = [];
+        const deleteCandidates: string[] = [];
+        for (const change of changedEntries) {
+            if (isIgnored(change.path, project.ignore)) { plan.skipped.push(`${gitName}/${change.path}`); }
+            else if (change.kind === 'delete') { deleteCandidates.push(change.path); }
+            else { uploadCandidates.push(change.path); }
         }
 
-        const needSync = filterNeedsSync(gitDir, notIgnored, syncTarget);
-        plan.skipped.push(...notIgnored.filter(f => !needSync.includes(f)).map(f => `${gitName}/${f}`));
+        const needSync = filterNeedsSync(gitDir, uploadCandidates, syncTarget);
+        const needDelete = filterNeedsDelete(gitDir, deleteCandidates, syncTarget);
+        plan.skipped.push(...uploadCandidates.filter(f => !needSync.includes(f)).map(f => `${gitName}/${f}`));
+        plan.skipped.push(...deleteCandidates.filter(f => !needDelete.includes(f)).map(f => `${gitName}/${f}`));
         plan.pending.push(...needSync.map(f => `${gitName}/${f}`));
+        plan.deleted.push(...needDelete.map(f => `${gitName}/${f}`));
     }
 
     return plan;
@@ -521,7 +503,7 @@ export async function runSyncCli(argv: string[]): Promise<void> {
         if (wantsJson) {
             console.log(JSON.stringify(result, null, 2));
         } else if (result.ok) {
-            console.log(`同步完成: ${result.uploaded.length} 个文件已上传`);
+            console.log(`同步完成: ${result.uploaded.length} 个文件已上传，${result.deleted.length} 个文件已删除`);
             if (result.skipped.length > 0) { console.log(`跳过: ${result.skipped.length} 个`); }
         } else {
             console.error(`同步失败: ${result.failed.map(f => f.error).join(', ')}`);

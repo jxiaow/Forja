@@ -4,7 +4,7 @@
  */
 import * as cp from 'child_process';
 import { ServerConfig } from './serverStore';
-import { buildScpArgs, buildSshArgs, createAskpassEnv, sshTarget } from './ssh';
+import { buildScpArgs, buildSshArgs, createAskpassEnv, quoteForRemoteShell, sshTarget } from './ssh';
 
 interface DisposableLike {
     dispose(): void;
@@ -26,6 +26,9 @@ interface ProcessResult {
     stderr: string;
     timedOut: boolean;
 }
+
+const DEFAULT_SCP_UPLOAD_TIMEOUT_MS = 120000;
+const DEFAULT_REMOTE_DELETE_TIMEOUT_MS = 10000;
 
 function createCancellationError(): SyncTransportError {
     const error = new Error('操作已取消') as SyncTransportError;
@@ -110,39 +113,51 @@ function runCancellableProcess(command: string, args: string[], askpass: ReturnT
 /** SCP 上传单个文件。 */
 export async function scpUpload(server: ServerConfig, localFile: string, remoteFile: string, password: string | null, token?: CancellationTokenLike): Promise<void> {
     const baseArgs = buildScpArgs(server);
-    const dest = process.platform === 'win32'
-        ? `${sshTarget(server)}:${remoteFile}`
-        : `${sshTarget(server)}:'${remoteFile.replace(/'/g, "'\\''")}'`;
+    const dest = `${sshTarget(server)}:${quoteForRemoteShell(remoteFile)}`;
     const args = [...baseArgs, localFile, dest];
 
-    const askpass = createAskpassEnv(
-        server.authMode === 'password' ? password : null, `transport-${process.pid}`
-    );
+    const askpass = createAskpassEnv(server.authMode === 'password' ? password : null);
 
     let processResult: ProcessResult;
     try {
-        processResult = await runCancellableProcess('scp', args, askpass, token);
+        processResult = await runCancellableProcess('scp', args, askpass, token, DEFAULT_SCP_UPLOAD_TIMEOUT_MS);
     } catch (e) {
         if (isCancellationError(e)) { throw e; }
         const msg = e instanceof Error ? e.message : String(e);
         throw new Error(`scp 启动失败: ${msg}`);
     }
 
+    if (processResult.timedOut) {
+        throw createTimeoutError('上传文件', DEFAULT_SCP_UPLOAD_TIMEOUT_MS);
+    }
     if (processResult.code !== 0) {
         throw new Error(`scp 失败 (code=${processResult.code}): ${processResult.stderr.trim()}`);
+    }
+}
+
+/** 删除远程单个文件。 */
+export async function deleteRemoteFile(server: ServerConfig, remoteFile: string, password: string | null, token?: CancellationTokenLike): Promise<void> {
+    const sshArgs = buildSshArgs(server);
+    const cmd = `rm -f ${quoteForRemoteShell(remoteFile)}`;
+    const args = [...sshArgs, sshTarget(server), cmd];
+
+    const askpass = createAskpassEnv(server.authMode === 'password' ? password : null);
+    const result = await runCancellableProcess('ssh', args, askpass, token, DEFAULT_REMOTE_DELETE_TIMEOUT_MS);
+    if (result.timedOut) {
+        throw createTimeoutError('删除远程文件', DEFAULT_REMOTE_DELETE_TIMEOUT_MS);
+    }
+    if (result.code !== 0) {
+        throw new Error(`删除远程文件失败 (code=${result.code}): ${result.stderr.trim() || 'rm -f failed'}`);
     }
 }
 
 /** 确保远程目录存在。 */
 export async function ensureRemoteDir(server: ServerConfig, remoteDir: string, password: string | null, token?: CancellationTokenLike): Promise<void> {
     const sshArgs = buildSshArgs(server);
-    const escaped = remoteDir.replace(/'/g, "'\\''");
-    const cmd = `mkdir -p '${escaped}'`;
+    const cmd = `mkdir -p ${quoteForRemoteShell(remoteDir)}`;
     const args = [...sshArgs, sshTarget(server), cmd];
 
-    const askpass = createAskpassEnv(
-        server.authMode === 'password' ? password : null, `mkdir-${process.pid}`
-    );
+    const askpass = createAskpassEnv(server.authMode === 'password' ? password : null);
 
     const timeoutMs = 5000;
     const result = await runCancellableProcess('ssh', args, askpass, token, timeoutMs);

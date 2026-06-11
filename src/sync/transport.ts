@@ -17,6 +17,7 @@ export { buildSshArgs, buildScpArgs, sshTarget, SshArgsOptions } from '../core/s
 
 export {
     CancellationTokenLike,
+    deleteRemoteFile,
     ensureRemoteDir,
     isCancellationError,
     scpUpload
@@ -34,9 +35,7 @@ export function testConnection(server: ServerConfig, password: string | null): P
         const target = sshTarget(server);
         const args = [...sshArgs, target, 'echo ok'];
 
-        const askpass = createAskpassEnv(
-            server.authMode === 'password' ? password : null, `transport-${process.pid}`
-        );
+        const askpass = createAskpassEnv(server.authMode === 'password' ? password : null);
 
         const proc = cp.spawn('ssh', args, {
             windowsHide: true,

@@ -19,6 +19,7 @@ test('vscode sync transport re-exports shared core upload primitives', () => {
     assert.match(source, /from '\.\.\/core\/sshTransport'/);
     assert.match(source, /scpUpload/);
     assert.match(source, /ensureRemoteDir/);
+    assert.match(source, /deleteRemoteFile/);
 });
 
 
@@ -28,6 +29,27 @@ test('shared ssh transport has a force-kill fallback after graceful termination'
     assert.match(source, /proc\.kill\(\)/);
     assert.match(source, /proc\.kill\('SIGKILL'\)/);
     assert.match(source, /exitCode === null && proc\.signalCode === null/);
+});
+
+test('shared scp upload has a timeout guard', () => {
+    const source = fs.readFileSync(path.join(repoRoot, 'src', 'core', 'sshTransport.ts'), 'utf-8');
+
+    assert.match(source, /DEFAULT_SCP_UPLOAD_TIMEOUT_MS/);
+    assert.match(source, /runCancellableProcess\('scp', args, askpass, token, DEFAULT_SCP_UPLOAD_TIMEOUT_MS\)/);
+});
+
+test('shared ssh transport supports remote file deletion', () => {
+    const source = fs.readFileSync(path.join(repoRoot, 'src', 'core', 'sshTransport.ts'), 'utf-8');
+
+    assert.match(source, /export async function deleteRemoteFile/);
+    assert.match(source, /rm -f/);
+});
+
+test('shared scp upload quotes the remote target through a helper', () => {
+    const source = fs.readFileSync(path.join(repoRoot, 'src', 'core', 'sshTransport.ts'), 'utf-8');
+
+    assert.match(source, /quoteForRemoteShell/);
+    assert.doesNotMatch(source, /process\.platform === 'win32'/);
 });
 
 

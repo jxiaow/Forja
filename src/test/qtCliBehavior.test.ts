@@ -136,6 +136,43 @@ test('forja sync --plan --file only returns the selected file', async () => {
     assert.equal(process.exitCode, 0);
 });
 
+test('forja sync --plan reports deleted files separately', async () => {
+    const workspace = makeWorkspace();
+    cp.execFileSync('git', ['init'], { cwd: workspace, stdio: 'ignore' });
+    cp.execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: workspace, stdio: 'ignore' });
+    cp.execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: workspace, stdio: 'ignore' });
+    fs.writeFileSync(path.join(workspace, 'old.cpp'), 'int old_file() { return 0; }\n', 'utf8');
+    cp.execFileSync('git', ['add', 'old.cpp'], { cwd: workspace, stdio: 'ignore' });
+    cp.execFileSync('git', ['commit', '-m', 'seed'], { cwd: workspace, stdio: 'ignore' });
+    fs.unlinkSync(path.join(workspace, 'old.cpp'));
+
+    writeServers([{
+        id: 'server-1',
+        name: 'dev',
+        host: '127.0.0.1',
+        port: 22,
+        username: 'dev',
+        authMode: 'key',
+        privateKeyPath: '/tmp/nonexistent-key',
+        password: ''
+    }]);
+    saveSyncSettings(workspace, {
+        ...DEFAULT_SYNC,
+        enabled: true,
+        selectedServer: 'server-1',
+        remotePaths: { 'server-1': '/remote/app' },
+        ignore: []
+    });
+
+    const output = await captureStdout(() => runSyncCli(['--workspace', workspace, '--plan', '--json']));
+    const data = JSON.parse(output);
+
+    assert.equal(data.ok, true);
+    assert.deepEqual(data.pending, []);
+    assert.deepEqual(data.deleted, [path.basename(workspace) + '/old.cpp']);
+    assert.equal(process.exitCode, 0);
+});
+
 test('forja sync --plan sets exit code when planning fails', async () => {
     const workspace = makeWorkspace();
 

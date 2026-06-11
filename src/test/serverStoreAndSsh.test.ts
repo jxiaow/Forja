@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { createAskpassEnv } from '../core/ssh';
+import { createAskpassEnv, quoteForRemoteShell } from '../core/ssh';
 
 test('createAskpassEnv returns undefined for null password', () => {
     const result = createAskpassEnv(null);
@@ -34,4 +34,22 @@ test('createAskpassEnv script file exists before cleanup', () => {
     const scriptPath = path.join(os.tmpdir(), `forja-askpass-exist-test${process.platform === 'win32' ? '.ps1' : '.sh'}`);
     assert.equal(fs.existsSync(scriptPath), true, 'script should exist before cleanup');
     result.cleanup();
+});
+
+test('createAskpassEnv uses unique script paths without explicit suffix', () => {
+    const first = createAskpassEnv('first');
+    const second = createAskpassEnv('second');
+    assert.ok(first);
+    assert.ok(second);
+
+    try {
+        assert.notEqual(first.env.SSH_ASKPASS, second.env.SSH_ASKPASS);
+    } finally {
+        first.cleanup();
+        second.cleanup();
+    }
+});
+
+test('quoteForRemoteShell escapes spaces and single quotes', () => {
+    assert.equal(quoteForRemoteShell("path with spaces/it's.txt"), "'path with spaces/it'\\''s.txt'");
 });

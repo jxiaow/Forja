@@ -24,6 +24,14 @@ function _warnHostKeyCheckingIfNeeded(_server: ServerConfig): void {
     // 内网场景为主，不再弹出提示
 }
 
+function isAuthenticationError(message: string): boolean {
+    const normalized = message.toLowerCase();
+    return normalized.includes('permission denied')
+        || normalized.includes('authentication failed')
+        || normalized.includes('publickey')
+        || normalized.includes('password');
+}
+
 export function registerSyncWatcher(context: vscode.ExtensionContext): void {
     context.subscriptions.push(onSettingsChange((section) => {
         if (section === 'sync') {
@@ -149,6 +157,7 @@ export async function executeSyncChangedFiles(uri?: vscode.Uri): Promise<void> {
         _warnHostKeyCheckingIfNeeded(resolved.server);
         try {
             let totalUploaded = 0;
+            let totalDeleted = 0;
             let totalSkipped = 0;
             const totalFailed: { file: string; error: string }[] = [];
 
@@ -160,17 +169,18 @@ export async function executeSyncChangedFiles(uri?: vscode.Uri): Promise<void> {
                 };
                 const result = await syncChangedFiles(repoResolved, gitDir, token, requestedFile ? [requestedFile] : []);
                 totalUploaded += result.uploaded.length;
+                totalDeleted += result.deleted.length;
                 totalSkipped += result.skipped.length;
                 totalFailed.push(...result.failed.map(f => ({ file: `${gitName}/${f.file}`, error: f.error })));
             }
 
             if (token.isCancellationRequested) {
-                vscode.window.showWarningMessage(`同步已取消: ${totalUploaded} 个文件已上传${totalSkipped > 0 ? `，${totalSkipped} 个已跳过` : ''}`);
-                logger.info(`同步已取消: 上传=${totalUploaded}, 跳过=${totalSkipped}, 失败=${totalFailed.length}`);
+                vscode.window.showWarningMessage(`同步已取消: ${totalUploaded} 个文件已上传，${totalDeleted} 个文件已删除${totalSkipped > 0 ? `，${totalSkipped} 个已跳过` : ''}`);
+                logger.info(`同步已取消: 上传=${totalUploaded}, 删除=${totalDeleted}, 跳过=${totalSkipped}, 失败=${totalFailed.length}`);
                 return;
             }
 
-            if (totalUploaded === 0 && totalFailed.length === 0 && totalSkipped === 0) {
+            if (totalUploaded === 0 && totalDeleted === 0 && totalFailed.length === 0 && totalSkipped === 0) {
                 vscode.window.showInformationMessage('没有需要同步的变更文件');
                 return;
             }
@@ -179,12 +189,15 @@ export async function executeSyncChangedFiles(uri?: vscode.Uri): Promise<void> {
                 const failedList = totalFailed.map(f => f.file).join(', ');
                 vscode.window.showErrorMessage(`同步完成，${totalUploaded} 个成功，${totalFailed.length} 个失败: ${failedList}`);
             } else {
-                vscode.window.showInformationMessage(`同步完成: ${totalUploaded} 个文件已上传${totalSkipped > 0 ? `，${totalSkipped} 个已跳过` : ''}`);
+                vscode.window.showInformationMessage(`同步完成: ${totalUploaded} 个文件已上传，${totalDeleted} 个文件已删除${totalSkipped > 0 ? `，${totalSkipped} 个已跳过` : ''}`);
             }
 
-            logger.info(`同步结果: 上传=${totalUploaded}, 跳过=${totalSkipped}, 失败=${totalFailed.length}`);
+            logger.info(`同步结果: 上传=${totalUploaded}, 删除=${totalDeleted}, 跳过=${totalSkipped}, 失败=${totalFailed.length}`);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
+            if (isAuthenticationError(msg)) {
+                clearPasswordCache();
+            }
             vscode.window.showErrorMessage(`同步失败: ${msg}`);
             logger.error(`同步失败: ${msg}`);
         }

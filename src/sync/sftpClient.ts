@@ -4,13 +4,13 @@
  */
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as cp from 'child_process';
 import { createLogger } from '../vscode/logger';
-import { filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
+import { filterNeedsDelete, filterNeedsSync, markDeletedBatch, markSyncedBatch, SyncTargetContext } from '../core/syncState';
 import { ServerConfig } from '../core/serverStore';
 import { ResolvedSyncConfig } from './resolver';
-import { scpUpload, ensureRemoteDir, isCancellationError } from './transport';
+import { deleteRemoteFile, scpUpload, ensureRemoteDir, isCancellationError } from './transport';
 import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
+import { getGitChangedEntries, GitChangedFile, isIgnored } from '../core/gitChangedFiles';
 
 const logger = createLogger('SftpClient');
 
@@ -44,69 +44,18 @@ export function clearPasswordCache(): void {
     _passwordCache.clear();
 }
 
-// ── Git diff ──
-
-export function getGitChangedFiles(workspaceRoot: string): Promise<string[]> {
-    return new Promise((resolve, reject) => {
-        const isWin = process.platform === 'win32';
-        const sep = isWin ? ' & ' : ' ; ';
-        const cmd = `git diff --name-only HEAD${sep}git diff --name-only --cached${sep}git ls-files --others --exclude-standard`;
-        cp.exec(cmd, { cwd: workspaceRoot }, (err, stdout) => {
-            if (err) {
-                cp.exec('git status --porcelain -uall', { cwd: workspaceRoot }, (err2, stdout2) => {
-                    if (err2) {
-                        // 非 git 仓库时返回空数组而非报错
-                        if (err2.message.includes('not a git repository')) {
-                            logger.warn(`目录不是 git 仓库，跳过: ${workspaceRoot}`);
-                            resolve([]);
-                            return;
-                        }
-                        reject(new Error(`git 命令失败: ${err2.message}`));
-                        return;
-                    }
-                    const files = stdout2.trim().split('\n')
-                        .filter(line => line.length > 3)
-                        .map(line => line.substring(3).trim())
-                        .filter(f => f.length > 0);
-                    resolve([...new Set(files)]);
-                });
-                return;
-            }
-            const files = stdout.trim().split('\n')
-                .map(f => f.trim())
-                .filter(f => f.length > 0);
-            resolve([...new Set(files)]);
-        });
-    });
-}
-
-// ── 忽略判断 ──
-
-function isIgnored(relativePath: string, ignoreList: string[]): boolean {
-    const parts = relativePath.split(/[\\/]/);
-    for (const pattern of ignoreList) {
-        for (const part of parts) {
-            if (part === pattern) { return true; }
-            if (pattern.includes('*')) {
-                const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-                if (regex.test(part)) { return true; }
-            }
-        }
-    }
-    return false;
-}
-
 // ── 公开接口 ──
 
 export interface SyncResult {
     uploaded: string[];
+    deleted: string[];
     skipped: string[];
     failed: { file: string; error: string }[];
 }
 
 export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRoot: string, token?: { isCancellationRequested: boolean }, fileFilters: string[] = []): Promise<SyncResult> {
     const { server, remotePath, ignore } = resolved;
-    const result: SyncResult = { uploaded: [], skipped: [], failed: [] };
+    const result: SyncResult = { uploaded: [], deleted: [], skipped: [], failed: [] };
 
     let password: string | null = null;
     if (server.authMode === 'password') {
@@ -118,25 +67,46 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
 
     const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath };
 
-    const changedFiles = fileFilters.length > 0
-        ? resolveRequestedFilesForGitRoot(workspaceRoot, workspaceRoot, fileFilters)
-        : await getGitChangedFiles(workspaceRoot);
-    if (changedFiles.length === 0) { return result; }
+    const changedEntries: GitChangedFile[] = fileFilters.length > 0
+        ? resolveRequestedFilesForGitRoot(workspaceRoot, workspaceRoot, fileFilters).map(file => ({ path: file, kind: 'upload', status: '??' }))
+        : await getGitChangedEntries(workspaceRoot);
+    if (changedEntries.length === 0) { return result; }
 
-    const notIgnored: string[] = [];
-    for (const f of changedFiles) {
-        if (isIgnored(f, ignore)) { result.skipped.push(f); }
-        else { notIgnored.push(f); }
+    const uploadCandidates: string[] = [];
+    const deleteCandidates: string[] = [];
+    for (const change of changedEntries) {
+        if (isIgnored(change.path, ignore)) { result.skipped.push(change.path); }
+        else if (change.kind === 'delete') { deleteCandidates.push(change.path); }
+        else { uploadCandidates.push(change.path); }
     }
 
-    const needSync = filterNeedsSync(workspaceRoot, notIgnored, syncTarget);
-    const alreadySynced = notIgnored.filter(f => !needSync.includes(f));
+    const needSync = filterNeedsSync(workspaceRoot, uploadCandidates, syncTarget);
+    const needDelete = filterNeedsDelete(workspaceRoot, deleteCandidates, syncTarget);
+    const alreadySynced = uploadCandidates.filter(f => !needSync.includes(f));
     result.skipped.push(...alreadySynced);
+    result.skipped.push(...deleteCandidates.filter(f => !needDelete.includes(f)));
 
-    if (needSync.length === 0) { return result; }
+    if (needSync.length === 0 && needDelete.length === 0) { return result; }
 
     const remoteDirs = new Set<string>();
     const successFiles: string[] = [];
+    const deletedFiles: string[] = [];
+
+    for (const relativePath of needDelete) {
+        if (token?.isCancellationRequested) { break; }
+        const remoteFile = remotePath.replace(/\/$/, '') + '/' + relativePath.replace(/\\/g, '/');
+        try {
+            await deleteRemoteFile(server, remoteFile, password, token);
+            result.deleted.push(relativePath);
+            deletedFiles.push(relativePath);
+            logger.info(`已删除远程文件: ${relativePath}`);
+        } catch (e) {
+            if (isCancellationError(e) || token?.isCancellationRequested) { break; }
+            const msg = e instanceof Error ? e.message : String(e);
+            result.failed.push({ file: relativePath, error: msg });
+            logger.error(`删除远程文件失败: ${relativePath} - ${msg}`);
+        }
+    }
 
     for (const relativePath of needSync) {
         if (token?.isCancellationRequested) { break; }
@@ -172,6 +142,9 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
 
     if (successFiles.length > 0) {
         markSyncedBatch(workspaceRoot, successFiles, syncTarget);
+    }
+    if (deletedFiles.length > 0) {
+        markDeletedBatch(workspaceRoot, deletedFiles, syncTarget);
     }
 
     return result;
