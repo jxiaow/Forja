@@ -240,7 +240,7 @@ export function saveSyncSettings(workspace: string, settings: SyncSettings): voi
 // ── Remote 配置读写 ──
 
 export function loadRemoteSettings(workspace: string): RemoteSettings {
-    const filePath = projectConfigPath(workspace, 'remote');
+    const filePath = resolveConfigPath(workspace, 'remote');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));

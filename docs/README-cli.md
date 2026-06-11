@@ -2,7 +2,7 @@
 
 命令行工具用于 C++ 项目的构建、运行和环境管理。
 
-当前 CLI 已实现子命令：`qt`、`sdk`、`sync`、`cleanup`。
+当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`sync`、`cleanup`。
 
 ## 安装
 
@@ -18,6 +18,7 @@ npm link
 forja --help
 forja qt --help
 forja sdk --help
+forja remote --help
 ```
 
 ## AI 工具集成
@@ -43,6 +44,7 @@ AI 或脚本需要结构化输出时追加 `--json`：
 ```bash
 forja qt status --json
 forja qt build --json
+forja remote status --json
 ```
 
 ## 通用选项
@@ -55,6 +57,19 @@ Qt/SDK 命令通用选项：
 | `--json` | 输出 JSON，适合 AI/脚本解析 |
 
 `--workspace` 用来确定本次命令读写哪个项目的本地配置、从哪里扫描 `.pro`、以及同步/运行状态等归属。它不是 `.pro` 文件路径；多项目仓库中用 `forja qt use --project <relative.pro>` 在该 workspace 内选择具体项目。
+
+## Remote 命令
+
+Remote 命令复用 sync 配置中的 server 和 remotePath，先用 `forja sync status --json` 确认远端目标，再执行 remote 状态检查或远程构建流程。
+
+```bash
+forja remote status --json
+forja remote doctor --json
+forja remote test --json
+forja remote bootstrap --json
+forja remote qt build --json
+forja remote sdk build --json
+```
 
 ## JSON 输出
 

@@ -60,7 +60,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 writeOutput(result, options.json);
                 return;
             }
-            const artifact = findBootstrapArtifact(process.cwd());
+            const artifact = findBootstrapArtifact(cliPackageRoot());
             const password = resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null;
             const runner = createSshRunner(resolved.config.server, password);
             const uploader = createScpUploader(resolved.config.server, password);
@@ -83,7 +83,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 writeOutput(result, options.json);
                 return;
             }
-            const artifact = findBootstrapArtifact(process.cwd());
+            const artifact = findBootstrapArtifact(cliPackageRoot());
             const password = resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null;
             const runner = createSshRunner(resolved.config.server, password);
             const uploader = createScpUploader(resolved.config.server, password);
@@ -99,7 +99,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 writeOutput(blockedResult('bootstrap', resolved.diagnostics, resolved.nextActions), options.json);
                 return;
             }
-            const artifact = findBootstrapArtifact(process.cwd());
+            const artifact = findBootstrapArtifact(cliPackageRoot());
             if (!artifact.ok) {
                 process.exitCode = 1;
                 writeOutput({ action: 'bootstrap', mode: 'remote', remoteBin: '$HOME/.forja/bin/forja', ...artifact }, options.json);
@@ -496,6 +496,10 @@ function parseBuildOrderItems(items: string[]): RemoteBuildOrderItem[] {
 
 function unique(values: string[]): string[] {
     return Array.from(new Set(values));
+}
+
+function cliPackageRoot(): string {
+    return path.resolve(__dirname, '..', '..', '..');
 }
 
 function writeOutput(result: unknown, json: boolean): void {
