@@ -4,7 +4,7 @@
  */
 import * as path from 'path';
 import { clearSyncState, filterNeedsDelete, filterNeedsSync, markDeletedBatch, markSyncedBatch, SyncTargetContext } from '../core/syncState';
-import { addServer, readProjectSyncConfig, getServerById, readServers, removeServer, ServerConfig, updateServer, writeProjectSyncConfig } from '../core/serverStore';
+import { addServer, readProjectSyncConfig, getServerById, readServers, removeServer, resolveServerSelector, ServerConfig, updateServer, writeProjectSyncConfig } from '../core/serverStore';
 import { deleteRemoteFile, ensureRemoteDir, scpUpload, testConnection } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
 import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
@@ -113,6 +113,26 @@ interface FailedRepoTargets {
 }
 
 export { isIgnored };
+
+interface ResolvedServer {
+    server: ServerConfig | null;
+    error?: string;
+}
+
+function resolveCliServer(selector: string): ResolvedServer {
+    const resolved = resolveServerSelector(selector);
+    if (resolved.ambiguous) {
+        return { server: null, error: `服务器 "${selector}" 匹配到多个服务器，请使用 id` };
+    }
+    if (!resolved.server) {
+        return { server: null, error: `服务器 "${selector}" 未找到` };
+    }
+    return { server: resolved.server };
+}
+
+function remotePathForServer(project: ReturnType<typeof readProjectSyncConfig>, server: ServerConfig, selector: string): string {
+    return project.remotePaths[server.id] || project.remotePaths[selector] || '';
+}
 
 function availableRepoNames(gitRoots: GitRoot[]): string {
     return gitRoots.map(r => r.name).join(', ');
@@ -268,12 +288,13 @@ export async function executeSyncCli(workspaceRoot: string, serverId?: string, r
     }
 
     const targetId = serverId || project.selectedServer;
-    const server = getServerById(targetId);
+    const resolvedServer = resolveCliServer(targetId);
+    const server = resolvedServer.server;
     if (!server) {
-        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json` }], server: targetId, remotePath: '', nextActions: syncFailureActions() };
+        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: resolvedServer.error || `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json` }], server: targetId, remotePath: '', nextActions: syncFailureActions() };
     }
 
-    const remotePath = project.remotePaths[server.id] || '';
+    const remotePath = remotePathForServer(project, server, targetId);
     if (!remotePath) {
         return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: '未配置远程路径' }], server: server.name, remotePath: '', nextActions: syncFailureActions() };
     }
@@ -408,12 +429,13 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
     }
 
     const targetId = serverId || project.selectedServer;
-    const server = getServerById(targetId);
+    const resolvedServer = resolveCliServer(targetId);
+    const server = resolvedServer.server;
     if (!server) {
-        return empty(`服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json`, targetId, '');
+        return empty(resolvedServer.error || `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json`, targetId, '');
     }
 
-    const remotePath = project.remotePaths[server.id] || '';
+    const remotePath = remotePathForServer(project, server, targetId);
     if (!remotePath) {
         return empty('未配置远程路径', server.name, '');
     }
@@ -483,8 +505,9 @@ export function statusSyncCli(workspaceRoot: string, serverId?: string): SyncSta
     const project = readProjectSyncConfig(workspaceRoot);
     const servers = readServers();
     const targetId = serverId || project.selectedServer;
-    const server = targetId ? getServerById(targetId) : null;
-    const remotePath = server ? (project.remotePaths[server.id] || '') : '';
+    const resolvedServer = targetId ? resolveCliServer(targetId) : { server: null };
+    const server = resolvedServer.server;
+    const remotePath = server ? remotePathForServer(project, server, targetId) : '';
 
     const checks = {
         enabled: project.enabled,
@@ -506,7 +529,7 @@ export function statusSyncCli(workspaceRoot: string, serverId?: string): SyncSta
             enabled: '远程同步未启用',
             servers: '未添加同步服务器',
             selectedServer: '未选择同步服务器',
-            server: `服务器 "${targetId}" 未找到`,
+            server: resolvedServer.error || `服务器 "${targetId}" 未找到`,
             remotePath: '未配置远程路径'
         };
         return { level: 'error' as const, message: messages[key] || key };
@@ -562,12 +585,13 @@ export function showSyncServerCli(workspaceRoot: string, serverId: string | null
         };
     }
 
-    const server = getServerById(targetId);
+    const resolvedServer = resolveCliServer(targetId);
+    const server = resolvedServer.server;
     if (!server) {
         return {
             ok: false,
             action: 'server',
-            diagnostics: [{ level: 'error', message: `服务器 "${targetId}" 未找到` }],
+            diagnostics: [{ level: 'error', message: resolvedServer.error || `服务器 "${targetId}" 未找到` }],
             nextActions: ['forja sync servers --json']
         };
     }
@@ -577,7 +601,7 @@ export function showSyncServerCli(workspaceRoot: string, serverId: string | null
         action: 'server',
         server: publicServer(server),
         selected: project.selectedServer === server.id,
-        remotePath: project.remotePaths[server.id] || '',
+        remotePath: remotePathForServer(project, server, targetId),
         diagnostics: [],
         nextActions: ['forja sync test-connection --json']
     };
@@ -613,58 +637,65 @@ export function addSyncServerCli(fields: Partial<Omit<ServerConfig, 'id'>>): Syn
 export function updateSyncServerCli(serverId: string | null, fields: Partial<Omit<ServerConfig, 'id'>>): SyncServerResult {
     if (!serverId) { return errorSyncServerResult('update-server', 'update-server 需要 --server <id>'); }
     if (Object.keys(fields).length === 0) { return errorSyncServerResult('update-server', 'update-server 至少需要一个待修改字段'); }
-    if (!getServerById(serverId)) { return errorSyncServerResult('update-server', `服务器 "${serverId}" 未找到`); }
+    const resolvedServer = resolveCliServer(serverId);
+    if (!resolvedServer.server) { return errorSyncServerResult('update-server', resolvedServer.error || `服务器 "${serverId}" 未找到`); }
 
-    updateServer(serverId, fields);
-    const updated = getServerById(serverId);
+    updateServer(resolvedServer.server.id, fields);
+    const updated = getServerById(resolvedServer.server.id);
     if (!updated) { return errorSyncServerResult('update-server', `服务器 "${serverId}" 未找到`); }
     return { ok: true, action: 'update-server', server: publicServer(updated), diagnostics: [] };
 }
 
 export function removeSyncServerCli(serverId: string | null): SyncServerResult {
     if (!serverId) { return errorSyncServerResult('remove-server', 'remove-server 需要 --server <id>'); }
-    const server = getServerById(serverId);
-    if (!server) { return errorSyncServerResult('remove-server', `服务器 "${serverId}" 未找到`); }
+    const resolvedServer = resolveCliServer(serverId);
+    const server = resolvedServer.server;
+    if (!server) { return errorSyncServerResult('remove-server', resolvedServer.error || `服务器 "${serverId}" 未找到`); }
 
-    removeServer(serverId);
+    removeServer(server.id);
     return { ok: true, action: 'remove-server', server: publicServer(server), diagnostics: [] };
 }
 
 export function useSyncCli(workspaceRoot: string, serverId: string | null, remotePath: string | null, enabled: boolean | null): SyncUseResult {
     const current = readProjectSyncConfig(workspaceRoot);
-    const selectedServer = serverId || current.selectedServer;
-    if (!selectedServer && enabled === null) {
+    const selectedServerInput = serverId || current.selectedServer;
+    if (!selectedServerInput && enabled === null) {
         return {
             ok: false,
             action: 'use',
             enabled: current.enabled,
-            selectedServer,
+            selectedServer: selectedServerInput,
             remotePath: '',
             diagnostics: [{ level: 'error', message: 'use 需要 --server <id>、--enable 或 --disable' }],
             nextActions: ['forja sync servers --json']
         };
     }
 
-    if (selectedServer && !getServerById(selectedServer)) {
+    const resolvedServer = selectedServerInput ? resolveCliServer(selectedServerInput) : { server: null };
+    if (selectedServerInput && !resolvedServer.server) {
         return {
             ok: false,
             action: 'use',
             enabled: current.enabled,
-            selectedServer,
+            selectedServer: selectedServerInput,
             remotePath: '',
-            diagnostics: [{ level: 'error', message: `服务器 "${selectedServer}" 未找到` }],
+            diagnostics: [{ level: 'error', message: resolvedServer.error || `服务器 "${selectedServerInput}" 未找到` }],
             nextActions: ['forja sync servers --json']
         };
     }
+    const selectedServer = resolvedServer.server?.id || '';
 
     const remotePaths = { ...current.remotePaths };
+    if (selectedServer && selectedServerInput !== selectedServer && remotePaths[selectedServer] === undefined && remotePaths[selectedServerInput]) {
+        remotePaths[selectedServer] = remotePaths[selectedServerInput];
+    }
     if (remotePath !== null) {
         if (!selectedServer) {
             return {
                 ok: false,
                 action: 'use',
                 enabled: current.enabled,
-                selectedServer,
+                selectedServer: selectedServerInput,
                 remotePath,
                 diagnostics: [{ level: 'error', message: '--remote-path 需要同时指定或已有 --server <id>' }],
                 nextActions: ['forja sync use --server <id> --remote-path <path> --json']
@@ -698,7 +729,8 @@ export function useSyncCli(workspaceRoot: string, serverId: string | null, remot
 export async function testSyncConnectionCli(workspaceRoot: string, serverId?: string): Promise<SyncTestConnectionResult> {
     const project = readProjectSyncConfig(workspaceRoot);
     const targetId = serverId || project.selectedServer;
-    const server = targetId ? getServerById(targetId) : null;
+    const resolvedServer = targetId ? resolveCliServer(targetId) : { server: null };
+    const server = resolvedServer.server;
     if (!targetId) {
         return {
             ok: false,
@@ -713,7 +745,7 @@ export async function testSyncConnectionCli(workspaceRoot: string, serverId?: st
             ok: false,
             action: 'test-connection',
             server: null,
-            diagnostics: [{ level: 'error', message: `服务器 "${targetId}" 未找到` }],
+            diagnostics: [{ level: 'error', message: resolvedServer.error || `服务器 "${targetId}" 未找到` }],
             nextActions: ['forja sync servers --json']
         };
     }

@@ -1,3 +1,4 @@
+import { buildRemoteRepoDirSetup } from './repoPath';
 import { quoteRemoteArg, remoteCommand } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
@@ -39,7 +40,7 @@ export async function executeRemoteCleanUntracked(options: ExecuteRemoteCleanUnt
         }
     }
 
-    const command = 'cd ' + remoteCommand([options.remotePath]) + '/' + remoteCommand([options.repo]) + ' && ' + buildCleanCommand(options.paths, options.recursive);
+    const command = buildRemoteRepoDirSetup(options.remotePath, options.repo, true) + ' cd "$repo_dir" && ' + buildCleanCommand(options.paths, options.recursive);
     const executed = await options.runner.run(command, 30000);
     if (executed.exitCode !== 0) {
         diagnostics.push({ level: 'error', message: trim(executed.stderr) || '远端 clean-untracked 失败' });

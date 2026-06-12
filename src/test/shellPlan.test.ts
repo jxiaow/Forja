@@ -43,6 +43,21 @@ test('shell plan builder appends custom qmake arguments', () => {
     );
 });
 
+test('linux shell plan exposes Qt lib path for Qt helper binaries', () => {
+    const builder = createShellPlanBuilder(linuxConfig);
+    const plan = builder.qmakeCommands({
+        ...cfg,
+        qtPath: '/usr/local/qt5.13.2',
+        projectDir: '/workspace/qt',
+        proFile: 'qt_linux_pc_client.pro'
+    });
+
+    assert.deepEqual(plan.commands.slice(0, 2), [
+        'export PATH="/usr/local/qt5.13.2/bin:$PATH"',
+        'export LD_LIBRARY_PATH="/usr/local/qt5.13.2/lib:$HOME/.forja/compat/icu55/lib:$LD_LIBRARY_PATH"'
+    ]);
+});
+
 test('shell plan builder exposes shell execution metadata', () => {
     const builder = createShellPlanBuilder(winConfig);
     const exec = builder.makeCommandLine(['one', 'two']);

@@ -301,6 +301,31 @@ test('saveRemoteSettings round-trips with loadRemoteSettings', () => {
     assert.deepEqual(loaded.transfer, { deployServer: 'deploy-1', deployPath: '/opt/app', artifacts: ['build/app.exe'] });
 });
 
+test('saveRemoteSettings round-trips staged workspace repo mappings', () => {
+    const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'remote'));
+
+    saveRemoteSettings(workspace, {
+        ...DEFAULT_REMOTE,
+        workspaceMode: 'staged',
+        profile: 'release_6.0_3.9',
+        remoteWorkspace: '/home/xw/workspace/forja-remote/release_6.0_3.9',
+        repos: [
+            { localName: 'qt_client', remoteName: 'qt_client', role: 'primary', baseline: 'auto', overlay: true },
+            { localName: 'xylib_win32', remoteName: 'xylib_arm64', role: 'remote-only', remotePath: '/home/xw/workspace/dev/xylib_arm64', baseline: 'status-only', overlay: false, mount: 'symlink' }
+        ]
+    });
+    const loaded = loadRemoteSettings(workspace);
+
+    assert.equal(loaded.workspaceMode, 'staged');
+    assert.equal(loaded.profile, 'release_6.0_3.9');
+    assert.equal(loaded.remoteWorkspace, '/home/xw/workspace/forja-remote/release_6.0_3.9');
+    assert.deepEqual(loaded.repos, [
+        { localName: 'qt_client', remoteName: 'qt_client', role: 'primary', baseline: 'auto', overlay: true },
+        { localName: 'xylib_win32', remoteName: 'xylib_arm64', role: 'remote-only', remotePath: '/home/xw/workspace/dev/xylib_arm64', baseline: 'status-only', overlay: false, mount: 'symlink' }
+    ]);
+});
+
 test('loadRemoteSettings looks up parent directory', () => {
     const parent = makeWorkspace();
     const child = path.join(parent, 'qt_client');

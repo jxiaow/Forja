@@ -1,26 +1,42 @@
 import * as path from 'path';
 import { getServerById } from '../../core/serverStore';
-import { loadRemoteSettings, RemoteBuildOrderItem, saveRemoteSettings } from '../../core/settingsIO';
-import { executeRemoteBootstrap, findBootstrapArtifact } from '../core/bootstrap';
+import { loadRemoteSettings, RemoteBuildOrderItem, RemoteRepoAssetSettings, RemoteRepoSettings, saveRemoteSettings } from '../../core/settingsIO';
+import { executeRemoteBootstrap, findBootstrapArtifact, findPackageRoot } from '../core/bootstrap';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { executeRemoteCleanUntracked } from '../core/cleanUntracked';
-import { resolveRemoteConfig } from '../core/config';
+import { resolveRemoteActionPath, resolveRemoteConfig, resolveRemotePrimaryActionPath } from '../core/config';
 import { buildRemoteDoctor } from '../core/doctor';
 import { executeRemoteUnlock } from '../core/lock';
 import { executePreparedRemoteAction } from '../core/pipeline';
 import { executeRemoteRestore } from '../core/restore';
 import { createScpUploader, createSshRunner } from '../core/shell';
+import { validateStagedRepoName } from '../core/stagedWorkspace';
 import { buildRemoteStatus, buildRemoteTest } from '../core/status';
 import { buildRemoteTransferStatus, executeRemoteTransfer } from '../core/transfer';
 import { RemoteDiagnostic } from '../core/types';
 
 interface RemoteCliOptions {
-    action: 'test' | 'status' | 'doctor' | 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'cleanUntracked' | 'preparedAction' | 'buildOrder' | 'transfer';
+    action: 'test' | 'status' | 'doctor' | 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'cleanUntracked' | 'preparedAction' | 'buildOrder' | 'transfer' | 'workspaceSettings' | 'repoSettings' | 'forjaBinSettings';
     workspace: string;
     json: boolean;
     bootstrap: boolean;
     buildOrderAction: 'status' | 'set' | 'clear';
     transferAction: 'status' | 'set' | 'clear' | 'run';
+    workspaceSettingsAction: 'status' | 'use' | 'clear';
+    repoSettingsAction: 'list' | 'set' | 'remove' | 'clear';
+    forjaBinSettingsAction: 'status' | 'use' | 'clear';
+    workspaceMode: 'legacy' | 'staged';
+    profile: string;
+    remoteWorkspace: string;
+    remoteForjaBinPath: string;
+    repoLocalName: string;
+    repoRemoteName: string;
+    repoRole: RemoteRepoSettings['role'] | '';
+    repoRemotePath: string;
+    repoBaseline: 'auto' | 'status-only' | '';
+    repoOverlay: boolean | null;
+    repoMount: 'symlink' | '';
+    repoAssets: string[];
     transferServer: string;
     transferPath: string;
     transferArtifacts: string[];
@@ -125,6 +141,51 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             writeOutput({ ok: true, action: 'buildOrder', mode: 'remote', buildOrder: settings.buildOrder, diagnostics: [], nextActions: [] }, options.json);
             return;
         }
+        if (options.action === 'workspaceSettings') {
+            const settings = loadRemoteSettings(options.workspace);
+            if (options.workspaceSettingsAction === 'use') {
+                settings.workspaceMode = options.workspaceMode;
+                settings.profile = options.profile;
+                settings.remoteWorkspace = options.remoteWorkspace;
+                saveRemoteSettings(options.workspace, settings);
+            } else if (options.workspaceSettingsAction === 'clear') {
+                settings.workspaceMode = 'legacy';
+                settings.profile = '';
+                settings.remoteWorkspace = '';
+                settings.repos = [];
+                saveRemoteSettings(options.workspace, settings);
+            }
+            writeOutput({ ok: true, action: 'workspace', mode: 'remote', workspaceMode: settings.workspaceMode, profile: settings.profile, remoteWorkspace: settings.remoteWorkspace, repos: settings.repos, diagnostics: [], nextActions: [] }, options.json);
+            return;
+        }
+        if (options.action === 'repoSettings') {
+            const settings = loadRemoteSettings(options.workspace);
+            if (options.repoSettingsAction === 'set') {
+                const repo = buildRepoSetting(options);
+                settings.repos = [...settings.repos.filter(item => item.localName !== repo.localName), repo];
+                saveRemoteSettings(options.workspace, settings);
+            } else if (options.repoSettingsAction === 'remove') {
+                settings.repos = settings.repos.filter(item => item.localName !== options.repoLocalName);
+                saveRemoteSettings(options.workspace, settings);
+            } else if (options.repoSettingsAction === 'clear') {
+                settings.repos = [];
+                saveRemoteSettings(options.workspace, settings);
+            }
+            writeOutput({ ok: true, action: 'repo', mode: 'remote', repos: settings.repos, diagnostics: [], nextActions: [] }, options.json);
+            return;
+        }
+        if (options.action === 'forjaBinSettings') {
+            const settings = loadRemoteSettings(options.workspace);
+            if (options.forjaBinSettingsAction === 'use') {
+                settings.remoteForjaBin = options.remoteForjaBinPath;
+                saveRemoteSettings(options.workspace, settings);
+            } else if (options.forjaBinSettingsAction === 'clear') {
+                settings.remoteForjaBin = '';
+                saveRemoteSettings(options.workspace, settings);
+            }
+            writeOutput({ ok: true, action: 'forjaBin', mode: 'remote', remoteForjaBin: settings.remoteForjaBin, diagnostics: [], nextActions: [] }, options.json);
+            return;
+        }
         if (options.action === 'transfer') {
             const settings = loadRemoteSettings(options.workspace);
             if (options.transferAction === 'set') {
@@ -157,7 +218,8 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                     return;
                 }
                 const runner = createSshRunner(resolved.config.server, resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null);
-                const transferResult = await executeRemoteTransfer({ remotePath: resolved.config.remotePath, transfer, deployServer, runner });
+                const actionRemotePath = resolveRemotePrimaryActionPath(resolved.config.workspace, resolved.config.remotePath);
+                const transferResult = await executeRemoteTransfer({ remotePath: actionRemotePath, transfer, deployServer, runner });
                 if (!transferResult.ok) { process.exitCode = 1; }
                 writeOutput(transferResult, options.json);
                 return;
@@ -165,7 +227,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const resolved = resolveRemoteConfig(options.workspace);
             const deployServer = settings.transfer ? getServerById(settings.transfer.deployServer) : null;
             const status = buildRemoteTransferStatus({
-                remotePath: resolved.config?.remotePath ?? null,
+                remotePath: resolved.config ? resolveRemotePrimaryActionPath(resolved.config.workspace, resolved.config.remotePath) : null,
                 transfer: settings.transfer,
                 deployServer
             });
@@ -186,12 +248,15 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 writeOutput({ ...preflight, action: 'bridge', target: options.target, remoteAction: options.remoteAction }, options.json);
                 return;
             }
+            const remoteSettings = loadRemoteSettings(resolved.config.workspace);
+            const actionRemotePath = resolveRemoteActionPath(resolved.config.workspace, resolved.config.remotePath);
             const result = await executeRemoteBridge({
                 target: options.target!,
                 action: options.remoteAction!,
                 args: options.passthrough,
                 json: options.json,
-                remotePath: resolved.config.remotePath,
+                remotePath: actionRemotePath,
+                remoteForjaBin: remoteSettings.remoteForjaBin || undefined,
                 runner
             });
             if (!result.ok) { process.exitCode = 1; }
@@ -257,12 +322,14 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 return;
             }
             if (options.action === 'cleanUntracked') {
-                const clean = await executeRemoteCleanUntracked({ remotePath: resolved.config.remotePath, repo: options.repo, paths: options.passthrough, recursive: options.recursive, runner });
+                const actionRemotePath = resolveRemoteActionPath(resolved.config.workspace, resolved.config.remotePath);
+                const clean = await executeRemoteCleanUntracked({ remotePath: actionRemotePath, repo: options.repo, paths: options.passthrough, recursive: options.recursive, runner });
                 if (!clean.ok) { process.exitCode = 1; }
                 writeOutput({ ...clean, target: options.target }, options.json);
                 return;
             }
-            const result = await executeRemoteRestore({ remotePath: resolved.config.remotePath, repo: options.repo, paths: options.passthrough, runner });
+            const actionRemotePath = resolveRemoteActionPath(resolved.config.workspace, resolved.config.remotePath);
+            const result = await executeRemoteRestore({ remotePath: actionRemotePath, repo: options.repo, paths: options.passthrough, runner });
             if (!result.ok) { process.exitCode = 1; }
             writeOutput({ ...result, action: options.action }, options.json);
             return;
@@ -275,7 +342,8 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             return;
         }
         const runner = createSshRunner(resolved.config.server, resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null);
-        const result = await executeRemoteUnlock({ remotePath: resolved.config.remotePath, lockId: options.lockId, force: options.force, runner });
+        const actionRemotePath = resolveRemoteActionPath(resolved.config.workspace, resolved.config.remotePath);
+        const result = await executeRemoteUnlock({ remotePath: actionRemotePath, lockId: options.lockId, force: options.force, runner });
         if (!result.ok) { process.exitCode = 1; }
         writeOutput(result, options.json);
     } catch (error) {
@@ -298,6 +366,21 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
         bootstrap: false,
         buildOrderAction: 'status',
         transferAction: 'status',
+        workspaceSettingsAction: 'status',
+        repoSettingsAction: 'list',
+        forjaBinSettingsAction: 'status',
+        workspaceMode: 'legacy',
+        profile: '',
+        remoteWorkspace: '',
+        remoteForjaBinPath: '',
+        repoLocalName: '',
+        repoRemoteName: '',
+        repoRole: '',
+        repoRemotePath: '',
+        repoBaseline: '',
+        repoOverlay: null,
+        repoMount: '',
+        repoAssets: [],
         transferServer: '',
         transferPath: '',
         transferArtifacts: [],
@@ -345,6 +428,30 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
             }
             options.transferAction = subcommand;
             start = subcommand === argv[1] ? 2 : 1;
+        } else if (first === 'workspace') {
+            options.action = 'workspaceSettings';
+            const subcommand = argv[1] && !argv[1].startsWith('--') ? argv[1] : 'status';
+            if (subcommand !== 'status' && subcommand !== 'use' && subcommand !== 'clear') {
+                throw new Error('remote workspace 仅支持 status/use/clear');
+            }
+            options.workspaceSettingsAction = subcommand;
+            start = subcommand === argv[1] ? 2 : 1;
+        } else if (first === 'repo') {
+            options.action = 'repoSettings';
+            const subcommand = argv[1] && !argv[1].startsWith('--') ? argv[1] : 'list';
+            if (subcommand !== 'list' && subcommand !== 'set' && subcommand !== 'remove' && subcommand !== 'clear') {
+                throw new Error('remote repo 仅支持 list/set/remove/clear');
+            }
+            options.repoSettingsAction = subcommand;
+            start = subcommand === argv[1] ? 2 : 1;
+        } else if (first === 'forja-bin') {
+            options.action = 'forjaBinSettings';
+            const subcommand = argv[1] && !argv[1].startsWith('--') ? argv[1] : 'status';
+            if (subcommand !== 'status' && subcommand !== 'use' && subcommand !== 'clear') {
+                throw new Error('remote forja-bin 仅支持 status/use/clear');
+            }
+            options.forjaBinSettingsAction = subcommand;
+            start = subcommand === argv[1] ? 2 : 1;
         } else if (first !== 'test' && first !== 'status' && first !== 'doctor' && first !== 'bootstrap' && first !== 'unlock') {
             throw new Error('未知 remote 命令: ' + first);
         } else {
@@ -354,6 +461,11 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
 
     for (let i = start; i < argv.length; i++) {
         const arg = argv[i];
+        const targetPassthrough = consumeTargetPassthrough(argv, i, options);
+        if (targetPassthrough !== null) {
+            i += targetPassthrough;
+            continue;
+        }
         switch (arg) {
             case '--workspace': {
                 const value = argv[i + 1];
@@ -409,10 +521,85 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 break;
             }
             case '--path': {
-                if (options.action !== 'transfer' || options.transferAction !== 'set') { throw new Error('--path 只能用于 remote transfer set'); }
+                if (!((options.action === 'transfer' && options.transferAction === 'set') || (options.action === 'workspaceSettings' && options.workspaceSettingsAction === 'use') || (options.action === 'repoSettings' && options.repoSettingsAction === 'set') || (options.action === 'forjaBinSettings' && options.forjaBinSettingsAction === 'use'))) { throw new Error('--path 只能用于 remote transfer set、remote workspace use、remote repo set 或 remote forja-bin use'); }
                 const value = argv[i + 1];
                 if (!value || value.startsWith('--')) { throw new Error('--path 需要一个值'); }
-                options.transferPath = value;
+                if (options.action === 'transfer') { options.transferPath = value; }
+                else if (options.action === 'workspaceSettings') { options.remoteWorkspace = value; }
+                else if (options.action === 'forjaBinSettings') { options.remoteForjaBinPath = value; }
+                else { options.repoRemotePath = value; }
+                i++;
+                break;
+            }
+            case '--mode': {
+                if (options.action !== 'workspaceSettings' || options.workspaceSettingsAction !== 'use') { throw new Error('--mode 只能用于 remote workspace use'); }
+                const value = argv[i + 1];
+                if (value !== 'legacy' && value !== 'staged' && value !== 'managed') { throw new Error('--mode 仅支持 legacy 或 staged'); }
+                options.workspaceMode = value === 'managed' ? 'staged' : value;
+                i++;
+                break;
+            }
+            case '--profile': {
+                if (options.action !== 'workspaceSettings' || options.workspaceSettingsAction !== 'use') { throw new Error('--profile 只能用于 remote workspace use'); }
+                const value = argv[i + 1];
+                if (!value || value.startsWith('--')) { throw new Error('--profile 需要一个值'); }
+                options.profile = value;
+                i++;
+                break;
+            }
+            case '--local': {
+                if (options.action !== 'repoSettings' || (options.repoSettingsAction !== 'set' && options.repoSettingsAction !== 'remove')) { throw new Error('--local 只能用于 remote repo set/remove'); }
+                const value = argv[i + 1];
+                if (!value || value.startsWith('--')) { throw new Error('--local 需要一个值'); }
+                options.repoLocalName = value;
+                i++;
+                break;
+            }
+            case '--remote': {
+                if (options.action !== 'repoSettings' || options.repoSettingsAction !== 'set') { throw new Error('--remote 只能用于 remote repo set'); }
+                const value = argv[i + 1];
+                if (!value || value.startsWith('--')) { throw new Error('--remote 需要一个值'); }
+                options.repoRemoteName = value;
+                i++;
+                break;
+            }
+            case '--role': {
+                if (options.action !== 'repoSettings' || options.repoSettingsAction !== 'set') { throw new Error('--role 只能用于 remote repo set'); }
+                const value = argv[i + 1];
+                if (!isRemoteRepoRole(value)) { throw new Error('--role 非法: ' + (value || '')); }
+                options.repoRole = value;
+                i++;
+                break;
+            }
+            case '--baseline': {
+                if (options.action !== 'repoSettings' || options.repoSettingsAction !== 'set') { throw new Error('--baseline 只能用于 remote repo set'); }
+                const value = argv[i + 1];
+                if (value !== 'auto' && value !== 'status-only') { throw new Error('--baseline 仅支持 auto 或 status-only'); }
+                options.repoBaseline = value;
+                i++;
+                break;
+            }
+            case '--overlay': {
+                if (options.action !== 'repoSettings' || options.repoSettingsAction !== 'set') { throw new Error('--overlay 只能用于 remote repo set'); }
+                const value = argv[i + 1];
+                if (value !== 'true' && value !== 'false') { throw new Error('--overlay 需要 true 或 false'); }
+                options.repoOverlay = value === 'true';
+                i++;
+                break;
+            }
+            case '--mount': {
+                if (options.action !== 'repoSettings' || options.repoSettingsAction !== 'set') { throw new Error('--mount 只能用于 remote repo set'); }
+                const value = argv[i + 1];
+                if (value !== 'symlink') { throw new Error('--mount 仅支持 symlink'); }
+                options.repoMount = value;
+                i++;
+                break;
+            }
+            case '--asset': {
+                if (options.action !== 'repoSettings' || options.repoSettingsAction !== 'set') { throw new Error('--asset 只能用于 remote repo set'); }
+                const value = argv[i + 1];
+                if (!value || value.startsWith('--')) { throw new Error('--asset 需要一个值'); }
+                options.repoAssets.push(value);
                 i++;
                 break;
             }
@@ -439,6 +626,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
     if (options.action === 'restore' || options.action === 'reset' || options.action === 'cleanUntracked') {
         const actionName = options.action === 'cleanUntracked' ? 'clean-untracked' : options.action;
         if (!options.repo) { throw new Error('remote ' + actionName + ' 需要 --repo <repo>'); }
+        validateRepoNameArg(options.repo, '--repo');
         if (options.passthrough.length === 0) { throw new Error('remote ' + actionName + ' 需要 -- 后跟至少一个路径'); }
     }
     if (options.action === 'buildOrder' && options.buildOrderAction === 'set' && options.passthrough.length === 0) {
@@ -449,6 +637,25 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
         if (!options.transferPath) { throw new Error('remote transfer set 需要 --path <deployPath>'); }
         if (options.transferArtifacts.length === 0) { throw new Error('remote transfer set 需要至少一个 --artifact <path>'); }
     }
+    if (options.action === 'workspaceSettings' && options.workspaceSettingsAction === 'use') {
+        if (options.workspaceMode === 'staged' && !options.remoteWorkspace) { throw new Error('remote workspace use --mode staged 需要 --path <remoteWorkspace>'); }
+    }
+    if (options.action === 'repoSettings' && options.repoSettingsAction === 'set') {
+        if (!options.repoLocalName) { throw new Error('remote repo set 需要 --local <name>'); }
+        if (!options.repoRemoteName) { throw new Error('remote repo set 需要 --remote <name>'); }
+        if (!options.repoRole) { throw new Error('remote repo set 需要 --role <role>'); }
+        validateRepoNameArg(options.repoLocalName, '--local');
+        validateRepoNameArg(options.repoRemoteName, '--remote');
+    }
+    if (options.action === 'repoSettings' && options.repoSettingsAction === 'remove' && !options.repoLocalName) {
+        throw new Error('remote repo remove 需要 --local <name>');
+    }
+    if (options.action === 'repoSettings' && options.repoSettingsAction === 'remove') {
+        validateRepoNameArg(options.repoLocalName, '--local');
+    }
+    if (options.action === 'forjaBinSettings' && options.forjaBinSettingsAction === 'use' && !options.remoteForjaBinPath) {
+        throw new Error('remote forja-bin use 需要 --path <remoteForjaBin>');
+    }
     if (options.target === 'qt' && options.remoteAction === 'run' && options.json && !options.passthrough.includes('--detach')) {
         throw new Error('remote qt run --json 仅支持 --detach 模式，请使用 remote qt run --detach --json');
     }
@@ -456,15 +663,15 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
 }
 
 function isBridgeAction(target: RemoteBridgeTarget, action: string | undefined): action is RemoteBridgeAction {
-    if (action === 'status' || action === 'init' || action === 'use') { return true; }
+    if (action === 'status') { return true; }
     return target === 'qt' && (action === 'stop' || action === 'ps');
 }
 
 function isPreparedAction(target: RemoteBridgeTarget, action: string | undefined): action is RemoteBridgeAction {
     if (target === 'qt') {
-        return action === 'build' || action === 'clean' || action === 'qmake' || action === 'run';
+        return action === 'init' || action === 'use' || action === 'build' || action === 'clean' || action === 'qmake' || action === 'run';
     }
-    return action === 'build' || action === 'rebuild' || action === 'clean';
+    return action === 'init' || action === 'use' || action === 'build' || action === 'rebuild' || action === 'clean';
 }
 
 function remoteSupportMessage(target: RemoteBridgeTarget): string {
@@ -494,12 +701,85 @@ function parseBuildOrderItems(items: string[]): RemoteBuildOrderItem[] {
     });
 }
 
+function buildRepoSetting(options: RemoteCliOptions): RemoteRepoSettings {
+    const repo: RemoteRepoSettings = {
+        localName: options.repoLocalName,
+        remoteName: options.repoRemoteName,
+        role: options.repoRole as RemoteRepoSettings['role']
+    };
+    if (options.repoRemotePath) { repo.remotePath = options.repoRemotePath; }
+    if (options.repoBaseline) { repo.baseline = options.repoBaseline; }
+    if (options.repoOverlay !== null) { repo.overlay = options.repoOverlay; }
+    if (options.repoMount) { repo.mount = options.repoMount; }
+    if (options.repoAssets.length > 0) { repo.assets = parseRepoAssets(options.repoAssets); }
+    return repo;
+}
+
+function validateRepoNameArg(value: string, label: string): void {
+    const error = validateStagedRepoName(value, 'repo');
+    if (error) { throw new Error(label + ' ' + error); }
+}
+
+function consumeTargetPassthrough(argv: string[], index: number, options: RemoteCliOptions): number | null {
+    if (options.action !== 'bridge' && options.action !== 'preparedAction') { return null; }
+    const arg = argv[index];
+    if (arg === '--workspace' || arg === '--json' || arg === '--') { return null; }
+    if (!arg.startsWith('--')) { return null; }
+    const valueFlags = new Set(['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target', '--qmake-args', '--vs-dev-cmd']);
+    const booleanFlags = new Set(['--plan', '--detach']);
+    const flag = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg;
+    if (booleanFlags.has(flag) || arg.includes('=')) {
+        options.passthrough.push(arg);
+        return 0;
+    }
+    if (valueFlags.has(flag)) {
+        const value = argv[index + 1];
+        if (!value || value.startsWith('--')) { throw new Error(arg + ' 需要一个值'); }
+        options.passthrough.push(arg, value);
+        return 1;
+    }
+    return null;
+}
+
+function parseRepoAssets(values: string[]): RemoteRepoAssetSettings[] {
+    return values.map(value => {
+        const idx = value.indexOf('=');
+        const localPath = idx >= 0 ? value.slice(0, idx) : value;
+        const remotePath = idx >= 0 ? value.slice(idx + 1) : '';
+        validateRepoAssetPath(localPath, '--asset local');
+        if (remotePath) { validateRepoAssetPath(remotePath, '--asset remote'); }
+        return remotePath ? { localPath: normalizeAssetPath(localPath), remotePath: normalizeAssetPath(remotePath) } : { localPath: normalizeAssetPath(localPath) };
+    });
+}
+
+function validateRepoAssetPath(value: string, label: string): void {
+    const normalized = normalizeAssetPath(value);
+    if (!normalized || normalized.includes('\0') || path.isAbsolute(normalized) || /^[A-Za-z]:\//.test(normalized)) {
+        throw new Error(label + ' 需要 repo 内相对路径');
+    }
+    if (normalized.split('/').some(segment => segment === '' || segment === '.' || segment === '..')) {
+        throw new Error(label + ' 需要 repo 内相对路径');
+    }
+}
+
+function normalizeAssetPath(value: string): string {
+    return value.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+}
+
+function isRemoteRepoRole(value: unknown): value is RemoteRepoSettings['role'] {
+    return value === 'primary'
+        || value === 'mapped'
+        || value === 'remote-only'
+        || value === 'existing-remote'
+        || value === 'skip';
+}
+
 function unique(values: string[]): string[] {
     return Array.from(new Set(values));
 }
 
 function cliPackageRoot(): string {
-    return path.resolve(__dirname, '..', '..', '..');
+    return findPackageRoot(__dirname) || path.resolve(__dirname, '..', '..', '..');
 }
 
 function writeOutput(result: unknown, json: boolean): void {
@@ -638,6 +918,9 @@ function helpText(): string {
         '  forja remote test [--bootstrap] [--json]',
         '  forja remote bootstrap [--json]',
         '  forja remote unlock --lock-id <id> --force [--json]',
+        '  forja remote workspace status|use|clear [--json]',
+        '  forja remote repo list|set|remove|clear [--asset local[=remote]] [--json]',
+        '  forja remote forja-bin status|use|clear [--path <remoteForjaBin>] [--json]',
         '  forja remote build-order status|set|clear [items...] [--json]',
         '  forja remote transfer status|set|clear|run [--json]',
         '  forja remote qt status|init|use|build|clean|qmake|run|stop|ps [--json]',

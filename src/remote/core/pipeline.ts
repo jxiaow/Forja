@@ -1,11 +1,17 @@
-import { RemoteBuildOrderItem } from '../../core/settingsIO';
-import { GitRunner, buildRemoteBaselineStatus, RepoBaselineState } from './baseline';
+import { loadRemoteSettings, RemoteBuildOrderItem, RemoteRepoSettings } from '../../core/settingsIO';
+import { GitRunner, buildRemoteBaselineStatus, inspectLocalRepositories, RepoBaselineState } from './baseline';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from './bridge';
 import { RemoteUploader } from './bootstrap';
 import { executeRemoteBranchSync } from './branchSync';
+import { executeBundleBaseline } from './bundleBaseline';
 import { executeRemoteAcquireLock, executeRemoteReleaseLock, RemoteLockMetadata } from './lock';
-import { buildLocalOverlayPlan, executeRemoteOverlaySync } from './overlaySync';
+import { buildStagedWorkspacePrepareCommand, stagedWorkspaceRepoPath } from './stagedWorkspace';
+import { buildLocalOverlayPlan, executeRemoteOverlaySync, LocalOverlayAssetMapping, mergeAssetOverlayPlan } from './overlaySync';
+import { executeRemoteOverlayRestore } from './overlayRestore';
+import { executeRemoteShellFallback, supportsRemoteShellFallback } from './remoteShellFallback';
+import { planRemoteRepositories, RemoteRepoMapping, RemoteRepoPlan } from './repoStrategy';
 import { RemoteDiagnostic, RemoteRunner, RemoteStage } from './types';
+import { executeWorkspaceLinks } from './workspaceLink';
 
 export interface PrepareRemoteWorkspaceOptions {
     workspace: string;
@@ -37,6 +43,7 @@ export interface PrepareRemoteWorkspaceResult {
     ok: boolean;
     action: 'prepareWorkspace';
     mode: 'remote';
+    actionRemotePath?: string;
     failedStage?: string;
     lock?: RemoteLockMetadata;
     repos: RepoBaselineState[];
@@ -51,11 +58,16 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
     let repos: RepoBaselineState[] = [];
     let lock: RemoteLockMetadata | undefined;
     const releaseAfterPrepare = options.releaseAfterPrepare ?? true;
+    const remoteSettings = loadRemoteSettings(options.workspace);
+    const stagedMode = remoteSettings.workspaceMode === 'staged';
+    const workspaceRemotePath = stagedMode && remoteSettings.remoteWorkspace ? remoteSettings.remoteWorkspace : options.remotePath;
+    let repoPlans: RemoteRepoPlan[] = [];
 
     const fail = (stage: string, nextActions: string[] = ['修复 remote prepare 诊断后重试']): PrepareRemoteWorkspaceResult => ({
         ok: false,
         action: 'prepareWorkspace',
         mode: 'remote',
+        actionRemotePath: stagedMode ? resolvePrimaryActionPath(workspaceRemotePath, repoPlans) : workspaceRemotePath,
         failedStage: stage,
         lock,
         repos,
@@ -64,19 +76,43 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         nextActions
     });
 
-    const baseline = await buildRemoteBaselineStatus({ workspace: options.workspace, remotePath: options.remotePath, runner: options.runner, git: options.git });
+    const local = stagedMode ? await inspectLocalRepositories({ workspace: options.workspace, git: options.git, allowUnpushed: true }) : undefined;
+    const baseline = await buildRemoteBaselineStatus({
+        workspace: options.workspace,
+        remotePath: workspaceRemotePath,
+        runner: options.runner,
+        git: options.git,
+        allowUnpushed: stagedMode,
+        ...(stagedMode ? stagedBaselineProbe(local?.repos || [], remoteSettings.repos) : {})
+    });
     repos = baseline.repos;
-    diagnostics.push(...baseline.diagnostics);
-    stages.push({ stage: 'baselinePrecheck', ok: baseline.ok, message: baseline.overall });
-    if (!baseline.ok) {
-        return fail('baselinePrecheck', baseline.nextActions);
+    if (stagedMode) {
+        const plan = planRemoteRepositories({
+            stagedWorkspace: workspaceRemotePath,
+            localRepos: local?.repos || [],
+            remoteRepos: baseline.repos,
+            mappings: toRemoteRepoMappings(remoteSettings.repos)
+        });
+        repoPlans = plan.repos;
+        diagnostics.push(...(local?.diagnostics || []).filter(item => item.level === 'error'));
+        diagnostics.push(...plan.diagnostics);
+        stages.push({ stage: 'baselinePlan', ok: plan.ok, message: plan.ok ? plan.repos.map(repo => repo.strategy).join(',') : 'blocked' });
+        if (!plan.ok) {
+            return fail('baselinePlan', plan.nextActions);
+        }
+    } else {
+        stages.push({ stage: 'baselinePrecheck', ok: baseline.ok, message: baseline.overall });
+        diagnostics.push(...baseline.diagnostics);
+        if (!baseline.ok) {
+            return fail('baselinePrecheck', baseline.nextActions);
+        }
     }
 
     const lockResult = await executeRemoteAcquireLock({
-        remotePath: options.remotePath,
+        remotePath: workspaceRemotePath,
         owner: options.owner,
         stage: 'prepare',
-        repos: repos.map(repo => repo.name),
+        repos: stagedMode ? repoPlans.map(repo => repo.remoteName) : repos.map(repo => repo.name),
         workspace: options.workspace,
         runner: options.runner
     });
@@ -89,22 +125,94 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
 
     let result: PrepareRemoteWorkspaceResult | undefined;
     try {
-        const branchSync = await executeRemoteBranchSync({ remotePath: options.remotePath, targetId: lockResult.targetId, repos, runner: options.runner });
-        diagnostics.push(...branchSync.diagnostics);
-        stages.push({ stage: 'branchSync', ok: branchSync.ok });
-        if (!branchSync.ok) {
-            result = fail('branchSync', branchSync.nextActions);
-            return result;
+        if (stagedMode) {
+            const prepare = await options.runner.run(buildStagedWorkspacePrepareCommand({
+                stagedWorkspace: workspaceRemotePath,
+                serverId: options.owner,
+                workspaceId: lockResult.targetId,
+                repos: repoPlans.filter(repo => repo.staged).map(repo => repo.remoteName)
+            }), 10000);
+            diagnostics.push(...(prepare.exitCode === 0 ? [] : [{ level: 'error' as const, message: prepare.stderr || 'staged workspace prepare 失败' }]));
+            stages.push({ stage: 'stagedWorkspacePrepare', ok: prepare.exitCode === 0, message: prepare.exitCode === 0 ? 'ready' : prepare.stderr });
+            if (prepare.exitCode !== 0) {
+                result = fail('stagedWorkspacePrepare');
+                return result;
+            }
+
+            const overlayRestore = await executeRemoteOverlayRestore({
+                targetId: lockResult.targetId,
+                repos: repoPlans
+                    .filter(repo => repo.overlayAllowed)
+                    .map(repo => ({ name: repo.localName, remotePath: repoPathForPlan(workspaceRemotePath, repo) })),
+                runner: options.runner
+            });
+            diagnostics.push(...overlayRestore.diagnostics);
+            if (!overlayRestore.ok) {
+                stages.push({ stage: 'overlaySync', ok: false, message: 'overlay restore failed' });
+                result = fail('overlaySync', ['修复 overlay restore 诊断后重试']);
+                return result;
+            }
+
+            const branchRepos = repos.filter(repo => repoPlans.some(plan => plan.remoteName === repo.name && plan.strategy === 'git-pull'));
+            if (branchRepos.length > 0) {
+                const branchSync = await executeRemoteBranchSync({ remotePath: workspaceRemotePath, targetId: lockResult.targetId, repos: branchRepos, runner: options.runner });
+                diagnostics.push(...branchSync.diagnostics);
+                stages.push({ stage: 'branchSync', ok: branchSync.ok, message: 'git' });
+                if (!branchSync.ok) {
+                    result = fail('branchSync', branchSync.nextActions);
+                    return result;
+                }
+            }
+
+            const bundlePlans = repoPlans.filter(plan => plan.strategy === 'bundle-fetch' || plan.strategy === 'bundle-clone');
+            if (bundlePlans.length > 0) {
+                const bundle = await executeBundleBaseline({ stagedWorkspace: workspaceRemotePath, targetId: lockResult.targetId, localRepos: local?.repos || [], plans: bundlePlans, runner: options.runner, uploader: options.uploader });
+                diagnostics.push(...bundle.diagnostics);
+                repos = mergeBundleRepos(repos, bundle.repos);
+                stages.push({ stage: 'bundleBaseline', ok: bundle.ok, message: 'bundle' });
+                if (!bundle.ok) {
+                    result = fail('bundleBaseline', bundle.nextActions);
+                    return result;
+                }
+            }
+
+            const links = await executeWorkspaceLinks({ stagedWorkspace: workspaceRemotePath, plans: repoPlans, runner: options.runner });
+            diagnostics.push(...links.diagnostics);
+            stages.push({ stage: 'workspaceLink', ok: links.ok, message: links.linked.join(',') || 'none' });
+            if (!links.ok) {
+                result = fail('workspaceLink', links.nextActions);
+                return result;
+            }
+        } else {
+            const branchSync = await executeRemoteBranchSync({ remotePath: workspaceRemotePath, targetId: lockResult.targetId, repos, runner: options.runner });
+            diagnostics.push(...branchSync.diagnostics);
+            stages.push({ stage: 'branchSync', ok: branchSync.ok, message: 'git' });
+            if (!branchSync.ok) {
+                result = fail('branchSync', branchSync.nextActions);
+                return result;
+            }
         }
 
         const overlayPlan = await buildLocalOverlayPlan({ workspace: options.workspace, ignore: options.ignore, git: options.git });
-        diagnostics.push(...overlayPlan.diagnostics);
-        if (!overlayPlan.ok) {
+        let effectiveOverlayPlan = stagedMode ? {
+            ...overlayPlan,
+            repos: overlayPlan.repos.filter(repo => repoPlans.some(plan => plan.localName === repo.name && plan.overlayAllowed))
+        } : overlayPlan;
+        if (stagedMode) {
+            effectiveOverlayPlan = mergeAssetOverlayPlan(effectiveOverlayPlan, toLocalOverlayAssets(remoteSettings.repos, local?.repos || [], repoPlans));
+        }
+        diagnostics.push(...effectiveOverlayPlan.diagnostics);
+        if (!effectiveOverlayPlan.ok) {
             stages.push({ stage: 'overlaySync', ok: false, message: 'overlay plan failed' });
             result = fail('overlaySync');
             return result;
         }
-        const overlaySync = await executeRemoteOverlaySync({ remotePath: options.remotePath, targetId: lockResult.targetId, plan: overlayPlan, runner: options.runner, uploader: options.uploader });
+        const repoRemotePaths = stagedMode
+            ? Object.fromEntries(repoPlans
+                .filter(repo => repo.overlayAllowed)
+                .map(repo => [repo.localName, repoPathForPlan(workspaceRemotePath, repo)]))
+            : Object.fromEntries(baseline.repos.filter(repo => repo.remotePath).map(repo => [repo.name, repo.remotePath as string]));
+        const overlaySync = await executeRemoteOverlaySync({ remotePath: workspaceRemotePath, targetId: lockResult.targetId, plan: effectiveOverlayPlan, repoRemotePaths, runner: options.runner, uploader: options.uploader });
         diagnostics.push(...overlaySync.diagnostics);
         stages.push({ stage: 'overlaySync', ok: overlaySync.ok });
         if (!overlaySync.ok) {
@@ -112,7 +220,14 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             return result;
         }
 
-        const postBaseline = await buildRemoteBaselineStatus({ workspace: options.workspace, remotePath: options.remotePath, runner: options.runner, git: options.git });
+        const postBaseline = await buildRemoteBaselineStatus({
+            workspace: options.workspace,
+            remotePath: workspaceRemotePath,
+            runner: options.runner,
+            git: options.git,
+            allowUnpushed: stagedMode,
+            ...(stagedMode ? stagedBaselineProbe(local?.repos || [], remoteSettings.repos) : {})
+        });
         repos = postBaseline.repos;
         diagnostics.push(...postBaseline.diagnostics);
         stages.push({ stage: 'baselineCheck', ok: postBaseline.ok, message: postBaseline.overall });
@@ -125,6 +240,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             ok: true,
             action: 'prepareWorkspace',
             mode: 'remote',
+            actionRemotePath: stagedMode ? resolvePrimaryActionPath(workspaceRemotePath, repoPlans) : workspaceRemotePath,
             lock,
             repos,
             stages,
@@ -134,7 +250,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         return result;
     } finally {
         if (releaseAfterPrepare || !result?.ok) {
-            const release = await executeRemoteReleaseLock({ remotePath: options.remotePath, lockId: lockResult.lock.lockId, runner: options.runner });
+            const release = await executeRemoteReleaseLock({ remotePath: workspaceRemotePath, lockId: lockResult.lock.lockId, runner: options.runner });
             diagnostics.push(...release.diagnostics);
             stages.push({ stage: 'releaseLock', ok: release.ok, message: release.removed ? 'removed' : release.diagnostics[0]?.message });
             if (result) {
@@ -154,35 +270,37 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
 export async function executePreparedRemoteAction(options: ExecutePreparedRemoteActionOptions): Promise<ExecutePreparedRemoteActionResult> {
     const actions = selectRemoteActions(options);
     const readinessTargets = [...new Set(actions.map(item => item.target))];
-    for (const target of readinessTargets) {
-        const readiness = await executeRemoteBridge({
-            target,
-            action: 'status',
-            args: [],
-            json: true,
-            remotePath: options.remotePath,
-            runner: options.runner
-        });
-        if (!readiness.ok) {
-            return {
-                ok: false,
-                action: 'preparedAction',
-                mode: 'remote',
-                failedStage: 'targetReadiness',
-                repos: [],
-                stages: [{ stage: 'targetReadiness', ok: false, message: target }],
-                diagnostics: readiness.diagnostics,
-                nextActions: readiness.nextActions.length > 0 ? readiness.nextActions : [`forja remote ${target} status --json`],
-                remote: readiness
-            };
-        }
+    const remoteSettings = loadRemoteSettings(options.workspace);
+    const stagedMode = remoteSettings.workspaceMode === 'staged';
+    const workspaceRemotePath = stagedMode && remoteSettings.remoteWorkspace ? remoteSettings.remoteWorkspace : options.remotePath;
+    const remoteForjaBin = remoteSettings.remoteForjaBin || undefined;
+    if (!stagedMode) {
+        const readinessFailure = await runTargetReadiness(readinessTargets, workspaceRemotePath, options.runner, remoteForjaBin);
+        if (readinessFailure) { return readinessFailure; }
     }
 
     const prepared = await prepareRemoteWorkspace({ ...options, releaseAfterPrepare: false });
     const base: ExecutePreparedRemoteActionResult = { ...prepared, action: 'preparedAction' };
-    base.stages.unshift({ stage: 'targetReadiness', ok: true, message: readinessTargets.join(',') });
     if (!prepared.ok) {
         return base;
+    }
+    const actionRemotePath = prepared.actionRemotePath || workspaceRemotePath;
+    if (stagedMode) {
+        const readinessFailure = await runTargetReadiness(readinessTargets, actionRemotePath, options.runner, remoteForjaBin);
+        if (readinessFailure) {
+            if (isRemoteForjaUnavailable(readinessFailure.remote)) {
+                base.diagnostics.push({ level: 'warning', message: 'remote forja 不可用，后续尝试 shell fallback' });
+                base.stages.push({ stage: 'targetReadiness', ok: true, message: 'shell fallback' });
+            } else {
+                readinessFailure.stages = [...base.stages, ...readinessFailure.stages];
+                return readinessFailure;
+            }
+        }
+        if (!base.stages.some(stage => stage.stage === 'targetReadiness')) {
+            base.stages.push({ stage: 'targetReadiness', ok: true, message: readinessTargets.join(',') });
+        }
+    } else {
+        base.stages.unshift({ stage: 'targetReadiness', ok: true, message: readinessTargets.join(',') });
     }
 
     try {
@@ -194,9 +312,30 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
                 args: action.args,
                 json: options.json,
                 stream: actions.length === 1 ? options.stream : false,
-                remotePath: options.remotePath,
+                remotePath: actionRemotePath,
+                remoteForjaBin,
                 runner: options.runner
             });
+            if (!remote.ok && stagedMode && isRemoteForjaUnavailable(remote) && supportsRemoteShellFallback(action.target, action.action)) {
+                const fallback = await executeRemoteShellFallback({
+                    target: action.target,
+                    action: action.action,
+                    args: action.args,
+                    remotePath: actionRemotePath,
+                    runner: options.runner
+                });
+                base.remote = fallback;
+                base.remoteActions.push(fallback);
+                base.stages.push({ stage: 'remoteShellFallback', ok: fallback.ok, message: action.target + ':' + action.action });
+                base.diagnostics.push(...fallback.diagnostics);
+                if (!fallback.ok) {
+                    base.ok = false;
+                    base.failedStage = 'remoteShellFallback';
+                    base.nextActions = fallback.nextActions;
+                    break;
+                }
+                continue;
+            }
             base.remote = remote;
             base.remoteActions.push(remote);
             base.stages.push({ stage: 'remoteAction', ok: remote.ok, message: action.target + ':' + action.action });
@@ -214,7 +353,7 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
         base.diagnostics.push({ level: 'error', message: error instanceof Error ? error.message : String(error) });
         base.nextActions = ['检查远端 action 参数后重试'];
     } finally {
-        const release = await executeRemoteReleaseLock({ remotePath: options.remotePath, lockId: prepared.lock!.lockId, runner: options.runner });
+        const release = await executeRemoteReleaseLock({ remotePath: workspaceRemotePath, lockId: prepared.lock!.lockId, runner: options.runner });
         base.diagnostics.push(...release.diagnostics);
         base.stages.push({ stage: 'releaseLock', ok: release.ok, message: release.removed ? 'removed' : release.diagnostics[0]?.message });
         if (!release.ok) {
@@ -224,6 +363,82 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
         }
     }
     return base;
+}
+
+function stagedBaselineProbe(localRepos: { name: string }[], mappings: RemoteRepoSettings[]): { remoteRepoNames: string[]; localNameByRemoteName: Record<string, string> } {
+    const mappedLocalNames = new Set(mappings.map(repo => repo.localName));
+    const localNameByRemoteName: Record<string, string> = {};
+    const remoteRepoNames = new Set<string>();
+
+    for (const repo of mappings) {
+        localNameByRemoteName[repo.remoteName] = repo.localName;
+        if (repo.role === 'primary' || repo.role === 'mapped') {
+            remoteRepoNames.add(repo.remoteName);
+        }
+    }
+    for (const local of localRepos) {
+        if (!mappedLocalNames.has(local.name)) {
+            remoteRepoNames.add(local.name);
+        }
+    }
+
+    return { remoteRepoNames: [...remoteRepoNames], localNameByRemoteName };
+}
+
+function repoPathForPlan(stagedWorkspace: string, plan: RemoteRepoPlan): string {
+    return plan.remotePath || stagedWorkspaceRepoPath(stagedWorkspace, plan.remoteName);
+}
+
+function resolvePrimaryActionPath(stagedWorkspace: string, plans: RemoteRepoPlan[]): string {
+    const primary = plans.find(plan => plan.role === 'primary' && plan.staged)
+        || plans.find(plan => plan.role === 'mapped' && plan.staged)
+        || plans.find(plan => plan.overlayAllowed && plan.staged);
+    return primary ? repoPathForPlan(stagedWorkspace, primary) : stagedWorkspace;
+}
+
+function isRemoteForjaUnavailable(remote: Awaited<ReturnType<typeof executeRemoteBridge>> | undefined): boolean {
+    if (!remote) { return false; }
+    if (remote.exitCode === 127 || remote.exitCode === 126) { return true; }
+    if (remote.result !== undefined) { return false; }
+    const text = (remote.stderr + '\n' + remote.stdout + '\n' + remote.diagnostics.map(item => item.message).join('\n')).toLowerCase();
+    return text.includes('not found')
+        || text.includes('no such file')
+        || text.includes('permission denied')
+        || text.includes('remote forja missing')
+        || text.includes('版本不兼容');
+}
+
+async function runTargetReadiness(
+    readinessTargets: RemoteBridgeTarget[],
+    remotePath: string,
+    runner: RemoteRunner,
+    remoteForjaBin?: string
+): Promise<ExecutePreparedRemoteActionResult | null> {
+    for (const target of readinessTargets) {
+        const readiness = await executeRemoteBridge({
+            target,
+            action: 'status',
+            args: [],
+            json: true,
+            remotePath,
+            remoteForjaBin,
+            runner
+        });
+        if (!readiness.ok) {
+            return {
+                ok: false,
+                action: 'preparedAction',
+                mode: 'remote',
+                failedStage: 'targetReadiness',
+                repos: [],
+                stages: [{ stage: 'targetReadiness', ok: false, message: target }],
+                diagnostics: readiness.diagnostics,
+                nextActions: readiness.nextActions.length > 0 ? readiness.nextActions : [`forja remote ${target} status --json`],
+                remote: readiness
+            };
+        }
+    }
+    return null;
 }
 
 function selectRemoteActions(options: ExecutePreparedRemoteActionOptions): RemoteBuildOrderItem[] {
@@ -236,4 +451,43 @@ function selectRemoteActions(options: ExecutePreparedRemoteActionOptions): Remot
 function isBuildOrderEntryPoint(options: ExecutePreparedRemoteActionOptions): boolean {
     if (options.target === 'qt') { return options.action === 'build'; }
     return options.action === 'build' || options.action === 'rebuild';
+}
+
+function toRemoteRepoMappings(repos: RemoteRepoSettings[]): RemoteRepoMapping[] {
+    return repos.map(repo => ({
+        localName: repo.localName,
+        remoteName: repo.remoteName,
+        role: repo.role,
+        remotePath: repo.remotePath,
+        baseline: repo.baseline,
+        overlay: repo.overlay,
+        mount: repo.mount
+    }));
+}
+
+function toLocalOverlayAssets(settings: RemoteRepoSettings[], localRepos: { name: string; dir: string }[], plans: RemoteRepoPlan[]): LocalOverlayAssetMapping[] {
+    const assets: LocalOverlayAssetMapping[] = [];
+    for (const repo of settings) {
+        if (!repo.assets || repo.assets.length === 0) { continue; }
+        const plan = plans.find(item => item.localName === repo.localName && item.overlayAllowed);
+        const local = localRepos.find(item => item.name === repo.localName);
+        if (!plan || !local) { continue; }
+        for (const asset of repo.assets) {
+            assets.push({
+                repoName: repo.localName,
+                repoDir: local.dir,
+                localPath: asset.localPath,
+                remotePath: asset.remotePath
+            });
+        }
+    }
+    return assets;
+}
+
+function mergeBundleRepos(current: RepoBaselineState[], updated: RepoBaselineState[]): RepoBaselineState[] {
+    const byName = new Map(current.map(repo => [repo.name, repo]));
+    for (const repo of updated) {
+        byName.set(repo.name, repo);
+    }
+    return [...byName.values()];
 }

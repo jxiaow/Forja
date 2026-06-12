@@ -1,5 +1,6 @@
 import { ServerConfig } from '../../core/serverStore';
 import type { RepoBaselineState } from './baseline';
+import type { RemoteRepoPlan } from './repoStrategy';
 
 export type RemoteLayerName =
     | 'syncConfig'
@@ -9,6 +10,7 @@ export type RemoteLayerName =
     | 'remoteForja'
     | 'repoDiscovery'
     | 'baselinePrecheck'
+    | 'baselinePlan'
     | 'targetLock';
 
 export interface RemoteDiagnostic {
@@ -65,6 +67,10 @@ export interface RemoteStatusResult {
     };
     remoteSettings?: {
         remoteForjaBin: string;
+        workspaceMode: 'legacy' | 'staged';
+        profile: string;
+        remoteWorkspace: string;
+        repoCount: number;
         buildOrder: {
             configured: boolean;
             count: number;
@@ -78,6 +84,11 @@ export interface RemoteStatusResult {
         };
     };
     repos?: RepoBaselineState[];
+    remotePlan?: {
+        workspaceMode: 'legacy' | 'staged';
+        stagedWorkspace: string;
+        repos: RemoteRepoPlan[];
+    };
     diagnostics: RemoteDiagnostic[];
     nextActions: string[];
 }

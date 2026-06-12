@@ -35,6 +35,37 @@ test('remote CLI bootstrap resolves artifacts from package root instead of calle
     assert.match(source, /findBootstrapArtifact\(cliPackageRoot\(\)\)/);
 });
 
+test('remote CLI workspace-affecting actions use staged action path', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'cli', 'index.ts'), 'utf8');
+    assert.match(source, /executeRemoteTransfer\(\{ remotePath: actionRemotePath/);
+    assert.match(source, /executeRemoteCleanUntracked\(\{ remotePath: actionRemotePath/);
+    assert.match(source, /executeRemoteRestore\(\{ remotePath: actionRemotePath/);
+    assert.match(source, /executeRemoteUnlock\(\{ remotePath: actionRemotePath/);
+});
+
+test('remote source uses staged workspace naming for public flow', () => {
+    const remoteDir = path.join(process.cwd(), 'src', 'remote');
+    const files = fs.readdirSync(path.join(remoteDir, 'core')).filter(file => file.endsWith('.ts'));
+    const combined = files
+        .map(file => fs.readFileSync(path.join(remoteDir, 'core', file), 'utf8'))
+        .join('\n');
+
+    assert.ok(files.includes('stagedWorkspace.ts'));
+    assert.equal(files.includes('managedWorkspace.ts'), false);
+    assert.doesNotMatch(combined, /managedWorkspacePrepare/);
+    assert.doesNotMatch(combined, /managedWorkspace:/);
+    assert.doesNotMatch(combined, /managedWorkspace\?/);
+    assert.doesNotMatch(combined, /managedWorkspaceRepoPath/);
+    assert.doesNotMatch(combined, /\bmanaged:\s*boolean/);
+    assert.doesNotMatch(combined, /\.managed\b/);
+});
+
+test('standalone CLI package includes remote command modules', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'scripts', 'build-cli.js'), 'utf8');
+    assert.match(source, /'remote\/cli'/);
+    assert.match(source, /'remote\/core'/);
+});
+
 test('forja skill documents current status init use flow', () => {
     const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
 

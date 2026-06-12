@@ -1,5 +1,6 @@
 import * as cp from 'child_process';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
+import { buildRemoteRepoDirSetup } from './repoPath';
 import { remoteCommand } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
@@ -29,6 +30,7 @@ export interface LocalRepoPrecheck {
 export interface InspectLocalRepositoriesOptions {
     workspace: string;
     git?: GitRunner;
+    allowUnpushed?: boolean;
 }
 
 export interface InspectLocalRepositoriesResult {
@@ -44,6 +46,8 @@ export interface RemoteRepoProbeInput {
 export interface RepoBaselineState {
     name: string;
     mode: 'git' | 'files';
+    remotePath?: string;
+    missing?: boolean;
     branch?: string;
     upstream?: string;
     localCommit?: string;
@@ -70,6 +74,8 @@ export interface InspectRemoteRepositoriesResult {
 export interface BuildRemoteBaselineStatusOptions extends InspectLocalRepositoriesOptions {
     remotePath: string;
     runner: RemoteRunner;
+    remoteRepoNames?: string[];
+    localNameByRemoteName?: Record<string, string>;
 }
 
 export interface BuildRemoteBaselineStatusResult {
@@ -142,7 +148,7 @@ export async function inspectLocalRepositories(options: InspectLocalRepositories
             if ((repo.ahead || 0) > 0 && (repo.behind || 0) > 0) {
                 repo.ok = false;
                 repoDiagnostics.push({ level: 'error', message: root.name + ' 本地分支与 upstream 分叉，remote baseline 不可确定' });
-            } else if ((repo.ahead || 0) > 0) {
+            } else if ((repo.ahead || 0) > 0 && !options.allowUnpushed) {
                 repo.ok = false;
                 repoDiagnostics.push({ level: 'error', message: root.name + ' 本地 HEAD 未 push 到 upstream，远端无法拉取该 baseline' });
             } else if ((repo.behind || 0) > 0) {
@@ -161,8 +167,9 @@ export async function inspectLocalRepositories(options: InspectLocalRepositories
 export async function inspectRemoteRepositories(options: InspectRemoteRepositoriesOptions): Promise<InspectRemoteRepositoriesResult> {
     const diagnostics: RemoteDiagnostic[] = [];
     const repos: RepoBaselineState[] = [];
+    const singleRepo = options.repos.length === 1;
     for (const repo of options.repos) {
-        const command = buildRemoteRepoInspectCommand(options.remotePath, repo.name);
+        const command = buildRemoteRepoInspectCommand(options.remotePath, repo.name, singleRepo);
         const executed = await options.runner.run(command, 10000);
         if (executed.exitCode !== 0) {
             const message = trim(executed.stderr) || repo.name + ' 远端仓库探测失败';
@@ -180,20 +187,22 @@ export async function inspectRemoteRepositories(options: InspectRemoteRepositori
 }
 
 export async function buildRemoteBaselineStatus(options: BuildRemoteBaselineStatusOptions): Promise<BuildRemoteBaselineStatusResult> {
-    const local = await inspectLocalRepositories({ workspace: options.workspace, git: options.git });
+    const local = await inspectLocalRepositories({ workspace: options.workspace, git: options.git, allowUnpushed: options.allowUnpushed });
     if (local.repos.length === 0) {
         return { ok: false, overall: 'blocked', repos: [], diagnostics: local.diagnostics, nextActions: ['检查本地 workspace git 仓库'] };
     }
 
     const remote = await inspectRemoteRepositories({
         remotePath: options.remotePath,
-        repos: local.repos.map(repo => ({ name: repo.name })),
+        repos: (options.remoteRepoNames && options.remoteRepoNames.length > 0 ? options.remoteRepoNames : local.repos.map(repo => repo.name))
+            .map(name => ({ name })),
         runner: options.runner
     });
 
     const diagnostics: RemoteDiagnostic[] = [...local.diagnostics, ...remote.diagnostics];
     const repos = remote.repos.map(remoteRepo => {
-        const localRepo = local.repos.find(repo => repo.name === remoteRepo.name);
+        const localName = options.localNameByRemoteName?.[remoteRepo.name] || remoteRepo.name;
+        const localRepo = local.repos.find(repo => repo.name === localName);
         const merged: RepoBaselineState = {
             ...remoteRepo,
             branch: localRepo?.branch,
@@ -207,7 +216,7 @@ export async function buildRemoteBaselineStatus(options: BuildRemoteBaselineStat
                 diagnostics.push({ level: 'error', message: remoteRepo.name + ' commit 不一致: local=' + (localRepo?.localCommit || 'unknown') + ', remote=' + (remoteRepo.remoteCommit || 'unknown') });
             }
         }
-        if (remoteRepo.mode === 'files') {
+        if (remoteRepo.mode === 'files' && !remoteRepo.missing) {
             diagnostics.push({ level: 'warning', message: remoteRepo.name + ' 远端为 files-only，跳过 git baseline 对齐' });
         }
         return merged;
@@ -224,14 +233,14 @@ export async function buildRemoteBaselineStatus(options: BuildRemoteBaselineStat
     };
 }
 
-function buildRemoteRepoInspectCommand(remotePath: string, repoName: string): string {
-    const repoDir = remoteCommand([remotePath]) + '/' + remoteCommand([repoName]);
+function buildRemoteRepoInspectCommand(remotePath: string, repoName: string, singleRepo: boolean): string {
     return [
-        'repo_dir=' + repoDir + ';',
+        buildRemoteRepoDirSetup(remotePath, repoName, singleRepo),
+        'printf "path:%s\\n" "$repo_dir";',
         'if [ -d "$repo_dir/.git" ]; then',
-        'cd "$repo_dir" && printf "mode:git\\n" && printf "commit:" && git rev-parse HEAD && printf "status:\\n" && git status --porcelain -uall',
-        'elif [ -d "$repo_dir" ]; then printf "mode:files\\n"',
-        'else printf "mode:files\\nmissing:true\\n"',
+        'cd "$repo_dir" && printf "mode:git\\n" && printf "commit:" && git rev-parse HEAD && printf "status:\\n" && git status --porcelain -uall;',
+        'elif [ -d "$repo_dir" ]; then printf "mode:files\\n";',
+        'else printf "mode:files\\nmissing:true\\n";',
         'fi'
     ].join(' ');
 }
@@ -241,6 +250,14 @@ function parseRemoteRepoProbe(name: string, stdout: string): RepoBaselineState {
     const modeLine = lines.find(line => line.startsWith('mode:'));
     const mode = modeLine && modeLine.trim() === 'mode:git' ? 'git' : 'files';
     const state = emptyRepoState(name, mode);
+    const pathLine = lines.find(line => line.startsWith('path:'));
+    if (pathLine) {
+        state.remotePath = pathLine.slice('path:'.length).trim() || undefined;
+    }
+    if (lines.some(line => line.trim() === 'missing:true')) {
+        state.missing = true;
+        state.diagnostics.push({ level: 'error', message: name + ' 远端仓库不存在: ' + (state.remotePath || 'unknown') });
+    }
     const commitLine = lines.find(line => line.startsWith('commit:'));
     if (commitLine) {
         state.remoteCommit = commitLine.slice('commit:'.length).trim() || undefined;

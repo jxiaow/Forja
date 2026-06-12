@@ -63,10 +63,30 @@ export interface RemoteTransferSettings {
     artifacts: string[];
 }
 
+export interface RemoteRepoAssetSettings {
+    localPath: string;
+    remotePath?: string;
+}
+
+export interface RemoteRepoSettings {
+    localName: string;
+    remoteName: string;
+    role: 'primary' | 'mapped' | 'remote-only' | 'existing-remote' | 'skip';
+    remotePath?: string;
+    baseline?: 'auto' | 'status-only';
+    overlay?: boolean;
+    mount?: 'symlink';
+    assets?: RemoteRepoAssetSettings[];
+}
+
 export interface RemoteSettings {
     remoteForjaBin: string;
     buildOrder: RemoteBuildOrderItem[];
     transfer: RemoteTransferSettings | null;
+    workspaceMode: 'legacy' | 'staged';
+    profile: string;
+    remoteWorkspace: string;
+    repos: RemoteRepoSettings[];
 }
 
 export interface ForjaSettings {
@@ -117,7 +137,11 @@ export const DEFAULT_SYNC: Readonly<SyncSettings> = {
 export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
     remoteForjaBin: '',
     buildOrder: [],
-    transfer: null
+    transfer: null,
+    workspaceMode: 'legacy',
+    profile: '',
+    remoteWorkspace: '',
+    repos: []
 };
 
 export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
@@ -431,11 +455,50 @@ function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
         }
     }
 
+    const repos: RemoteRepoSettings[] = [];
+    if (Array.isArray(raw.repos)) {
+        for (const item of raw.repos) {
+            if (!item || typeof item !== 'object') { continue; }
+            const entry = item as Record<string, unknown>;
+            if (!isString(entry.localName) || !isString(entry.remoteName) || !isRemoteRepoRole(entry.role)) { continue; }
+            const repo: RemoteRepoSettings = {
+                localName: entry.localName,
+                remoteName: entry.remoteName,
+                role: entry.role
+            };
+            if (isString(entry.remotePath)) { repo.remotePath = entry.remotePath; }
+            if (entry.baseline === 'auto' || entry.baseline === 'status-only') { repo.baseline = entry.baseline; }
+            if (isBool(entry.overlay)) { repo.overlay = entry.overlay; }
+            if (entry.mount === 'symlink') { repo.mount = entry.mount; }
+            const assets = sanitizeRemoteRepoAssets(entry.assets);
+            if (assets.length > 0) { repo.assets = assets; }
+            repos.push(repo);
+        }
+    }
+
     return {
         remoteForjaBin: isString(raw.remoteForjaBin) ? raw.remoteForjaBin : d.remoteForjaBin,
         buildOrder,
-        transfer
+        transfer,
+        workspaceMode: raw.workspaceMode === 'staged' || raw.workspaceMode === 'managed' ? 'staged' : d.workspaceMode,
+        profile: isString(raw.profile) ? raw.profile : d.profile,
+        remoteWorkspace: isString(raw.remoteWorkspace) ? raw.remoteWorkspace : d.remoteWorkspace,
+        repos
     };
+}
+
+function sanitizeRemoteRepoAssets(raw: unknown): RemoteRepoAssetSettings[] {
+    if (!Array.isArray(raw)) { return []; }
+    const assets: RemoteRepoAssetSettings[] = [];
+    for (const item of raw) {
+        if (!item || typeof item !== 'object') { continue; }
+        const entry = item as Record<string, unknown>;
+        if (!isString(entry.localPath)) { continue; }
+        const asset: RemoteRepoAssetSettings = { localPath: entry.localPath };
+        if (isString(entry.remotePath) && entry.remotePath) { asset.remotePath = entry.remotePath; }
+        assets.push(asset);
+    }
+    return assets;
 }
 
 function isRemoteBuildOrderAction(target: 'qt' | 'sdk', action: unknown): action is RemoteBuildOrderItem['action'] {
@@ -443,4 +506,12 @@ function isRemoteBuildOrderAction(target: 'qt' | 'sdk', action: unknown): action
         return action === 'build' || action === 'clean' || action === 'qmake';
     }
     return action === 'build' || action === 'rebuild' || action === 'clean';
+}
+
+function isRemoteRepoRole(value: unknown): value is RemoteRepoSettings['role'] {
+    return value === 'primary'
+        || value === 'mapped'
+        || value === 'remote-only'
+        || value === 'existing-remote'
+        || value === 'skip';
 }

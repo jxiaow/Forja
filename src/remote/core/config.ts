@@ -1,6 +1,7 @@
 import * as path from 'path';
 import { getServerById } from '../../core/serverStore';
-import { loadSyncSettings } from '../../core/settingsIO';
+import { loadRemoteSettings, loadSyncSettings } from '../../core/settingsIO';
+import { stagedWorkspaceRepoPath } from './stagedWorkspace';
 import { RemoteConfig, RemoteDiagnostic, RemoteLayer } from './types';
 
 export interface ResolveRemoteConfigResult {
@@ -30,6 +31,23 @@ export function resolveRemoteConfig(workspace: string): ResolveRemoteConfigResul
         diagnostics: [],
         nextActions: []
     };
+}
+
+export function resolveRemoteActionPath(workspace: string, remotePath: string): string {
+    const settings = loadRemoteSettings(workspace);
+    if (settings.workspaceMode === 'staged' && settings.remoteWorkspace) {
+        return settings.remoteWorkspace;
+    }
+    return remotePath;
+}
+
+export function resolveRemotePrimaryActionPath(workspace: string, remotePath: string): string {
+    const settings = loadRemoteSettings(workspace);
+    if (settings.workspaceMode !== 'staged' || !settings.remoteWorkspace) {
+        return remotePath;
+    }
+    const primary = settings.repos.find(repo => repo.role === 'primary' && repo.remoteName);
+    return primary ? stagedWorkspaceRepoPath(settings.remoteWorkspace, primary.remoteName) : settings.remoteWorkspace;
 }
 
 function blocked(message: string): ResolveRemoteConfigResult {

@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { buildRemoteRepoDirSetup } from './repoPath';
 import { quoteRemoteArg, remoteCommand } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
@@ -49,9 +50,8 @@ export async function executeRemoteRestore(options: ExecuteRemoteRestoreOptions)
     const canonicalPath = pathResult.stdout.trim();
     const targetId = crypto.createHash('sha256').update(canonicalPath).digest('hex');
 
-    const repoDir = remoteCommand([options.remotePath]) + '/' + remoteCommand([options.repo]);
     const pathArgs = remoteCommand(options.paths);
-    const command = 'cd ' + repoDir + ' && git ls-files --error-unmatch -- ' + pathArgs + ' && git restore -- ' + pathArgs;
+    const command = buildRemoteRepoDirSetup(options.remotePath, options.repo, true) + ' cd "$repo_dir" && git ls-files --error-unmatch -- ' + pathArgs + ' && git restore -- ' + pathArgs;
     const executed = await options.runner.run(command, 30000);
     if (executed.exitCode !== 0) {
         diagnostics.push({ level: 'error', message: trim(executed.stderr) || '远端 restore 失败' });

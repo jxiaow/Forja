@@ -1,9 +1,10 @@
 import { loadRemoteSettings, RemoteSettings } from '../../core/settingsIO';
-import { buildRemoteBaselineStatus, GitRunner } from './baseline';
+import { buildRemoteBaselineStatus, GitRunner, inspectLocalRepositories, inspectRemoteRepositories } from './baseline';
 import { BootstrapArtifactResult, executeRemoteBootstrap, RemoteUploader } from './bootstrap';
 import { VERSION } from '../../version';
 import { resolveRemoteConfig } from './config';
 import { executeRemoteReadLock } from './lock';
+import { planRemoteRepositories, RemoteRepoMapping } from './repoStrategy';
 import { createSshRunner, remoteCommand } from './shell';
 import { RemoteConfig, RemoteLayer, RemoteRunner, RemoteStage, RemoteStatusResult, RemoteTestResult } from './types';
 
@@ -50,7 +51,9 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         };
     }
 
-    const { server, remotePath } = resolved.config;
+    const stagedMode = localRemoteSettings.workspaceMode === 'staged' && !!localRemoteSettings.remoteWorkspace;
+    const { server } = resolved.config;
+    const remotePath = stagedMode ? localRemoteSettings.remoteWorkspace : resolved.config.remotePath;
     const probe = options.probe ?? true;
     if (!probe) {
         layers.push(
@@ -115,8 +118,10 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         nextActions: versionOk ? undefined : ['forja remote bootstrap']
     });
     if (!versionOk) {
-        diagnostics.push({ level: 'error', message: 'remote forja 未安装或版本不兼容' });
-        return finishBlocked(options.workspace, server.name || server.id, remotePath, layers, diagnostics, 'remoteForja', ['forja remote bootstrap']);
+        diagnostics.push({ level: stagedMode ? 'warning' : 'error', message: 'remote forja 未安装或版本不兼容' });
+        if (!stagedMode) {
+            return finishBlocked(options.workspace, server.name || server.id, remotePath, layers, diagnostics, 'remoteForja', ['forja remote bootstrap']);
+        }
     }
 
     let lock = { locked: false } as RemoteStatusResult['lock'];
@@ -141,6 +146,45 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
                 nextActions: lockStatus.lock.lockId ? ['forja remote unlock --lock-id ' + lockStatus.lock.lockId + ' --force'] : []
             };
         }
+    }
+
+    if (options.baseline !== false && stagedMode) {
+        const planStatus = await buildStagedRemotePlanStatus({
+            workspace: resolved.config.workspace,
+            stagedWorkspace: remotePath,
+            settings: localRemoteSettings,
+            runner,
+            git: options.git
+        });
+        layers.push(
+            { name: 'repoDiscovery', ok: planStatus.localRepoCount > 0, message: planStatus.localRepoCount > 0 ? planStatus.localRepoNames.join(', ') : 'no local git repos' },
+            { name: 'baselinePlan', ok: planStatus.plan.ok, message: planStatus.plan.ok ? 'ready' : 'blocked' }
+        );
+        diagnostics.push(...planStatus.diagnostics);
+        const overall = planStatus.plan.ok ? versionOk ? 'ready' : 'degraded' : 'blocked';
+        return {
+            ok: true,
+            action: 'status',
+            mode: 'remote',
+            overall,
+            workspace: resolved.config.workspace,
+            server: server.name || server.id,
+            remotePath,
+            layers,
+            lock,
+            remoteSettings: remoteSettingsSummary,
+            repos: planStatus.remoteRepos,
+            remotePlan: {
+                workspaceMode: 'staged',
+                stagedWorkspace: remotePath,
+                repos: planStatus.plan.repos
+            },
+            diagnostics,
+            nextActions: unique([
+                ...(!versionOk ? ['forja remote bootstrap'] : []),
+                ...planStatus.plan.nextActions
+            ])
+        };
     }
 
     if (options.baseline !== false) {
@@ -191,6 +235,9 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
 export async function buildRemoteTest(options: BuildRemoteTestOptions): Promise<RemoteTestResult> {
     const status = await buildRemoteStatus({ ...options, probe: options.probe ?? true, baseline: false, lock: false });
     const failed = status.layers.find(layer => layer.ok === false);
+    if (failed?.name === 'remoteForja' && status.remoteSettings?.workspaceMode === 'staged') {
+        return testResult(true, undefined, status.diagnostics, status.nextActions);
+    }
     if (!failed || !options.bootstrap || failed.name !== 'remoteForja') {
         return testResult(!failed, failed, status.diagnostics, failed?.nextActions || status.nextActions);
     }
@@ -263,6 +310,10 @@ function finishBlocked(
 function summarizeRemoteSettings(settings: RemoteSettings): NonNullable<RemoteStatusResult['remoteSettings']> {
     return {
         remoteForjaBin: settings.remoteForjaBin,
+        workspaceMode: settings.workspaceMode,
+        profile: settings.profile,
+        remoteWorkspace: settings.remoteWorkspace,
+        repoCount: settings.repos.length,
         buildOrder: {
             configured: settings.buildOrder.length > 0,
             count: settings.buildOrder.length,
@@ -277,6 +328,77 @@ function summarizeRemoteSettings(settings: RemoteSettings): NonNullable<RemoteSt
     };
 }
 
+async function buildStagedRemotePlanStatus(options: {
+    workspace: string;
+    stagedWorkspace: string;
+    settings: RemoteSettings;
+    runner: RemoteRunner;
+    git?: GitRunner;
+}): Promise<{
+    localRepoCount: number;
+    localRepoNames: string[];
+    remoteRepos: Awaited<ReturnType<typeof inspectRemoteRepositories>>['repos'];
+    plan: ReturnType<typeof planRemoteRepositories>;
+    diagnostics: RemoteStatusResult['diagnostics'];
+}> {
+    const local = await inspectLocalRepositories({ workspace: options.workspace, git: options.git, allowUnpushed: true });
+    if (local.repos.length === 0) {
+        const emptyPlan = planRemoteRepositories({
+            stagedWorkspace: options.stagedWorkspace,
+            localRepos: [],
+            remoteRepos: [],
+            mappings: toRemoteRepoMappings(options.settings.repos)
+        });
+        return {
+            localRepoCount: 0,
+            localRepoNames: [],
+            remoteRepos: [],
+            plan: emptyPlan,
+            diagnostics: [...local.diagnostics, ...emptyPlan.diagnostics]
+        };
+    }
+
+    const remoteProbeNames = unique([
+        ...local.repos.map(repo => repo.name),
+        ...options.settings.repos.map(repo => repo.remoteName)
+    ]);
+    const remote = await inspectRemoteRepositories({
+        remotePath: options.stagedWorkspace,
+        repos: remoteProbeNames.map(name => ({ name })),
+        runner: options.runner
+    });
+    const plan = planRemoteRepositories({
+        stagedWorkspace: options.stagedWorkspace,
+        localRepos: local.repos,
+        remoteRepos: remote.repos,
+        mappings: toRemoteRepoMappings(options.settings.repos)
+    });
+
+    return {
+        localRepoCount: local.repos.length,
+        localRepoNames: local.repos.map(repo => repo.name),
+        remoteRepos: remote.repos,
+        plan,
+        diagnostics: [
+            ...local.diagnostics,
+            ...remote.diagnostics.filter(item => !/远端仓库不存在/.test(item.message)),
+            ...plan.diagnostics
+        ]
+    };
+}
+
+function toRemoteRepoMappings(repos: RemoteSettings['repos']): RemoteRepoMapping[] {
+    return repos.map(repo => ({
+        localName: repo.localName,
+        remoteName: repo.remoteName,
+        role: repo.role,
+        remotePath: repo.remotePath,
+        baseline: repo.baseline,
+        overlay: repo.overlay,
+        mount: repo.mount
+    }));
+}
+
 function buildRemoteForjaVersionCommand(remoteForjaBin: string): string {
     if (remoteForjaBin) {
         return `${remoteCommand([remoteForjaBin])} --version`;
@@ -286,4 +408,8 @@ function buildRemoteForjaVersionCommand(remoteForjaBin: string): string {
 
 function trimMessage(value: string): string {
     return value.trim().split(/\r?\n/).slice(0, 3).join('\n');
+}
+
+function unique(values: string[]): string[] {
+    return Array.from(new Set(values));
 }

@@ -1,5 +1,6 @@
 import * as cp from 'child_process';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
 import * as path from 'path';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
 import { isIgnored } from '../../core/gitChangedFiles';
@@ -35,10 +36,18 @@ export interface BuildLocalOverlayPlanOptions {
     git?: GitRunner;
 }
 
+export interface LocalOverlayAssetMapping {
+    repoName: string;
+    repoDir: string;
+    localPath: string;
+    remotePath?: string;
+}
+
 export interface ExecuteRemoteOverlaySyncOptions {
     remotePath: string;
     targetId: string;
     plan: LocalOverlayPlan;
+    repoRemotePaths?: Record<string, string>;
     runner: RemoteRunner;
     uploader: RemoteUploader;
 }
@@ -104,6 +113,52 @@ export async function buildLocalOverlayPlan(options: BuildLocalOverlayPlanOption
     return { ok: diagnostics.every(item => item.level !== 'error'), action: 'overlayPlan', repos, diagnostics };
 }
 
+export function mergeAssetOverlayPlan(plan: LocalOverlayPlan, assets: LocalOverlayAssetMapping[]): LocalOverlayPlan {
+    if (assets.length === 0) { return plan; }
+    const diagnostics: RemoteDiagnostic[] = [...plan.diagnostics];
+    const repos = plan.repos.map(repo => ({
+        ...repo,
+        trackedUploads: [...repo.trackedUploads],
+        untrackedUploads: [...repo.untrackedUploads],
+        deletedTracked: [...repo.deletedTracked],
+        skipped: [...repo.skipped]
+    }));
+    const byName = new Map(repos.map(repo => [repo.name, repo]));
+
+    for (const asset of assets) {
+        const repo = byName.get(asset.repoName);
+        if (!repo) {
+            diagnostics.push({ level: 'error', message: asset.repoName + ' asset overlay 找不到本地 overlay repo' });
+            continue;
+        }
+        const localRel = normalizeOverlayPath(asset.localPath);
+        const remoteBase = normalizeOverlayPath(asset.remotePath || asset.localPath);
+        const pathError = validateOverlayPath(localRel) || validateOverlayPath(remoteBase);
+        if (pathError) {
+            diagnostics.push({ level: 'error', message: asset.repoName + ' 非法 asset 路径: ' + asset.localPath });
+            continue;
+        }
+        const localAbs = path.resolve(asset.repoDir, localRel);
+        const repoDir = path.resolve(asset.repoDir);
+        if (!isInside(repoDir, localAbs) || !fs.existsSync(localAbs)) {
+            diagnostics.push({ level: 'error', message: asset.repoName + ' asset 不存在或不在 repo 内: ' + asset.localPath });
+            continue;
+        }
+        const stat = fs.statSync(localAbs);
+        const files = stat.isDirectory() ? listFilesRecursive(localAbs) : [localAbs];
+        for (const file of files) {
+            const relInAsset = stat.isDirectory() ? normalizeOverlayPath(path.relative(localAbs, file)) : '';
+            const remoteRel = stat.isDirectory() ? joinOverlayPath(remoteBase, relInAsset) : remoteBase;
+            if (repo.untrackedUploads.some(item => item.path === remoteRel) || repo.trackedUploads.some(item => item.path === remoteRel)) {
+                continue;
+            }
+            repo.untrackedUploads.push({ path: remoteRel, localPath: file });
+        }
+    }
+
+    return { ...plan, ok: plan.ok && diagnostics.every(item => item.level !== 'error'), repos, diagnostics };
+}
+
 export async function executeRemoteOverlaySync(options: ExecuteRemoteOverlaySyncOptions): Promise<ExecuteRemoteOverlaySyncResult> {
     const diagnostics: RemoteDiagnostic[] = [...options.plan.diagnostics];
     const repos: RemoteOverlaySyncRepoResult[] = [];
@@ -115,13 +170,21 @@ export async function executeRemoteOverlaySync(options: ExecuteRemoteOverlaySync
         const repoDiagnostics: RemoteDiagnostic[] = [];
         const uploaded: string[] = [];
         const deletedTracked: string[] = [];
-        const repoRemotePath = trimSlash(options.remotePath) + '/' + repo.name;
+        const repoRemotePath = options.repoRemotePaths?.[repo.name] || trimSlash(options.remotePath) + '/' + repo.name;
         const allUploads = [...repo.trackedUploads, ...repo.untrackedUploads];
 
         for (const item of allUploads) {
             const capture = await options.runner.run(buildCaptureUnderlayCommand(options.targetId, repo.name, repoRemotePath, item.path), 10000);
             if (capture.exitCode !== 0) {
                 const error = { level: 'error' as const, message: trim(capture.stderr) || repo.name + ' underlay 捕获失败: ' + item.path };
+                diagnostics.push(error);
+                repoDiagnostics.push(error);
+                repos.push({ name: repo.name, ok: false, uploaded, deletedTracked, diagnostics: repoDiagnostics });
+                return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: ['修复 overlay sync 诊断后重试'] };
+            }
+            const mkdir = await options.runner.run(buildEnsureParentDirectoryCommand(repoRemotePath, item.path), 10000);
+            if (mkdir.exitCode !== 0) {
+                const error = { level: 'error' as const, message: trim(mkdir.stderr) || repo.name + ' 远端目录创建失败: ' + item.path };
                 diagnostics.push(error);
                 repoDiagnostics.push(error);
                 repos.push({ name: repo.name, ok: false, uploaded, deletedTracked, diagnostics: repoDiagnostics });
@@ -213,6 +276,33 @@ function validateOverlayPath(value: string): string | null {
     return null;
 }
 
+function normalizeOverlayPath(value: string): string {
+    return value.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+}
+
+function joinOverlayPath(base: string, rel: string): string {
+    if (!rel) { return base; }
+    return base + '/' + rel;
+}
+
+function isInside(root: string, value: string): boolean {
+    const relative = path.relative(root, value);
+    return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function listFilesRecursive(dir: string): string[] {
+    const result: string[] = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const child = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            result.push(...listFilesRecursive(child));
+        } else if (entry.isFile()) {
+            result.push(child);
+        }
+    }
+    return result;
+}
+
 function buildCaptureUnderlayCommand(targetId: string, repoName: string, repoRemotePath: string, rel: string): string {
     const stateDir = '"$HOME/.forja/remote-state/' + targetId + '"';
     const backupRef = repoName + '/' + hashPath(rel) + '.bak';
@@ -227,6 +317,14 @@ function buildCaptureUnderlayCommand(targetId: string, repoName: string, repoRem
         "fs.mkdirSync(path.dirname(dst),{recursive:true});fs.copyFileSync(src,dst);"
     ].join('');
     return 'node -e ' + quoteRemoteArg(script) + ' -- ' + stateDir + ' ' + remoteCommand([repoRemotePath, rel, backupRef]);
+}
+
+function buildEnsureParentDirectoryCommand(repoRemotePath: string, rel: string): string {
+    const parent = path.posix.dirname(rel.replace(/\\/g, '/'));
+    if (parent === '.') {
+        return 'mkdir -p ' + remoteCommand([repoRemotePath]);
+    }
+    return 'mkdir -p ' + remoteCommand([trimSlash(repoRemotePath) + '/' + parent]);
 }
 
 function buildManifestUpdateCommand(targetId: string, repoName: string, tracked: string[], untracked: string[], deletedTracked: string[]): string {
