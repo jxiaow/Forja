@@ -249,7 +249,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 return;
             }
             const remoteSettings = loadRemoteSettings(resolved.config.workspace);
-            const actionRemotePath = resolveRemoteActionPath(resolved.config.workspace, resolved.config.remotePath);
+            const actionRemotePath = resolveRemotePrimaryActionPath(resolved.config.workspace, resolved.config.remotePath);
             const result = await executeRemoteBridge({
                 target: options.target!,
                 action: options.remoteAction!,

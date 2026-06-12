@@ -3,7 +3,7 @@ import { getServerById } from '../../core/serverStore';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { executeRemoteBootstrap, findBootstrapArtifact } from '../core/bootstrap';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
-import { resolveRemoteConfig } from '../core/config';
+import { resolveRemoteConfig, resolveRemotePrimaryActionPath } from '../core/config';
 import { buildRemoteDoctor } from '../core/doctor';
 import { executePreparedRemoteAction, ExecutePreparedRemoteActionResult } from '../core/pipeline';
 import { createScpUploader, createSshRunner } from '../core/shell';
@@ -240,7 +240,8 @@ async function runForegroundRemoteQtRun(
         runner,
         uploader
     });
-    publishProblemsIfApplicable(REMOTE_VSCODE_COMMANDS.find(item => item.id === 'forja.remote.qt.run')!, { ...result, workspace: resolved.config.workspace, remotePath: resolved.config.remotePath });
+    const problemRemotePath = result.actionRemotePath || resolved.config.remotePath;
+    publishProblemsIfApplicable(REMOTE_VSCODE_COMMANDS.find(item => item.id === 'forja.remote.qt.run')!, { ...result, workspace: resolved.config.workspace, remotePath: problemRemotePath });
     if (!result.ok) {
         writeDiagnostics(terminal, result.diagnostics, result.nextActions);
         return 1;
@@ -277,7 +278,7 @@ async function executeCommand(context: vscode.ExtensionContext, workspace: strin
         const resolved = resolveRemoteConfig(workspace);
         const deployServer = settings.transfer ? getServerById(settings.transfer.deployServer) : null;
         const status = buildRemoteTransferStatus({
-            remotePath: resolved.config?.remotePath ?? null,
+            remotePath: resolved.config ? resolveRemotePrimaryActionPath(resolved.config.workspace, resolved.config.remotePath) : null,
             transfer: settings.transfer,
             deployServer
         });
@@ -309,15 +310,16 @@ async function executeCommand(context: vscode.ExtensionContext, workspace: strin
     }
 
     if (command.kind === 'bridgeAction') {
+        const actionRemotePath = resolveRemotePrimaryActionPath(resolved.config.workspace, resolved.config.remotePath);
         const bridge = await executeRemoteBridge({
             target: command.target!,
             action: command.remoteAction!,
             args: command.args || [],
             json: true,
-            remotePath: resolved.config.remotePath,
+            remotePath: actionRemotePath,
             runner
         });
-        return { ...bridge, workspace: resolved.config.workspace, remotePath: resolved.config.remotePath };
+        return { ...bridge, workspace: resolved.config.workspace, remotePath: actionRemotePath };
     }
 
     const result = await executePreparedRemoteAction({
@@ -333,7 +335,7 @@ async function executeCommand(context: vscode.ExtensionContext, workspace: strin
         runner,
         uploader: uploader!
     });
-    return { ...result, workspace: resolved.config.workspace, remotePath: resolved.config.remotePath };
+    return { ...result, workspace: resolved.config.workspace, remotePath: result.actionRemotePath || resolved.config.remotePath };
 }
 
 function publishProblemsIfApplicable(command: RemoteVscodeCommandDefinition, result: { workspace?: string; remotePath?: string; remote?: { result?: unknown; stdout?: string; stderr?: string } } | ExecutePreparedRemoteActionResult & { workspace?: string; remotePath?: string }): void {

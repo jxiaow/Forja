@@ -107,6 +107,38 @@ test('keeps remote-only dependencies status-only and never overlayable', () => {
     assert.equal(result.repos[0].mount, 'symlink');
 });
 
+test('honors status-only baseline on active repositories without overlay', () => {
+    const result = planRemoteRepositories({
+        stagedWorkspace: '/home/xw/workspace/forja-remote/release',
+        localRepos: [localRepo({ ahead: 1, upstreamCommit: 'old-upstream' })],
+        remoteRepos: [remoteRepo({ remoteCommit: 'old-remote', commitAligned: false })],
+        mappings: [{ localName: 'qt_client', remoteName: 'qt_client', role: 'primary', baseline: 'status-only', overlay: true }]
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.repos[0].strategy, 'status-only');
+    assert.equal(result.repos[0].overlayAllowed, false);
+});
+
+test('blocks existing files-only staged repositories before baseline mutation', () => {
+    const result = planRemoteRepositories({
+        stagedWorkspace: '/home/xw/workspace/forja-remote/release',
+        localRepos: [localRepo()],
+        remoteRepos: [remoteRepo({
+            mode: 'files',
+            remoteCommit: undefined,
+            commitAligned: false,
+            missing: false
+        })],
+        mappings: [{ localName: 'qt_client', remoteName: 'qt_client', role: 'primary', overlay: true }]
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.repos[0].strategy, 'blocked');
+    assert.equal(result.repos[0].overlayAllowed, false);
+    assert.match(result.diagnostics.map(item => item.message).join('\n'), /files-only|非 git/);
+});
+
 test('does not auto-map different local and remote repository names', () => {
     const result = planRemoteRepositories({
         stagedWorkspace: '/home/xw/workspace/forja-remote/release',

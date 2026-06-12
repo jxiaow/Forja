@@ -37,10 +37,21 @@ test('remote CLI bootstrap resolves artifacts from package root instead of calle
 
 test('remote CLI workspace-affecting actions use staged action path', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'cli', 'index.ts'), 'utf8');
+    assert.match(source, /if \(options\.action === 'bridge'\) \{[\s\S]*const actionRemotePath = resolveRemotePrimaryActionPath\(resolved\.config\.workspace, resolved\.config\.remotePath\)[\s\S]*executeRemoteBridge\(\{/);
     assert.match(source, /executeRemoteTransfer\(\{ remotePath: actionRemotePath/);
     assert.match(source, /executeRemoteCleanUntracked\(\{ remotePath: actionRemotePath/);
     assert.match(source, /executeRemoteRestore\(\{ remotePath: actionRemotePath/);
     assert.match(source, /executeRemoteUnlock\(\{ remotePath: actionRemotePath/);
+});
+
+test('remote VSCode adapter resolves staged paths for bridge and transfer commands', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'vscode', 'commands.ts'), 'utf8');
+    assert.match(source, /resolveRemotePrimaryActionPath/);
+    assert.match(source, /const actionRemotePath = resolveRemotePrimaryActionPath\(resolved\.config\.workspace, resolved\.config\.remotePath\)/);
+    assert.match(source, /buildRemoteTransferStatus\(\{\s*remotePath: resolved\.config \? resolveRemotePrimaryActionPath\(resolved\.config\.workspace, resolved\.config\.remotePath\) : null/s);
+    assert.match(source, /executeRemoteBridge\(\{\s*target: command\.target!,\s*action: command\.remoteAction!,[\s\S]*remotePath: actionRemotePath/);
+    assert.match(source, /const problemRemotePath = result\.actionRemotePath \|\| resolved\.config\.remotePath/);
+    assert.match(source, /return \{ \.\.\.result, workspace: resolved\.config\.workspace, remotePath: result\.actionRemotePath \|\| resolved\.config\.remotePath \}/);
 });
 
 test('remote source uses staged workspace naming for public flow', () => {

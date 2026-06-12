@@ -69,7 +69,11 @@ manifest 是“Forja 在该远端工作区留下过哪些 overlay 文件”的�
 3. 不把普通 `forja qt sync` 的历史文件自动视为 remote overlay，除非 remote sync 明确接管该写入路径
 4. 如果本次 overlay 上传或删除会覆盖 preserved tracked dirty，先把覆盖前的远端内容保存为 underlay，再执行 overlay 操作
 
+如果 remote sync 在部分文件已经上传或删除后失败，必须先把已完成部分写入 manifest，再返回失败诊断。下一次运行才能按 manifest 还原这些已落地 overlay，避免“本轮失败但远端已被部分污染”的状态被遗忘。
+
 manifest 只识别当前 remote pipeline 写入并记录过的 overlay。其他本地机器、普通 sync 命令或人工 SCP 写入的远端文件，不得因为路径相似就自动清理；它们会落入 preserved/unknown 分类。第一版因此默认一个远端 build target 由受控 remote pipeline 写 overlay，status 需要暴露 target 是否处于 files-only 或 dirty preserved 状态。
+
+本次 overlay 写入前，如果目标路径在远端存在但不是 git tracked 文件，也不在 manifest 管理范围内，视为 unknown untracked 碰撞并阻塞。不能上传覆盖，也不能把它当作可删除 overlay 清理。
 
 ## Branch Sync
 
@@ -108,6 +112,8 @@ git stash push -m "forja-remote-preserve" -- <tracked paths>
 ```
 
 第一版 stash 范围只包含 tracked dirty，不把 unknown untracked 和 ignored 文件纳入 stash。
+
+tracked rename 必须把旧路径和新路径同时纳入 stash 路径集。只保留新路径会丢失远端原有 rename 的删除侧，后续 checkout/pull/restore 无法完整还原 preserved dirty。
 
 ### 3. 拉取 Git Baseline
 

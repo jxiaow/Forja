@@ -96,6 +96,16 @@ export async function buildLocalOverlayPlan(options: BuildLocalOverlayPlanOption
                 diagnostics.push({ level: 'error', message: root.name + ' 非法 overlay 路径: ' + parsed.path });
                 continue;
             }
+            if (parsed.previousPath) {
+                const previousPathError = validateOverlayPath(parsed.previousPath);
+                if (previousPathError) {
+                    diagnostics.push({ level: 'error', message: root.name + ' 非法 overlay 路径: ' + parsed.previousPath });
+                    continue;
+                }
+                if (!isIgnored(parsed.previousPath, options.ignore) && !repoPlan.deletedTracked.includes(parsed.previousPath)) {
+                    repoPlan.deletedTracked.push(parsed.previousPath);
+                }
+            }
             if (isIgnored(parsed.path, options.ignore)) {
                 repoPlan.skipped.push(parsed.path);
                 continue;
@@ -172,23 +182,35 @@ export async function executeRemoteOverlaySync(options: ExecuteRemoteOverlaySync
         const deletedTracked: string[] = [];
         const repoRemotePath = options.repoRemotePaths?.[repo.name] || trimSlash(options.remotePath) + '/' + repo.name;
         const allUploads = [...repo.trackedUploads, ...repo.untrackedUploads];
+        const persistCompletedOverlay = async (): Promise<void> => {
+            const tracked = repo.trackedUploads.map(item => item.path).filter(item => uploaded.includes(item));
+            const untracked = repo.untrackedUploads.map(item => item.path).filter(item => uploaded.includes(item));
+            if (tracked.length === 0 && untracked.length === 0 && deletedTracked.length === 0) { return; }
+            const manifest = await options.runner.run(buildManifestUpdateCommand(options.targetId, repo.name, tracked, untracked, deletedTracked), 10000);
+            if (manifest.exitCode !== 0) {
+                const error = { level: 'error' as const, message: trim(manifest.stderr) || repo.name + ' overlay manifest 更新失败' };
+                diagnostics.push(error);
+                repoDiagnostics.push(error);
+            }
+        };
+        const failRepo = async (error: RemoteDiagnostic): Promise<ExecuteRemoteOverlaySyncResult> => {
+            diagnostics.push(error);
+            repoDiagnostics.push(error);
+            await persistCompletedOverlay();
+            repos.push({ name: repo.name, ok: false, uploaded, deletedTracked, diagnostics: repoDiagnostics });
+            return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: ['修复 overlay sync 诊断后重试'] };
+        };
 
         for (const item of allUploads) {
             const capture = await options.runner.run(buildCaptureUnderlayCommand(options.targetId, repo.name, repoRemotePath, item.path), 10000);
             if (capture.exitCode !== 0) {
                 const error = { level: 'error' as const, message: trim(capture.stderr) || repo.name + ' underlay 捕获失败: ' + item.path };
-                diagnostics.push(error);
-                repoDiagnostics.push(error);
-                repos.push({ name: repo.name, ok: false, uploaded, deletedTracked, diagnostics: repoDiagnostics });
-                return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: ['修复 overlay sync 诊断后重试'] };
+                return failRepo(error);
             }
             const mkdir = await options.runner.run(buildEnsureParentDirectoryCommand(repoRemotePath, item.path), 10000);
             if (mkdir.exitCode !== 0) {
                 const error = { level: 'error' as const, message: trim(mkdir.stderr) || repo.name + ' 远端目录创建失败: ' + item.path };
-                diagnostics.push(error);
-                repoDiagnostics.push(error);
-                repos.push({ name: repo.name, ok: false, uploaded, deletedTracked, diagnostics: repoDiagnostics });
-                return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: ['修复 overlay sync 诊断后重试'] };
+                return failRepo(error);
             }
             try {
                 await options.uploader.upload(item.localPath, repoRemotePath + '/' + item.path);
@@ -196,10 +218,7 @@ export async function executeRemoteOverlaySync(options: ExecuteRemoteOverlaySync
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 const diagnostic = { level: 'error' as const, message };
-                diagnostics.push(diagnostic);
-                repoDiagnostics.push(diagnostic);
-                repos.push({ name: repo.name, ok: false, uploaded, deletedTracked, diagnostics: repoDiagnostics });
-                return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: ['修复 overlay sync 诊断后重试'] };
+                return failRepo(diagnostic);
             }
         }
 
@@ -207,18 +226,12 @@ export async function executeRemoteOverlaySync(options: ExecuteRemoteOverlaySync
             const capture = await options.runner.run(buildCaptureUnderlayCommand(options.targetId, repo.name, repoRemotePath, rel), 10000);
             if (capture.exitCode !== 0) {
                 const error = { level: 'error' as const, message: trim(capture.stderr) || repo.name + ' underlay 捕获失败: ' + rel };
-                diagnostics.push(error);
-                repoDiagnostics.push(error);
-                repos.push({ name: repo.name, ok: false, uploaded, deletedTracked, diagnostics: repoDiagnostics });
-                return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: ['修复 overlay sync 诊断后重试'] };
+                return failRepo(error);
             }
             const remove = await options.runner.run('cd ' + remoteCommand([repoRemotePath]) + ' && rm -f -- ' + remoteCommand([rel]), 10000);
             if (remove.exitCode !== 0) {
                 const error = { level: 'error' as const, message: trim(remove.stderr) || repo.name + ' tracked deletion 失败: ' + rel };
-                diagnostics.push(error);
-                repoDiagnostics.push(error);
-                repos.push({ name: repo.name, ok: false, uploaded, deletedTracked, diagnostics: repoDiagnostics });
-                return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: ['修复 overlay sync 诊断后重试'] };
+                return failRepo(error);
             }
             deletedTracked.push(rel);
         }
@@ -251,23 +264,28 @@ function defaultGitRunner(): GitRunner {
     };
 }
 
-function parseStatusLine(line: string): { kind: 'tracked' | 'untracked' | 'deleted'; path: string } | null {
+function parseStatusLine(line: string): { kind: 'tracked' | 'untracked' | 'deleted'; path: string; previousPath?: string } | null {
     if (line.startsWith('?? ')) {
         return { kind: 'untracked', path: cleanRenamePath(line.slice(3).trim()) };
     }
     const status = line.slice(0, 2);
-    const rel = cleanRenamePath(line.slice(3).trim());
+    const parsedPath = parseRenamePath(line.slice(3).trim());
+    const rel = parsedPath.path;
     if (!rel) { return null; }
     if (status.includes('D')) {
         return { kind: 'deleted', path: rel };
     }
-    return { kind: 'tracked', path: rel };
+    return { kind: 'tracked', path: rel, previousPath: status.includes('R') ? parsedPath.previousPath : undefined };
 }
 
 function cleanRenamePath(value: string): string {
+    return parseRenamePath(value).path;
+}
+
+function parseRenamePath(value: string): { path: string; previousPath?: string } {
     const marker = ' -> ';
     const idx = value.indexOf(marker);
-    return idx >= 0 ? value.slice(idx + marker.length) : value;
+    return idx >= 0 ? { previousPath: value.slice(0, idx), path: value.slice(idx + marker.length) } : { path: value };
 }
 
 function validateOverlayPath(value: string): string | null {
@@ -310,9 +328,10 @@ function buildCaptureUnderlayCommand(targetId: string, repoName: string, repoRem
         "const fs=require('fs');const path=require('path');const cp=require('child_process');",
         "const stateDir=process.argv[1];const repoDir=process.argv[2];const rel=process.argv[3];const backupRef=process.argv[4];",
         "function run(args){return cp.spawnSync('git',args,{cwd:repoDir,encoding:'utf8'});}",
-        "const tracked=run(['ls-files','--error-unmatch','--',rel]);if(tracked.status!==0){process.exit(0);}",
+        "const src=path.resolve(repoDir,rel);if(src===repoDir||!src.startsWith(repoDir+path.sep)){throw new Error('unsafe overlay path '+rel);}",
+        "const tracked=run(['ls-files','--error-unmatch','--',rel]);if(tracked.status!==0){if(fs.existsSync(src)){throw new Error('unknown untracked remote path: '+rel);}process.exit(0);}",
         "const dirty=run(['status','--porcelain','--',rel]);if(dirty.status!==0||!dirty.stdout.trim()){process.exit(0);}",
-        "const src=path.resolve(repoDir,rel);if(src===repoDir||!src.startsWith(repoDir+path.sep)||!fs.existsSync(src)){process.exit(0);}",
+        "if(!fs.existsSync(src)){process.exit(0);}",
         "const dst=path.resolve(stateDir,'underlay',backupRef);const root=path.resolve(stateDir,'underlay');if(dst===root||!dst.startsWith(root+path.sep)){throw new Error('invalid backupRef');}",
         "fs.mkdirSync(path.dirname(dst),{recursive:true});fs.copyFileSync(src,dst);"
     ].join('');

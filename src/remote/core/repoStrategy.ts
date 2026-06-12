@@ -129,6 +129,10 @@ function planMappedRepository(
         };
     }
 
+    if (mapping.baseline === 'status-only') {
+        return activePlan(mapping, 'status-only', false, false, remotePath, diagnostics);
+    }
+
     if (!local) {
         diagnostics.push({ level: 'error', message: mapping.localName + ' 本地仓库不存在，无法执行 remote baseline' });
         return blockedPlan(mapping, remotePath, staged, diagnostics);
@@ -142,6 +146,11 @@ function planMappedRepository(
 
     if (!remote || remote.missing) {
         return activePlan(mapping, 'bundle-clone', true, true, remotePath, diagnostics);
+    }
+
+    if (remote.mode === 'files') {
+        diagnostics.push({ level: 'error', message: mapping.remoteName + ' 远端为 files-only 非 git 目录，拒绝执行 baseline mutation' });
+        return blockedPlan(mapping, remotePath, staged, diagnostics);
     }
 
     if (remote.commitAligned || (!!local.localCommit && local.localCommit === remote.remoteCommit)) {

@@ -149,7 +149,11 @@ function parseTrackedPorcelain(stdout: string): string[] {
         if (!raw) { continue; }
         const renameArrow = ' -> ';
         const idx = raw.indexOf(renameArrow);
-        paths.push(idx >= 0 ? raw.slice(idx + renameArrow.length) : raw);
+        if (idx >= 0) {
+            paths.push(raw.slice(0, idx), raw.slice(idx + renameArrow.length));
+        } else {
+            paths.push(raw);
+        }
     }
     return [...new Set(paths)];
 }

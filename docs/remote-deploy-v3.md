@@ -231,7 +231,7 @@ sync 的远端路径仍为：
 
 `remotePath` 表示远端工作区根，不是单个项目根。
 
-所有远端 forja 动作的 cwd 都是 `<sync.remotePath>`，并且显式传入 `--workspace <sync.remotePath>`。repo 位于该工作区根下：
+legacy workspace 模式下，远端 forja 动作的 cwd 是 `<sync.remotePath>`，并且显式传入 `--workspace <sync.remotePath>`。staged workspace 模式下，执行类动作、bridge action 和 transfer source 使用 primary repo 对应的 action path；target identity、overlay manifest、underlay backup 和 lock 仍按 workspace root 归属。repo 位于该工作区根下：
 
 ```text
 <remotePath>/

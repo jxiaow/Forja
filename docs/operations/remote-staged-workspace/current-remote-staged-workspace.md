@@ -14,6 +14,7 @@
 - staged pipeline 已接入 `baselinePlan -> acquireLock -> stagedWorkspacePrepare -> bundleBaseline -> workspaceLink -> overlaySync -> baselineCheck`。
 - bundle baseline 和 workspace link 已通过单元测试和 WSL smoke 验证。
 - staged overlay 已支持 repo assets：即使本地 SDK/headers 被 `.gitignore` 忽略，也可按配置上传；`local=remote` 可处理 Windows/Linux 目录名或大小写差异。
+- staged overlay 已补齐 rename、unknown untracked 碰撞和部分失败 manifest 记录：rename 会同步旧路径删除和新路径上传；远端未知 untracked 文件不会被覆盖；上传中途失败时先记录已完成 overlay，供下一轮恢复。
 - CLI 已支持 `forja remote forja-bin status|use|clear`，可为远端 Forja 指定带环境初始化的 wrapper，例如补齐 Qt/ICU 的 `LD_LIBRARY_PATH`。
 - staged pipeline 在远端 Forja CLI 缺失或不可执行时，已支持 Qt `qmake/build/clean/run/ps/stop` 和 SDK `build/rebuild/clean` 的 POSIX shell fallback。fallback 不使用 Windows 本地 Qt/VS 配置，只在远端 staged workspace 内查找 `.pro` 或 `Makefile` 并执行 `qmake` / `make`；`run/ps/stop` 使用 staged workspace 内的 `.forja/run-state` 记录最小进程状态。
 
@@ -24,7 +25,7 @@
 
 本轮复核（2026-06-12）：
 
-- `npm test` 通过：352 pass，1 skip，0 fail。
+- `npm test` 通过：359 pass，1 skip，0 fail。
 - `npm run build:cli` 通过，CLI 包含 staged remote 相关模块。
 - 使用临时 `FORJA_CONFIG_DIR` 重跑真实 `qt_client` 的只读 staged remote smoke 时，配置解析和 staged workspace plan 生效，但 SSH 在 `xw@172.31.158.44` 返回 `Permission denied (publickey,password)`；因此本轮未重跑真实 WSL status/test/build 验收。
 
