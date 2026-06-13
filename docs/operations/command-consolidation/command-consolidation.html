@@ -1,0 +1,1444 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forja Command Consolidation</title>
+<style>
+:root { --ink:#18201c; --muted:#5f6a64; --line:#d8ded9; --paper:#f6f5ef; --accent:#1f8a70; --accent-strong:#0f5f4d; --code-bg:#e9eee9; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; color:var(--ink); background:var(--paper); line-height:1.62; }
+.shell { display:grid; grid-template-columns:minmax(250px,18vw) minmax(0,1fr); min-height:100vh; }
+aside { position:sticky; top:0; height:100vh; overflow:auto; padding:28px 22px; border-right:1px solid var(--line); background:#eef2ee; }
+.brand { display:block; color:var(--accent-strong); font-weight:800; font-size:20px; text-decoration:none; margin-bottom:6px; }
+.subtle { color:var(--muted); font-size:13px; }
+.command-grid { display:grid; gap:7px; margin:18px 0 22px; }
+.command-pill { display:block; text-decoration:none; color:var(--ink); background:rgba(255,255,255,.72); border:1px solid transparent; border-radius:6px; padding:8px 10px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:13px; transition:border-color .16s ease, transform .16s ease, background .16s ease; }
+.command-pill span { color:var(--muted); }
+.command-pill:hover { border-color:var(--accent); transform:translateX(2px); background:#fff; }
+nav { display:grid; gap:3px; padding-top:14px; border-top:1px solid var(--line); }
+nav a { color:var(--muted); text-decoration:none; font-size:13px; padding:5px 0; }
+nav a:hover { color:var(--accent-strong); }
+.toc-l1 { font-weight:800; color:var(--ink); margin-top:8px; }
+.toc-l2 { padding-left:10px; }
+.toc-l3 { padding-left:22px; }
+main { padding:0 0 80px; overflow:hidden; }
+.hero { padding:56px min(8vw,96px) 46px; border-bottom:1px solid var(--line); background:linear-gradient(120deg,rgba(31,138,112,.10),transparent 38%),linear-gradient(180deg,#fffdf8,var(--paper)); }
+.eyebrow { color:var(--accent-strong); font-weight:700; text-transform:uppercase; font-size:12px; letter-spacing:.08em; }
+h1 { margin:12px 0 16px; max-width:980px; font-size:clamp(38px,6vw,82px); line-height:.96; letter-spacing:0; }
+.lede { max-width:760px; color:var(--muted); font-size:18px; }
+.stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin-top:34px; max-width:900px; border:1px solid var(--line); background:var(--line); }
+.stat { background:rgba(255,255,255,.76); padding:16px; }
+.stat strong { display:block; font-size:30px; line-height:1; }
+.stat span { color:var(--muted); font-size:13px; }
+article { max-width:1060px; padding:36px min(8vw,96px); }
+h1,h2,h3,h4 { scroll-margin-top:24px; }
+article h1 { display:none; }
+h2 { margin:56px 0 16px; font-size:31px; line-height:1.16; border-top:1px solid var(--line); padding-top:26px; }
+h3 { margin:42px 0 12px; font-size:23px; line-height:1.22; }
+h4 { margin:28px 0 8px; font-size:17px; }
+p { max-width:860px; }
+code { font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; background:var(--code-bg); color:#13201b; border-radius:4px; padding:1px 5px; font-size:.92em; }
+pre { max-width:100%; overflow:auto; border-radius:6px; padding:16px; background:#101a16; color:#e6f1e9; border:1px solid #26352f; }
+pre code { background:transparent; color:inherit; padding:0; }
+blockquote { max-width:920px; margin:18px 0; padding:14px 18px; border-left:4px solid var(--accent); background:rgba(255,255,255,.65); color:var(--muted); }
+ul,ol { max-width:900px; padding-left:24px; }
+li { margin:5px 0; }
+.check { list-style:none; margin-left:-22px; }
+.check span { display:inline-grid; place-items:center; width:16px; height:16px; margin-right:8px; border:1px solid var(--accent); color:var(--accent-strong); font-size:11px; vertical-align:-1px; }
+.table-wrap { max-width:100%; overflow:auto; border:1px solid var(--line); border-radius:6px; margin:18px 0 28px; background:#fff; }
+table { width:100%; border-collapse:collapse; min-width:720px; font-size:14px; }
+th,td { padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; }
+th { background:#eef4ef; font-weight:760; }
+tr:last-child td { border-bottom:0; }
+.top-link { position:fixed; right:20px; bottom:20px; color:#fff; background:var(--accent-strong); text-decoration:none; padding:10px 12px; border-radius:6px; font-size:13px; box-shadow:0 8px 24px rgba(15,95,77,.22); }
+@media (max-width:940px) { .shell{display:block;} aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line);} nav{max-height:240px;overflow:auto;} .stats{grid-template-columns:1fr;} article,.hero{padding-left:22px;padding-right:22px;} h1{font-size:42px;} }
+@media print { aside,.top-link{display:none;} .shell{display:block;} article,.hero{padding:20px;} body{background:#fff;} pre{white-space:pre-wrap;color:#111;background:#f4f4f4;} }
+</style>
+</head>
+<body>
+<div class="shell">
+<aside>
+<a class="brand" href="#top">Forja Commands</a>
+<div class="subtle">Migration plan reader</div>
+<div class="command-grid" aria-label="Final command surface"><a href="#forja-status" class="command-pill"><span>forja</span> status</a>
+<a href="#forja-init" class="command-pill"><span>forja</span> init</a>
+<a href="#forja-list" class="command-pill"><span>forja</span> list</a>
+<a href="#forja-use" class="command-pill"><span>forja</span> use</a>
+<a href="#forja-build" class="command-pill"><span>forja</span> build</a>
+<a href="#forja-run" class="command-pill"><span>forja</span> run</a>
+<a href="#forja-stop" class="command-pill"><span>forja</span> stop</a>
+<a href="#forja-clean" class="command-pill"><span>forja</span> clean</a>
+<a href="#forja-doctor" class="command-pill"><span>forja</span> doctor</a>
+<a href="#forja-sync" class="command-pill"><span>forja</span> sync</a></div>
+<nav aria-label="Document sections"><a class="toc-l1" href="#forja-command-consolidation-migration-and-implementation-plan">Forja Command Consolidation Migration And Implementation Plan</a>
+<a class="toc-l2" href="#final-user-command-surface">Final User Command Surface</a>
+<a class="toc-l2" href="#core-concepts">Core Concepts</a>
+<a class="toc-l3" href="#active-target">Active Target</a>
+<a class="toc-l3" href="#candidate">Candidate</a>
+<a class="toc-l3" href="#execution-location">runAt</a>
+<a class="toc-l3" href="#compatibility-commands">Compatibility Commands</a>
+<a class="toc-l2" href="#old-to-new-capability-map">Old To New Capability Map</a>
+<a class="toc-l2" href="#command-specifications">Command Specifications</a>
+<a class="toc-l3" href="#forja-status">forja status</a>
+<a class="toc-l3" href="#forja-init">forja init</a>
+<a class="toc-l3" href="#forja-list">forja list</a>
+<a class="toc-l3" href="#forja-use">forja use</a>
+<a class="toc-l3" href="#forja-build">forja build</a>
+<a class="toc-l3" href="#forja-run">forja run</a>
+<a class="toc-l3" href="#forja-stop">forja stop</a>
+<a class="toc-l3" href="#forja-clean">forja clean</a>
+<a class="toc-l3" href="#forja-doctor">forja doctor</a>
+<a class="toc-l3" href="#forja-sync">forja sync</a>
+<a class="toc-l2" href="#vscode-command-surface">VSCode Command Surface</a>
+<a class="toc-l2" href="#implementation-file-structure">Implementation File Structure</a>
+<a class="toc-l2" href="#migration-stages">Migration Stages</a>
+<a class="toc-l3" href="#stage-1-add-unified-model-without-changing-existing-behavior">Stage 1: Add Unified Model Without Changing Existing Behavior</a>
+<a class="toc-l3" href="#stage-2-implement-status-list-use-and-init">Stage 2: Implement status, list, use, and init</a>
+<a class="toc-l3" href="#stage-3-implement-unified-execution-commands">Stage 3: Implement Unified Execution Commands</a>
+<a class="toc-l3" href="#stage-4-implement-unified-doctor-and-sync-help">Stage 4: Implement Unified Doctor And Sync Help</a>
+<a class="toc-l3" href="#stage-5-hide-compatibility-surface">Stage 5: Hide Compatibility Surface</a>
+<a class="toc-l3" href="#stage-6-package-verification">Stage 6: Package Verification</a>
+<a class="toc-l2" href="#testing-matrix">Testing Matrix</a>
+<a class="toc-l2" href="#documentation-updates">Documentation Updates</a>
+<a class="toc-l2" href="#compatibility-policy">Compatibility Policy</a>
+<a class="toc-l2" href="#open-decisions-resolved-in-this-plan">Open Decisions Resolved In This Plan</a>
+<a class="toc-l2" href="#self-review-notes">Self-Review Notes</a></nav>
+</aside>
+<main id="top">
+<section class="hero">
+<div class="eyebrow">Command consolidation</div>
+<h1>Forja command migration plan</h1>
+<p class="lede">A readable HTML version of the command consolidation plan: ten user-facing commands, old-to-new capability mapping, detailed flows, VSCode surface, implementation stages, and test matrix.</p>
+<div class="stats" aria-label="Plan summary">
+<div class="stat"><strong>10</strong><span>final user commands</span></div>
+<div class="stat"><strong>0</strong><span>top-level remote / qmake / rcc commands</span></div>
+<div class="stat"><strong>6</strong><span>migration stages</span></div>
+</div>
+</section>
+<article><h1 id="forja-command-consolidation-migration-and-implementation-plan">Forja Command Consolidation Migration And Implementation Plan</h1>
+<blockquote><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</blockquote>
+<p><strong>Goal:</strong> Replace the user-facing Qt/SDK/Remote/Sync command tree with a small intent-based command surface while preserving existing implementation capabilities behind compatibility adapters.</p>
+<p><strong>Architecture:</strong> Introduce a unified command model built around <code>activeTarget</code> and <code>runAt</code>. Qt, SDK, local, and remote become target attributes instead of first-level user commands. Existing Qt/SDK/Remote/Sync implementation modules remain the execution backends while the new top-level CLI and VSCode commands route through a shared planner.</p>
+<p><strong>Tech Stack:</strong> TypeScript strict mode, Node <code>node:test</code>, existing CLI dispatchers, existing VSCode command registration, existing settings files through <code>core/settingsIO.ts</code> and module settings stores.</p>
+<hr>
+<h2 id="final-user-command-surface">Final User Command Surface</h2>
+<p>The user-facing command set is:</p>
+<pre><code data-lang="bash">forja status
+forja init
+forja list
+forja use
+forja build
+forja run
+forja stop
+forja clean
+forja doctor
+forja sync</code></pre>
+<p>No <code>forja remote</code> user command is introduced. Remote is selected with <code>forja use --remote</code> and then consumed by <code>status</code>, <code>build</code>, <code>run</code>, <code>stop</code>, <code>clean</code>, <code>doctor</code>, and <code>sync</code>.</p>
+<p>No top-level <code>qmake</code> or <code>rcc</code> command is introduced. Their standalone capability is preserved through <code>forja build qmake</code> and <code>forja build rcc</code>.</p>
+<p>No top-level <code>qt</code> or <code>sdk</code> user command remains in the primary help. Existing old commands can remain registered during migration, but they become hidden compatibility routes and should not appear in normal help, nextActions, quick picks, or the VSCode command palette.</p>
+<h2 id="core-concepts">Core Concepts</h2>
+<h3 id="active-target">Active Target</h3>
+<p><code>activeTarget</code> is the single selected thing that build/run/clean operate on.</p>
+<p>Shape:</p>
+<pre><code data-lang="ts">interface ActiveTarget {
+    kind: 'qt' | 'sdk';
+    project: string;
+    mode: 'debug' | 'release';
+    arch: 'x86' | 'x64';
+    runAt: 'local' | 'remote';
+}</code></pre>
+<p>Rules:</p>
+<ul>
+<li><code>kind</code> is explicit once selected. Mixed Qt + SDK workspaces must not guess.</li>
+<li><code>project</code> is workspace-relative when possible.</li>
+<li><code>mode</code> and <code>arch</code> are shared user concepts even if a backend maps them differently.</li>
+<li><code>runAt</code> is the selected execution side: <code>local</code> runs on the current machine, <code>remote</code> runs through the configured remote pipeline.</li>
+<li>A missing active target blocks <code>build</code>, <code>run</code>, <code>stop</code>, and <code>clean</code> with a <code>forja list</code> / <code>forja use</code> next action.</li>
+</ul>
+<h3 id="candidate">Candidate</h3>
+<p>A candidate is something Forja can select.</p>
+<p>Shape:</p>
+<pre><code data-lang="ts">interface ForjaCandidate {
+    id: string;
+    kind: 'qt' | 'sdk';
+    project: string;
+    label: string;
+    configured: boolean;
+    current: boolean;
+    diagnostics: Array&lt;{ level: 'info' | 'warning' | 'error'; message: string }&gt;;
+}</code></pre>
+<p>Candidate sources:</p>
+<ul>
+<li>Qt candidates from <code>.pro</code> scanning currently used by <code>forja qt projects</code>.</li>
+<li>SDK candidates from <code>.sln</code> or <code>Makefile</code> scanning currently used by <code>forja sdk projects</code>.</li>
+<li>Current target from saved Qt/SDK settings and the new unified active target metadata.</li>
+</ul>
+<h3 id="execution-location">runAt</h3>
+<p>Execution location is selected independently from target kind.</p>
+<p>Values:</p>
+<ul>
+<li><code>local</code>: use local Qt/SDK backend.</li>
+<li><code>remote</code>: prepare remote workspace and execute remote Qt/SDK backend.</li>
+</ul>
+<p>Rules:</p>
+<ul>
+<li><code>forja use --remote</code> switches the current active target to remote execution.</li>
+<li><code>forja use --local</code> switches it back.</li>
+<li><code>forja status</code> reports whether the chosen location is ready.</li>
+<li><code>forja doctor</code> performs deeper checks for the chosen location and can also show remote readiness.</li>
+</ul>
+<h3 id="compatibility-commands">Compatibility Commands</h3>
+<p>Compatibility commands are old command IDs and CLI routes retained during migration.</p>
+<p>Examples:</p>
+<ul>
+<li><code>forja qt build</code></li>
+<li><code>forja sdk build</code></li>
+<li><code>forja remote qt build</code></li>
+<li>VSCode command ID <code>forja.remote.qt.build</code></li>
+</ul>
+<p>Rules:</p>
+<ul>
+<li>Compatibility commands call the same underlying backend as the new commands.</li>
+<li>They are not shown in top-level help.</li>
+<li>VSCode compatibility commands are hidden from Command Palette with <code>when: false</code>.</li>
+<li><code>nextActions</code> must use only new commands after the migration phase for that command is complete.</li>
+</ul>
+<h2 id="old-to-new-capability-map">Old To New Capability Map</h2>
+<div class="table-wrap"><table>
+<tr><th>Old capability</th><th>New user command</th><th>Notes</th></tr>
+<tr><td><code>forja qt status</code></td><td><code>forja status</code></td><td>Included in current target and Qt readiness sections.</td></tr>
+<tr><td><code>forja sdk status</code></td><td><code>forja status</code></td><td>Included in current target and SDK readiness sections.</td></tr>
+<tr><td><code>forja sync status</code></td><td><code>forja status</code></td><td>Included as sync readiness, not a separate status command.</td></tr>
+<tr><td><code>forja remote status</code></td><td><code>forja status</code></td><td>Included as remote readiness for remote-capable workspaces.</td></tr>
+<tr><td><code>forja remote workspace status</code></td><td><code>forja status</code></td><td>Included in remote readiness.</td></tr>
+<tr><td><code>forja remote forja-bin status</code></td><td><code>forja status</code> / <code>forja doctor</code></td><td>Lightweight path presence in status, executable/bootstrap checks in doctor.</td></tr>
+<tr><td><code>forja remote transfer status</code></td><td><code>forja status</code></td><td>Included as transfer readiness if transfer is configured.</td></tr>
+<tr><td><code>forja qt init</code></td><td><code>forja init</code></td><td>Runs Qt auto-detection for Qt candidates.</td></tr>
+<tr><td><code>forja sdk init</code></td><td><code>forja init</code></td><td>Runs SDK auto-detection for SDK candidates.</td></tr>
+<tr><td><code>forja remote bootstrap</code></td><td><code>forja init --remote</code> or guided <code>forja doctor fix --remote</code> phase</td><td>Do not expose bootstrap as a primary command.</td></tr>
+<tr><td><code>forja qt projects</code></td><td><code>forja list</code> / <code>forja list targets</code></td><td>Targets include Qt projects.</td></tr>
+<tr><td><code>forja sdk projects</code></td><td><code>forja list</code> / <code>forja list targets</code></td><td>Targets include SDK projects.</td></tr>
+<tr><td><code>forja qt env</code></td><td><code>forja list env</code> / <code>forja doctor</code></td><td>Candidate list in list; deep validation in doctor.</td></tr>
+<tr><td><code>forja sdk env</code></td><td><code>forja list env</code> / <code>forja doctor</code></td><td>Candidate list in list; deep validation in doctor.</td></tr>
+<tr><td><code>forja sync servers</code></td><td><code>forja list servers</code></td><td>Server list becomes a list category.</td></tr>
+<tr><td><code>forja sync server</code></td><td><code>forja list servers --detail &lt;id&gt;</code></td><td>Detail remains read-only.</td></tr>
+<tr><td><code>forja remote repo list</code></td><td><code>forja list remote-repos</code> or remote section in <code>forja list</code></td><td>Only needed when remote workspace mapping is configured.</td></tr>
+<tr><td><code>forja qt use</code></td><td><code>forja use</code></td><td>Target, mode, arch, and Qt toolchain selection.</td></tr>
+<tr><td><code>forja sdk use</code></td><td><code>forja use</code></td><td>Target, mode, arch, and SDK toolchain selection.</td></tr>
+<tr><td><code>forja sync use</code></td><td><code>forja use --server ... --remote-path ...</code></td><td>Server and remote path selection.</td></tr>
+<tr><td><code>forja remote workspace use</code></td><td><code>forja use --remote-workspace ...</code></td><td>Used by guided remote setup.</td></tr>
+<tr><td><code>forja remote repo set</code></td><td><code>forja use --remote-repo ...</code> or guided config file flow</td><td>User should not need this in daily workflow.</td></tr>
+<tr><td><code>forja remote forja-bin use</code></td><td><code>forja use --remote-forja-bin ...</code></td><td>Used only when auto bootstrap/bin discovery is insufficient.</td></tr>
+<tr><td><code>forja remote transfer set</code></td><td><code>forja use</code> advanced flow or hidden compatibility route</td><td>Low-frequency artifact transfer settings do not become visible sync subcommands.</td></tr>
+<tr><td><code>forja qt qmake</code></td><td><code>forja build qmake</code></td><td>Qt-only build sub-mode.</td></tr>
+<tr><td><code>forja remote qt qmake</code></td><td><code>forja build qmake</code> with <code>runAt=remote</code></td><td>Qt-only build sub-mode.</td></tr>
+<tr><td><code>forja qt rcc</code></td><td><code>forja build rcc</code></td><td>Qt-only build sub-mode.</td></tr>
+<tr><td><code>forja qt build</code></td><td><code>forja build</code></td><td>Local Qt target.</td></tr>
+<tr><td><code>forja sdk build</code></td><td><code>forja build</code></td><td>Local SDK target.</td></tr>
+<tr><td><code>forja remote qt build</code></td><td><code>forja build</code> with <code>runAt=remote</code></td><td>Remote Qt target.</td></tr>
+<tr><td><code>forja remote sdk build</code></td><td><code>forja build</code> with <code>runAt=remote</code></td><td>Remote SDK target.</td></tr>
+<tr><td><code>forja sdk rebuild</code></td><td><code>forja build fresh</code></td><td>SDK rebuild maps to fresh build.</td></tr>
+<tr><td><code>forja remote sdk rebuild</code></td><td><code>forja build fresh</code> with <code>runAt=remote</code></td><td>Remote SDK fresh build.</td></tr>
+<tr><td><code>forja qt run</code></td><td><code>forja run</code></td><td>Local Qt target.</td></tr>
+<tr><td><code>forja remote qt run</code></td><td><code>forja run</code> with <code>runAt=remote</code></td><td>Remote Qt target.</td></tr>
+<tr><td><code>forja qt ps</code></td><td><code>forja status</code></td><td>Runtime status belongs in status.</td></tr>
+<tr><td><code>forja remote qt ps</code></td><td><code>forja status</code></td><td>Remote runtime status belongs in status.</td></tr>
+<tr><td><code>forja qt stop</code></td><td><code>forja stop</code></td><td>Local Qt target.</td></tr>
+<tr><td><code>forja remote qt stop</code></td><td><code>forja stop</code> with <code>runAt=remote</code></td><td>Remote Qt target.</td></tr>
+<tr><td><code>forja qt clean</code></td><td><code>forja clean</code></td><td>Local Qt target.</td></tr>
+<tr><td><code>forja sdk clean</code></td><td><code>forja clean</code></td><td>Local SDK target.</td></tr>
+<tr><td><code>forja remote qt clean</code></td><td><code>forja clean</code> with <code>runAt=remote</code></td><td>Remote Qt target.</td></tr>
+<tr><td><code>forja remote sdk clean</code></td><td><code>forja clean</code> with <code>runAt=remote</code></td><td>Remote SDK target.</td></tr>
+<tr><td><code>forja sync</code></td><td><code>forja sync</code></td><td>Kept as a top-level user action.</td></tr>
+<tr><td><code>forja sync --plan</code></td><td><code>forja sync plan</code></td><td>Preview is a sync subaction, not a flag-style command.</td></tr>
+<tr><td><code>forja sync --file</code></td><td><code>forja sync --file</code></td><td>Kept for direct file sync.</td></tr>
+<tr><td><code>forja sync test-connection</code></td><td><code>forja doctor</code></td><td>Connection check moves to doctor.</td></tr>
+<tr><td><code>forja remote test</code></td><td><code>forja doctor</code></td><td>Remote execution check moves to doctor.</td></tr>
+<tr><td><code>forja remote doctor</code></td><td><code>forja doctor</code></td><td>Unified diagnostics.</td></tr>
+<tr><td><code>forja remote unlock</code></td><td><code>forja doctor unlock &lt;id&gt;</code> or guided recovery</td><td>Recovery action, not normal command.</td></tr>
+<tr><td><code>forja remote restore/reset/clean-untracked</code></td><td>Recovery sub-flow in <code>forja doctor</code></td><td>These are dangerous operations and should be guided.</td></tr>
+</table></div>
+<h2 id="command-specifications">Command Specifications</h2>
+<h3 id="forja-status"><code>forja status</code></h3>
+<p>Purpose:</p>
+<ul>
+<li>Answer &quot;what is the current Forja state and what should I do next?&quot;</li>
+<li>Remain lightweight and read-only.</li>
+<li>Avoid full environment probing that can be slow or invasive.</li>
+</ul>
+<p>Old capabilities absorbed:</p>
+<ul>
+<li><code>qt status</code></li>
+<li><code>sdk status</code></li>
+<li><code>sync status</code></li>
+<li><code>remote status</code></li>
+<li>runtime <code>ps</code> summaries</li>
+<li>transfer/workspace/forja-bin readiness summaries</li>
+</ul>
+<p>CLI flow:</p>
+<ol>
+<li>Resolve workspace from <code>--workspace</code> or current directory.</li>
+<li>Load unified active target metadata.</li>
+<li>Load Qt settings, SDK settings, sync settings, and remote settings.</li>
+<li>Scan only enough to know if candidates exist when no active target exists.</li>
+<li>If active target exists:</li>
+</ol>
+<ul>
+<li>Validate selected project path exists.</li>
+<li>Validate saved mode and arch are acceptable.</li>
+<li>Validate selected execution location has required saved settings.</li>
+<li>Include runtime state for run-capable targets.</li>
+</ul>
+<ol>
+<li>If active target is missing:</li>
+</ol>
+<ul>
+<li>Return <code>ok: false</code> when multiple targets exist or no target is configured.</li>
+<li>Return next actions <code>forja list</code> and <code>forja use</code>.</li>
+</ul>
+<ol>
+<li>Include <code>nextActions</code> using only new commands.</li>
+</ol>
+<p>Supported flags:</p>
+<pre><code data-lang="bash">forja status
+forja status --workspace &lt;path&gt;
+forja status --json</code></pre>
+<p>Text output shape:</p>
+<pre><code data-lang="text">Forja status
+Workspace: C:\repo
+Target: Qt apps/client/client.pro Debug x64 local
+State: ready
+Next: forja build</code></pre>
+<p>JSON output shape:</p>
+<pre><code data-lang="json">{
+  &quot;ok&quot;: true,
+  &quot;action&quot;: &quot;status&quot;,
+  &quot;workspace&quot;: &quot;C:/repo&quot;,
+  &quot;activeTarget&quot;: {
+    &quot;kind&quot;: &quot;qt&quot;,
+    &quot;project&quot;: &quot;apps/client/client.pro&quot;,
+    &quot;mode&quot;: &quot;debug&quot;,
+    &quot;arch&quot;: &quot;x64&quot;,
+    &quot;runAt&quot;: &quot;local&quot;
+  },
+  &quot;readiness&quot;: {
+    &quot;target&quot;: &quot;ready&quot;,
+    &quot;sync&quot;: &quot;configured&quot;,
+    &quot;remote&quot;: &quot;not-selected&quot;
+  },
+  &quot;nextActions&quot;: [&quot;forja build&quot;]
+}</code></pre>
+<p>Important edge cases:</p>
+<ul>
+<li>Mixed Qt and SDK workspace with no active target: do not choose; return <code>forja list</code> and <code>forja use</code>.</li>
+<li>Active Qt target missing <code>.pro</code>: return missing target diagnostic and <code>forja list</code>.</li>
+<li>Active SDK target missing <code>.sln</code>/<code>Makefile</code>: return missing target diagnostic and <code>forja list</code>.</li>
+<li>Remote selected but server missing: return <code>forja list servers</code> and <code>forja use --server &lt;id&gt; --remote-path &lt;path&gt;</code>.</li>
+</ul>
+<p>VSCode behavior:</p>
+<ul>
+<li>Command title: <code>Forja: Status</code>.</li>
+<li>Status bar click can show the status quick pick first, then provide <code>Use Target</code>, <code>Build</code>, and <code>Doctor</code> actions.</li>
+<li>Existing <code>forja.remote.status</code> remains hidden and internally available during migration.</li>
+</ul>
+<p>Tests:</p>
+<ul>
+<li><code>src/test/unifiedCliStatus.test.ts</code>: mixed workspace without active target returns no guess.</li>
+<li><code>src/test/unifiedCliStatus.test.ts</code>: active Qt target returns new nextActions.</li>
+<li><code>src/test/unifiedCliStatus.test.ts</code>: remote selected with missing server reports <code>use --server</code>.</li>
+<li><code>src/test/syncCommandIdsSource.test.ts</code>: command palette hides old status commands.</li>
+</ul>
+<h3 id="forja-init"><code>forja init</code></h3>
+<p>Purpose:</p>
+<ul>
+<li>Perform first-run automatic discovery and write only values that can be determined without user judgment.</li>
+<li>Avoid selecting between multiple Qt/SDK targets.</li>
+<li>Avoid becoming a general configuration editor.</li>
+</ul>
+<p>Old capabilities absorbed:</p>
+<ul>
+<li><code>qt init</code></li>
+<li><code>sdk init</code></li>
+<li>automatic portions of <code>qt env</code> and <code>sdk env</code></li>
+<li>remote bootstrap only when explicitly requested by a guided flag</li>
+</ul>
+<p>CLI flow:</p>
+<ol>
+<li>Resolve workspace.</li>
+<li>Scan Qt candidates.</li>
+<li>Scan SDK candidates.</li>
+<li>Detect Qt, VS, jom, make, and platform capabilities.</li>
+<li>Save unambiguous toolchain defaults.</li>
+<li>If exactly one target exists across Qt and SDK, save it as active target.</li>
+<li>If more than one target exists, do not select; return <code>forja list</code> and <code>forja use</code>.</li>
+<li>If <code>--remote</code> is supplied:</li>
+</ol>
+<ul>
+<li>Check sync server selection and remote path.</li>
+<li>If remote bin is missing and bootstrap artifact exists, run bootstrap.</li>
+<li>If bootstrap cannot run, return <code>forja doctor --json</code> next action.</li>
+</ul>
+<p>Supported flags:</p>
+<pre><code data-lang="bash">forja init
+forja init --workspace &lt;path&gt;
+forja init --remote
+forja init --plan
+forja init --json</code></pre>
+<p>Text output shape:</p>
+<pre><code data-lang="text">Forja init
+Workspace: C:\repo
+Detected:
+  Qt targets: 2
+  SDK targets: 1
+Saved:
+  mode: debug
+  arch: x64
+Next:
+  forja list
+  forja use</code></pre>
+<p>JSON output shape:</p>
+<pre><code data-lang="json">{
+  &quot;ok&quot;: true,
+  &quot;action&quot;: &quot;init&quot;,
+  &quot;workspace&quot;: &quot;C:/repo&quot;,
+  &quot;detected&quot;: {
+    &quot;targets&quot;: 3,
+    &quot;qtCandidates&quot;: 2,
+    &quot;sdkCandidates&quot;: 1
+  },
+  &quot;saved&quot;: {
+    &quot;mode&quot;: &quot;debug&quot;,
+    &quot;arch&quot;: &quot;x64&quot;
+  },
+  &quot;nextActions&quot;: [&quot;forja list&quot;, &quot;forja use&quot;]
+}</code></pre>
+<p>Important edge cases:</p>
+<ul>
+<li>Exactly one Qt target and no SDK target: save Qt target.</li>
+<li>Exactly one SDK target and no Qt target: save SDK target.</li>
+<li>One Qt and one SDK target: do not choose.</li>
+<li>Multiple Qt targets: do not choose.</li>
+<li><code>--remote</code> without server: do not prompt in non-interactive mode; return <code>forja list servers</code> and <code>forja use --server</code>.</li>
+</ul>
+<p>VSCode behavior:</p>
+<ul>
+<li>Command title: <code>Forja: Init</code>.</li>
+<li>Runs with progress notification.</li>
+<li>If multiple targets are found, open the same picker used by <code>Forja: Use Target</code>.</li>
+</ul>
+<p>Tests:</p>
+<ul>
+<li><code>src/test/unifiedCliInit.test.ts</code>: single Qt target is saved.</li>
+<li><code>src/test/unifiedCliInit.test.ts</code>: one Qt and one SDK target is ambiguous.</li>
+<li><code>src/test/unifiedCliInit.test.ts</code>: init never accepts explicit project/mode/toolchain flags except remote bootstrap flag.</li>
+<li><code>src/test/cliEntrySource.test.ts</code>: top-level dispatcher exposes <code>init</code>.</li>
+</ul>
+<h3 id="forja-list"><code>forja list</code></h3>
+<p>Purpose:</p>
+<ul>
+<li>Answer &quot;what can I choose?&quot;</li>
+<li>Remain read-only.</li>
+<li>Provide candidate lists for targets, environment tools, servers, and remote mappings.</li>
+</ul>
+<p>Old capabilities absorbed:</p>
+<ul>
+<li><code>qt projects</code></li>
+<li><code>sdk projects</code></li>
+<li><code>qt env</code></li>
+<li><code>sdk env</code></li>
+<li><code>sync servers</code></li>
+<li><code>sync server</code></li>
+<li><code>remote repo list</code></li>
+</ul>
+<p>CLI flow:</p>
+<ol>
+<li>Resolve workspace.</li>
+<li>Determine list category:</li>
+</ol>
+<ul>
+<li>default category is <code>targets</code>.</li>
+<li>supported categories: <code>targets</code>, <code>env</code>, <code>servers</code>, <code>remote-repos</code>.</li>
+</ul>
+<ol>
+<li>For <code>targets</code>:</li>
+</ol>
+<ul>
+<li>scan Qt <code>.pro</code> files.</li>
+<li>scan SDK <code>.sln</code> or <code>Makefile</code> files.</li>
+<li>mark current active target.</li>
+<li>show local/remote readiness summary.</li>
+</ul>
+<ol>
+<li>For <code>env</code>:</li>
+</ol>
+<ul>
+<li>show Qt/VS/jom/make candidates.</li>
+<li>do not write settings.</li>
+</ul>
+<ol>
+<li>For <code>servers</code>:</li>
+</ol>
+<ul>
+<li>show server IDs/names/hosts.</li>
+<li>mark selected sync server.</li>
+</ul>
+<ol>
+<li>For <code>remote-repos</code>:</li>
+</ol>
+<ul>
+<li>show configured remote repo mappings.</li>
+<li>show whether they map to local repo candidates.</li>
+</ul>
+<p>Supported flags:</p>
+<pre><code data-lang="bash">forja list
+forja list targets
+forja list env
+forja list servers
+forja list remote-repos
+forja list servers --detail &lt;id&gt;
+forja list --workspace &lt;path&gt;
+forja list --json</code></pre>
+<p>Text output shape:</p>
+<pre><code data-lang="text">Forja targets
+* Qt   apps/client/client.pro       Debug x64 local
+  SDK  sdk/NemoSDK.sln              Release x64 local
+  Qt   tools/designer/designer.pro  not configured
+
+Use:
+  forja use --target apps/client/client.pro</code></pre>
+<p>JSON output shape:</p>
+<pre><code data-lang="json">{
+  &quot;ok&quot;: true,
+  &quot;action&quot;: &quot;list&quot;,
+  &quot;category&quot;: &quot;targets&quot;,
+  &quot;targets&quot;: [
+    {
+      &quot;kind&quot;: &quot;qt&quot;,
+      &quot;project&quot;: &quot;apps/client/client.pro&quot;,
+      &quot;current&quot;: true,
+      &quot;configured&quot;: true
+    }
+  ]
+}</code></pre>
+<p>Important edge cases:</p>
+<ul>
+<li>No targets found: return <code>ok: false</code>, diagnostics, and <code>forja init</code>.</li>
+<li>Servers detail for unknown ID: return error and list available server IDs.</li>
+<li><code>list env</code> on non-Windows should not show Windows-only arch choices as usable.</li>
+</ul>
+<p>VSCode behavior:</p>
+<ul>
+<li>Command title: <code>Forja: List Targets</code>.</li>
+<li>Status bar target selector should use the same candidate model.</li>
+<li>Environment and server lists can appear as secondary quick picks from <code>Forja: Use Target</code>.</li>
+</ul>
+<p>Tests:</p>
+<ul>
+<li><code>src/test/unifiedCliList.test.ts</code>: default category lists both Qt and SDK targets.</li>
+<li><code>src/test/unifiedCliList.test.ts</code>: current target marker is stable.</li>
+<li><code>src/test/unifiedCliList.test.ts</code>: <code>list servers</code> uses global server store and hides passwords.</li>
+<li><code>src/test/unifiedCliList.test.ts</code>: <code>list env</code> is read-only.</li>
+</ul>
+<h3 id="forja-use"><code>forja use</code></h3>
+<p>Purpose:</p>
+<ul>
+<li>Select what Forja should use.</li>
+<li>Own all explicit choices: target, mode, arch, execution location, server, remote path, remote workspace, and remote helper path.</li>
+<li>Replace separate <code>qt use</code>, <code>sdk use</code>, <code>sync use</code>, and remote configuration commands in normal user workflows.</li>
+</ul>
+<p>Old capabilities absorbed:</p>
+<ul>
+<li><code>qt use</code></li>
+<li><code>sdk use</code></li>
+<li><code>sync use</code></li>
+<li><code>remote workspace use</code></li>
+<li><code>remote repo set</code></li>
+<li><code>remote repo remove</code></li>
+<li><code>remote forja-bin use</code></li>
+<li><code>remote transfer set</code></li>
+<li>execution location commands in VSCode</li>
+</ul>
+<p>CLI flow:</p>
+<ol>
+<li>Resolve workspace.</li>
+<li>If no arguments and terminal is interactive:</li>
+</ol>
+<ul>
+<li>show target choices.</li>
+<li>show mode/arch choices.</li>
+<li>show local/remote choice.</li>
+<li>if remote, show server and remote path choices.</li>
+<li>save all confirmed values.</li>
+</ul>
+<ol>
+<li>If arguments are supplied:</li>
+</ol>
+<ul>
+<li>validate the provided fields.</li>
+<li>update only provided fields.</li>
+<li>preserve other active target fields.</li>
+</ul>
+<ol>
+<li>If <code>--target</code> is provided:</li>
+</ol>
+<ul>
+<li>infer kind from extension/pattern: <code>.pro</code> = Qt, <code>.sln</code>/<code>Makefile</code> = SDK.</li>
+<li>reject unknown target type.</li>
+</ul>
+<ol>
+<li>If <code>--kind</code> is provided without <code>--target</code>:</li>
+</ol>
+<ul>
+<li>switch kind only when there is exactly one configured target for that kind.</li>
+<li>otherwise return <code>forja list</code>.</li>
+</ul>
+<ol>
+<li>If <code>--remote</code> or <code>--local</code> is provided:</li>
+</ol>
+<ul>
+<li>update execution location.</li>
+</ul>
+<ol>
+<li>If server or remote path fields are provided:</li>
+</ol>
+<ul>
+<li>update sync/remote settings through existing settings stores.</li>
+</ul>
+<ol>
+<li>Return <code>forja status</code> as the next action.</li>
+</ol>
+<p>Supported flags:</p>
+<pre><code data-lang="bash">forja use
+forja use --target &lt;project&gt;
+forja use --kind qt
+forja use --kind sdk
+forja use --mode debug|release
+forja use --arch x86|x64
+forja use --local
+forja use --remote
+forja use --server &lt;id&gt; --remote-path &lt;path&gt;
+forja use --remote-workspace &lt;path&gt;
+forja use --remote-forja-bin &lt;path&gt;
+forja use --workspace &lt;path&gt;
+forja use --json</code></pre>
+<p>Text output shape:</p>
+<pre><code data-lang="text">Forja use
+Selected:
+  Target: Qt apps/client/client.pro
+  Mode: Release x64
+  Execution: remote
+  Server: dev
+Next:
+  forja status</code></pre>
+<p>JSON output shape:</p>
+<pre><code data-lang="json">{
+  &quot;ok&quot;: true,
+  &quot;action&quot;: &quot;use&quot;,
+  &quot;activeTarget&quot;: {
+    &quot;kind&quot;: &quot;qt&quot;,
+    &quot;project&quot;: &quot;apps/client/client.pro&quot;,
+    &quot;mode&quot;: &quot;release&quot;,
+    &quot;arch&quot;: &quot;x64&quot;,
+    &quot;runAt&quot;: &quot;remote&quot;
+  },
+  &quot;nextActions&quot;: [&quot;forja status&quot;]
+}</code></pre>
+<p>Important edge cases:</p>
+<ul>
+<li><code>--remote</code> with no selected server: save execution location only when remote settings already exist; otherwise return diagnostic and next action <code>forja list servers</code>.</li>
+<li><code>--target</code> outside workspace: reject.</li>
+<li><code>--kind qt</code> in workspace with multiple Qt targets: reject with <code>forja list</code>.</li>
+<li><code>--arch x86</code> on non-Windows: reject.</li>
+<li><code>--target</code> switching from Qt to SDK preserves mode/arch only if valid for SDK platform.</li>
+</ul>
+<p>VSCode behavior:</p>
+<ul>
+<li>Command title: <code>Forja: Use Target</code>.</li>
+<li>Status bar target segment opens this command.</li>
+<li>It replaces separate visible commands for Qt project selection, SDK project selection, and execution location.</li>
+</ul>
+<p>Tests:</p>
+<ul>
+<li><code>src/test/unifiedCliUse.test.ts</code>: target inference from <code>.pro</code>.</li>
+<li><code>src/test/unifiedCliUse.test.ts</code>: target inference from <code>.sln</code>.</li>
+<li><code>src/test/unifiedCliUse.test.ts</code>: mixed workspace requires target unless already active.</li>
+<li><code>src/test/unifiedCliUse.test.ts</code>: <code>--remote</code> updates execution location.</li>
+<li><code>src/test/unifiedCliUse.test.ts</code>: invalid arch is rejected on unsupported platform.</li>
+</ul>
+<h3 id="forja-build"><code>forja build</code></h3>
+<p>Purpose:</p>
+<ul>
+<li>Build the current active target.</li>
+<li>Hide Qt/SDK/local/remote routing behind active target and execution location.</li>
+<li>Preserve standalone Qt qmake and rcc operations through build flags.</li>
+</ul>
+<p>Old capabilities absorbed:</p>
+<ul>
+<li><code>qt qmake</code></li>
+<li><code>qt rcc</code></li>
+<li><code>qt build</code></li>
+<li><code>sdk build</code></li>
+<li><code>sdk rebuild</code></li>
+<li><code>remote qt qmake</code></li>
+<li><code>remote qt build</code></li>
+<li><code>remote sdk build</code></li>
+<li><code>remote sdk rebuild</code></li>
+</ul>
+<p>CLI flow:</p>
+<ol>
+<li>Resolve workspace.</li>
+<li>Load active target.</li>
+<li>If active target is missing, return <code>forja list</code> and <code>forja use</code>.</li>
+<li>Parse build mode:</li>
+</ol>
+<ul>
+<li>default: normal build.</li>
+<li><code>fresh</code>: clean then build.</li>
+<li><code>qmake</code>: Qt qmake only.</li>
+<li><code>rcc</code>: Qt rcc only.</li>
+<li><code>--plan</code>: show commands without executing.</li>
+</ul>
+<ol>
+<li>If active target is Qt local:</li>
+</ol>
+<ul>
+<li><code>qmake</code>: call existing qmake planner only.</li>
+<li><code>rcc</code>: call existing rcc planner only.</li>
+<li>default build: ensure qmake when Makefile is missing/mismatched, run rcc when needed, then build.</li>
+<li><code>fresh</code>: clean, qmake, rcc if configured, then build.</li>
+</ul>
+<ol>
+<li>If active target is SDK local:</li>
+</ol>
+<ul>
+<li>default build: call SDK build.</li>
+<li><code>fresh</code>: call SDK rebuild if available or clean + build.</li>
+<li><code>qmake</code> / <code>rcc</code>: reject with unsupported build step diagnostic.</li>
+</ul>
+<ol>
+<li>If execution location is remote:</li>
+</ol>
+<ul>
+<li>run remote preflight.</li>
+<li>prepare remote workspace.</li>
+<li>route to matching remote Qt/SDK action.</li>
+<li>for <code>qmake</code> and <code>rcc</code>, route only when target kind supports the action.</li>
+</ul>
+<ol>
+<li>Return build result using compact output rules.</li>
+</ol>
+<p>Supported flags:</p>
+<pre><code data-lang="bash">forja build
+forja build fresh
+forja build qmake
+forja build rcc
+forja build --plan
+forja build --workspace &lt;path&gt;
+forja build --json</code></pre>
+<p>Flag exclusivity:</p>
+<ul>
+<li><code>fresh</code>, <code>qmake</code>, and <code>rcc</code> are mutually exclusive build actions.</li>
+<li><code>--plan</code> can combine with one of them.</li>
+</ul>
+<p>Text output shape:</p>
+<pre><code data-lang="text">Forja build succeeded
+Target: Qt apps/client/client.pro Debug x64 local
+Mode: build</code></pre>
+<p>JSON output shape:</p>
+<pre><code data-lang="json">{
+  &quot;ok&quot;: true,
+  &quot;action&quot;: &quot;build&quot;,
+  &quot;buildMode&quot;: &quot;build&quot;,
+  &quot;activeTarget&quot;: {
+    &quot;kind&quot;: &quot;qt&quot;,
+    &quot;project&quot;: &quot;apps/client/client.pro&quot;,
+    &quot;mode&quot;: &quot;debug&quot;,
+    &quot;arch&quot;: &quot;x64&quot;,
+    &quot;runAt&quot;: &quot;local&quot;
+  },
+  &quot;durationMs&quot;: 1200
+}</code></pre>
+<p>Important edge cases:</p>
+<ul>
+<li>SDK target with <code>qmake</code>: return <code>ok: false</code>, message <code>current SDK target has no qmake build step</code>.</li>
+<li>SDK target with <code>rcc</code>: return <code>ok: false</code>, message <code>current SDK target has no rcc build step</code>.</li>
+<li>Remote selected but remote preflight fails: return doctor next action.</li>
+<li>Build failure: keep existing compact errors and log file behavior.</li>
+</ul>
+<p>VSCode behavior:</p>
+<ul>
+<li>Command title: <code>Forja: Build</code>.</li>
+<li>Additional palette-visible command <code>Forja: Fresh Build</code> is optional only if product wants a one-click fresh build; otherwise keep it inside quick pick.</li>
+<li><code>QMake</code> and <code>RCC</code> appear as quick-pick build options, not separate visible commands.</li>
+</ul>
+<p>Tests:</p>
+<ul>
+<li><code>src/test/unifiedCliBuild.test.ts</code>: Qt <code>build qmake</code> routes to qmake.</li>
+<li><code>src/test/unifiedCliBuild.test.ts</code>: Qt <code>build rcc</code> routes to rcc.</li>
+<li><code>src/test/unifiedCliBuild.test.ts</code>: SDK <code>build fresh</code> routes to rebuild semantics.</li>
+<li><code>src/test/unifiedCliBuild.test.ts</code>: SDK <code>build qmake</code> fails clearly.</li>
+<li><code>src/test/unifiedCliBuild.test.ts</code>: remote Qt build routes through remote prepared action.</li>
+</ul>
+<h3 id="forja-run"><code>forja run</code></h3>
+<p>Purpose:</p>
+<ul>
+<li>Run the current active target when the target kind supports runtime execution.</li>
+<li>Keep build-before-run convenience for Qt targets.</li>
+</ul>
+<p>Old capabilities absorbed:</p>
+<ul>
+<li><code>qt run</code></li>
+<li><code>qt run --detach</code></li>
+<li><code>remote qt run</code></li>
+<li><code>remote qt runDetached</code></li>
+</ul>
+<p>CLI flow:</p>
+<ol>
+<li>Resolve workspace.</li>
+<li>Load active target.</li>
+<li>If no active target, return <code>forja list</code> and <code>forja use</code>.</li>
+<li>If active target kind is SDK:</li>
+</ol>
+<ul>
+<li>return <code>ok: false</code>.</li>
+<li>diagnostic says current SDK target has no run behavior.</li>
+<li>next action is <code>forja build</code>.</li>
+</ul>
+<ol>
+<li>If active target is Qt local:</li>
+</ol>
+<ul>
+<li>ensure build prerequisites as current <code>qt run</code> does.</li>
+<li>if <code>--detach</code>, run detached and return pid/log when available.</li>
+<li>otherwise run foreground.</li>
+</ul>
+<ol>
+<li>If active target is Qt remote:</li>
+</ol>
+<ul>
+<li>run remote preflight.</li>
+<li>prepare remote workspace.</li>
+<li>execute remote Qt run.</li>
+<li><code>--detach</code> maps to remote detached run.</li>
+</ul>
+<ol>
+<li>Return runtime status.</li>
+</ol>
+<p>Supported flags:</p>
+<pre><code data-lang="bash">forja run
+forja run --detach
+forja run --workspace &lt;path&gt;
+forja run --json</code></pre>
+<p>Compatibility rule:</p>
+<ul>
+<li>Preserve current restriction that JSON run output requires detached mode unless foreground JSON streaming is explicitly implemented.</li>
+</ul>
+<p>Text output shape:</p>
+<pre><code data-lang="text">Forja run started
+Target: Qt apps/client/client.pro Debug x64 local
+PID: 12345
+Log: C:\repo\.forja\logs\run.log</code></pre>
+<p>JSON output shape:</p>
+<pre><code data-lang="json">{
+  &quot;ok&quot;: true,
+  &quot;action&quot;: &quot;run&quot;,
+  &quot;activeTarget&quot;: {
+    &quot;kind&quot;: &quot;qt&quot;,
+    &quot;project&quot;: &quot;apps/client/client.pro&quot;,
+    &quot;mode&quot;: &quot;debug&quot;,
+    &quot;arch&quot;: &quot;x64&quot;,
+    &quot;runAt&quot;: &quot;local&quot;
+  },
+  &quot;pid&quot;: 12345,
+  &quot;logFile&quot;: &quot;C:/repo/.forja/logs/run.log&quot;
+}</code></pre>
+<p>Important edge cases:</p>
+<ul>
+<li>SDK target: fail with <code>forja build</code> next action.</li>
+<li>Qt target with stale Makefile: trigger build flow as current run does.</li>
+<li>Remote selected but remote preflight fails: return <code>forja doctor</code>.</li>
+</ul>
+<p>VSCode behavior:</p>
+<ul>
+<li>Command title: <code>Forja: Run</code>.</li>
+<li>Status bar play button executes this command.</li>
+<li>If current target is SDK, play button should be build icon or show build action instead of run.</li>
+</ul>
+<p>Tests:</p>
+<ul>
+<li><code>src/test/unifiedCliRun.test.ts</code>: SDK target returns unsupported run diagnostic.</li>
+<li><code>src/test/unifiedCliRun.test.ts</code>: Qt local run maps to existing Qt runner.</li>
+<li><code>src/test/unifiedCliRun.test.ts</code>: remote Qt run maps to remote foreground/detached behavior.</li>
+</ul>
+<h3 id="forja-stop"><code>forja stop</code></h3>
+<p>Purpose:</p>
+<ul>
+<li>Stop the current active target when it has runtime state.</li>
+</ul>
+<p>Old capabilities absorbed:</p>
+<ul>
+<li><code>qt stop</code></li>
+<li><code>remote qt stop</code></li>
+</ul>
+<p>CLI flow:</p>
+<ol>
+<li>Resolve workspace.</li>
+<li>Load active target.</li>
+<li>If no active target, return <code>forja list</code> and <code>forja use</code>.</li>
+<li>If active target kind is SDK:</li>
+</ol>
+<ul>
+<li>return <code>ok: false</code>.</li>
+<li>diagnostic says SDK target has no tracked runtime process.</li>
+</ul>
+<ol>
+<li>If Qt local:</li>
+</ol>
+<ul>
+<li>call existing local stop logic.</li>
+</ul>
+<ol>
+<li>If Qt remote:</li>
+</ol>
+<ul>
+<li>call remote bridge stop.</li>
+</ul>
+<ol>
+<li>Return stopped/not-running status.</li>
+</ol>
+<p>Supported flags:</p>
+<pre><code data-lang="bash">forja stop
+forja stop --workspace &lt;path&gt;
+forja stop --json</code></pre>
+<p>Text output shape:</p>
+<pre><code data-lang="text">Forja stop
+Target: Qt apps/client/client.pro local
+State: stopped</code></pre>
+<p>JSON output shape:</p>
+<pre><code data-lang="json">{
+  &quot;ok&quot;: true,
+  &quot;action&quot;: &quot;stop&quot;,
+  &quot;state&quot;: &quot;stopped&quot;
+}</code></pre>
+<p>Important edge cases:</p>
+<ul>
+<li>No prior run state: return <code>ok: true</code> with state <code>not-running</code>.</li>
+<li>Remote stop with missing server: return <code>forja doctor</code>.</li>
+</ul>
+<p>VSCode behavior:</p>
+<ul>
+<li>Command title: <code>Forja: Stop</code>.</li>
+<li>Status bar stop icon executes this command.</li>
+</ul>
+<p>Tests:</p>
+<ul>
+<li><code>src/test/unifiedCliStop.test.ts</code>: local Qt stop routes to local backend.</li>
+<li><code>src/test/unifiedCliStop.test.ts</code>: SDK stop is unsupported and clear.</li>
+<li><code>src/test/unifiedCliStop.test.ts</code>: remote Qt stop routes to bridge action.</li>
+</ul>
+<h3 id="forja-clean"><code>forja clean</code></h3>
+<p>Purpose:</p>
+<ul>
+<li>Clean build outputs for the current active target.</li>
+<li>Hide local/remote and Qt/SDK routing.</li>
+</ul>
+<p>Old capabilities absorbed:</p>
+<ul>
+<li><code>qt clean</code></li>
+<li><code>sdk clean</code></li>
+<li><code>remote qt clean</code></li>
+<li><code>remote sdk clean</code></li>
+</ul>
+<p>CLI flow:</p>
+<ol>
+<li>Resolve workspace.</li>
+<li>Load active target.</li>
+<li>If no active target, return <code>forja list</code> and <code>forja use</code>.</li>
+<li>If Qt local, call Qt clean.</li>
+<li>If SDK local, call SDK clean.</li>
+<li>If remote, run remote preflight and matching remote clean.</li>
+<li>Return clean result.</li>
+</ol>
+<p>Supported flags:</p>
+<pre><code data-lang="bash">forja clean
+forja clean --plan
+forja clean --workspace &lt;path&gt;
+forja clean --json</code></pre>
+<p>Text output shape:</p>
+<pre><code data-lang="text">Forja clean succeeded
+Target: SDK sdk/NemoSDK.sln Release x64 local</code></pre>
+<p>JSON output shape:</p>
+<pre><code data-lang="json">{
+  &quot;ok&quot;: true,
+  &quot;action&quot;: &quot;clean&quot;,
+  &quot;activeTarget&quot;: {
+    &quot;kind&quot;: &quot;sdk&quot;,
+    &quot;project&quot;: &quot;sdk/NemoSDK.sln&quot;,
+    &quot;mode&quot;: &quot;release&quot;,
+    &quot;arch&quot;: &quot;x64&quot;,
+    &quot;runAt&quot;: &quot;local&quot;
+  }
+}</code></pre>
+<p>Important edge cases:</p>
+<ul>
+<li><code>--plan</code> must not delete or modify build outputs.</li>
+<li>Remote clean missing preflight should return <code>forja doctor</code>.</li>
+</ul>
+<p>VSCode behavior:</p>
+<ul>
+<li>Command title: <code>Forja: Clean</code>.</li>
+<li>Clean appears in the unified action menu.</li>
+</ul>
+<p>Tests:</p>
+<ul>
+<li><code>src/test/unifiedCliClean.test.ts</code>: Qt clean routes to Qt backend.</li>
+<li><code>src/test/unifiedCliClean.test.ts</code>: SDK clean routes to SDK backend.</li>
+<li><code>src/test/unifiedCliClean.test.ts</code>: remote clean routes through remote prepared action.</li>
+</ul>
+<h3 id="forja-doctor"><code>forja doctor</code></h3>
+<p>Purpose:</p>
+<ul>
+<li>Perform deep diagnostics across target, toolchain, sync, and remote execution.</li>
+<li>Replace separate environment, connection, test, and remote doctor commands in the primary user model.</li>
+</ul>
+<p>Old capabilities absorbed:</p>
+<ul>
+<li><code>qt env</code> diagnostic role</li>
+<li><code>sdk env</code> diagnostic role</li>
+<li><code>sync test-connection</code></li>
+<li><code>remote test</code></li>
+<li><code>remote doctor</code></li>
+<li>guided bootstrap validation</li>
+<li>recovery guidance for remote lock/restore/reset/clean-untracked</li>
+</ul>
+<p>CLI flow:</p>
+<ol>
+<li>Resolve workspace.</li>
+<li>Load active target and settings.</li>
+<li>Run local target diagnostics:</li>
+</ol>
+<ul>
+<li>Qt toolchain if target is Qt or no target exists.</li>
+<li>SDK toolchain if target is SDK or no target exists.</li>
+</ul>
+<ol>
+<li>Run sync diagnostics:</li>
+</ol>
+<ul>
+<li>server selection.</li>
+<li>remote path.</li>
+<li>SSH connection when configured.</li>
+</ul>
+<ol>
+<li>Run remote diagnostics when execution location is remote or <code>--remote</code> is supplied:</li>
+</ol>
+<ul>
+<li>remote server reachability.</li>
+<li>remote Forja bin.</li>
+<li>bootstrap artifact availability.</li>
+<li>remote workspace and repo mapping readiness.</li>
+</ul>
+<ol>
+<li>Report fix actions using new commands.</li>
+<li>If <code>--fix</code> is supplied:</li>
+</ol>
+<ul>
+<li>run only non-destructive fixes: bootstrap missing remote Forja bin, initialize local state directories, refresh generated metadata.</li>
+<li>do not run restore/reset/clean-untracked without an explicit recovery flag.</li>
+</ul>
+<p>Supported flags:</p>
+<pre><code data-lang="bash">forja doctor
+forja doctor --remote
+forja doctor fix
+forja doctor fix --remote
+forja doctor --workspace &lt;path&gt;
+forja doctor --json</code></pre>
+<p>Recovery flags:</p>
+<pre><code data-lang="bash">forja doctor unlock &lt;lock-id&gt; [--force]
+forja doctor restore &lt;repo&gt; &lt;paths...&gt;
+forja doctor reset &lt;repo&gt; &lt;paths...&gt;
+forja doctor clean-untracked &lt;repo&gt; &lt;paths...&gt; [--recursive]</code></pre>
+<p>Recovery rules:</p>
+<ul>
+<li>Recovery flags are explicit and never inferred.</li>
+<li>Recovery flags must require <code>--repo</code> and path arguments where applicable.</li>
+<li>Recovery text must explain that these affect remote files.</li>
+</ul>
+<p>Text output shape:</p>
+<pre><code data-lang="text">Forja doctor
+Target: Qt apps/client/client.pro Debug x64 remote
+
+Local toolchain: ready
+Sync: ready
+Remote: missing remote Forja bin
+
+Fix:
+  forja doctor fix --remote</code></pre>
+<p>JSON output shape:</p>
+<pre><code data-lang="json">{
+  &quot;ok&quot;: false,
+  &quot;action&quot;: &quot;doctor&quot;,
+  &quot;checks&quot;: [
+    { &quot;name&quot;: &quot;localToolchain&quot;, &quot;status&quot;: &quot;ready&quot; },
+    { &quot;name&quot;: &quot;remoteForjaBin&quot;, &quot;status&quot;: &quot;missing&quot; }
+  ],
+  &quot;nextActions&quot;: [&quot;forja doctor fix --remote&quot;]
+}</code></pre>
+<p>Important edge cases:</p>
+<ul>
+<li><code>doctor</code> may be slower than <code>status</code>; keep this expected and documented.</li>
+<li><code>--fix</code> must not change selected target or mode.</li>
+<li>Missing remote server should not attempt SSH.</li>
+</ul>
+<p>VSCode behavior:</p>
+<ul>
+<li>Command title: <code>Forja: Doctor</code>.</li>
+<li>Runs with progress.</li>
+<li>Results can be shown in output channel and summarized in notification.</li>
+</ul>
+<p>Tests:</p>
+<ul>
+<li><code>src/test/unifiedCliDoctor.test.ts</code>: local target diagnostics run without SSH when local target is selected.</li>
+<li><code>src/test/unifiedCliDoctor.test.ts</code>: remote diagnostics include remote test checks.</li>
+<li><code>src/test/unifiedCliDoctor.test.ts</code>: <code>--fix</code> does not run destructive recovery.</li>
+<li><code>src/test/unifiedCliDoctor.test.ts</code>: recovery flags require repo/path.</li>
+</ul>
+<h3 id="forja-sync"><code>forja sync</code></h3>
+<p>Purpose:</p>
+<ul>
+<li>Synchronize changed files to the selected remote target.</li>
+<li>Keep sync as a primary command because it is a user goal, not just configuration.</li>
+</ul>
+<p>Old capabilities retained or absorbed:</p>
+<ul>
+<li><code>sync</code></li>
+<li><code>sync plan</code></li>
+<li><code>sync --file</code></li>
+<li><code>sync reset</code></li>
+<li>server selection from <code>sync use</code> moves to <code>forja use</code></li>
+<li>server listing from <code>sync servers</code> moves to <code>forja list servers</code></li>
+<li>connection testing from <code>sync test-connection</code> moves to <code>forja doctor</code></li>
+</ul>
+<p>CLI flow:</p>
+<ol>
+<li>Resolve workspace.</li>
+<li>Load sync settings.</li>
+<li>If server or remote path is missing:</li>
+</ol>
+<ul>
+<li>return <code>forja list servers</code>.</li>
+<li>return <code>forja use --server &lt;id&gt; --remote-path &lt;path&gt;</code>.</li>
+</ul>
+<ol>
+<li>If <code>--plan</code>, compute changed files and print planned operations only.</li>
+<li>If <code>--file</code> is supplied, sync only specified files.</li>
+<li>If <code>--repo</code> is supplied, filter or override repo target as current sync supports.</li>
+<li>Execute sync.</li>
+<li>Return compact result.</li>
+</ol>
+<p>Supported flags:</p>
+<pre><code data-lang="bash">forja sync
+forja sync plan
+forja sync --file &lt;path&gt;
+forja sync --repo &lt;name-or-path&gt;
+forja sync reset
+forja sync --workspace &lt;path&gt;
+forja sync --json</code></pre>
+<p>Removed from primary sync help:</p>
+<pre><code data-lang="bash">forja sync use
+forja sync servers
+forja sync server
+forja sync add-server
+forja sync update-server
+forja sync remove-server
+forja sync test-connection</code></pre>
+<p>Server CRUD migration:</p>
+<ul>
+<li>During the first migration phase, keep server CRUD as compatibility commands.</li>
+<li>New user-facing server CRUD should be provided through <code>forja use --server-create</code>, <code>forja use --server-update</code>, and <code>forja use --server-remove</code> only if product decides CLI server CRUD remains necessary.</li>
+<li>If server CRUD stays necessary for non-interactive use, document it under <code>forja use</code>, not under <code>forja sync</code>.</li>
+</ul>
+<p>Text output shape:</p>
+<pre><code data-lang="text">Forja sync succeeded
+Server: dev
+Remote path: /home/dev/workspace
+Files uploaded: 3</code></pre>
+<p>JSON output shape:</p>
+<pre><code data-lang="json">{
+  &quot;ok&quot;: true,
+  &quot;action&quot;: &quot;sync&quot;,
+  &quot;server&quot;: &quot;dev&quot;,
+  &quot;remotePath&quot;: &quot;/home/dev/workspace&quot;,
+  &quot;uploaded&quot;: 3,
+  &quot;skipped&quot;: 0
+}</code></pre>
+<p>Important edge cases:</p>
+<ul>
+<li><code>--reset</code> clears local sync state and does not upload.</li>
+<li>Missing server must not attempt SSH.</li>
+<li>Password handling remains unchanged: prefer <code>FORJA_SSH_PASSWORD</code>.</li>
+</ul>
+<p>VSCode behavior:</p>
+<ul>
+<li>Command title: <code>Forja: Sync Changes</code>.</li>
+<li>Explorer context menu can keep sync current file/changes entry.</li>
+<li>Server selection belongs in <code>Forja: Use Target</code> or a use sub-flow.</li>
+</ul>
+<p>Tests:</p>
+<ul>
+<li><code>src/test/unifiedCliSync.test.ts</code>: missing server reports new use/list next actions.</li>
+<li><code>src/test/unifiedCliSync.test.ts</code>: <code>--plan</code> preserves current dry-run behavior.</li>
+<li><code>src/test/unifiedCliSync.test.ts</code>: old <code>sync status</code> nextActions no longer appear after migration phase.</li>
+<li><code>src/test/syncCommandIdsSource.test.ts</code>: visible sync command set is generic.</li>
+</ul>
+<h2 id="vscode-command-surface">VSCode Command Surface</h2>
+<p>Visible commands after migration:</p>
+<div class="table-wrap"><table>
+<tr><th>Command ID</th><th>Title</th><th>Backend</th></tr>
+<tr><td><code>forja.status</code></td><td><code>Forja: Status</code></td><td>unified status</td></tr>
+<tr><td><code>forja.init</code></td><td><code>Forja: Init</code></td><td>unified init</td></tr>
+<tr><td><code>forja.list</code></td><td><code>Forja: List Targets</code></td><td>unified list targets</td></tr>
+<tr><td><code>forja.use</code></td><td><code>Forja: Use Target</code></td><td>unified use</td></tr>
+<tr><td><code>forja.build</code></td><td><code>Forja: Build</code></td><td>unified build</td></tr>
+<tr><td><code>forja.run</code></td><td><code>Forja: Run</code></td><td>unified run</td></tr>
+<tr><td><code>forja.stop</code></td><td><code>Forja: Stop</code></td><td>unified stop</td></tr>
+<tr><td><code>forja.clean</code></td><td><code>Forja: Clean</code></td><td>unified clean</td></tr>
+<tr><td><code>forja.doctor</code></td><td><code>Forja: Doctor</code></td><td>unified doctor</td></tr>
+<tr><td><code>forja.sync</code></td><td><code>Forja: Sync Changes</code></td><td>sync</td></tr>
+</table></div>
+<p>Hidden compatibility IDs:</p>
+<ul>
+<li>All existing <code>forja.qt.*</code> command IDs.</li>
+<li>All existing <code>forja.sdk.*</code> command IDs.</li>
+<li>All existing <code>forja.remote.*</code> command IDs.</li>
+<li>Existing special context commands that are still needed internally, such as <code>forja.qt.openWithQtDesigner</code>, may remain context-visible where they are truly contextual.</li>
+</ul>
+<p>VSCode constraints:</p>
+<ul>
+<li>Do not delete old command IDs in the first migration.</li>
+<li>Do not modify <code>activate</code> signature.</li>
+<li>New commands must be registered and added to <code>package.json</code>.</li>
+<li>Hide compatibility command palette entries with <code>menus.commandPalette</code> <code>when: false</code>.</li>
+<li>Keep Explorer context commands only when they are context-specific and not available through the main flow.</li>
+</ul>
+<h2 id="implementation-file-structure">Implementation File Structure</h2>
+<p>Create:</p>
+<ul>
+<li><code>src/cli/unified/index.ts</code>: top-level unified command dispatcher functions.</li>
+<li><code>src/cli/unified/types.ts</code>: active target, candidates, result types.</li>
+<li><code>src/cli/unified/activeTarget.ts</code>: read/write active target metadata.</li>
+<li><code>src/cli/unified/candidates.ts</code>: target/env/server candidate aggregation.</li>
+<li><code>src/cli/unified/status.ts</code>: unified status planner.</li>
+<li><code>src/cli/unified/use.ts</code>: unified use planner and persistence.</li>
+<li><code>src/cli/unified/build.ts</code>: build routing.</li>
+<li><code>src/cli/unified/doctor.ts</code>: unified diagnostics routing.</li>
+<li><code>src/test/unifiedCliStatus.test.ts</code></li>
+<li><code>src/test/unifiedCliInit.test.ts</code></li>
+<li><code>src/test/unifiedCliList.test.ts</code></li>
+<li><code>src/test/unifiedCliUse.test.ts</code></li>
+<li><code>src/test/unifiedCliBuild.test.ts</code></li>
+<li><code>src/test/unifiedCliRun.test.ts</code></li>
+<li><code>src/test/unifiedCliDoctor.test.ts</code></li>
+<li><code>src/test/unifiedCliSync.test.ts</code></li>
+</ul>
+<p>Modify:</p>
+<ul>
+<li><code>src/cli/index.ts</code>: route new top-level commands before compatibility subcommands.</li>
+<li><code>src/qt/shared/qtCore.ts</code>: update nextActions to use new commands once unified status/use exist.</li>
+<li><code>src/sdk/cli/index.ts</code>: expose reusable build/status functions or adapter hooks without importing VSCode.</li>
+<li><code>src/sync/cli.ts</code>: keep execution but update nextActions and user help.</li>
+<li><code>src/remote/cli/index.ts</code>: keep compatibility, expose reusable remote adapter hooks.</li>
+<li><code>src/remote/vscode/commands.ts</code>: add unified command adapters or hide old remote commands.</li>
+<li><code>src/qt/commands.ts</code>: keep old IDs, route visible commands through unified adapters where possible.</li>
+<li><code>src/sdk/sdkExtension.ts</code>: keep old IDs, route visible commands through unified adapters where possible.</li>
+<li><code>src/ui/unifiedStatusBar.ts</code>: replace Qt/SDK-specific visible actions with unified command calls.</li>
+<li><code>package.json</code>: add new command contributions and hide old palette entries.</li>
+<li><code>docs/README-cli.md</code>: replace old command tree with new user command model.</li>
+<li><code>docs/cli-interface-spec.md</code>: document new public CLI contract.</li>
+<li><code>skills/forja/README.md</code>: update AI-facing command usage.</li>
+<li><code>scripts/build-cli.js</code>: include new unified CLI modules in CLI package.</li>
+</ul>
+<h2 id="migration-stages">Migration Stages</h2>
+<h3 id="stage-1-add-unified-model-without-changing-existing-behavior">Stage 1: Add Unified Model Without Changing Existing Behavior</h3>
+<ul>
+<li class="check "><span></span>Add active target types and storage helpers.</li>
+<li class="check "><span></span>Add candidate aggregation for Qt/SDK targets.</li>
+<li class="check "><span></span>Add tests for mixed workspaces and single-target auto selection.</li>
+<li class="check "><span></span>Keep old commands untouched.</li>
+<li class="check "><span></span>Verify with targeted tests:</li>
+<li><code>npm test -- --test-name-pattern=unifiedCli</code></li>
+<li>If test runner does not support name pattern, run <code>npm test</code> only after targeted source tests compile.</li>
+</ul>
+<p>Acceptance:</p>
+<ul>
+<li>New modules compile.</li>
+<li>No user-visible command changes yet.</li>
+<li>Mixed workspace target ambiguity is represented in tests.</li>
+</ul>
+<h3 id="stage-2-implement-status-list-use-and-init">Stage 2: Implement <code>status</code>, <code>list</code>, <code>use</code>, and <code>init</code></h3>
+<ul>
+<li class="check "><span></span>Add top-level CLI routes.</li>
+<li class="check "><span></span>Implement read-only <code>status</code>.</li>
+<li class="check "><span></span>Implement read-only <code>list</code>.</li>
+<li class="check "><span></span>Implement explicit <code>use</code>.</li>
+<li class="check "><span></span>Implement conservative <code>init</code>.</li>
+<li class="check "><span></span>Update old Qt/SDK nextActions that point to status/projects/use/env.</li>
+<li class="check "><span></span>Add VSCode commands for status/list/use/init.</li>
+</ul>
+<p>Acceptance:</p>
+<ul>
+<li><code>forja status --json</code> works with no active target.</li>
+<li><code>forja list --json</code> lists Qt and SDK candidates.</li>
+<li><code>forja use --target &lt;path&gt; --json</code> saves active target.</li>
+<li><code>forja init --json</code> does not guess between one Qt and one SDK target.</li>
+</ul>
+<h3 id="stage-3-implement-unified-execution-commands">Stage 3: Implement Unified Execution Commands</h3>
+<ul>
+<li class="check "><span></span>Implement <code>build</code> routing.</li>
+<li class="check "><span></span>Implement <code>build fresh</code>.</li>
+<li class="check "><span></span>Implement <code>build qmake</code>.</li>
+<li class="check "><span></span>Implement <code>build rcc</code>.</li>
+<li class="check "><span></span>Implement <code>run</code>.</li>
+<li class="check "><span></span>Implement <code>stop</code>.</li>
+<li class="check "><span></span>Implement <code>clean</code>.</li>
+<li class="check "><span></span>Add remote routing for selected remote execution location.</li>
+<li class="check "><span></span>Update status bar build/run/stop/clean calls.</li>
+</ul>
+<p>Acceptance:</p>
+<ul>
+<li><code>forja build --json</code> routes by active target.</li>
+<li><code>forja build qmake --json</code> works for Qt and reports unsupported qmake step for SDK.</li>
+<li><code>forja run --detach --json</code> works for Qt and fails clearly for SDK.</li>
+<li>Remote selected target routes through existing remote prepared/bridge actions.</li>
+</ul>
+<h3 id="stage-4-implement-unified-doctor-and-sync-help">Stage 4: Implement Unified Doctor And Sync Help</h3>
+<ul>
+<li class="check "><span></span>Implement <code>doctor</code> aggregation.</li>
+<li class="check "><span></span>Move connection tests into doctor.</li>
+<li class="check "><span></span>Keep <code>sync</code> execution behavior.</li>
+<li class="check "><span></span>Update <code>sync</code> help to remove server/config subcommands from primary workflow.</li>
+<li class="check "><span></span>Update <code>sync</code> missing-config nextActions to <code>list/use</code>.</li>
+</ul>
+<p>Acceptance:</p>
+<ul>
+<li><code>forja doctor --json</code> reports local target checks.</li>
+<li><code>forja doctor --remote --json</code> reports remote checks without changing target.</li>
+<li><code>forja sync plan --json</code> retains existing behavior.</li>
+<li>Missing sync configuration points to <code>forja list servers</code> and <code>forja use --server</code>.</li>
+</ul>
+<h3 id="stage-5-hide-compatibility-surface">Stage 5: Hide Compatibility Surface</h3>
+<ul>
+<li class="check "><span></span>Hide old VSCode command palette entries.</li>
+<li class="check "><span></span>Keep old command IDs registered.</li>
+<li class="check "><span></span>Update docs to show only new command surface.</li>
+<li class="check "><span></span>Update CLI help so old <code>qt</code>, <code>sdk</code>, <code>remote</code>, and sync config subcommands are marked compatibility or removed from primary help.</li>
+<li class="check "><span></span>Update AI skill docs to use new commands.</li>
+</ul>
+<p>Acceptance:</p>
+<ul>
+<li>Command Palette search for <code>Forja</code> shows only the new command set plus truly contextual commands.</li>
+<li><code>forja --help</code> shows the new command set.</li>
+<li>Old commands still execute for compatibility.</li>
+</ul>
+<h3 id="stage-6-package-verification">Stage 6: Package Verification</h3>
+<ul>
+<li class="check "><span></span>Run <code>npm run compile</code>.</li>
+<li class="check "><span></span>Run targeted node tests for unified CLI modules.</li>
+<li class="check "><span></span>Run <code>npm test</code>.</li>
+<li class="check "><span></span>Run <code>npm run build:cli</code> because CLI package gains new files.</li>
+<li class="check "><span></span>Do not run <code>npm run package:all</code> unless the task is explicitly packaging a release.</li>
+</ul>
+<p>Acceptance:</p>
+<ul>
+<li>Compile passes.</li>
+<li>Tests pass.</li>
+<li>CLI package includes unified modules.</li>
+</ul>
+<h2 id="testing-matrix">Testing Matrix</h2>
+<div class="table-wrap"><table>
+<tr><th>Scenario</th><th>Commands</th><th>Expected</th></tr>
+<tr><td>Empty workspace</td><td><code>forja status --json</code></td><td>No target, next action <code>forja init</code>.</td></tr>
+<tr><td>One Qt target</td><td><code>forja init --json</code></td><td>Saves Qt active target.</td></tr>
+<tr><td>One SDK target</td><td><code>forja init --json</code></td><td>Saves SDK active target.</td></tr>
+<tr><td>One Qt + one SDK</td><td><code>forja init --json</code></td><td>Does not choose, next actions <code>forja list</code>, <code>forja use</code>.</td></tr>
+<tr><td>Multiple Qt targets</td><td><code>forja list --json</code></td><td>Lists all <code>.pro</code> files and marks current if selected.</td></tr>
+<tr><td>Select Qt</td><td><code>forja use --target app.pro --json</code></td><td>Active target kind is <code>qt</code>.</td></tr>
+<tr><td>Select SDK</td><td><code>forja use --target sdk/NemoSDK.sln --json</code></td><td>Active target kind is <code>sdk</code>.</td></tr>
+<tr><td>Qt qmake only</td><td><code>forja build qmake --json</code></td><td>Runs qmake route only.</td></tr>
+<tr><td>Qt rcc only</td><td><code>forja build rcc --json</code></td><td>Runs rcc route only.</td></tr>
+<tr><td>SDK qmake rejected</td><td><code>forja build qmake --json</code></td><td>Reports that SDK has no qmake build step.</td></tr>
+<tr><td>SDK fresh build</td><td><code>forja build fresh --json</code></td><td>Uses rebuild or clean + build.</td></tr>
+<tr><td>Qt run</td><td><code>forja run --detach --json</code></td><td>Returns pid/log when available.</td></tr>
+<tr><td>SDK run rejected</td><td><code>forja run --json</code></td><td>Fails with <code>forja build</code> next action.</td></tr>
+<tr><td>Remote Qt build</td><td><code>forja use --remote</code>, <code>forja build --json</code></td><td>Uses remote prepared Qt build.</td></tr>
+<tr><td>Remote SDK build</td><td><code>forja use --remote</code>, <code>forja build --json</code></td><td>Uses remote prepared SDK build.</td></tr>
+<tr><td>Missing remote server</td><td><code>forja build --json</code></td><td>Fails before SSH and points to list/use.</td></tr>
+<tr><td>Sync missing config</td><td><code>forja sync --json</code></td><td>Points to list servers and use server.</td></tr>
+<tr><td>Doctor local</td><td><code>forja doctor --json</code></td><td>Does not SSH unless remote selected or <code>--remote</code>.</td></tr>
+<tr><td>Doctor remote</td><td><code>forja doctor --remote --json</code></td><td>Runs remote readiness checks.</td></tr>
+</table></div>
+<h2 id="documentation-updates">Documentation Updates</h2>
+<p><code>docs/README-cli.md</code> should start with the new workflow:</p>
+<pre><code data-lang="bash">forja status
+forja init
+forja list
+forja use
+forja build
+forja run</code></pre>
+<p>Mixed workspace example:</p>
+<pre><code data-lang="bash">forja list
+forja use --target apps/client/client.pro
+forja build
+forja use --target sdk/NemoSDK.sln
+forja build fresh</code></pre>
+<p>Remote example:</p>
+<pre><code data-lang="bash">forja list servers
+forja use --server dev --remote-path /home/dev/workspace
+forja use --remote
+forja doctor --remote
+forja build</code></pre>
+<p>Qt phase example:</p>
+<pre><code data-lang="bash">forja build qmake
+forja build rcc
+forja build</code></pre>
+<h2 id="compatibility-policy">Compatibility Policy</h2>
+<p>First release after implementation:</p>
+<ul>
+<li>Old CLI subcommands still work.</li>
+<li>Old VSCode command IDs still work.</li>
+<li>Old commands are hidden from primary help and Command Palette.</li>
+<li>Old command output may include a short deprecation hint in text mode.</li>
+<li>JSON output should avoid noisy deprecation text unless a <code>warnings</code> field already exists.</li>
+</ul>
+<p>Second release:</p>
+<ul>
+<li>Keep old command execution unless there is a strong reason to remove it.</li>
+<li>Do not remove published VSCode command IDs.</li>
+<li>Continue to hide old commands.</li>
+</ul>
+<h2 id="open-decisions-resolved-in-this-plan">Open Decisions Resolved In This Plan</h2>
+<ul>
+<li><code>remote</code> is not a top-level user command.</li>
+<li><code>qmake</code> and <code>rcc</code> are not top-level user commands.</li>
+<li>Qt standalone phases are exposed as build subactions: <code>forja build qmake</code> and <code>forja build rcc</code>.</li>
+<li><code>status</code> is lightweight and read-only.</li>
+<li><code>doctor</code> is deep diagnostics and optional safe fixes.</li>
+<li><code>list</code> is read-only and answers &quot;what can I choose?&quot;</li>
+<li><code>use</code> is the only normal selection/configuration command.</li>
+<li><code>init</code> only performs automatic first-run initialization and does not make ambiguous choices.</li>
+</ul>
+<h2 id="self-review-notes">Self-Review Notes</h2>
+<ul>
+<li>Every final user command has a purpose, old-command mapping, CLI flow, flags, edge cases, VSCode behavior, and tests.</li>
+<li>Every old command family has a migration destination.</li>
+<li>No implementation step requires deleting old command IDs.</li>
+<li>The plan avoids <code>vscode</code> imports in CLI/shared modules by placing unified CLI logic under <code>src/cli/unified</code>.</li>
+<li>Remote behavior remains routed through existing remote core and VSCode adapters.</li>
+</ul></article>
+</main>
+</div>
+<a class="top-link" href="#top">Top</a>
+</body>
+</html>
