@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>forja status — Forja 命令收敛 v2</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #1a1a1a;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --code-bg: #f3f4f6;
+      --link: #2563eb;
+      --heading: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+      max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem;
+    }
+    h1, h2, h3 { color: var(--heading); margin-top: 2rem; margin-bottom: 1rem; }
+    h1 { font-size: 2rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; }
+    h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+    h3 { font-size: 1.25rem; }
+    p { margin-bottom: 1rem; }
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      background: var(--code-bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      font-size: 0.9em;
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+    }
+    pre code { background: none; padding: 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.5rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+    th { background: var(--code-bg); font-weight: 600; }
+    blockquote {
+      border-left: 4px solid var(--border);
+      padding-left: 1rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+    ul, ol { margin-bottom: 1rem; padding-left: 2rem; }
+    li { margin-bottom: 0.25rem; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+    .nav-top { margin-bottom: 2rem; }
+    .nav-top a { margin-right: 1rem; }
+    /* Layout */
+    .page-wrapper { display: flex; gap: 2rem; align-items: flex-start; }
+    .main-content { flex: 1; min-width: 0; }
+        /* TOC sidebar */
+    .toc-sidebar { width: 240px; flex-shrink: 0; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; font-size: 0.85rem; padding: 0.75rem 0; border-left: 2px solid var(--border); padding-left: 1rem; }
+    .toc-sidebar ul { list-style: none; padding-left: 0.85rem; margin: 0; }
+    .toc-sidebar > ul { padding-left: 0; }
+    .toc-sidebar li { margin-bottom: 0.1rem; }
+    .toc-sidebar a { display: block; color: var(--muted); font-size: 0.82rem; line-height: 1.5; padding: 0.15rem 0 0.15rem 0.5rem; border-left: 2px solid transparent; margin-left: -1rem; padding-left: calc(1rem - 2px); transition: color 0.15s, border-color 0.15s; text-decoration: none; }
+    .toc-sidebar a:hover { color: var(--link); text-decoration: none; }
+    .toc-sidebar a.active { color: var(--link); border-left-color: var(--link); font-weight: 600; }
+    .toc-sidebar::-webkit-scrollbar { width: 3px; }
+    .toc-sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    @media (max-width: 900px) { .page-wrapper { flex-direction: column-reverse; } .toc-sidebar { width: 100%; position: static; max-height: none; border-left: none; padding-left: 0; } }
+    /* Prism override */
+    pre[class*="language-"] { margin-bottom: 1rem; }
+    code[class*="language-"] { background: none; padding: 0; }
+    .tab-group { margin-bottom: 1.5rem; }
+    .tab-buttons { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 0; }
+    .tab-btn { padding: 0.4rem 1rem; border: none; background: none; cursor: pointer; font-size: 0.85rem; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -2px; font-family: inherit; }
+    .tab-btn.active { color: var(--link); border-bottom-color: var(--link); font-weight: 600; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .tab-panel pre { margin-top: 0.5rem; margin-bottom: 0; border-radius: 0 0 6px 6px; }
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body>
+  <div class="nav-top">
+    <a href="index.html">&larr; 返回总览</a>
+  </div>
+
+
+<div class="page-wrapper">
+<main class="main-content">  <h1><code>forja status</code></h1>
+<p><strong>职责</strong>：轻量只读状态查看。不做深度 SSH、不做完整工具链探测、不修改配置。</p>
+
+  <h2 id="syntax">语法</h2>
+  <pre><code class="language-bash">forja status [--process] [--workspace &lt;path&gt;] [--json] [--lang &lt;locale&gt;]</code></pre>
+
+  <h2 id="behavior">行为</h2>
+  <ol>
+    <li>解析 workspace。</li>
+    <li>读取 active target 元数据。</li>
+    <li>读取 Qt/SDK/Sync/Remote 设置摘要。</li>
+    <li>无 active target 时：扫描候选数量，不猜测，返回 <code>forja list</code> + <code>forja use</code>。</li>
+    <li>有 active target 时：验证项目存在、mode/arch 有效、runAt 配置完整。</li>
+    <li><code>--process</code> 返回 <code>runtime</code> 字段；不传只给 readiness 摘要。</li>
+  </ol>
+
+  <h2 id="absorbed">吸收的旧命令</h2>
+  <p><code>forja qt status</code>、<code>forja sdk status</code>、<code>forja remote status</code>、<code>forja sync status</code>、<code>forja qt ps</code>、<code>forja remote qt ps</code>、<code>forja remote transfer status</code>、<code>forja remote workspace status</code>、<code>forja remote forja-bin status</code>、<code>forja remote build-order status</code></p>
+
+  <h2 id="result">Result</h2>
+  <pre><code class="language-typescript">interface StatusResult extends ForjaJsonResult {
+    action: 'status';
+    readiness: Readiness;
+    toolchain?: ToolchainSummary;
+    remote?: RemoteStatusSummary;
+    sync?: SyncStatusSummary;
+    runtime?: RuntimeState;    // 仅 --process
+}
+
+interface ToolchainSummary {
+    qt?: { path: string; version?: string };
+    vs?: { path: string; version?: string };
+    jom?: string;              // Windows only
+    make?: boolean;            // POSIX only
+}
+
+interface RemoteStatusSummary {
+    runAt: 'local' | 'remote';
+    server?: { id: string; name: string; host: string };
+    remotePath?: string;
+    remoteForjaVersion?: string;
+    locked?: boolean;
+    workspaceMode?: 'legacy' | 'staged';
+}
+
+interface SyncStatusSummary {
+    enabled: boolean;
+    server?: { id: string; name: string; host: string };
+    remotePath?: string;
+}</code></pre>
+
+  <h2 id="readiness">Readiness 语义</h2>
+  <table>
+    <thead>
+      <tr><th>维度</th><th>ready</th><th>configured</th><th>blocked</th><th>missing</th><th>unknown</th><th>not-selected</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>target</td><td>项目存在、配置完整</td><td>有配置但未深度验证</td><td>配置有但有问题（如 Makefile 不匹配）</td><td>项目文件不存在</td><td>无法判断（配置损坏）</td><td>未选择</td></tr>
+      <tr><td>toolchain</td><td>Qt/VS/jom/make 就绪</td><td>有路径但未验证可用性</td><td>路径无效或版本不对</td><td>缺少工具链</td><td>无法判断</td><td>&mdash;</td></tr>
+      <tr><td>sync</td><td>server + remotePath 完整</td><td>有配置但未验证 SSH</td><td>配置有阻塞（如服务器被删）</td><td>缺少 server/path</td><td>无法判断</td><td>未配置</td></tr>
+      <tr><td>remote</td><td>SSH + forja + path 就绪</td><td>有配置但未连接</td><td>SSH/forja 失败或被锁</td><td>缺少 server</td><td>无法判断</td><td>runAt=local</td></tr>
+      <tr><td>runtime</td><td>进程运行中</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>无法查询</td><td>未运行（<code>--process</code> 无进程时）</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="diag-codes">Status 诊断码表</h2>
+  <table>
+    <thead>
+      <tr><th>code</th><th>level</th><th>EN message</th><th>ZH message</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>workspace.notFound</code></td><td>error</td><td>Workspace does not exist: {path}</td><td>Workspace 不存在: {path}</td></tr>
+      <tr><td><code>workspace.configCorrupt</code></td><td>error</td><td>Config file parse failed: {file} &mdash; {detail}</td><td>配置文件解析失败: {file} &mdash; {detail}</td></tr>
+      <tr><td><code>target.notSelected</code></td><td>warning</td><td>No active target selected</td><td>未选择 active target</td></tr>
+      <tr><td><code>target.mixedNotSelected</code></td><td>info</td><td>Found {qtCount} Qt and {sdkCount} SDK targets, none selected</td><td>发现 {qtCount} 个 Qt 目标和 {sdkCount} 个 SDK 目标，未选择</td></tr>
+      <tr><td><code>target.projectMissing</code></td><td>error</td><td>Project file does not exist: {project}</td><td>项目文件不存在: {project}</td></tr>
+      <tr><td><code>target.makefileMismatch</code></td><td>warning</td><td>Makefile does not match current config ({diff})</td><td>Makefile 与当前配置不匹配（{diff}）</td></tr>
+      <tr><td><code>toolchain.neverInit</code></td><td>warning</td><td>Not initialized, no config found</td><td>未初始化，未找到任何配置</td></tr>
+      <tr><td><code>toolchain.qtMissing</code></td><td>error</td><td>Qt not found at configured path: {path}</td><td>Qt 路径无效或不存在: {path}</td></tr>
+      <tr><td><code>toolchain.vsMissing</code></td><td>error</td><td>VS dev environment not found (vsDevShell)</td><td>未找到 VS 开发环境 (vsDevShell)</td></tr>
+      <tr><td><code>toolchain.jomMissing</code></td><td>warning</td><td>jom not found (optional, recommended for faster builds)</td><td>未找到 jom（可选，推荐安装以加速构建）</td></tr>
+      <tr><td><code>toolchain.makeMissing</code></td><td>error</td><td>make not found</td><td>未找到 make 工具</td></tr>
+      <tr><td><code>remote.serverMissing</code></td><td>error</td><td>runAt=remote but no server configured</td><td>runAt=remote 但未配置服务器和远程路径</td></tr>
+      <tr><td><code>remote.sshFailed</code></td><td>error</td><td>SSH connection failed: {detail}</td><td>SSH 连接失败: {detail}</td></tr>
+      <tr><td><code>remote.forjaIncompatible</code></td><td>error</td><td>Remote Forja version incompatible: {remote} (local {local})</td><td>远端 Forja 版本不兼容: {remote}（本地 {local}）</td></tr>
+      <tr><td><code>remote.forjaMissing</code></td><td>error</td><td>Remote Forja not installed</td><td>远端 Forja 未安装</td></tr>
+      <tr><td><code>remote.locked</code></td><td>warning</td><td>Remote locked: lockId={lockId}, owner={owner}, stage={stage}</td><td>远端被锁定: lockId={lockId}, owner={owner}, stage={stage}</td></tr>
+      <tr><td><code>remote.platformUnsupported</code></td><td>error</td><td>Remote platform unsupported: {platform}</td><td>远端平台不支持: {platform}</td></tr>
+      <tr><td><code>remote.pathUnreachable</code></td><td>error</td><td>Remote path unreachable: {path}</td><td>远程路径不可用: {path}</td></tr>
+      <tr><td><code>sync.serverDeleted</code></td><td>error</td><td>Sync server &quot;{server}&quot; does not exist</td><td>同步服务器 &quot;{server}&quot; 不存在</td></tr>
+      <tr><td><code>sync.notEnabled</code></td><td>error</td><td>Remote sync not enabled</td><td>远程同步未启用</td></tr>
+      <tr><td><code>sync.remotePathMissing</code></td><td>error</td><td>Remote path not configured</td><td>未配置远程路径</td></tr>
+      <tr><td><code>sync.neverConfigured</code></td><td>warning</td><td>No sync server added</td><td>未添加同步服务器</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="normal-scenarios">正常场景</h2>
+
+  
+  <div class="tab-group">
+  <h3>空 workspace</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-empty-json">JSON</button>
+    <button class="tab-btn" data-tab="s-empty-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-empty-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "readiness": {
+        "target": "not-selected",
+        "toolchain": "unknown",
+        "sync": "not-selected",
+        "remote": "not-selected"
+    },
+    "diagnostics": [
+        { "code": "target.notSelected", "level": "warning", "message": "No active target selected" }
+    ],
+    "nextActions": ["forja init"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-empty-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Readiness: target=not-selected toolchain=unknown sync=not-selected remote=not-selected
+Warning: No active target selected
+Next:
+  forja init</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>Qt 项目就绪（本地）</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-qt-ready-json">JSON</button>
+    <button class="tab-btn" data-tab="s-qt-ready-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-qt-ready-json">
+    <pre><code class="language-json">{
+    "ok": true,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "ready",
+        "toolchain": "ready",
+        "sync": "not-selected",
+        "remote": "not-selected"
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "local"
+    },
+    "toolchain": {
+        "qt": { "path": "C:/Qt/5.15.2/msvc2019", "version": "5.15.2" },
+        "vs": { "path": "C:/Program Files/.../vcvarsall.bat", "version": "2019" },
+        "jom": "C:/Qt/Tools/QtCreator/bin/jom.exe"
+    },
+    "nextActions": ["forja build"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-qt-ready-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: qt app/app.pro release x86 local
+Readiness: target=ready toolchain=ready sync=not-selected remote=not-selected
+Toolchain: Qt 5.15.2, VS 2019, jom
+Next:
+  forja build</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>SDK 项目 + Remote</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-sdk-remote-json">JSON</button>
+    <button class="tab-btn" data-tab="s-sdk-remote-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-sdk-remote-json">
+    <pre><code class="language-json">{
+    "ok": true,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "ready",
+        "toolchain": "ready",
+        "sync": "ready",
+        "remote": "ready"
+    },
+    "activeTarget": {
+        "kind": "sdk",
+        "project": "project.sln",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "remote"
+    },
+    "toolchain": {
+        "vs": { "path": "C:/Program Files/.../vcvarsall.bat", "version": "2022" }
+    },
+    "remote": {
+        "runAt": "remote",
+        "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
+        "remotePath": "/home/user/project",
+        "remoteForjaVersion": "1.2.3",
+        "locked": false,
+        "workspaceMode": "legacy"
+    },
+    "sync": {
+        "enabled": true,
+        "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
+        "remotePath": "/home/user/project"
+    },
+    "nextActions": ["forja build"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-sdk-remote-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: sdk project.sln release x86 remote
+Readiness: target=ready toolchain=ready sync=ready remote=ready
+Toolchain: VS 2022
+Remote: dev-server (192.168.1.10), Forja 1.2.3
+Sync: enabled → dev-server:/home/user/project
+Next:
+  forja build</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3><code>--process</code> 有运行中进程</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-process-running-json">JSON</button>
+    <button class="tab-btn" data-tab="s-process-running-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-process-running-json">
+    <pre><code class="language-json">{
+    "ok": true,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "ready",
+        "toolchain": "ready",
+        "sync": "not-selected",
+        "remote": "not-selected",
+        "runtime": "ready"
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "local"
+    },
+    "runtime": {
+        "running": true,
+        "pid": 12345,
+        "executablePath": "/path/to/build/debug/myapp.exe",
+        "logFile": "/path/to/.forja/logs/myapp.log",
+        "runAt": "local"
+    },
+    "nextActions": ["forja stop"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-process-running-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: qt app/app.pro release x86 local
+Readiness: target=ready toolchain=ready sync=not-selected remote=not-selected runtime=ready
+Runtime: running (pid 12345)
+  executable: /path/to/build/release/myapp.exe
+  log: /path/to/.forja/logs/myapp.log
+Next:
+  forja stop</code></pre>
+  </div>
+  </div>
+
+
+  <h2 id="error-scenarios">异常场景</h2>
+
+  
+  <div class="tab-group">
+  <h3>Workspace 不存在</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-ws-notfound-json">JSON</button>
+    <button class="tab-btn" data-tab="s-ws-notfound-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-ws-notfound-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "readiness": {
+        "target": "unknown",
+        "toolchain": "unknown",
+        "sync": "unknown",
+        "remote": "unknown"
+    },
+    "diagnostics": [
+        { "code": "workspace.notFound", "level": "error", "message": "Workspace does not exist: /path/to/workspace", "params": { "path": "/path/to/workspace" } }
+    ],
+    "nextActions": []
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-ws-notfound-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Readiness: target=unknown toolchain=unknown sync=unknown remote=unknown
+Error: Workspace does not exist: /path/to/workspace</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>从未初始化</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-never-init-json">JSON</button>
+    <button class="tab-btn" data-tab="s-never-init-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-never-init-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "not-selected",
+        "toolchain": "unknown",
+        "sync": "not-selected",
+        "remote": "not-selected"
+    },
+    "diagnostics": [
+        { "code": "toolchain.neverInit", "level": "warning", "message": "Not initialized, no config found" }
+    ],
+    "nextActions": ["forja init"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-never-init-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Readiness: target=not-selected toolchain=unknown sync=not-selected remote=not-selected
+Warning: Not initialized, no config found
+Next:
+  forja init</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>项目文件被删除</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-project-missing-json">JSON</button>
+    <button class="tab-btn" data-tab="s-project-missing-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-project-missing-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "missing",
+        "toolchain": "ready",
+        "sync": "not-selected",
+        "remote": "not-selected"
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "local"
+    },
+    "diagnostics": [
+        {
+            "code": "target.projectMissing",
+            "level": "error",
+            "message": "Project file does not exist: app/app.pro",
+            "hint": "The file may have been deleted or moved",
+            "params": { "project": "app/app.pro" }
+        }
+    ],
+    "nextActions": ["forja list", "forja use --target &lt;project&gt;"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-project-missing-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: qt app/app.pro release x86 local
+Readiness: target=missing toolchain=ready sync=not-selected remote=not-selected
+Error: Project file does not exist: app/app.pro
+  hint: The file may have been deleted or moved
+Next:
+  forja list
+  forja use --target &lt;project&gt;</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>工具链缺失</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-toolchain-missing-json">JSON</button>
+    <button class="tab-btn" data-tab="s-toolchain-missing-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-toolchain-missing-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "configured",
+        "toolchain": "blocked",
+        "sync": "not-selected",
+        "remote": "not-selected"
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "local"
+    },
+    "toolchain": {
+        "qt": { "path": "C:/Qt/old-path" }
+    },
+    "diagnostics": [
+        { "code": "toolchain.qtMissing", "level": "error", "message": "Qt not found at configured path: C:/Qt/old-path", "hint": "Qt installation may have changed, reconfigure with forja use", "params": { "path": "C:/Qt/old-path" } },
+        { "code": "toolchain.vsMissing", "level": "error", "message": "VS dev environment not found (vsDevShell)", "hint": "Install Visual Studio and configure vcvarsall.bat" },
+        { "code": "toolchain.jomMissing", "level": "warning", "message": "jom not found (optional, recommended for faster builds)" }
+    ],
+    "nextActions": ["forja doctor", "forja use --qt-path &lt;path&gt;"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-toolchain-missing-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: qt app/app.pro release x86 local
+Readiness: target=configured toolchain=blocked sync=not-selected remote=not-selected
+Error: Qt not found at configured path: C:/Qt/old-path
+  hint: Qt installation may have changed, reconfigure with forja use
+Error: VS dev environment not found (vsDevShell)
+  hint: Install Visual Studio and configure vcvarsall.bat
+Warning: jom not found (optional, recommended for faster builds)
+Next:
+  forja doctor
+  forja use --qt-path &lt;path&gt;</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>runAt=remote 但未配置服务器</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-remote-no-server-json">JSON</button>
+    <button class="tab-btn" data-tab="s-remote-no-server-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-remote-no-server-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "ready",
+        "toolchain": "ready",
+        "sync": "not-selected",
+        "remote": "missing"
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "remote"
+    },
+    "remote": { "runAt": "remote" },
+    "diagnostics": [
+        { "code": "remote.serverMissing", "level": "error", "message": "runAt=remote but no server configured" }
+    ],
+    "nextActions": ["forja list servers", "forja use --server &lt;id&gt; --remote-path &lt;path&gt;"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-remote-no-server-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: qt app/app.pro release x86 remote
+Readiness: target=ready toolchain=ready sync=not-selected remote=missing
+Error: runAt=remote but no server configured
+Next:
+  forja list servers
+  forja use --server &lt;id&gt; --remote-path &lt;path&gt;</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>SSH 连接失败</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-ssh-failed-json">JSON</button>
+    <button class="tab-btn" data-tab="s-ssh-failed-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-ssh-failed-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "ready",
+        "toolchain": "ready",
+        "sync": "configured",
+        "remote": "blocked"
+    },
+    "activeTarget": {
+        "kind": "sdk",
+        "project": "project.sln",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "remote"
+    },
+    "remote": {
+        "runAt": "remote",
+        "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
+        "remotePath": "/home/user/project",
+        "locked": false
+    },
+    "diagnostics": [
+        { "code": "remote.sshFailed", "level": "error", "message": "SSH connection failed: Connection refused", "hint": "Check if the server is online and reachable", "params": { "detail": "Connection refused" } }
+    ],
+    "nextActions": ["forja doctor --remote"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-ssh-failed-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: sdk project.sln release x86 remote
+Readiness: target=ready toolchain=ready sync=configured remote=blocked
+Error: SSH connection failed: Connection refused
+  hint: Check if the server is online and reachable
+Next:
+  forja doctor --remote</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>Remote Forja 版本不兼容</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-forja-incompat-json">JSON</button>
+    <button class="tab-btn" data-tab="s-forja-incompat-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-forja-incompat-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "ready",
+        "toolchain": "ready",
+        "sync": "ready",
+        "remote": "blocked"
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "remote"
+    },
+    "remote": {
+        "runAt": "remote",
+        "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
+        "remotePath": "/home/user/project",
+        "remoteForjaVersion": "0.9.0",
+        "locked": false
+    },
+    "diagnostics": [
+        { "code": "remote.forjaIncompatible", "level": "error", "message": "Remote Forja version incompatible: 0.9.0 (local 1.2.3)", "hint": "Redeploy Forja to the remote server", "params": { "remote": "0.9.0", "local": "1.2.3" } }
+    ],
+    "nextActions": ["forja doctor fix --remote"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-forja-incompat-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: qt app/app.pro release x86 remote
+Readiness: target=ready toolchain=ready sync=ready remote=blocked
+Error: Remote Forja version incompatible: 0.9.0 (local 1.2.3)
+  hint: Redeploy Forja to the remote server
+Next:
+  forja doctor fix --remote</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>Remote 被锁定</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-remote-locked-json">JSON</button>
+    <button class="tab-btn" data-tab="s-remote-locked-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-remote-locked-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "ready",
+        "toolchain": "ready",
+        "sync": "ready",
+        "remote": "blocked"
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "remote"
+    },
+    "remote": {
+        "runAt": "remote",
+        "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
+        "remotePath": "/home/user/project",
+        "remoteForjaVersion": "1.2.3",
+        "locked": true
+    },
+    "diagnostics": [
+        { "code": "remote.locked", "level": "warning", "message": "Remote locked: lockId=abc123, owner=build, stage=compile", "hint": "If a build is stuck, force unlock with doctor", "params": { "lockId": "abc123", "owner": "build", "stage": "compile" } }
+    ],
+    "nextActions": ["forja doctor unlock abc123", "forja doctor unlock abc123 --force"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-remote-locked-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: qt app/app.pro release x86 remote
+Readiness: target=ready toolchain=ready sync=ready remote=blocked
+Warning: Remote locked: lockId=abc123, owner=build, stage=compile
+  hint: If a build is stuck, force unlock with doctor
+Next:
+  forja doctor unlock abc123
+  forja doctor unlock abc123 --force</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>Sync 配置的服务器被删除</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-sync-deleted-json">JSON</button>
+    <button class="tab-btn" data-tab="s-sync-deleted-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-sync-deleted-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "ready",
+        "toolchain": "ready",
+        "sync": "blocked",
+        "remote": "not-selected"
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "local"
+    },
+    "sync": { "enabled": true },
+    "diagnostics": [
+        { "code": "sync.serverDeleted", "level": "error", "message": "Sync server \"old-server\" does not exist", "hint": "Server was deleted, please re-select", "params": { "server": "old-server" } }
+    ],
+    "nextActions": ["forja list servers", "forja use --server &lt;id&gt; --remote-path &lt;path&gt;"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-sync-deleted-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: qt app/app.pro release x86 local
+Readiness: target=ready toolchain=ready sync=blocked remote=not-selected
+Error: Sync server "old-server" does not exist
+  hint: Server was deleted, please re-select
+Next:
+  forja list servers
+  forja use --server &lt;id&gt; --remote-path &lt;path&gt;</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>混合 workspace 未选择</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-mixed-json">JSON</button>
+    <button class="tab-btn" data-tab="s-mixed-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-mixed-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "not-selected",
+        "toolchain": "unknown",
+        "sync": "not-selected",
+        "remote": "not-selected"
+    },
+    "diagnostics": [
+        { "code": "target.mixedNotSelected", "level": "info", "message": "Found 2 Qt and 1 SDK targets, none selected", "params": { "qtCount": "2", "sdkCount": "1" } }
+    ],
+    "nextActions": ["forja list", "forja use --target &lt;project&gt;"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-mixed-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Readiness: target=not-selected toolchain=unknown sync=not-selected remote=not-selected
+Info: Found 2 Qt and 1 SDK targets, none selected
+Next:
+  forja list
+  forja use --target &lt;project&gt;</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>配置文件损坏</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-corrupt-json">JSON</button>
+    <button class="tab-btn" data-tab="s-corrupt-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-corrupt-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "unknown",
+        "toolchain": "unknown",
+        "sync": "unknown",
+        "remote": "unknown"
+    },
+    "diagnostics": [
+        { "code": "workspace.configCorrupt", "level": "error", "message": "Config file parse failed: .forja/qt.json — Unexpected token } in JSON", "hint": "File may be corrupted, delete and re-run forja init", "params": { "file": ".forja/qt.json", "detail": "Unexpected token } in JSON" } }
+    ],
+    "nextActions": ["forja init"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-corrupt-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Readiness: target=unknown toolchain=unknown sync=unknown remote=unknown
+Error: Config file parse failed: .forja/qt.json — Unexpected token } in JSON
+  hint: File may be corrupted, delete and re-run forja init
+Next:
+  forja init</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>Makefile 与当前配置不匹配</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-makefile-mismatch-json">JSON</button>
+    <button class="tab-btn" data-tab="s-makefile-mismatch-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-makefile-mismatch-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "blocked",
+        "toolchain": "ready",
+        "sync": "not-selected",
+        "remote": "not-selected"
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "debug",
+        "arch": "x86",
+        "runAt": "local"
+    },
+    "diagnostics": [
+        { "code": "target.makefileMismatch", "level": "warning", "message": "Makefile does not match current config (mode: release→debug, arch: x64→x86)", "hint": "Re-run qmake to regenerate Makefile", "params": { "diff": "mode: release→debug, arch: x64→x86" } }
+    ],
+    "nextActions": ["forja build qmake"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-makefile-mismatch-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: qt app/app.pro debug x86 local
+Readiness: target=blocked toolchain=ready sync=not-selected remote=not-selected
+Warning: Makefile does not match current config (mode: release→debug, arch: x64→x86)
+  hint: Re-run qmake to regenerate Makefile
+Next:
+  forja build qmake</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3>SDK on POSIX 缺少 make</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-make-missing-json">JSON</button>
+    <button class="tab-btn" data-tab="s-make-missing-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-make-missing-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "configured",
+        "toolchain": "blocked",
+        "sync": "not-selected",
+        "remote": "not-selected"
+    },
+    "activeTarget": {
+        "kind": "sdk",
+        "project": "Makefile",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "local"
+    },
+    "toolchain": { "make": false },
+    "diagnostics": [
+        { "code": "toolchain.makeMissing", "level": "error", "message": "make not found", "hint": "Install build-essential or equivalent toolchain" }
+    ],
+    "nextActions": ["forja doctor"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-make-missing-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: sdk Makefile release x86 local
+Readiness: target=configured toolchain=blocked sync=not-selected remote=not-selected
+Error: make not found
+  hint: Install build-essential or equivalent toolchain
+Next:
+  forja doctor</code></pre>
+  </div>
+  </div>
+
+
+  
+  <div class="tab-group">
+  <h3><code>--process</code> 无运行记录</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-process-notrunning-json">JSON</button>
+    <button class="tab-btn" data-tab="s-process-notrunning-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-process-notrunning-json">
+    <pre><code class="language-json">{
+    "ok": true,
+    "action": "status",
+    "workspace": "/path/to/workspace",
+    "readiness": {
+        "target": "ready",
+        "toolchain": "ready",
+        "sync": "not-selected",
+        "remote": "not-selected",
+        "runtime": "not-selected"
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "release",
+        "arch": "x64",
+        "runAt": "local"
+    },
+    "runtime": {
+        "running": false,
+        "runAt": "local"
+    },
+    "nextActions": ["forja run"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-process-notrunning-text">
+    <pre><code class="language-text">Forja status
+Workspace: /path/to/workspace
+Target: qt app/app.pro release x86 local
+Readiness: target=ready toolchain=ready sync=not-selected remote=not-selected runtime=not-selected
+Runtime: not running
+Next:
+  forja run</code></pre>
+  </div>
+  </div>
+
+
+  
+<h2 id="ok-rules"><code>ok</code> 判定规则</h2>
+  <ul>
+    <li>任何 readiness 维度为 <code>blocked</code>、<code>missing</code>、<code>unknown</code> &rarr; <code>ok: false</code></li>
+    <li>所有维度为 <code>ready</code>、<code>configured</code>、<code>not-selected</code> &rarr; <code>ok: true</code></li>
+    <li><code>runtime</code> 不影响 <code>ok</code> 值</li>
+  </ul>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+</main>
+
+
+  <aside class="toc-sidebar">
+    <ul>
+      <li><a href="#syntax">语法</a></li>
+      <li><a href="#behavior">行为</a></li>
+      <li><a href="#absorbed">吸收的旧命令</a></li>
+      <li><a href="#result">Result</a></li>
+      <li><a href="#readiness">Readiness 语义</a></li>
+      <li><a href="#diag-codes">Status 诊断码表</a></li>
+      <li><a href="#normal-scenarios">正常场景</a></li>
+      <li><a href="#error-scenarios">异常场景</a></li>
+      <li><a href="#ok-rules"><code>ok</code> 判定规则</a></li>
+    </ul>
+  </aside>
+
+  </div>
+<script>
+(function() {
+  document.querySelectorAll('.tab-buttons').forEach(function(group) {
+    group.addEventListener('click', function(e) {
+      var btn = e.target.closest('.tab-btn');
+      if (!btn) return;
+      var container = group.parentElement;
+      container.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      container.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+      btn.classList.add('active');
+      var panel = container.querySelector('#' + btn.getAttribute('data-tab'));
+      if (panel) panel.classList.add('active');
+    });
+  });
+})();
+</script>
+<script>
+(function() {
+  var links = document.querySelectorAll('.toc-sidebar a[href^="#"]');
+  if (!links.length) return;
+  var ids = Array.from(links).map(function(a) { return a.getAttribute('href').slice(1); }).filter(Boolean);
+  var headings = ids.map(function(id) { return document.getElementById(id); }).filter(Boolean);
+  if (!headings.length) return;
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      var link = document.querySelector('.toc-sidebar a[href="#' + entry.target.id + '"]');
+      if (link) {
+        if (entry.isIntersecting) {
+          links.forEach(function(l) { l.classList.remove('active'); });
+          link.classList.add('active');
+        }
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px' });
+  headings.forEach(function(h) { observer.observe(h); });
+})();
+</script>
+</body>
+</html>

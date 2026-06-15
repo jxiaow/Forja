@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>forja stop — Forja 命令收敛 v2</title>
+  <style>
+    :root { --bg: #fff; --text: #1a1a1a; --muted: #6b7280; --border: #e5e7eb; --code-bg: #f3f4f6; --link: #2563eb; --heading: #111827; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: var(--text); background: var(--bg); max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h1, h2, h3 { color: var(--heading); margin-top: 2rem; margin-bottom: 1rem; }
+    h1 { font-size: 2rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; }
+    h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+    h3 { font-size: 1.25rem; }
+    p { margin-bottom: 1rem; }
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; font-family: 'SF Mono', Monaco, Consolas, monospace; }
+    pre { background: var(--code-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; margin-bottom: 1rem; }
+    pre code { background: none; padding: 0; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: var(--code-bg); font-weight: 600; }
+    ul, ol { margin-bottom: 1rem; padding-left: 2rem; }
+    li { margin-bottom: 0.25rem; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+    .nav-top { margin-bottom: 2rem; }
+    .nav-top a { margin-right: 1rem; }
+    /* Layout */
+    .page-wrapper { display: flex; gap: 2rem; align-items: flex-start; }
+    .main-content { flex: 1; min-width: 0; }
+        /* TOC sidebar */
+    .toc-sidebar { width: 240px; flex-shrink: 0; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; font-size: 0.85rem; padding: 0.75rem 0; border-left: 2px solid var(--border); padding-left: 1rem; }
+    .toc-sidebar ul { list-style: none; padding-left: 0.85rem; margin: 0; }
+    .toc-sidebar > ul { padding-left: 0; }
+    .toc-sidebar li { margin-bottom: 0.1rem; }
+    .toc-sidebar a { display: block; color: var(--muted); font-size: 0.82rem; line-height: 1.5; padding: 0.15rem 0 0.15rem 0.5rem; border-left: 2px solid transparent; margin-left: -1rem; padding-left: calc(1rem - 2px); transition: color 0.15s, border-color 0.15s; text-decoration: none; }
+    .toc-sidebar a:hover { color: var(--link); text-decoration: none; }
+    .toc-sidebar a.active { color: var(--link); border-left-color: var(--link); font-weight: 600; }
+    .toc-sidebar::-webkit-scrollbar { width: 3px; }
+    .toc-sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    @media (max-width: 900px) { .page-wrapper { flex-direction: column-reverse; } .toc-sidebar { width: 100%; position: static; max-height: none; border-left: none; padding-left: 0; } }
+    /* Prism override */
+    pre[class*="language-"] { margin-bottom: 1rem; }
+    code[class*="language-"] { background: none; padding: 0; }
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body>
+  <div class="nav-top">
+    <a href="index.html">&larr; 返回总览</a>
+  </div>
+
+
+<div class="page-wrapper">
+<main class="main-content">  <h1><code>forja stop</code></h1>
+<p><strong>职责</strong>：停止当前运行目标。</p>
+
+  <h2 id="syntax">语法</h2>
+  <pre><code class="language-bash">forja stop [--workspace &lt;path&gt;] [--json]</code></pre>
+
+  <h2 id="behavior">行为</h2>
+  <ul>
+    <li>Qt local：停止本地进程。</li>
+    <li>Qt remote：远程 bridge stop。</li>
+    <li>SDK：返回 <code>state: "unsupported"</code>。</li>
+    <li>无运行记录：<code>state: "not-running"</code>，不视为错误。</li>
+  </ul>
+
+  <h2 id="absorbed">吸收的旧命令</h2>
+  <p><code>forja qt stop</code>、<code>forja remote qt stop</code></p>
+
+  <h2 id="result">Result</h2>
+  <pre><code class="language-typescript">interface StopResult extends ForjaJsonResult {
+    action: 'stop';
+    state: 'stopped' | 'not-running' | 'unsupported';
+    runtime?: RuntimeState;
+}</code></pre>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+</main>
+
+
+  <aside class="toc-sidebar">
+    <ul>
+      <li><a href="#syntax">语法</a></li>
+      <li><a href="#behavior">行为</a></li>
+      <li><a href="#absorbed">吸收的旧命令</a></li>
+      <li><a href="#result">Result</a></li>
+    </ul>
+  </aside>
+
+  </div>
+<script>
+(function() {
+  var links = document.querySelectorAll('.toc-sidebar a[href^="#"]');
+  if (!links.length) return;
+  var ids = Array.from(links).map(function(a) { return a.getAttribute('href').slice(1); }).filter(Boolean);
+  var headings = ids.map(function(id) { return document.getElementById(id); }).filter(Boolean);
+  if (!headings.length) return;
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      var link = document.querySelector('.toc-sidebar a[href="#' + entry.target.id + '"]');
+      if (link) {
+        if (entry.isIntersecting) {
+          links.forEach(function(l) { l.classList.remove('active'); });
+          link.classList.add('active');
+        }
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px' });
+  headings.forEach(function(h) { observer.observe(h); });
+})();
+</script>
+</body>
+</html>

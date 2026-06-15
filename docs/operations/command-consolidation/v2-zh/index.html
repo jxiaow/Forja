@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forja 命令收敛迁移方案 v2</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #1a1a1a;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --code-bg: #f3f4f6;
+      --link: #2563eb;
+      --heading: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+      max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem;
+    }
+    h1, h2, h3 { color: var(--heading); margin-top: 2rem; margin-bottom: 1rem; }
+    h1 { font-size: 2rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; }
+    h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+    h3 { font-size: 1.25rem; }
+    p { margin-bottom: 1rem; }
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      background: var(--code-bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      font-size: 0.9em;
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+    }
+    pre code { background: none; padding: 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.5rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+    th { background: var(--code-bg); font-weight: 600; }
+    blockquote {
+      border-left: 4px solid var(--border);
+      padding-left: 1rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+    ul, ol { margin-bottom: 1rem; padding-left: 2rem; }
+    li { margin-bottom: 0.25rem; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+    .nav-top { margin-bottom: 2rem; }
+    .nav-top a { margin-right: 1rem; }
+    /* Layout */
+    .page-wrapper { display: flex; gap: 2rem; align-items: flex-start; }
+    .main-content { flex: 1; min-width: 0; }
+        /* TOC sidebar */
+    .toc-sidebar { width: 240px; flex-shrink: 0; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; font-size: 0.85rem; padding: 0.75rem 0; border-left: 2px solid var(--border); padding-left: 1rem; }
+    .toc-sidebar ul { list-style: none; padding-left: 0.85rem; margin: 0; }
+    .toc-sidebar > ul { padding-left: 0; }
+    .toc-sidebar li { margin-bottom: 0.1rem; }
+    .toc-sidebar a { display: block; color: var(--muted); font-size: 0.82rem; line-height: 1.5; padding: 0.15rem 0 0.15rem 0.5rem; border-left: 2px solid transparent; margin-left: -1rem; padding-left: calc(1rem - 2px); transition: color 0.15s, border-color 0.15s; text-decoration: none; }
+    .toc-sidebar a:hover { color: var(--link); text-decoration: none; }
+    .toc-sidebar a.active { color: var(--link); border-left-color: var(--link); font-weight: 600; }
+    .toc-sidebar::-webkit-scrollbar { width: 3px; }
+    .toc-sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    @media (max-width: 900px) { .page-wrapper { flex-direction: column-reverse; } .toc-sidebar { width: 100%; position: static; max-height: none; border-left: none; padding-left: 0; } }
+    /* Prism override */
+    pre[class*="language-"] { margin-bottom: 1rem; }
+    code[class*="language-"] { background: none; padding: 0; }
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body>
+  <div class="nav-top">
+    <a href="../v2-en/index.html">English</a>
+  </div>
+
+
+<div class="page-wrapper">
+<main class="main-content">  <h1>Forja 命令收敛迁移方案 v2</h1>
+
+  <blockquote>
+    目标：将 ~107 个分散的 Qt/SDK/Remote/Sync 命令收敛为 10 个意图驱动的顶层命令，同时保留所有现有功能通过兼容层继续工作。
+  </blockquote>
+
+  <p><strong>命令规格（各文件）</strong>：
+    <a href="status.html">status</a> ·
+    <a href="init.html">init</a> ·
+    <a href="list.html">list</a> ·
+    <a href="use.html">use</a> ·
+    <a href="build.html">build</a> ·
+    <a href="run.html">run</a> ·
+    <a href="stop.html">stop</a> ·
+    <a href="clean.html">clean</a> ·
+    <a href="doctor.html">doctor</a> ·
+    <a href="sync.html">sync</a>
+  </p>
+<hr>
+
+  <h2 id="commands">1. 最终用户命令集</h2>
+  <pre><code class="language-bash">forja status      — 当前状态和下一步建议
+forja init        — 首次初始化（检测 + 保存无歧义配置）
+forja list        — 列举可选项（targets/servers/remote-repos）
+forja use         — 选择目标、构建配置、执行端
+forja build       — 构建当前目标
+forja run         — 运行当前目标
+forja stop        — 停止当前运行目标
+forja clean       — 清理构建产物
+forja doctor      — 深度诊断和恢复
+forja sync        — 同步变更文件到远程</code></pre>
+
+  <p>不引入 <code>forja remote</code>、<code>forja qt</code>、<code>forja sdk</code> 作为用户命令。这些保留为隐藏兼容入口。</p>
+
+  <hr>
+
+  <h2 id="concepts">2. 核心概念</h2>
+
+  <h3 id="active-target">2.1 ActiveTarget</h3>
+  <p>所有执行类命令围绕当前目标工作。</p>
+  <pre><code class="language-typescript">interface ActiveTarget {
+    kind: 'qt' | 'sdk';
+    project: string;       // workspace 相对路径
+    mode: 'debug' | 'release';
+    arch: 'x86' | 'x64';
+    runAt: 'local' | 'remote';
+}</code></pre>
+
+  <p>规则：</p>
+  <ul>
+    <li><code>kind</code> 一旦选定必须显式；混合 workspace 不猜测。</li>
+    <li><code>project</code> 优先使用相对路径。</li>
+    <li><code>runAt</code> 独立于 <code>kind</code>：Qt 和 SDK 都支持 local/remote。</li>
+    <li>缺失 active target 时，<code>build</code>/<code>run</code>/<code>stop</code>/<code>clean</code> 返回失败并指向 <code>forja list</code> + <code>forja use</code>。</li>
+  </ul>
+
+  <h3 id="candidate">2.2 Candidate</h3>
+  <pre><code class="language-typescript">interface TargetCandidate {
+    kind: 'qt' | 'sdk';
+    project: string;
+    label: string;
+    current: boolean;
+    configured: boolean;
+    diagnostics: Diagnostic[];
+}</code></pre>
+
+  <h3 id="diagnostic">2.3 Diagnostic</h3>
+  <pre><code class="language-typescript">interface Diagnostic {
+    code: string;                        // 稳定机器码，格式: &lt;domain&gt;.&lt;condition&gt;
+    level: 'info' | 'warning' | 'error';
+    message: string;                     // 人读文本，跟随 locale
+    hint?: string;                       // 人读提示，跟随 locale
+    params?: Record&lt;string, string&gt;;     // 模板变量，供 message/hint 插值
+}</code></pre>
+
+  <p><code>code</code> 不随语言变化，AI/脚本用 <code>code</code> 判断，不依赖 <code>message</code> 文本。</p>
+  <p>诊断码命名规则：<code>&lt;domain&gt;.&lt;condition&gt;</code>，domain 包括 <code>workspace</code>、<code>target</code>、<code>toolchain</code>、<code>remote</code>、<code>sync</code>、<code>build</code>、<code>run</code>、<code>stop</code>、<code>clean</code>、<code>doctor</code>。</p>
+
+  <h3 id="json-envelope">2.4 JSON Envelope</h3>
+  <pre><code class="language-typescript">interface ForjaJsonResult {
+    ok: boolean;
+    action: string;
+    workspace?: string;
+    activeTarget?: ActiveTarget;
+    diagnostics?: Diagnostic[];
+    nextActions?: string[];
+}</code></pre>
+
+  <p>规则：</p>
+  <ul>
+    <li><code>ok</code> 和 <code>action</code> 必须始终存在。</li>
+    <li><code>nextActions</code> 只输出新命令，不输出旧兼容命令。</li>
+    <li>文本输出可提示兼容命令迁移；JSON 不输出噪音文案。</li>
+    <li>退出码：成功 <code>0</code>，失败 <code>1</code>，用户取消 <code>0</code>。</li>
+  </ul>
+
+  <h3 id="readiness">2.5 Readiness</h3>
+  <pre><code class="language-typescript">type ReadinessState = 'ready' | 'configured' | 'blocked' | 'missing' | 'unknown' | 'not-selected';
+
+interface Readiness {
+    target?: ReadinessState;
+    toolchain?: ReadinessState;
+    sync?: ReadinessState;
+    remote?: ReadinessState;
+    runtime?: ReadinessState;
+    transfer?: ReadinessState;
+}</code></pre>
+
+  <p>语义：<code>ready</code> = 已验证可用；<code>configured</code> = 配置存在但未深度验证；<code>not-selected</code> = 未选择；<code>missing</code> = 缺少必要配置；<code>blocked</code> = 配置存在但有阻塞；<code>unknown</code> = 无法判断。</p>
+
+  <h3 id="runtime-state">2.6 RuntimeState</h3>
+  <pre><code class="language-typescript">interface RuntimeState {
+    running: boolean;
+    pid?: number;
+    executablePath?: string;
+    logFile?: string;
+    runAt: 'local' | 'remote';
+}</code></pre>
+
+  <p><code>status --process</code> 查看，<code>run --detach</code> 启动，<code>stop</code> 终止。三者共享结构但职责不同。</p>
+
+  <h3 id="command-plan">2.7 CommandPlan</h3>
+  <pre><code class="language-typescript">interface CommandPlan {
+    mode: 'dryRun';
+    commands?: string[];
+    shellCommand?: string;
+    willWrite?: string[];
+    willRun?: string[];
+}</code></pre>
+
+  <h3 id="server-summary">2.8 ServerSummary / ServerDetail</h3>
+  <pre><code class="language-typescript">interface ServerSummary {
+    id: string;
+    name: string;
+    host: string;
+    port: number;
+    username: string;
+    authMode: 'key' | 'password';
+    selected?: boolean;
+}
+
+interface ServerDetail extends ServerSummary {
+    privateKeyPath?: string;
+    strictHostKeyChecking?: boolean;
+}</code></pre>
+
+  <p><code>ServerDetail</code> 用于 <code>forja list servers --detail &lt;id&gt;</code>。不输出密码。</p>
+
+  <h3 id="remote-summary">2.9 RemoteSummary</h3>
+  <pre><code class="language-typescript">interface RemoteSummary {
+    runAt: 'local' | 'remote';
+    server?: ServerSummary;
+    remotePath?: string;
+    remoteWorkspace?: string;
+    remoteForjaBin?: string;
+    buildOrder?: string[];
+    transferConfigured?: boolean;
+}</code></pre>
+
+  <h3 id="list-vs-doctor">2.10 List vs Doctor 边界</h3>
+  <p><code>list</code> 回答"有什么"，<code>doctor</code> 回答"能不能用"。工具链检测（Qt/VS/jom/make 扫描）属于诊断性质，全部归 <code>doctor</code>。</p>
+
+  <table>
+    <thead>
+      <tr><th>问题</th><th>命令</th><th>理由</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>"有哪些项目？"</td><td><code>forja list</code></td><td>文件扫描，纯枚举</td></tr>
+      <tr><td>"有哪些服务器？"</td><td><code>forja list servers</code></td><td>读配置，纯枚举</td></tr>
+      <tr><td>"有哪些远程 repo？"</td><td><code>forja list remote-repos</code></td><td>读配置，纯枚举</td></tr>
+      <tr><td>"Qt/VS/jom 装了吗？"</td><td><code>forja doctor</code></td><td>系统探测，属诊断</td></tr>
+      <tr><td>"SSH 能连上吗？"</td><td><code>forja doctor</code></td><td>连接验证，属诊断</td></tr>
+      <tr><td>"sync 配置完整吗？"</td><td><code>forja doctor</code></td><td>配置校验，属诊断</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="locale">2.11 Locale</h3>
+  <p>诊断消息和文本输出支持多语言，JSON 中的 <code>code</code> 永远不变。</p>
+
+  <p><strong>优先级</strong>：<code>--lang</code> flag &gt; <code>FORJA_LANG</code> 环境变量 &gt; 系统 locale &gt; 默认 <code>en</code></p>
+
+  <pre><code class="language-bash">forja status --json                  # 默认 en
+forja status --json --lang zh        # 中文
+FORJA_LANG=zh forja status --json    # 中文</code></pre>
+
+  <p><strong>影响范围</strong>：</p>
+  <ul>
+    <li><code>Diagnostic.message</code>、<code>Diagnostic.hint</code> — 跟随 locale</li>
+    <li>Readiness 文本输出 — 跟随 locale</li>
+    <li>CLI help、文本模式输出 — 跟随 locale</li>
+  </ul>
+
+  <p><strong>不影响</strong>：</p>
+  <ul>
+    <li><code>Diagnostic.code</code> — 永远英文机器码</li>
+    <li><code>ReadinessState</code> 值 — 永远 <code>ready</code>/<code>configured</code>/<code>blocked</code>/<code>missing</code>/<code>unknown</code>/<code>not-selected</code></li>
+    <li><code>nextActions</code> 命令字符串 — 永远英文命令</li>
+  </ul>
+
+  <p><strong>Readiness 状态文本映射</strong>：</p>
+  <table>
+    <thead>
+      <tr><th>State</th><th>EN</th><th>ZH</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>ready</code></td><td>Ready</td><td>就绪</td></tr>
+      <tr><td><code>configured</code></td><td>Configured</td><td>已配置</td></tr>
+      <tr><td><code>blocked</code></td><td>Blocked</td><td>阻塞</td></tr>
+      <tr><td><code>missing</code></td><td>Missing</td><td>缺失</td></tr>
+      <tr><td><code>unknown</code></td><td>Unknown</td><td>未知</td></tr>
+      <tr><td><code>not-selected</code></td><td>Not selected</td><td>未选择</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2 id="mapping">4. 完整旧→新映射表</h2>
+  <p>基于 <code>command-inventory.md</code> 盘点，确保每个现有命令都有明确归宿。</p>
+
+  <h3 id="map-qt">4.1 Qt CLI 映射</h3>
+  <table>
+    <thead>
+      <tr><th>旧命令</th><th>新命令</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja qt init</code></td><td><code>forja init</code></td><td>吸收进统一 init</td></tr>
+      <tr><td><code>forja qt use</code></td><td><code>forja use</code></td><td>吸收进统一 use</td></tr>
+      <tr><td><code>forja qt status</code></td><td><code>forja status</code></td><td>吸收进统一 status</td></tr>
+      <tr><td><code>forja qt env</code></td><td><code>forja doctor</code></td><td>工具链检测全部归 doctor</td></tr>
+      <tr><td><code>forja qt projects</code></td><td><code>forja list</code> / <code>forja list targets</code></td><td>吸收进 list targets</td></tr>
+      <tr><td><code>forja qt qmake</code></td><td><code>forja build qmake</code></td><td>build 子动作</td></tr>
+      <tr><td><code>forja qt build</code></td><td><code>forja build</code></td><td>统一 build</td></tr>
+      <tr><td><code>forja qt clean</code></td><td><code>forja clean</code></td><td>统一 clean</td></tr>
+      <tr><td><code>forja qt run</code></td><td><code>forja run</code></td><td>统一 run</td></tr>
+      <tr><td><code>forja qt stop</code></td><td><code>forja stop</code></td><td>统一 stop</td></tr>
+      <tr><td><code>forja qt ps</code></td><td><code>forja status --process</code></td><td>runtime 归 status</td></tr>
+      <tr><td><code>forja qt rcc</code></td><td><code>forja build rcc</code></td><td>build 子动作</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="map-sdk">4.2 SDK CLI 映射</h3>
+  <table>
+    <thead>
+      <tr><th>旧命令</th><th>新命令</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja sdk init</code></td><td><code>forja init</code></td><td>吸收进统一 init</td></tr>
+      <tr><td><code>forja sdk use</code></td><td><code>forja use</code></td><td>吸收进统一 use</td></tr>
+      <tr><td><code>forja sdk status</code></td><td><code>forja status</code></td><td>吸收进统一 status</td></tr>
+      <tr><td><code>forja sdk env</code></td><td><code>forja doctor</code></td><td>工具链检测全部归 doctor</td></tr>
+      <tr><td><code>forja sdk projects</code></td><td><code>forja list</code> / <code>forja list targets</code></td><td>吸收进 list targets</td></tr>
+      <tr><td><code>forja sdk build</code></td><td><code>forja build</code></td><td>统一 build</td></tr>
+      <tr><td><code>forja sdk rebuild</code></td><td><code>forja build fresh</code></td><td>fresh = rebuild 语义</td></tr>
+      <tr><td><code>forja sdk clean</code></td><td><code>forja clean</code></td><td>统一 clean</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="map-remote">4.3 Remote CLI 映射</h3>
+  <table>
+    <thead>
+      <tr><th>旧命令</th><th>新命令</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja remote status</code></td><td><code>forja status</code></td><td>remote readiness 部分</td></tr>
+      <tr><td><code>forja remote doctor</code></td><td><code>forja doctor --remote</code></td><td>统一 doctor</td></tr>
+      <tr><td><code>forja remote test</code></td><td><code>forja doctor --remote</code></td><td>吸收进 doctor</td></tr>
+      <tr><td><code>forja remote bootstrap</code></td><td><code>forja doctor fix --remote</code> 或 <code>forja init --remote</code></td><td>引导修复→doctor fix；首次部署→init</td></tr>
+      <tr><td><code>forja remote unlock</code></td><td><code>forja doctor unlock &lt;lock-id&gt;</code></td><td>doctor 子动作</td></tr>
+      <tr><td><code>forja remote workspace status</code></td><td><code>forja status</code> / <code>forja list remote-repos</code></td><td>状态→status，列表→list</td></tr>
+      <tr><td><code>forja remote workspace use</code></td><td><code>forja use --remote-workspace</code></td><td>隐藏 flag</td></tr>
+      <tr><td><code>forja remote workspace clear</code></td><td>兼容保留</td><td>低频操作</td></tr>
+      <tr><td><code>forja remote repo list</code></td><td><code>forja list remote-repos</code></td><td>list 子分类</td></tr>
+      <tr><td><code>forja remote repo set/remove/clear</code></td><td>兼容保留</td><td>低频高级配置</td></tr>
+      <tr><td><code>forja remote forja-bin status</code></td><td><code>forja status</code></td><td>remote readiness</td></tr>
+      <tr><td><code>forja remote forja-bin use/clear</code></td><td><code>forja use --remote-forja-bin</code></td><td>隐藏 flag</td></tr>
+      <tr><td><code>forja remote build-order status/set/clear</code></td><td>兼容保留</td><td>低频高级配置</td></tr>
+      <tr><td><code>forja remote transfer status</code></td><td><code>forja status</code></td><td>transfer readiness</td></tr>
+      <tr><td><code>forja remote transfer set/clear/run</code></td><td>兼容保留</td><td>低频高级配置</td></tr>
+      <tr><td><code>forja remote qt status</code></td><td><code>forja status</code></td><td>统一 status</td></tr>
+      <tr><td><code>forja remote qt init</code></td><td><code>forja init --remote</code></td><td>统一 init</td></tr>
+      <tr><td><code>forja remote qt use</code></td><td><code>forja use</code></td><td>统一 use（runAt=remote）</td></tr>
+      <tr><td><code>forja remote qt build</code></td><td><code>forja build</code></td><td>统一 build（runAt=remote）</td></tr>
+      <tr><td><code>forja remote qt clean</code></td><td><code>forja clean</code></td><td>统一 clean（runAt=remote）</td></tr>
+      <tr><td><code>forja remote qt qmake</code></td><td><code>forja build qmake</code></td><td>统一 build qmake</td></tr>
+      <tr><td><code>forja remote qt run</code></td><td><code>forja run</code></td><td>统一 run</td></tr>
+      <tr><td><code>forja remote qt stop</code></td><td><code>forja stop</code></td><td>统一 stop</td></tr>
+      <tr><td><code>forja remote qt ps</code></td><td><code>forja status --process</code></td><td>runtime 归 status</td></tr>
+      <tr><td><code>forja remote qt restore</code></td><td><code>forja doctor restore</code></td><td>隐藏破坏性操作</td></tr>
+      <tr><td><code>forja remote qt reset</code></td><td><code>forja doctor reset</code></td><td>隐藏破坏性操作</td></tr>
+      <tr><td><code>forja remote qt clean-untracked</code></td><td><code>forja doctor clean-untracked</code></td><td>隐藏破坏性操作</td></tr>
+      <tr><td><code>forja remote sdk status</code></td><td><code>forja status</code></td><td>统一 status</td></tr>
+      <tr><td><code>forja remote sdk init</code></td><td><code>forja init --remote</code></td><td>统一 init</td></tr>
+      <tr><td><code>forja remote sdk use</code></td><td><code>forja use</code></td><td>统一 use</td></tr>
+      <tr><td><code>forja remote sdk build</code></td><td><code>forja build</code></td><td>统一 build</td></tr>
+      <tr><td><code>forja remote sdk rebuild</code></td><td><code>forja build fresh</code></td><td>统一 build fresh</td></tr>
+      <tr><td><code>forja remote sdk clean</code></td><td><code>forja clean</code></td><td>统一 clean</td></tr>
+      <tr><td><code>forja remote sdk restore/reset/clean-untracked</code></td><td><code>forja doctor restore/reset/clean-untracked</code></td><td>隐藏破坏性操作</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="map-sync">4.4 Sync CLI 映射</h3>
+  <table>
+    <thead>
+      <tr><th>旧命令</th><th>新命令</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja sync</code>（执行）</td><td><code>forja sync</code></td><td>保留</td></tr>
+      <tr><td><code>forja sync --plan</code></td><td><code>forja sync plan</code></td><td>位置动作</td></tr>
+      <tr><td><code>forja sync status</code></td><td><code>forja status</code></td><td>sync readiness 部分</td></tr>
+      <tr><td><code>forja sync use</code></td><td><code>forja use --server ... --remote-path ...</code></td><td>吸收进 use</td></tr>
+      <tr><td><code>forja sync test-connection</code></td><td><code>forja doctor</code></td><td>连接检测→doctor</td></tr>
+      <tr><td><code>forja sync reset</code></td><td><code>forja sync reset</code></td><td>保留</td></tr>
+      <tr><td><code>forja sync servers</code></td><td><code>forja list servers</code></td><td>list 子分类</td></tr>
+      <tr><td><code>forja sync server</code></td><td><code>forja list servers --detail &lt;id&gt;</code></td><td>list 子分类</td></tr>
+      <tr><td><code>forja sync add-server</code></td><td>兼容保留</td><td>低频 server CRUD</td></tr>
+      <tr><td><code>forja sync update-server</code></td><td>兼容保留</td><td>低频 server CRUD</td></tr>
+      <tr><td><code>forja sync remove-server</code></td><td>兼容保留</td><td>低频 server CRUD</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="map-cleanup">4.5 Cleanup CLI 映射</h3>
+  <table>
+    <thead>
+      <tr><th>旧命令</th><th>新命令</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja cleanup</code></td><td><code>forja doctor fix</code></td><td>非破坏性修复，吸收进 doctor fix</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="map-vscode-qt">4.6 VSCode Qt 命令映射</h3>
+  <table>
+    <thead>
+      <tr><th>旧 Command ID</th><th>新 Command ID</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja.qt.selectProject</code></td><td><code>forja.use</code>（统一 use 交互）</td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.qt.loadManualProject</code></td><td>隐藏兼容保留</td><td>内部命令</td></tr>
+      <tr><td><code>forja.qt.showActions</code></td><td><code>forja.build</code> / QuickPick 统一</td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.qt.qmake</code></td><td><code>forja.build</code>（QuickPick 选 qmake）</td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.qt.build</code></td><td><code>forja.build</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.qt.clean</code></td><td><code>forja.clean</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.qt.run</code></td><td><code>forja.run</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.qt.stop</code></td><td><code>forja.stop</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.qt.debug</code></td><td><code>forja.run --debug</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.qt.openWithQtDesigner</code></td><td>保留（Explorer .ui 上下文）</td><td>上下文命令，不进入 CLI</td></tr>
+      <tr><td><code>forja.qt.rcc</code></td><td><code>forja.build</code>（QuickPick 选 rcc）</td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.qt.runCustomCommand</code></td><td><code>forja.run --custom &lt;name&gt;</code></td><td>隐藏旧 ID</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="map-vscode-sync">4.7 VSCode Sync 命令映射</h3>
+  <table>
+    <thead>
+      <tr><th>旧 Command ID</th><th>新 Command ID</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja.syncTestConnection</code></td><td><code>forja.doctor</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.syncChangedFiles</code></td><td><code>forja.sync</code></td><td>保留 Explorer 上下文</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="map-vscode-sdk">4.8 VSCode SDK 命令映射</h3>
+  <table>
+    <thead>
+      <tr><th>旧 Command ID</th><th>新 Command ID</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja.sdk.build</code></td><td><code>forja.build</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.sdk.rebuild</code></td><td><code>forja.build</code>（fresh）</td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.sdk.clean</code></td><td><code>forja.clean</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.sdk.selectProject</code></td><td><code>forja.use</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.sdk.showActions</code></td><td><code>forja.use</code></td><td>隐藏旧 ID</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="map-vscode-remote">4.9 VSCode Remote 命令映射</h3>
+  <table>
+    <thead>
+      <tr><th>旧 Command ID</th><th>新 Command ID</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja.remote.execution.pick</code></td><td><code>forja.use</code>（runAt 选择）</td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.execution.local</code></td><td><code>forja.use --local</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.execution.remote</code></td><td><code>forja.use --remote</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.workbench</code></td><td><code>forja.status</code> / QuickPick</td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.status</code></td><td><code>forja.status</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.doctor</code></td><td><code>forja.doctor</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.test</code></td><td><code>forja.doctor --remote</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.bootstrap</code></td><td><code>forja.doctor fix --remote</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.transfer.status</code></td><td><code>forja.status</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.qt.build</code></td><td><code>forja.build</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.qt.clean</code></td><td><code>forja.clean</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.qt.qmake</code></td><td><code>forja.build qmake</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.qt.run</code></td><td><code>forja.run</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.qt.runDetached</code></td><td><code>forja.run --detach</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.qt.stop</code></td><td><code>forja.stop</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.qt.ps</code></td><td><code>forja.status --process</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.sdk.build</code></td><td><code>forja.build</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.sdk.rebuild</code></td><td><code>forja.build fresh</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.remote.sdk.clean</code></td><td><code>forja.clean</code></td><td>隐藏旧 ID</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="map-vscode-global">4.10 VSCode 全局/UI 命令映射</h3>
+  <table>
+    <thead>
+      <tr><th>旧 Command ID</th><th>新 Command ID</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja.config.openPage</code></td><td>保留</td><td>配置面板内部命令</td></tr>
+      <tr><td><code>forja.showSyncTab</code></td><td>保留（隐藏）</td><td>远程标签页切换</td></tr>
+      <tr><td><code>forja.showActions</code></td><td>保留</td><td>统一操作菜单</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2 id="vscode-palette">5. VSCode 最终 Command Palette</h2>
+
+  <h3 id="palette-visible">5.1 可见命令</h3>
+  <table>
+    <thead>
+      <tr><th>Command ID</th><th>标题</th><th>对应 CLI</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja.status</code></td><td>Forja: Status</td><td><code>forja status</code></td></tr>
+      <tr><td><code>forja.init</code></td><td>Forja: Init</td><td><code>forja init</code></td></tr>
+      <tr><td><code>forja.list</code></td><td>Forja: List Targets</td><td><code>forja list</code></td></tr>
+      <tr><td><code>forja.use</code></td><td>Forja: Use Target</td><td><code>forja use</code></td></tr>
+      <tr><td><code>forja.build</code></td><td>Forja: Build</td><td><code>forja build</code></td></tr>
+      <tr><td><code>forja.run</code></td><td>Forja: Run</td><td><code>forja run</code></td></tr>
+      <tr><td><code>forja.stop</code></td><td>Forja: Stop</td><td><code>forja stop</code></td></tr>
+      <tr><td><code>forja.clean</code></td><td>Forja: Clean</td><td><code>forja clean</code></td></tr>
+      <tr><td><code>forja.doctor</code></td><td>Forja: Doctor</td><td><code>forja doctor</code></td></tr>
+      <tr><td><code>forja.sync</code></td><td>Forja: Sync Changes</td><td><code>forja sync</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="palette-context">5.2 上下文可见命令</h3>
+  <table>
+    <thead>
+      <tr><th>Command ID</th><th>可见条件</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>forja.qt.openWithQtDesigner</code></td><td>Explorer .ui 文件右键</td><td>上下文命令</td></tr>
+      <tr><td><code>forja.syncChangedFiles</code></td><td>Explorer 文件右键</td><td>上下文命令</td></tr>
+      <tr><td><code>forja.config.openPage</code></td><td>Command Palette</td><td>配置面板入口</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="palette-hidden">5.3 隐藏兼容命令</h3>
+  <p>所有现有 <code>forja.qt.*</code>、<code>forja.sdk.*</code>、<code>forja.remote.*</code> command ID 继续注册，通过 <code>menus.commandPalette</code> <code>when: false</code> 隐藏。</p>
+
+  <hr>
+
+  <h2 id="global-flags">6. 通用参数</h2>
+  <table>
+    <thead>
+      <tr><th>参数</th><th>适用命令</th><th>含义</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>--workspace &lt;path&gt;</code></td><td>所有命令</td><td>指定工作区。默认当前目录</td></tr>
+      <tr><td><code>--json</code></td><td>所有命令</td><td>输出结构化 JSON</td></tr>
+      <tr><td><code>--plan</code></td><td><code>init</code>、<code>build</code>、<code>clean</code></td><td>只预览，不执行外部影响动作</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="action-rules">动作与参数规则</h3>
+  <pre><code class="language-bash">forja &lt;主命令&gt; &lt;动作&gt; [对象] [--修饰参数]</code></pre>
+
+  <ul>
+    <li>动作用位置参数：<code>forja build qmake</code>、<code>forja doctor unlock &lt;lock-id&gt;</code>、<code>forja sync plan</code>。</li>
+    <li><code>--flag</code> 只表达修饰：<code>--json</code>、<code>--workspace</code>、<code>--force</code>、<code>--file</code>。</li>
+    <li>不引入 <code>--restore</code>、<code>--reset</code>、<code>--unlock</code>、<code>--clean-untracked</code> 这类"看起来是开关、实际是动作"的新公开语法。</li>
+    <li>迁移期兼容旧 flag 形态；新帮助、<code>nextActions</code>、AI 工具推荐路径只使用位置动作。</li>
+  </ul>
+
+  <hr>
+
+  <h2 id="text-output">7. 文本输出规范</h2>
+
+  <h3 id="text-lang">7.1 语言策略</h3>
+  <p>CLI 文本输出使用英文。当前旧命令的中文输出（"成功"/"失败"/"下一步"）在迁移到新命令时统一改为英文。旧命令文本输出保持不变。</p>
+
+  <h3 id="text-template">7.2 统一模板</h3>
+  <pre><code>Forja &lt;command&gt; &lt;result&gt;
+Target: &lt;kind&gt; &lt;project&gt; &lt;mode&gt; &lt;arch&gt; &lt;runAt&gt;
+&lt;command-specific details&gt;
+Next:
+  &lt;nextAction1&gt;
+  &lt;nextAction2&gt;</code></pre>
+
+  <p>示例：</p>
+  <pre><code>Forja status
+Workspace: C:\repo
+Target: qt apps/client/client.pro debug x64 local
+Readiness: target=ready sync=configured remote=not-selected
+Next: forja build</code></pre>
+
+  <pre><code>Forja build succeeded
+Target: qt apps/client/client.pro debug x64 local
+Duration: 1200ms</code></pre>
+
+  <pre><code>Forja build failed (exit 2)
+Target: sdk sdk/NemoSDK.sln release x64 local
+Error: src/main.cpp(42): error C2065: 'foo': undeclared identifier
+Next: forja doctor</code></pre>
+
+  <hr>
+
+  <h2 id="concurrency">8. 并发与竞态</h2>
+  <ul>
+    <li><strong>Remote 执行</strong>：已有 lock 机制（<code>remote/core/lock.ts</code>），prepare/release 自动管理。</li>
+    <li><strong>Local 执行</strong>：依赖用户自行管理，不做额外保护。</li>
+    <li><strong><code>forja status</code></strong>：<code>runtime</code> 字段可标记是否有进行中的任务（local 读取 runState，remote 读取 bridge ps）。</li>
+    <li><strong><code>runAt</code> 切换</strong>：如果有进行中的构建，<code>use</code> 应警告但不阻止。</li>
+  </ul>
+
+  <hr>
+
+  <h2 id="file-structure">9. 实施文件结构</h2>
+
+  <h3 id="new-files">新建</h3>
+  <pre><code>src/cli/unified/
+├── index.ts           — 顶层统一命令分发
+├── types.ts           — ActiveTarget, Candidate, Result types
+├── activeTarget.ts    — 读写 active target 元数据
+├── candidates.ts      — Qt/SDK target + server + remote-repo 候选聚合
+├── status.ts          — status 规划器
+├── init.ts            — init 逻辑（toolchain 检测 + 保存）
+├── list.ts            — list 路由
+├── use.ts             — use 路由 + 持久化
+├── build.ts           — build 路由（local/remote × qt/sdk）
+├── run.ts             — run 路由（含 debug/custom）
+├── stop.ts            — stop 路由
+├── clean.ts           — clean 路由
+├── doctor.ts          — doctor 路由（check/fix/unlock + 隐藏恢复）
+└── sync.ts            — sync 路由</code></pre>
+
+  <h3 id="modified-files">修改</h3>
+  <table>
+    <thead>
+      <tr><th>文件</th><th>变更</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>src/cli/index.ts</code></td><td>新命令优先路由，旧命令作为兼容</td></tr>
+      <tr><td><code>src/qt/shared/qtCore.ts</code></td><td>nextActions 改用新命令</td></tr>
+      <tr><td><code>src/sdk/cli/index.ts</code></td><td>暴露可复用的 build/status 函数</td></tr>
+      <tr><td><code>src/sync/cli.ts</code></td><td>nextActions 改用新命令</td></tr>
+      <tr><td><code>src/remote/cli/index.ts</code></td><td>保留兼容，暴露可复用的 adapter hooks</td></tr>
+      <tr><td><code>src/remote/vscode/commands.ts</code></td><td>添加统一命令 adapter，隐藏旧命令</td></tr>
+      <tr><td><code>src/qt/commands.ts</code></td><td>保留旧 ID，可见命令路由到统一 adapter</td></tr>
+      <tr><td><code>src/sdk/sdkExtension.ts</code></td><td>保留旧 ID，可见命令路由到统一 adapter</td></tr>
+      <tr><td><code>src/ui/unifiedStatusBar.ts</code></td><td>状态栏动作改用统一命令</td></tr>
+      <tr><td><code>package.json</code></td><td>添加新 command contributions，隐藏旧 palette entries</td></tr>
+      <tr><td><code>scripts/build-cli.js</code></td><td>包含新 unified CLI 模块</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="test-files">测试</h3>
+  <pre><code>src/test/unifiedCliStatus.test.ts
+src/test/unifiedCliInit.test.ts
+src/test/unifiedCliList.test.ts
+src/test/unifiedCliUse.test.ts
+src/test/unifiedCliBuild.test.ts
+src/test/unifiedCliRun.test.ts
+src/test/unifiedCliStop.test.ts
+src/test/unifiedCliClean.test.ts
+src/test/unifiedCliDoctor.test.ts
+src/test/unifiedCliSync.test.ts</code></pre>
+
+  <hr>
+
+  <h2 id="stages">10. 实施阶段</h2>
+
+  <h3 id="stage-1">Stage 1: Foundation（无用户可见变化）</h3>
+  <ul>
+    <li>创建 <code>src/cli/unified/types.ts</code>：ActiveTarget、Candidate、Result 类型定义。</li>
+    <li>创建 <code>src/cli/unified/activeTarget.ts</code>：读写 active target 元数据（存储在 <code>~/.forja/projects/&lt;hash&gt;.json</code> type=activeTarget）。</li>
+    <li>创建 <code>src/cli/unified/candidates.ts</code>：Qt/SDK target + server + remote-repo 候选聚合。</li>
+    <li>添加混合 workspace 和单目标自动选择的测试。</li>
+    <li>不改动任何现有命令。</li>
+  </ul>
+  <p><strong>依赖</strong>：无。</p>
+  <p><strong>验证</strong>：新模块编译通过；测试通过。</p>
+
+  <h3 id="stage-2">Stage 2: Config Commands</h3>
+  <ul>
+    <li>创建 <code>src/cli/unified/status.ts</code>、<code>init.ts</code>、<code>list.ts</code>、<code>use.ts</code>。</li>
+    <li>创建 <code>src/cli/unified/index.ts</code>：顶层路由新命令。</li>
+    <li>修改 <code>src/cli/index.ts</code>：新命令优先匹配，未匹配时走旧路由。</li>
+    <li>更新旧 Qt/SDK 的 nextActions 中指向 status/use/projects 的部分。</li>
+    <li>添加 VSCode 命令 <code>forja.status</code>/<code>forja.init</code>/<code>forja.list</code>/<code>forja.use</code>，注册 + <code>package.json</code>。</li>
+  </ul>
+  <p><strong>依赖</strong>：Stage 1。</p>
+  <p><strong>可并行</strong>：Stage 3（一旦 activeTarget 读写稳定）。</p>
+  <p><strong>验证</strong>：</p>
+  <ul>
+    <li><code>forja status --json</code> 在无 active target 时不猜测。</li>
+    <li><code>forja list --json</code> 列出 Qt + SDK 候选。</li>
+    <li><code>forja use --target &lt;path&gt; --json</code> 保存 active target。</li>
+    <li><code>forja init --json</code> 在混合 workspace 不选择。</li>
+  </ul>
+
+  <h3 id="stage-3">Stage 3: Execution Commands</h3>
+  <ul>
+    <li>创建 <code>build.ts</code>、<code>run.ts</code>、<code>stop.ts</code>、<code>clean.ts</code>。</li>
+    <li>实现 build 路由：default/fresh/qmake/rcc × qt/sdk × local/remote。</li>
+    <li>实现 run 路由：default/detach/debug/custom。</li>
+    <li>实现 stop/clean 路由。</li>
+    <li>更新状态栏 build/run/stop/clean 调用。</li>
+  </ul>
+  <p><strong>依赖</strong>：Stage 1 + Stage 2 的 activeTarget 稳定。</p>
+  <p><strong>可并行</strong>：Stage 2（除 activeTarget 外无共享逻辑）。</p>
+  <p><strong>验证</strong>：</p>
+  <ul>
+    <li><code>forja build --json</code> 按 active target 路由。</li>
+    <li><code>forja build qmake --json</code> 对 Qt 有效，对 SDK 报错。</li>
+    <li><code>forja run --detach --json</code> 对 Qt 有效，对 SDK 报错。</li>
+    <li>Remote selected target 路由到已有 remote prepared/bridge actions。</li>
+  </ul>
+
+  <h3 id="stage-4">Stage 4: Diagnostics &amp; Sync</h3>
+  <ul>
+    <li>创建 <code>doctor.ts</code>、<code>sync.ts</code>。</li>
+    <li>实现 doctor 聚合：toolchain 可用性验证（Qt/VS/jom/make）+ target + sync + remote 检查。</li>
+    <li>将 <code>qt env</code>/<code>sdk env</code> 全部迁入 doctor（工具链扫描和验证均归 doctor）。</li>
+    <li>将 <code>sync test-connection</code>、<code>remote test</code>、<code>remote doctor</code> 能力吸收到 doctor。</li>
+    <li>保留 sync 执行行为，更新 nextActions 指向 list/use。</li>
+    <li>将 <code>cleanup</code> 能力吸收到 <code>doctor fix</code>。</li>
+  </ul>
+  <p><strong>依赖</strong>：Stage 2（status 模式已稳定）。</p>
+  <p><strong>验证</strong>：</p>
+  <ul>
+    <li><code>forja doctor --json</code> 报告 local target 检查（local 模式不 SSH）。</li>
+    <li><code>forja doctor --remote --json</code> 报告 remote 检查。</li>
+    <li><code>forja sync plan --json</code> 保留现有行为。</li>
+    <li>sync 缺配置时指向 <code>forja list servers</code> + <code>forja use --server</code>。</li>
+  </ul>
+
+  <h3 id="stage-5">Stage 5: Hide Compatibility Surface</h3>
+  <ul>
+    <li>在 <code>package.json</code> menus.commandPalette 中隐藏所有旧 VSCode 命令。</li>
+    <li>保留所有旧 command ID 注册。</li>
+    <li>更新 CLI help：旧 <code>qt</code>/<code>sdk</code>/<code>remote</code>/sync 配置子命令标记为兼容。</li>
+    <li>更新 AI skill 文档使用新命令。</li>
+    <li>更新 <code>docs/README-cli.md</code> 和 <code>docs/cli-interface-spec.md</code>。</li>
+  </ul>
+  <p><strong>依赖</strong>：Stage 2-4 全部完成。</p>
+  <p><strong>验证</strong>：</p>
+  <ul>
+    <li>Command Palette 搜索 "Forja" 只显示新命令集 + 上下文命令。</li>
+    <li><code>forja --help</code> 显示新命令集。</li>
+    <li>旧命令仍可执行。</li>
+  </ul>
+
+  <h3 id="stage-6">Stage 6: Verification</h3>
+  <ul>
+    <li><code>npm run compile</code></li>
+    <li><code>npm test</code></li>
+    <li><code>npm run build:cli</code>（CLI 包包含新模块）</li>
+    <li>不执行 <code>npm run package:all</code>（除非显式打包发布）</li>
+  </ul>
+  <p><strong>依赖</strong>：Stage 5。</p>
+
+  <hr>
+
+  <h2 id="stage-deps">11. Stage 依赖图</h2>
+  <pre><code>Stage 1 (Foundation)
+    ├── Stage 2 (Config: status/init/list/use)
+    │       └── Stage 4 (Diagnostics: doctor/sync)
+    │               └── Stage 5 (Hide Compat)
+    └── Stage 3 (Execution: build/run/stop/clean)  ← 可与 Stage 2 并行
+                    └── Stage 5 (Hide Compat)
+                            └── Stage 6 (Verification)</code></pre>
+
+  <p>Stage 2 和 Stage 3 可在 Stage 1 完成后并行推进。Stage 4 依赖 Stage 2。Stage 5 依赖 Stage 2-4 全部完成。</p>
+
+  <hr>
+
+  <h2 id="tests">12. 测试矩阵</h2>
+  <table>
+    <thead>
+      <tr><th>场景</th><th>命令</th><th>预期</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>空 workspace</td><td><code>forja status --json</code></td><td>无 target，next action <code>forja init</code></td></tr>
+      <tr><td>一个 Qt target</td><td><code>forja init --json</code></td><td>保存 Qt active target + toolchain</td></tr>
+      <tr><td>一个 SDK target</td><td><code>forja init --json</code></td><td>保存 SDK active target + toolchain</td></tr>
+      <tr><td>1 Qt + 1 SDK</td><td><code>forja init --json</code></td><td>不选择，next actions <code>forja list</code>、<code>forja use</code></td></tr>
+      <tr><td>多个 Qt targets</td><td><code>forja list --json</code></td><td>列出所有 .pro，标记 current</td></tr>
+      <tr><td>选择 Qt</td><td><code>forja use --target app.pro --json</code></td><td>kind=qt</td></tr>
+      <tr><td>选择 SDK</td><td><code>forja use --target sdk.sln --json</code></td><td>kind=sdk</td></tr>
+      <tr><td>Qt qmake only</td><td><code>forja build qmake --json</code></td><td>路由到 qmake</td></tr>
+      <tr><td>Qt rcc only</td><td><code>forja build rcc --json</code></td><td>路由到 rcc</td></tr>
+      <tr><td>SDK qmake rejected</td><td><code>forja build qmake --json</code></td><td>报错：SDK 没有 qmake 步骤</td></tr>
+      <tr><td>SDK fresh build</td><td><code>forja build fresh --json</code></td><td>rebuild 或 clean+build</td></tr>
+      <tr><td>Qt run</td><td><code>forja run --detach --json</code></td><td>返回 pid/logFile</td></tr>
+      <tr><td>Qt run debug</td><td><code>forja run --debug --json</code></td><td>启动调试</td></tr>
+      <tr><td>Qt run custom</td><td><code>forja run --custom myCmd --json</code></td><td>运行已保存命令</td></tr>
+      <tr><td>SDK run rejected</td><td><code>forja run --json</code></td><td>失败，next action <code>forja build</code></td></tr>
+      <tr><td>Remote Qt build</td><td><code>forja use --remote</code> + <code>forja build --json</code></td><td>远程 prepared Qt build</td></tr>
+      <tr><td>Remote SDK build</td><td><code>forja use --remote</code> + <code>forja build --json</code></td><td>远程 prepared SDK build</td></tr>
+      <tr><td>缺少 remote server</td><td><code>forja build --json</code></td><td>SSH 前失败，指向 list/use</td></tr>
+      <tr><td>Sync 缺配置</td><td><code>forja sync --json</code></td><td>指向 list servers + use server</td></tr>
+      <tr><td>Doctor local</td><td><code>forja doctor --json</code></td><td>local 检查（含 toolchain-qt/vs/jom/make），不 SSH</td></tr>
+      <tr><td>Doctor remote</td><td><code>forja doctor --remote --json</code></td><td>remote 检查</td></tr>
+      <tr><td>Doctor toolchain missing</td><td><code>forja doctor --json</code>（无 Qt 环境）</td><td><code>toolchain-qt</code> check = missing/blocked</td></tr>
+      <tr><td>Doctor fix cleanup</td><td><code>forja doctor fix --json</code></td><td>清理残留配置</td></tr>
+      <tr><td>Status process</td><td><code>forja status --process --json</code></td><td>返回 runtime 信息</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2 id="compat">13. 兼容策略</h2>
+
+  <h3 id="compat-v1">第一版发布后</h3>
+  <ul>
+    <li>旧 CLI 子命令继续工作。</li>
+    <li>旧 VSCode command ID 继续工作。</li>
+    <li>旧命令从主帮助和 Command Palette 隐藏。</li>
+    <li>旧命令文本输出可包含一行简短迁移提示；JSON 不默认加弃用噪音。</li>
+  </ul>
+
+  <h3 id="compat-v2">第二版发布后</h3>
+  <ul>
+    <li>保留旧命令执行（不删除已发布的 VSCode command ID）。</li>
+    <li>继续隐藏旧命令。</li>
+  </ul>
+
+  <h3 id="compat-invariants">不变项</h3>
+  <ul>
+    <li>不修改 <code>extension.ts</code> 的 activate 函数签名。</li>
+    <li>不删除已发布的 VSCode command ID。</li>
+    <li>不修改 <code>package.json</code> 已发布的 <code>activationEvents</code>。</li>
+  </ul>
+
+  <hr>
+
+  <h2 id="docs">14. 文档更新</h2>
+  <table>
+    <thead>
+      <tr><th>文档</th><th>变更</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>docs/README-cli.md</code></td><td>替换为新命令集</td></tr>
+      <tr><td><code>docs/cli-interface-spec.md</code></td><td>更新为新公开 CLI 契约</td></tr>
+      <tr><td><code>skills/forja/SKILL.md</code></td><td>AI 工具推荐路径改用新命令</td></tr>
+      <tr><td><code>docs/operations/command-consolidation/command-inventory.md</code></td><td>保留作为迁移基准</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <p><em>更新时间: 2026-06-15</em></p>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+</main>
+
+
+  <aside class="toc-sidebar">
+    <ul>
+      <li><a href="#commands">1. 最终用户命令集</a></li>
+      <li><a href="#concepts">2. 核心概念</a>
+        <ul>
+          <li><a href="#active-target">2.1 ActiveTarget</a></li>
+          <li><a href="#candidate">2.2 Candidate</a></li>
+          <li><a href="#diagnostic">2.3 Diagnostic</a></li>
+          <li><a href="#json-envelope">2.4 JSON Envelope</a></li>
+          <li><a href="#readiness">2.5 Readiness</a></li>
+          <li><a href="#runtime-state">2.6 RuntimeState</a></li>
+          <li><a href="#command-plan">2.7 CommandPlan</a></li>
+          <li><a href="#server-summary">2.8 ServerSummary / ServerDetail</a></li>
+          <li><a href="#remote-summary">2.9 RemoteSummary</a></li>
+          <li><a href="#list-vs-doctor">2.10 List vs Doctor 边界</a></li>
+          <li><a href="#locale">2.11 Locale</a></li>
+        </ul>
+      </li>
+      <li><a href="#mapping">4. 完整旧→新映射表</a>
+        <ul>
+          <li><a href="#map-qt">4.1 Qt CLI</a></li>
+          <li><a href="#map-sdk">4.2 SDK CLI</a></li>
+          <li><a href="#map-remote">4.3 Remote CLI</a></li>
+          <li><a href="#map-sync">4.4 Sync CLI</a></li>
+          <li><a href="#map-cleanup">4.5 Cleanup CLI</a></li>
+          <li><a href="#map-vscode-qt">4.6 VSCode Qt</a></li>
+          <li><a href="#map-vscode-sync">4.7 VSCode Sync</a></li>
+          <li><a href="#map-vscode-sdk">4.8 VSCode SDK</a></li>
+          <li><a href="#map-vscode-remote">4.9 VSCode Remote</a></li>
+          <li><a href="#map-vscode-global">4.10 VSCode 全局/UI</a></li>
+        </ul>
+      </li>
+      <li><a href="#vscode-palette">5. VSCode 最终 Command Palette</a></li>
+      <li><a href="#global-flags">6. 通用参数</a></li>
+      <li><a href="#text-output">7. 文本输出规范</a></li>
+      <li><a href="#concurrency">8. 并发与竞态</a></li>
+      <li><a href="#file-structure">9. 实施文件结构</a></li>
+      <li><a href="#stages">10. 实施阶段</a></li>
+      <li><a href="#stage-deps">11. Stage 依赖图</a></li>
+      <li><a href="#tests">12. 测试矩阵</a></li>
+      <li><a href="#compat">13. 兼容策略</a></li>
+      <li><a href="#docs">14. 文档更新</a></li>
+    </ul>
+  </aside>
+
+  </div>
+<script>
+(function() {
+  var links = document.querySelectorAll('.toc-sidebar a[href^="#"]');
+  if (!links.length) return;
+  var ids = Array.from(links).map(function(a) { return a.getAttribute('href').slice(1); }).filter(Boolean);
+  var headings = ids.map(function(id) { return document.getElementById(id); }).filter(Boolean);
+  if (!headings.length) return;
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      var link = document.querySelector('.toc-sidebar a[href="#' + entry.target.id + '"]');
+      if (link) {
+        if (entry.isIntersecting) {
+          links.forEach(function(l) { l.classList.remove('active'); });
+          link.classList.add('active');
+        }
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px' });
+  headings.forEach(function(h) { observer.observe(h); });
+})();
+</script>
+</body>
+</html>

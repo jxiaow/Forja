@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>forja init — Forja Command Consolidation v2</title>
+  <style>
+    :root { --bg: #fff; --text: #1a1a1a; --muted: #6b7280; --border: #e5e7eb; --code-bg: #f3f4f6; --link: #2563eb; --heading: #111827; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: var(--text); background: var(--bg); max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h1, h2, h3 { color: var(--heading); margin-top: 2rem; margin-bottom: 1rem; }
+    h1 { font-size: 2rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; }
+    h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+    h3 { font-size: 1.25rem; }
+    p { margin-bottom: 1rem; }
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; font-family: 'SF Mono', Monaco, Consolas, monospace; }
+    pre { background: var(--code-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; margin-bottom: 1rem; }
+    pre code { background: none; padding: 0; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: var(--code-bg); font-weight: 600; }
+    ul, ol { margin-bottom: 1rem; padding-left: 2rem; }
+    li { margin-bottom: 0.25rem; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+    .nav-top { margin-bottom: 2rem; }
+    .nav-top a { margin-right: 1rem; }
+    .page-wrapper { display: flex; gap: 2rem; align-items: flex-start; }
+    .main-content { flex: 1; min-width: 0; }
+    .toc-sidebar { width: 240px; flex-shrink: 0; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; font-size: 0.85rem; padding: 0.75rem 0; border-left: 2px solid var(--border); padding-left: 1rem; }
+    .toc-sidebar ul { list-style: none; padding-left: 0.85rem; margin: 0; }
+    .toc-sidebar > ul { padding-left: 0; }
+    .toc-sidebar li { margin-bottom: 0.1rem; }
+    .toc-sidebar a { display: block; color: var(--muted); font-size: 0.82rem; line-height: 1.5; padding: 0.15rem 0 0.15rem 0.5rem; border-left: 2px solid transparent; margin-left: -1rem; padding-left: calc(1rem - 2px); transition: color 0.15s, border-color 0.15s; text-decoration: none; }
+    .toc-sidebar a:hover { color: var(--link); text-decoration: none; }
+    .toc-sidebar a.active { color: var(--link); border-left-color: var(--link); font-weight: 600; }
+    .toc-sidebar::-webkit-scrollbar { width: 3px; }
+    .toc-sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    @media (max-width: 900px) { .page-wrapper { flex-direction: column-reverse; } .toc-sidebar { width: 100%; position: static; max-height: none; border-left: none; padding-left: 0; } }
+    pre[class*="language-"] { margin-bottom: 1rem; }
+    code[class*="language-"] { background: none; padding: 0; }
+    .tab-group { margin-bottom: 1.5rem; }
+    .tab-buttons { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 0; }
+    .tab-btn { padding: 0.4rem 1rem; border: none; background: none; cursor: pointer; font-size: 0.85rem; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -2px; font-family: inherit; }
+    .tab-btn.active { color: var(--link); border-bottom-color: var(--link); font-weight: 600; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .tab-panel pre { margin-top: 0.5rem; margin-bottom: 0; border-radius: 0 0 6px 6px; }
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body>
+  <div class="nav-top">
+    <a href="index.html">&larr; Back to overview</a>
+  </div>
+
+<div class="page-wrapper">
+<main class="main-content">
+  <h1><code>forja init</code></h1>
+  <p><strong>Responsibility</strong>: First-time initialization. Detects toolchain paths and saves unambiguous configuration without making fuzzy choices on behalf of the user. Safe to re-run.</p>
+
+  <h2 id="syntax">Syntax</h2>
+  <pre><code class="language-bash">forja init [--workspace &lt;path&gt;] [--remote] [--plan] [--json]</code></pre>
+
+  <h2 id="behavior">Behavior</h2>
+  <ol>
+    <li>Scan Qt targets (.pro files).</li>
+    <li>Scan SDK targets (.sln/Makefile).</li>
+    <li>Discover available toolchain paths (Qt/VS/jom/make) for saving defaults &mdash; path discovery only, no health validation (health validation belongs to <code>doctor</code>).</li>
+    <li>Save toolchain defaults (Qt path, VS path, jom path).</li>
+    <li>Save mode/arch defaults. Mode defaults to <code>release</code>; arch is platform-dependent (Windows defaults to <code>x86</code>, other platforms default to <code>x64</code>).</li>
+    <li>If the entire workspace has only one target, save it as the active target.</li>
+    <li>If multiple targets or mixed Qt+SDK, do not select; next actions point to <code>forja list</code> + <code>forja use</code>.</li>
+    <li>If zero targets, only save toolchain defaults; next action points to <code>forja list</code>.</li>
+    <li><code>--remote</code> executes initialization on remote via bridge. Requires configured server; if remote lacks Forja bin, next action points to <code>forja doctor fix --remote</code>.</li>
+  </ol>
+
+  <h2 id="idempotent">Idempotency</h2>
+  <p>Safe to re-run. Already-saved user choices are not overwritten; only missing items are filled in.</p>
+
+  <h2 id="plan">--plan</h2>
+  <p>Outputs "what will be detected, what will be saved" without writing configuration.</p>
+
+  <h2 id="absorbed">Absorbed Commands</h2>
+  <p><code>forja qt init</code>, <code>forja sdk init</code>, <code>forja remote qt init</code>, <code>forja remote sdk init</code></p>
+
+  <h2 id="not-absorbed">Not Absorbed</h2>
+  <p><code>forja remote bootstrap</code> (deploy Forja bin) &rarr; <code>forja doctor fix --remote</code></p>
+
+  <h2 id="result">Result</h2>
+  <pre><code class="language-typescript">interface InitResult extends ForjaJsonResult {
+    action: 'init';
+    mode: 'local' | 'remote';
+    detected: {
+        qtTargets: number;
+        sdkTargets: number;
+        toolchain: { qt?: boolean; vs?: boolean; jom?: boolean; make?: boolean };
+    };
+    saved?: { mode?: string; arch?: string; toolchain?: string[] };
+    ambiguous?: boolean;  // true when multiple targets or mixed Qt+SDK
+    plan?: CommandPlan;
+}</code></pre>
+
+  <h2 id="diagnostic-codes">Init Diagnostic Code Table</h2>
+  <table>
+    <thead>
+      <tr><th>code</th><th>level</th><th>EN message</th><th>ZH message</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>init.workspaceNotFound</code></td><td>error</td><td>Workspace does not exist: {path}</td><td>Workspace 不存在: {path}</td></tr>
+      <tr><td><code>init.noTargets</code></td><td>info</td><td>No Qt or SDK targets found, only toolchain defaults saved</td><td>未找到 Qt 或 SDK 目标，仅保存工具链默认值</td></tr>
+      <tr><td><code>init.multipleTargets</code></td><td>info</td><td>Found {count} targets, not auto-selecting</td><td>发现 {count} 个目标，未自动选择</td></tr>
+      <tr><td><code>init.mixedTargets</code></td><td>info</td><td>Found {qtCount} Qt and {sdkCount} SDK targets, not auto-selecting</td><td>发现 {qtCount} 个 Qt 目标和 {sdkCount} 个 SDK 目标，未自动选择</td></tr>
+      <tr><td><code>init.toolchainQtMissing</code></td><td>warning</td><td>Qt installation not detected</td><td>未检测到 Qt 安装</td></tr>
+      <tr><td><code>init.toolchainVsMissing</code></td><td>warning</td><td>Visual Studio installation not detected</td><td>未检测到 Visual Studio 安装</td></tr>
+      <tr><td><code>init.toolchainMakeMissing</code></td><td>warning</td><td>make not detected</td><td>未检测到 make 工具</td></tr>
+      <tr><td><code>init.toolchainJomMissing</code></td><td>warning</td><td>jom not detected (optional, recommended for faster Qt builds on Windows)</td><td>未检测到 jom（可选，推荐安装以加速 Qt 构建）</td></tr>
+      <tr><td><code>init.targetKindMismatch</code></td><td>error</td><td>--kind sdk specified but only Qt targets found</td><td>指定 --kind sdk 但仅找到 Qt 目标</td></tr>
+      <tr><td><code>init.configWriteFailed</code></td><td>error</td><td>Failed to write configuration: {detail}</td><td>写入配置失败: {detail}</td></tr>
+      <tr><td><code>init.remoteNoServer</code></td><td>error</td><td>No server configured for remote init</td><td>未配置服务器，无法执行远程初始化</td></tr>
+      <tr><td><code>init.remoteForjaMissing</code></td><td>error</td><td>Remote Forja bin not installed</td><td>远端 Forja 未安装</td></tr>
+      <tr><td><code>init.remoteBridgeFailed</code></td><td>error</td><td>Remote bridge execution failed: {detail}</td><td>远端 bridge 执行失败: {detail}</td></tr>
+      <tr><td><code>init.alreadyInitialized</code></td><td>info</td><td>Configuration already exists, only filling missing items</td><td>配置已存在，仅填充缺失项</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="normal-scenarios">Normal Scenarios</h2>
+
+  <div class="tab-group">
+  <h3 id="single-target">Single Qt Target Workspace</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-single-json">JSON</button>
+    <button class="tab-btn" data-tab="s-single-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-single-json">
+    <pre><code class="language-json">{
+    "ok": true,
+    "action": "init",
+    "mode": "local",
+    "workspace": "/path/to/workspace",
+    "detected": {
+        "qtTargets": 1,
+        "sdkTargets": 0,
+        "toolchain": { "qt": true, "vs": true, "jom": true }
+    },
+    "saved": {
+        "mode": "release",
+        "arch": "x86",
+        "toolchain": ["qtPath", "vsInstall", "jomPath"]
+    },
+    "activeTarget": {
+        "kind": "qt",
+        "project": "app/app.pro",
+        "mode": "release",
+        "arch": "x86",
+        "runAt": "local"
+    },
+    "nextActions": ["forja build"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-single-text">
+    <pre><code class="language-text">Forja init succeeded
+Workspace: /path/to/workspace
+Detected: 1 Qt target, toolchain: Qt/VS/jom
+Saved: mode=release arch=x86 pinnedProject=app/app.pro
+Active target: qt app/app.pro release x86 local
+Next:
+  forja build</code></pre>
+  </div>
+  </div>
+
+  <div class="tab-group">
+  <h3 id="multiple-targets">Multiple Mixed Targets Workspace</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-multiple-json">JSON</button>
+    <button class="tab-btn" data-tab="s-multiple-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-multiple-json">
+    <pre><code class="language-json">{
+    "ok": true,
+    "action": "init",
+    "mode": "local",
+    "workspace": "/path/to/workspace",
+    "detected": {
+        "qtTargets": 2,
+        "sdkTargets": 1,
+        "toolchain": { "qt": true, "vs": true, "jom": true }
+    },
+    "saved": {
+        "mode": "release",
+        "arch": "x86",
+        "toolchain": ["qtPath", "vsInstall", "jomPath"]
+    },
+    "ambiguous": true,
+    "diagnostics": [
+        { "code": "init.mixedTargets", "level": "info", "message": "Found 2 Qt and 1 SDK targets, not auto-selecting", "params": { "qtCount": "2", "sdkCount": "1" } }
+    ],
+    "nextActions": ["forja list", "forja use --target &lt;project&gt;"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-multiple-text">
+    <pre><code class="language-text">Forja init succeeded
+Workspace: /path/to/workspace
+Detected: 2 Qt targets, 1 SDK target, toolchain: Qt/VS/jom
+Saved: mode=release arch=x86
+Not auto-selecting (multiple targets found)
+Next:
+  forja list
+  forja use --target &lt;project&gt;</code></pre>
+  </div>
+  </div>
+
+  <div class="tab-group">
+  <h3 id="zero-targets">Zero Targets Workspace</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-zero-json">JSON</button>
+    <button class="tab-btn" data-tab="s-zero-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-zero-json">
+    <pre><code class="language-json">{
+    "ok": true,
+    "action": "init",
+    "mode": "local",
+    "workspace": "/path/to/workspace",
+    "detected": {
+        "qtTargets": 0,
+        "sdkTargets": 0,
+        "toolchain": { "qt": false, "vs": true }
+    },
+    "saved": {
+        "toolchain": ["vsInstall"]
+    },
+    "diagnostics": [
+        { "code": "init.noTargets", "level": "info", "message": "No Qt or SDK targets found, only toolchain defaults saved" }
+    ],
+    "nextActions": ["forja list"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-zero-text">
+    <pre><code class="language-text">Forja init succeeded
+Workspace: /path/to/workspace
+Detected: 0 targets, toolchain: VS
+No targets found, only toolchain defaults saved
+Next:
+  forja list</code></pre>
+  </div>
+  </div>
+
+  <div class="tab-group">
+  <h3 id="idempotent-run">Idempotent Re-run</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-idempotent-json">JSON</button>
+    <button class="tab-btn" data-tab="s-idempotent-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-idempotent-json">
+    <pre><code class="language-json">{
+    "ok": true,
+    "action": "init",
+    "mode": "local",
+    "workspace": "/path/to/workspace",
+    "detected": {
+        "qtTargets": 1,
+        "sdkTargets": 0,
+        "toolchain": { "qt": true, "vs": true, "jom": true }
+    },
+    "saved": {},
+    "diagnostics": [
+        { "code": "init.alreadyInitialized", "level": "info", "message": "Configuration already exists, only filling missing items" }
+    ],
+    "nextActions": ["forja status"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-idempotent-text">
+    <pre><code class="language-text">Forja init succeeded
+Workspace: /path/to/workspace
+Detected: 1 Qt target, toolchain: Qt/VS/jom
+Configuration already exists, only filling missing items
+Next:
+  forja status</code></pre>
+  </div>
+  </div>
+
+  <div class="tab-group">
+  <h3 id="plan-preview">--plan Preview</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-plan-json">JSON</button>
+    <button class="tab-btn" data-tab="s-plan-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-plan-json">
+    <pre><code class="language-json">{
+    "ok": true,
+    "action": "init",
+    "mode": "local",
+    "plan": {
+        "mode": "dryRun",
+        "willWrite": [".forja/qt.json"],
+        "willSave": {
+            "qtPath": "C:/Qt/5.15.2/msvc2019",
+            "vsInstall": "C:/Program Files/Microsoft Visual Studio/2019/Professional",
+            "jomPath": "C:/Qt/Tools/QtCreator/bin/jom.exe",
+            "mode": "release",
+            "arch": "x86",
+            "pinnedProject": "app/app.pro"
+        }
+    },
+    "nextActions": ["forja init"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-plan-text">
+    <pre><code class="language-text">Forja init plan (dry run)
+Workspace: /path/to/workspace
+Will detect: Qt targets, SDK targets, toolchain paths
+Will save:
+  mode=release arch=x86
+  qtPath=C:/Qt/5.15.2/msvc2019
+  vsInstall=C:/Program Files/Microsoft Visual Studio/2019/Professional
+  jomPath=C:/Qt/Tools/QtCreator/bin/jom.exe
+  pinnedProject=app/app.pro
+Next:
+  forja init</code></pre>
+  </div>
+  </div>
+
+  <h2 id="error-scenarios">Error Scenarios</h2>
+
+  <div class="tab-group">
+  <h3 id="workspace-not-found">Workspace Not Found</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-ws-notfound-json">JSON</button>
+    <button class="tab-btn" data-tab="s-ws-notfound-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-ws-notfound-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "init",
+    "mode": "local",
+    "diagnostics": [
+        { "code": "init.workspaceNotFound", "level": "error", "message": "Workspace does not exist: /path/to/workspace", "params": { "path": "/path/to/workspace" } }
+    ],
+    "nextActions": []
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-ws-notfound-text">
+    <pre><code class="language-text">Forja init failed
+Error: Workspace does not exist: /path/to/workspace</code></pre>
+  </div>
+  </div>
+
+  <div class="tab-group">
+  <h3 id="toolchain-missing">Toolchain Missing</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-toolchain-json">JSON</button>
+    <button class="tab-btn" data-tab="s-toolchain-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-toolchain-json">
+    <pre><code class="language-json">{
+    "ok": true,
+    "action": "init",
+    "mode": "local",
+    "workspace": "/path/to/workspace",
+    "detected": {
+        "qtTargets": 1,
+        "sdkTargets": 0,
+        "toolchain": { "qt": false, "vs": true, "jom": false }
+    },
+    "saved": {
+        "mode": "release",
+        "arch": "x86",
+        "toolchain": ["vsInstall"]
+    },
+    "diagnostics": [
+        { "code": "init.toolchainQtMissing", "level": "warning", "message": "Qt installation not detected", "hint": "Install Qt and re-run forja init, or use forja use --qt-path to specify manually" },
+        { "code": "init.toolchainMakeMissing", "level": "warning", "message": "make not detected", "hint": "Install build-essential or equivalent toolchain" }
+    ],
+    "nextActions": ["forja list env", "forja use --qt-path &lt;path&gt;"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-toolchain-text">
+    <pre><code class="language-text">Forja init succeeded
+Workspace: /path/to/workspace
+Detected: 1 Qt target, toolchain: VS (Qt: not found, jom: not found)
+Saved: mode=release arch=x86
+Warning: Qt installation not detected
+Warning: make not detected
+Next:
+  forja list env
+  forja use --qt-path &lt;path&gt;</code></pre>
+  </div>
+  </div>
+
+  <div class="tab-group">
+  <h3 id="remote-no-server">--remote No Server Configured</h3>
+  <pre><code class="language-json">{
+    "ok": false,
+    "action": "init",
+    "mode": "remote",
+    "diagnostics": [
+        { "code": "init.remoteNoServer", "level": "error", "message": "No server configured for remote init", "hint": "Add a server first with forja list servers, then use forja use --server &lt;id&gt;" }
+    ],
+    "nextActions": ["forja list servers", "forja use --server &lt;id&gt; --remote-path &lt;path&gt;"]
+}</code></pre>
+  </div>
+
+  <div class="tab-group">
+  <h3 id="remote-forja-missing">--remote Remote Forja Bin Missing</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-remote-forja-json">JSON</button>
+    <button class="tab-btn" data-tab="s-remote-forja-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-remote-forja-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "init",
+    "mode": "remote",
+    "diagnostics": [
+        { "code": "init.remoteForjaMissing", "level": "error", "message": "Remote Forja bin not installed", "hint": "Deploy Forja to remote server first" }
+    ],
+    "nextActions": ["forja doctor fix --remote"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-remote-forja-text">
+    <pre><code class="language-text">Forja init failed (remote)
+Error: Remote Forja bin not installed
+Next:
+  forja doctor fix --remote</code></pre>
+  </div>
+  </div>
+
+  <div class="tab-group">
+  <h3 id="remote-bridge-failed">--remote Bridge Execution Failed</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-remote-bridge-json">JSON</button>
+    <button class="tab-btn" data-tab="s-remote-bridge-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-remote-bridge-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "init",
+    "mode": "remote",
+    "diagnostics": [
+        { "code": "init.remoteBridgeFailed", "level": "error", "message": "Remote bridge execution failed: SSH connection timeout", "hint": "Check server connectivity and credentials", "params": { "detail": "SSH connection timeout" } }
+    ],
+    "nextActions": ["forja doctor --remote"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-remote-bridge-text">
+    <pre><code class="language-text">Forja init failed (remote)
+Error: Remote bridge execution failed: SSH connection timeout
+  hint: Check server connectivity and credentials
+Next:
+  forja doctor --remote</code></pre>
+  </div>
+  </div>
+
+  <div class="tab-group">
+  <h3 id="kind-mismatch">--kind sdk but only Qt targets found</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-kind-mismatch-json">JSON</button>
+    <button class="tab-btn" data-tab="s-kind-mismatch-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-kind-mismatch-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "init",
+    "mode": "local",
+    "workspace": "/path/to/workspace",
+    "detected": {
+        "qtTargets": 1,
+        "sdkTargets": 0,
+        "toolchain": { "qt": true, "vs": true }
+    },
+    "diagnostics": [
+        { "code": "init.targetKindMismatch", "level": "error", "message": "--kind sdk specified but only Qt targets found" }
+    ],
+    "nextActions": ["forja use --kind qt"]
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-kind-mismatch-text">
+    <pre><code class="language-text">Forja init failed
+Error: --kind sdk specified but only Qt targets found
+Next:
+  forja use --kind qt</code></pre>
+  </div>
+  </div>
+
+  <div class="tab-group">
+  <h3 id="config-write-failed">Configuration Write Failed</h3>
+  <div class="tab-buttons">
+    <button class="tab-btn active" data-tab="s-write-failed-json">JSON</button>
+    <button class="tab-btn" data-tab="s-write-failed-text">Text</button>
+  </div>
+  <div class="tab-panel active" id="s-write-failed-json">
+    <pre><code class="language-json">{
+    "ok": false,
+    "action": "init",
+    "mode": "local",
+    "workspace": "/path/to/workspace",
+    "detected": {
+        "qtTargets": 1,
+        "sdkTargets": 0,
+        "toolchain": { "qt": true, "vs": true }
+    },
+    "diagnostics": [
+        { "code": "init.configWriteFailed", "level": "error", "message": "Failed to write configuration: Permission denied", "params": { "detail": "Permission denied" } }
+    ],
+    "nextActions": []
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="s-write-failed-text">
+    <pre><code class="language-text">Forja init failed
+Error: Failed to write configuration: Permission denied</code></pre>
+  </div>
+  </div>
+
+  <h2 id="implementation-details">Implementation Details</h2>
+
+  <h3 id="remote-bridge-command">--remote Bridge Command Construction</h3>
+  <p><code>forja init --remote</code> actually executes the following remote command format:</p>
+  <pre><code class="language-bash">cd &lt;remotePath&gt; &amp;&amp; &lt;remoteForjaBin&gt; &lt;target&gt; init --workspace &lt;remotePath&gt; --json</code></pre>
+  <ul>
+    <li><code>&lt;target&gt;</code>: Determined by the local active target's <code>kind</code> (<code>qt</code> or <code>sdk</code>). If not set, defaults to <code>qt</code>.</li>
+    <li><code>&lt;remoteForjaBin&gt;</code>: From <code>RemoteSettings.remoteForjaBin</code>, defaults to <code>$HOME/.forja/bin/forja</code>.</li>
+    <li>Timeout: Default 120 seconds (consistent with bridge default).</li>
+  </ul>
+
+  <h3 id="active-target-storage">ActiveTarget Storage</h3>
+  <p>When a single target is automatically saved, activeTarget is stored at:</p>
+  <pre><code class="language-text">~/.forja/projects/&lt;workspace-hash&gt;/activeTarget.json</code></pre>
+  <p>Format:</p>
+  <pre><code class="language-json">{
+    "kind": "qt",
+    "project": "app/app.pro",
+    "mode": "release",
+    "arch": "x86",
+    "runAt": "local"
+}</code></pre>
+  <p>Also writes to legacy settings file for backward compatibility (<code>pinnedProject</code> field in <code>~/.forja/projects/&lt;workspace-hash&gt;:qt.json</code>).</p>
+
+  <h2 id="ok-rules">ok Determination Rules</h2>
+  <ul>
+    <li>When <code>mode: 'local'</code>:
+      <ul>
+        <li>Configuration write successful &rarr; <code>ok: true</code> (even if toolchain is missing, zero targets, or multiple targets)</li>
+        <li>Configuration write failed &rarr; <code>ok: false</code></li>
+        <li><code>--kind</code> mismatch with scan results &rarr; <code>ok: false</code></li>
+      </ul>
+    </li>
+    <li>When <code>mode: 'remote'</code>:
+      <ul>
+        <li>Any error-level diagnostic &rarr; <code>ok: false</code></li>
+        <li>Bridge execution successful and remote returns <code>ok: true</code> &rarr; <code>ok: true</code></li>
+        <li>Bridge execution failed or remote returns <code>ok: false</code> &rarr; <code>ok: false</code></li>
+      </ul>
+    </li>
+    <li>Warning-level diagnostics do not affect <code>ok</code> value</li>
+    <li><code>info</code>-level diagnostics are for information only and do not affect <code>ok</code> value</li>
+  </ul>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+</main>
+
+  <aside class="toc-sidebar">
+    <ul>
+      <li><a href="#syntax">Syntax</a></li>
+      <li><a href="#behavior">Behavior</a></li>
+      <li><a href="#idempotent">Idempotency</a></li>
+      <li><a href="#plan">--plan</a></li>
+      <li><a href="#absorbed">Absorbed Commands</a></li>
+      <li><a href="#not-absorbed">Not Absorbed</a></li>
+      <li><a href="#result">Result</a></li>
+      <li><a href="#diagnostic-codes">Diagnostic Codes</a></li>
+      <li><a href="#normal-scenarios">Normal Scenarios</a></li>
+      <li><a href="#error-scenarios">Error Scenarios</a></li>
+      <li><a href="#ok-rules">ok Rules</a></li>
+    </ul>
+  </aside>
+
+</div>
+<script>
+(function() {
+  document.querySelectorAll('.tab-buttons').forEach(function(group) {
+    group.addEventListener('click', function(e) {
+      var btn = e.target.closest('.tab-btn');
+      if (!btn) return;
+      var container = group.parentElement;
+      container.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      container.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+      btn.classList.add('active');
+      var panel = container.querySelector('#' + btn.getAttribute('data-tab'));
+      if (panel) panel.classList.add('active');
+    });
+  });
+})();
+</script>
+<script>
+(function() {
+  var links = document.querySelectorAll('.toc-sidebar a[href^="#"]');
+  if (!links.length) return;
+  var ids = Array.from(links).map(function(a) { return a.getAttribute('href').slice(1); }).filter(Boolean);
+  var headings = ids.map(function(id) { return document.getElementById(id); }).filter(Boolean);
+  if (!headings.length) return;
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      var link = document.querySelector('.toc-sidebar a[href="#' + entry.target.id + '"]');
+      if (link) {
+        if (entry.isIntersecting) {
+          links.forEach(function(l) { l.classList.remove('active'); });
+          link.classList.add('active');
+        }
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px' });
+  headings.forEach(function(h) { observer.observe(h); });
+})();
+</script>
+</body>
+</html>
