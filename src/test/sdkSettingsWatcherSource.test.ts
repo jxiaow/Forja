@@ -38,6 +38,12 @@ test('SDK state manager uses non-Windows x64 default arch before persisting conf
     assert.match(stateManagerSource, /this\._arch = getDefaultArch\(\)/);
 });
 
+test('SDK status bar updates handle config persistence failures', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'sdkExtension.ts'), 'utf8');
+
+    assert.match(source, /onSdkUpdate\(\(\{ mode, arch \}\) => \{[\s\S]*?stateManager\.persistToConfig\(\)\s*\.catch\(\(e: Error\) => logError\('状态栏更新后保存 SDK 配置失败', e\)\);[\s\S]*?\}\);/);
+});
+
 test('config panel rejects SDK arch writes on non-Windows platforms', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'messageHandler.ts'), 'utf8');
 

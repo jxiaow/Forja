@@ -144,6 +144,13 @@ test('config panel does not reload html for its own setting writes', () => {
     );
 });
 
+test('config panel routes message handler failures through logger', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'index.ts'), 'utf8');
+
+    assert.match(source, /\.catch\(e => logger\.warn\(/);
+    assert.doesNotMatch(source, /console\.warn/);
+});
+
 test('config panel project name prefers qmake target override', () => {
     const html = getHtml({
         ...createTemplateData(),

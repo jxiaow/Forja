@@ -101,7 +101,8 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     onSdkUpdate(({ mode, arch }) => {
         stateManager.mode = mode as import('./types').BuildMode;
         stateManager.arch = arch as import('./types').Arch;
-        stateManager.persistToConfig();
+        stateManager.persistToConfig()
+            .catch((e: Error) => logError('状态栏更新后保存 SDK 配置失败', e));
     });
     let sdkSettingsDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     context.subscriptions.push(onSettingsChange((section) => {

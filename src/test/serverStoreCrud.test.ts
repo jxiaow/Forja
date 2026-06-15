@@ -7,6 +7,7 @@ import {
     readServers, addServer, removeServer,
     updateServer, getServerById
 } from '../core/serverStore';
+import { setOutputWriter, setSilent } from '../core/loggerBase';
 
 // 用临时目录，不碰用户真实的 ~/.forja/servers.json
 const tmpDir = fs.mkdtempSync(path.join(tmpdir(), 'forja-test-'));
@@ -67,8 +68,52 @@ test('removeServer deletes by id', () => {
 
 test('readServers handles malformed JSON gracefully', () => {
     fs.writeFileSync(SERVERS_PATH, '{invalid json', 'utf-8');
-    const servers = readServers();
-    assert.deepEqual(servers, []);
+    setOutputWriter(() => undefined);
+    try {
+        const servers = readServers();
+        assert.deepEqual(servers, []);
+    } finally {
+        setOutputWriter(null);
+    }
+});
+
+test('readServers routes malformed JSON warning through logger output writer', () => {
+    fs.writeFileSync(SERVERS_PATH, '{invalid json', 'utf-8');
+    const lines: string[] = [];
+
+    setOutputWriter(line => lines.push(line));
+    try {
+        const servers = readServers();
+        assert.deepEqual(servers, []);
+    } finally {
+        setOutputWriter(null);
+    }
+
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /\[WARN\]/);
+    assert.match(lines[0], /servers\.json 解析失败/);
+});
+
+test('readServers does not emit malformed JSON warnings in silent mode', () => {
+    fs.writeFileSync(SERVERS_PATH, '{invalid json', 'utf-8');
+    const lines: string[] = [];
+    const consoleWarnings: unknown[] = [];
+    const oldConsoleWarn = console.warn;
+    console.warn = (...args: unknown[]) => { consoleWarnings.push(args); };
+
+    setSilent(true);
+    setOutputWriter(line => lines.push(line));
+    try {
+        const servers = readServers();
+        assert.deepEqual(servers, []);
+    } finally {
+        setOutputWriter(null);
+        setSilent(false);
+        console.warn = oldConsoleWarn;
+    }
+
+    assert.deepEqual(lines, []);
+    assert.deepEqual(consoleWarnings, []);
 });
 
 test('readServers ignores servers without id', () => {

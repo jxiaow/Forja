@@ -19,6 +19,7 @@ import { ConfigPageManager } from '../ui/configPanel/configPagePanel';
 const logger = createLogger('QtCommands');
 
 export function registerQtCommands(context: vscode.ExtensionContext, panel: ConfigPageManager): void {
+    type CommandHandler = Parameters<typeof vscode.commands.registerCommand>[1];
     const resolveDesignerExecutable = (): string => {
         const configured = (getDesignerPath() || '').trim();
         if (configured) { return configured; }
@@ -38,8 +39,7 @@ export function registerQtCommands(context: vscode.ExtensionContext, panel: Conf
         return 'designer';
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cmds: [string, (...args: any[]) => any][] = [
+    const cmds: [string, CommandHandler][] = [
         ['forja.qt.selectProject', async () => {
             const p = await selectProject(context, true);
             if (p) {

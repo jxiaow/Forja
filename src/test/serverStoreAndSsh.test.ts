@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as cp from 'child_process';
 import { createAskpassEnv, quoteForRemoteShell } from '../core/ssh';
+import { setOutputWriter, setSilent } from '../core/loggerBase';
 
 test('createAskpassEnv returns undefined for null password', () => {
     const result = createAskpassEnv(null);
@@ -82,4 +83,42 @@ test('createAskpassEnv askpass command prints password and exits successfully', 
     } finally {
         result.cleanup();
     }
+});
+
+test('createAskpassEnv routes write failures through logger output writer', () => {
+    const lines: string[] = [];
+
+    setOutputWriter(line => lines.push(line));
+    try {
+        const result = createAskpassEnv('mypass', 'write-failure/missing-dir');
+        assert.equal(result, undefined);
+    } finally {
+        setOutputWriter(null);
+    }
+
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /\[WARN\]/);
+    assert.match(lines[0], /createAskpassEnv 失败/);
+    assert.match(lines[0], /write-failure/);
+});
+
+test('createAskpassEnv does not emit write failure warnings in silent mode', () => {
+    const oldConsoleWarn = console.warn;
+    const lines: string[] = [];
+    const consoleWarnings: unknown[] = [];
+
+    console.warn = (...args: unknown[]) => { consoleWarnings.push(args); };
+    setSilent(true);
+    setOutputWriter(line => lines.push(line));
+    try {
+        const result = createAskpassEnv('mypass', 'write-failure-silent/missing-dir');
+        assert.equal(result, undefined);
+    } finally {
+        console.warn = oldConsoleWarn;
+        setOutputWriter(null);
+        setSilent(false);
+    }
+
+    assert.deepEqual(lines, []);
+    assert.deepEqual(consoleWarnings, []);
 });

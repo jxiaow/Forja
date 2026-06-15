@@ -316,7 +316,9 @@ export function listSyncStates(): Array<{ filePath: string; workspace: string }>
                 if (raw.workspace) {
                     results.push({ filePath, workspace: raw.workspace });
                 }
-            } catch { /* skip malformed */ }
+            } catch (e) {
+                logger.warn(`sync state 扫描跳过损坏文件: ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
+            }
         }
     } catch { /* dir read failure */ }
     return results;

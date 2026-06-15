@@ -56,14 +56,13 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
     const stages: RemoteStage[] = [];
     const diagnostics: RemoteDiagnostic[] = [];
     let repos: RepoBaselineState[] = [];
-    let lock: RemoteLockMetadata | undefined;
     const releaseAfterPrepare = options.releaseAfterPrepare ?? true;
     const remoteSettings = loadRemoteSettings(options.workspace);
     const stagedMode = remoteSettings.workspaceMode === 'staged';
     const workspaceRemotePath = stagedMode && remoteSettings.remoteWorkspace ? remoteSettings.remoteWorkspace : options.remotePath;
     let repoPlans: RemoteRepoPlan[] = [];
 
-    const fail = (stage: string, nextActions: string[] = ['修复 remote prepare 诊断后重试']): PrepareRemoteWorkspaceResult => ({
+    const fail = (stage: string, nextActions: string[] = ['修复 remote prepare 诊断后重试'], lock?: RemoteLockMetadata): PrepareRemoteWorkspaceResult => ({
         ok: false,
         action: 'prepareWorkspace',
         mode: 'remote',
@@ -117,11 +116,12 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         runner: options.runner
     });
     diagnostics.push(...lockResult.diagnostics);
-    lock = lockResult.lock;
+    const lock = lockResult.lock;
     stages.push({ stage: 'acquireLock', ok: lockResult.ok, message: lockResult.acquired ? lockResult.lock?.lockId : lockResult.diagnostics[0]?.message });
-    if (!lockResult.ok || !lockResult.lock?.lockId) {
-        return fail('acquireLock');
+    if (!lockResult.ok || !lock?.lockId) {
+        return fail('acquireLock', undefined, lock);
     }
+    const failWithLock = (stage: string, nextActions?: string[]): PrepareRemoteWorkspaceResult => fail(stage, nextActions, lock);
 
     let result: PrepareRemoteWorkspaceResult | undefined;
     try {
@@ -135,7 +135,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             diagnostics.push(...(prepare.exitCode === 0 ? [] : [{ level: 'error' as const, message: prepare.stderr || 'staged workspace prepare 失败' }]));
             stages.push({ stage: 'stagedWorkspacePrepare', ok: prepare.exitCode === 0, message: prepare.exitCode === 0 ? 'ready' : prepare.stderr });
             if (prepare.exitCode !== 0) {
-                result = fail('stagedWorkspacePrepare');
+                result = failWithLock('stagedWorkspacePrepare');
                 return result;
             }
 
@@ -149,7 +149,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             diagnostics.push(...overlayRestore.diagnostics);
             if (!overlayRestore.ok) {
                 stages.push({ stage: 'overlaySync', ok: false, message: 'overlay restore failed' });
-                result = fail('overlaySync', ['修复 overlay restore 诊断后重试']);
+                result = failWithLock('overlaySync', ['修复 overlay restore 诊断后重试']);
                 return result;
             }
 
@@ -159,7 +159,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
                 diagnostics.push(...branchSync.diagnostics);
                 stages.push({ stage: 'branchSync', ok: branchSync.ok, message: 'git' });
                 if (!branchSync.ok) {
-                    result = fail('branchSync', branchSync.nextActions);
+                    result = failWithLock('branchSync', branchSync.nextActions);
                     return result;
                 }
             }
@@ -171,7 +171,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
                 repos = mergeBundleRepos(repos, bundle.repos);
                 stages.push({ stage: 'bundleBaseline', ok: bundle.ok, message: 'bundle' });
                 if (!bundle.ok) {
-                    result = fail('bundleBaseline', bundle.nextActions);
+                    result = failWithLock('bundleBaseline', bundle.nextActions);
                     return result;
                 }
             }
@@ -180,7 +180,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             diagnostics.push(...links.diagnostics);
             stages.push({ stage: 'workspaceLink', ok: links.ok, message: links.linked.join(',') || 'none' });
             if (!links.ok) {
-                result = fail('workspaceLink', links.nextActions);
+                result = failWithLock('workspaceLink', links.nextActions);
                 return result;
             }
         } else {
@@ -188,7 +188,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             diagnostics.push(...branchSync.diagnostics);
             stages.push({ stage: 'branchSync', ok: branchSync.ok, message: 'git' });
             if (!branchSync.ok) {
-                result = fail('branchSync', branchSync.nextActions);
+                result = failWithLock('branchSync', branchSync.nextActions);
                 return result;
             }
         }
@@ -204,7 +204,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         diagnostics.push(...effectiveOverlayPlan.diagnostics);
         if (!effectiveOverlayPlan.ok) {
             stages.push({ stage: 'overlaySync', ok: false, message: 'overlay plan failed' });
-            result = fail('overlaySync');
+            result = failWithLock('overlaySync');
             return result;
         }
         const repoRemotePaths = stagedMode
@@ -216,7 +216,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         diagnostics.push(...overlaySync.diagnostics);
         stages.push({ stage: 'overlaySync', ok: overlaySync.ok });
         if (!overlaySync.ok) {
-            result = fail('overlaySync', overlaySync.nextActions);
+            result = failWithLock('overlaySync', overlaySync.nextActions);
             return result;
         }
 
@@ -232,7 +232,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         diagnostics.push(...postBaseline.diagnostics);
         stages.push({ stage: 'baselineCheck', ok: postBaseline.ok, message: postBaseline.overall });
         if (!postBaseline.ok) {
-            result = fail('baselineCheck', postBaseline.nextActions);
+            result = failWithLock('baselineCheck', postBaseline.nextActions);
             return result;
         }
 
@@ -250,7 +250,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         return result;
     } finally {
         if (releaseAfterPrepare || !result?.ok) {
-            const release = await executeRemoteReleaseLock({ remotePath: workspaceRemotePath, lockId: lockResult.lock.lockId, runner: options.runner });
+            const release = await executeRemoteReleaseLock({ remotePath: workspaceRemotePath, lockId: lock.lockId, runner: options.runner });
             diagnostics.push(...release.diagnostics);
             stages.push({ stage: 'releaseLock', ok: release.ok, message: release.removed ? 'removed' : release.diagnostics[0]?.message });
             if (result) {

@@ -61,7 +61,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             handleMessage(msg, webviewView.webview,
                 () => this._pushEnvUpdate(),
                 () => this._updateHtml())
-                .catch(e => console.warn('[forja] configPanel message error:', (e as Error).message))
+                .catch(e => logger.warn(`消息处理错误: ${(e as Error).message}`))
         );
 
         // 监听 sync-state 变化，同步完成后刷新面板中的待同步数

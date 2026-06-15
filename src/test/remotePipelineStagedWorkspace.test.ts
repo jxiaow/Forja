@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
-import { DEFAULT_REMOTE, projectConfigPath, saveRemoteSettings } from '../core/settingsIO';
+import { DEFAULT_REMOTE, saveRemoteSettings } from '../core/settingsIO';
 import { executePreparedRemoteAction, prepareRemoteWorkspace } from '../remote/core/pipeline';
 import { RemoteUploader } from '../remote/core/bootstrap';
 import { RemoteRunner } from '../remote/core/types';

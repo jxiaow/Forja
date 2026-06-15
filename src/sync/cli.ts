@@ -179,10 +179,6 @@ function remotePathForRepo(remotePath: string, gitRoot: GitRoot, overrides: Map<
     return overrides.get(gitRoot.dir) || remotePath.replace(/\/$/, '') + '/' + gitRoot.name;
 }
 
-function dedupeActions(actions: string[]): string[] {
-    return Array.from(new Set(actions));
-}
-
 function buildSyncNextActions(missing: string[], ready: boolean): { nextAction: string; nextActions: string[] } {
     if (missing.includes('servers')) {
         return {

@@ -1,7 +1,6 @@
 import * as cp from 'child_process';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
 import { buildRemoteRepoDirSetup } from './repoPath';
-import { remoteCommand } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
 export interface GitCommandResult {

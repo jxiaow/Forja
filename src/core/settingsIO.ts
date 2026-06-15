@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as os from 'os';
+import { warn } from './loggerBase';
 
 // ── 类型定义 ──
 
@@ -212,7 +213,9 @@ export function loadQtSettings(workspace: string): QtSettings {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeQt(raw);
         }
-    } catch { /* file missing or malformed */ }
+    } catch (e) {
+        warnSettingsLoadFailure('qt', filePath, e);
+    }
     return { ...DEFAULT_QT };
 }
 
@@ -236,7 +239,9 @@ export function loadSdkSettings(workspace: string): SdkSettings {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeSdk(raw);
         }
-    } catch { /* file missing or malformed */ }
+    } catch (e) {
+        warnSettingsLoadFailure('sdk', filePath, e);
+    }
     return { ...DEFAULT_SDK };
 }
 
@@ -263,7 +268,9 @@ export function loadSyncSettings(workspace: string): SyncSettings {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeSync(raw);
         }
-    } catch { /* file missing or malformed */ }
+    } catch (e) {
+        warnSettingsLoadFailure('sync', filePath, e);
+    }
     return { ...DEFAULT_SYNC };
 }
 
@@ -287,7 +294,9 @@ export function loadRemoteSettings(workspace: string): RemoteSettings {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeRemote(raw);
         }
-    } catch { /* file missing or malformed */ }
+    } catch (e) {
+        warnSettingsLoadFailure('remote', filePath, e);
+    }
     return { ...DEFAULT_REMOTE };
 }
 
@@ -338,7 +347,9 @@ export function listProjectConfigs(): Array<{ filePath: string; workspace: strin
                 if (raw.workspace && raw.type) {
                     results.push({ filePath, workspace: raw.workspace, type: raw.type });
                 }
-            } catch { /* skip malformed */ }
+            } catch (e) {
+                warn(`项目配置扫描跳过损坏文件: ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
+            }
         }
     } catch { /* dir read failure */ }
     return results;
@@ -351,6 +362,10 @@ function _ensureDir(filePath: string): void {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
+}
+
+function warnSettingsLoadFailure(type: 'qt' | 'sdk' | 'sync' | 'remote', filePath: string, e: unknown): void {
+    warn(`${type} 配置读取失败 (invalid JSON or read error): ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
 }
 
 function isString(v: unknown): v is string { return typeof v === 'string'; }

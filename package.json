@@ -32,8 +32,16 @@
         "title": "Forja: 显示操作菜单"
       },
       {
+        "command": "forja.showSyncTab",
+        "title": "Forja: 打开远程页"
+      },
+      {
         "command": "forja.qt.selectProject",
         "title": "Forja Qt: 选择项目"
+      },
+      {
+        "command": "forja.qt.loadManualProject",
+        "title": "Forja Qt: 加载手动项目"
       },
       {
         "command": "forja.qt.showActions",
@@ -186,6 +194,20 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "forja.showSyncTab",
+          "when": "false"
+        },
+        {
+          "command": "forja.qt.loadManualProject",
+          "when": "false"
+        },
+        {
+          "command": "forja.qt.runCustomCommand",
+          "when": "false"
+        }
+      ],
       "explorer/context": [
         {
           "command": "forja.qt.openWithQtDesigner",

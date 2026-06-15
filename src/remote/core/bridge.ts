@@ -50,7 +50,9 @@ export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): 
                 diagnostics.push(...extractRemoteDiagnostics(parsed, `远端 ${options.target} ${options.action} 返回失败`));
             }
         } catch (error) {
-            diagnostics.push({ level: 'error', message: `远端 ${options.target} ${options.action} JSON 输出解析失败: ${error instanceof Error ? error.message : String(error)}` });
+            const stdoutPreview = trim(executed.stdout);
+            const stdoutContext = stdoutPreview ? `; stdout: ${stdoutPreview}` : '';
+            diagnostics.push({ level: 'error', message: `远端 ${options.target} ${options.action} JSON 输出解析失败: ${error instanceof Error ? error.message : String(error)}${stdoutContext}` });
         }
     }
     if (executed.exitCode !== 0) {

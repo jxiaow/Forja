@@ -41,6 +41,20 @@ test('extension registers only generic sync tab command', () => {
     assert.doesNotMatch(extension, /forja\.qt\.showSyncTab/);
 });
 
+test('internal registered commands have contributed metadata and stay hidden from command palette', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8'));
+    const commands = pkg.contributes.commands.map((c: { command: string }) => c.command);
+    const hiddenPaletteCommands = (pkg.contributes.menus.commandPalette || [])
+        .filter((item: { when?: string }) => item.when === 'false')
+        .map((item: { command: string }) => item.command);
+
+    assert.ok(commands.includes('forja.showSyncTab'));
+    assert.ok(commands.includes('forja.qt.loadManualProject'));
+    assert.ok(hiddenPaletteCommands.includes('forja.showSyncTab'));
+    assert.ok(hiddenPaletteCommands.includes('forja.qt.loadManualProject'));
+    assert.ok(hiddenPaletteCommands.includes('forja.qt.runCustomCommand'));
+});
+
 test('sync test connection quick pick resolves duplicate server names by id', () => {
     const watcher = fs.readFileSync(path.join(repoRoot, 'src', 'sync', 'syncWatcher.ts'), 'utf-8');
 

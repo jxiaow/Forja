@@ -72,6 +72,7 @@ export function quoteForRemoteShell(value: string): string {
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { warn } from './loggerBase';
 
 const ASKPASS_ENV_VAR = 'FORJA_SSH_PASS';
 
@@ -118,7 +119,7 @@ export function createAskpassEnv(password: string | null, suffix?: string): Askp
 
         return { env, cleanup };
     } catch (e) {
-        console.warn(`[forja] createAskpassEnv 失败: ${e instanceof Error ? e.message : e}`);
+        warn(`createAskpassEnv 失败: ${e instanceof Error ? e.message : e}`);
         return undefined;
     }
 }

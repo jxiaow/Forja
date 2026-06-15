@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { clearSyncState, filterNeedsDelete, filterNeedsSync, getSyncPendingInfo, markDeletedBatch, markSyncedBatch, SyncTargetContext } from '../core/syncState';
+import { clearSyncState, filterNeedsDelete, filterNeedsSync, getSyncPendingInfo, listSyncStates, markDeletedBatch, markSyncedBatch, SyncTargetContext } from '../core/syncState';
+import { setOutputWriter } from '../core/loggerBase';
 
 const _oldConfigDir = process.env.FORJA_CONFIG_DIR;
 const _testConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sync-state-config-'));
@@ -24,6 +25,16 @@ function createWorkspace(): string {
 const targetA: SyncTargetContext = { serverId: 'server-a', serverName: 'A', remotePath: '/opt/app' };
 const targetB: SyncTargetContext = { serverId: 'server-b', serverName: 'B', remotePath: '/opt/app' };
 const targetC: SyncTargetContext = { serverId: 'server-a', serverName: 'A', remotePath: '/opt/other' };
+
+function captureOutputLines<T>(fn: () => T): { result: T; lines: string[] } {
+    const lines: string[] = [];
+    setOutputWriter(line => lines.push(line));
+    try {
+        return { result: fn(), lines };
+    } finally {
+        setOutputWriter(null);
+    }
+}
 
 test('sync state is isolated by server target and remote path', () => {
     const workspace = createWorkspace();
@@ -106,4 +117,18 @@ test('deleted sync markers survive unrelated uploads', () => {
         clearSyncState(workspace);
         fs.rmSync(workspace, { recursive: true, force: true });
     }
+});
+
+test('listSyncStates warns when a sync state file is malformed', () => {
+    const syncDir = path.join(_testConfigDir, 'sync');
+    const filePath = path.join(syncDir, 'malformed.json');
+    fs.mkdirSync(syncDir, { recursive: true });
+    fs.writeFileSync(filePath, '{not valid json', 'utf8');
+
+    const { result: states, lines } = captureOutputLines(() => listSyncStates());
+
+    assert.equal(states.some(s => s.filePath === filePath), false);
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /\[WARN\]/);
+    assert.match(lines[0], /sync state 扫描跳过损坏文件/);
 });
