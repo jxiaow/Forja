@@ -13,7 +13,7 @@ export interface RemoteDoctorCheck {
     name: RemoteLayerName | 'bootstrap';
     ok: boolean | null;
     message?: string;
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export interface RemoteDoctorAutoFix {
@@ -33,7 +33,7 @@ export interface RemoteDoctorResult {
     remotePath?: string;
     checks: RemoteDoctorCheck[];
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
     autoFixes: RemoteDoctorAutoFix[];
     status: RemoteStatusResult;
     test?: RemoteTestResult;
@@ -45,10 +45,10 @@ export async function buildRemoteDoctor(options: BuildRemoteDoctorOptions): Prom
         name: layer.name,
         ok: layer.ok,
         message: layer.message,
-        nextActions: layer.nextActions || []
+        nextAction: layer.nextAction
     }));
     let diagnostics: RemoteDiagnostic[] = [...status.diagnostics];
-    let nextActions = [...status.nextActions];
+    let nextAction: string | undefined = status.nextAction;
     let test: RemoteTestResult | undefined;
 
     const remoteForja = status.layers.find(layer => layer.name === 'remoteForja');
@@ -56,7 +56,7 @@ export async function buildRemoteDoctor(options: BuildRemoteDoctorOptions): Prom
     const autoFixes: RemoteDoctorAutoFix[] = [{
         name: 'bootstrap',
         available: canBootstrap,
-        command: 'forja remote test --bootstrap',
+        command: 'forja doctor fix --remote',
         reason: canBootstrap ? undefined : 'remoteForja 检查未失败或尚未到达该检查'
     }];
 
@@ -72,7 +72,7 @@ export async function buildRemoteDoctor(options: BuildRemoteDoctorOptions): Prom
             name: 'bootstrap',
             ok: test.ok,
             message: test.ok ? 'completed' : test.diagnostics.map(item => item.message).find(Boolean),
-            nextActions: test.nextActions
+            nextAction: test.nextAction
         });
         if (test.ok) {
             const bootstrapCheck = checks[checks.length - 1];
@@ -81,20 +81,19 @@ export async function buildRemoteDoctor(options: BuildRemoteDoctorOptions): Prom
                 name: layer.name,
                 ok: layer.ok,
                 message: layer.message,
-                nextActions: layer.nextActions || []
+                nextAction: layer.nextAction
             }));
             checks.push(bootstrapCheck);
             diagnostics = [...status.diagnostics];
-            nextActions = [...status.nextActions];
+            nextAction = status.nextAction;
         } else {
             diagnostics.push(...test.diagnostics);
-            nextActions = test.nextActions;
+            nextAction = test.nextAction;
         }
-    } else if (canBootstrap && !nextActions.includes('forja remote test --bootstrap')) {
-        nextActions.push('forja remote test --bootstrap');
+    } else if (canBootstrap && nextAction !== 'forja doctor fix --remote') {
+        nextAction = 'forja doctor fix --remote';
     }
 
-    nextActions = unique(nextActions);
     const ok = status.overall === 'ready' || status.overall === 'degraded';
     return {
         ok: ok && (!test || test.ok),
@@ -106,13 +105,9 @@ export async function buildRemoteDoctor(options: BuildRemoteDoctorOptions): Prom
         remotePath: status.remotePath,
         checks,
         diagnostics,
-        nextActions,
+        nextAction,
         autoFixes,
         status,
         test
     };
-}
-
-function unique(values: string[]): string[] {
-    return Array.from(new Set(values));
 }

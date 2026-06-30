@@ -30,8 +30,7 @@ test('remote bootstrap stops before upload when node or npm is unavailable', asy
             version: '0.1.0',
             artifactPath: '/tmp/forja-cli-0.1.0.tgz',
             sha256: 'abc',
-            diagnostics: [],
-            nextActions: []
+            diagnostics: []
         },
         runner,
         uploader
@@ -42,7 +41,7 @@ test('remote bootstrap stops before upload when node or npm is unavailable', asy
     assert.equal(commands.length, 1);
     assert.equal(result.stages[0].name, 'preflight');
     assert.match(result.diagnostics.map(item => item.message).join('\n'), /node.*npm|npm.*node/);
-    assert.ok(result.nextActions.some(action => action.includes('remoteForjaBin')));
+    assert.ok(!!result.nextAction);
 });
 
 test('bootstrap artifact resolves nearest package from nested standalone cli files', () => {

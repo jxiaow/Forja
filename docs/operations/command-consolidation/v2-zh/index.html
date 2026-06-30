@@ -116,7 +116,7 @@
   <h2 id="commands">1. 最终用户命令集</h2>
   <pre><code class="language-bash">forja status      — 当前状态和下一步建议
 forja init        — 首次初始化（检测 + 保存无歧义配置）
-forja list        — 列举可选项（targets/servers/remote-repos）
+forja list        — 列举可选项（targets/servers/remote-repos/env/remote）
 forja use         — 选择目标、构建配置、执行端
 forja build       — 构建当前目标
 forja run         — 运行当前目标
@@ -252,8 +252,8 @@ interface ServerDetail extends ServerSummary {
     transferConfigured?: boolean;
 }</code></pre>
 
-  <h3 id="list-vs-doctor">2.10 List vs Doctor 边界</h3>
-  <p><code>list</code> 回答"有什么"，<code>doctor</code> 回答"能不能用"。工具链检测（Qt/VS/jom/make 扫描）属于诊断性质，全部归 <code>doctor</code>。</p>
+  <h3 id="list-vs-doctor">2.10 List vs Doctor vs Status 边界</h3>
+  <p><code>list</code> 回答"有什么/配了什么"，<code>doctor</code> 回答"能不能用"，<code>status</code> 回答"当前状态和下一步"。</p>
 
   <table>
     <thead>
@@ -263,9 +263,13 @@ interface ServerDetail extends ServerSummary {
       <tr><td>"有哪些项目？"</td><td><code>forja list</code></td><td>文件扫描，纯枚举</td></tr>
       <tr><td>"有哪些服务器？"</td><td><code>forja list servers</code></td><td>读配置，纯枚举</td></tr>
       <tr><td>"有哪些远程 repo？"</td><td><code>forja list remote-repos</code></td><td>读配置，纯枚举</td></tr>
-      <tr><td>"Qt/VS/jom 装了吗？"</td><td><code>forja doctor</code></td><td>系统探测，属诊断</td></tr>
+      <tr><td>"Qt/VS/jom 路径在哪？"</td><td><code>forja list env</code></td><td>路径枚举，纯发现</td></tr>
+      <tr><td>"远程配了什么？"</td><td><code>forja list remote</code></td><td>配置列举（workspace/bin/build-order/transfer/repos）</td></tr>
+      <tr><td>"Qt/VS/jom 能用吗？"</td><td><code>forja doctor</code></td><td>健康验证，属诊断</td></tr>
       <tr><td>"SSH 能连上吗？"</td><td><code>forja doctor</code></td><td>连接验证，属诊断</td></tr>
       <tr><td>"sync 配置完整吗？"</td><td><code>forja doctor</code></td><td>配置校验，属诊断</td></tr>
+      <tr><td>"当前状态如何？"</td><td><code>forja status</code></td><td>readiness 摘要 + nextActions</td></tr>
+      <tr><td>"远程能用吗？"</td><td><code>forja status</code></td><td>remote readiness 判断（最小摘要）</td></tr>
     </tbody>
   </table>
 
@@ -361,15 +365,16 @@ FORJA_LANG=zh forja status --json    # 中文</code></pre>
       <tr><td><code>forja remote test</code></td><td><code>forja doctor --remote</code></td><td>吸收进 doctor</td></tr>
       <tr><td><code>forja remote bootstrap</code></td><td><code>forja doctor fix --remote</code> 或 <code>forja init --remote</code></td><td>引导修复→doctor fix；首次部署→init</td></tr>
       <tr><td><code>forja remote unlock</code></td><td><code>forja doctor unlock &lt;lock-id&gt;</code></td><td>doctor 子动作</td></tr>
-      <tr><td><code>forja remote workspace status</code></td><td><code>forja status</code> / <code>forja list remote-repos</code></td><td>状态→status，列表→list</td></tr>
+      <tr><td><code>forja remote workspace status</code></td><td><code>forja list remote</code></td><td>纯配置列举，归入 list remote</td></tr>
       <tr><td><code>forja remote workspace use</code></td><td><code>forja use --remote-workspace</code></td><td>隐藏 flag</td></tr>
       <tr><td><code>forja remote workspace clear</code></td><td>兼容保留</td><td>低频操作</td></tr>
       <tr><td><code>forja remote repo list</code></td><td><code>forja list remote-repos</code></td><td>list 子分类</td></tr>
       <tr><td><code>forja remote repo set/remove/clear</code></td><td>兼容保留</td><td>低频高级配置</td></tr>
-      <tr><td><code>forja remote forja-bin status</code></td><td><code>forja status</code></td><td>remote readiness</td></tr>
+      <tr><td><code>forja remote forja-bin status</code></td><td><code>forja list remote</code></td><td>纯配置列举，归入 list remote</td></tr>
       <tr><td><code>forja remote forja-bin use/clear</code></td><td><code>forja use --remote-forja-bin</code></td><td>隐藏 flag</td></tr>
-      <tr><td><code>forja remote build-order status/set/clear</code></td><td>兼容保留</td><td>低频高级配置</td></tr>
-      <tr><td><code>forja remote transfer status</code></td><td><code>forja status</code></td><td>transfer readiness</td></tr>
+      <tr><td><code>forja remote build-order status</code></td><td><code>forja list remote</code></td><td>纯配置列举，归入 list remote</td></tr>
+      <tr><td><code>forja remote build-order set/clear</code></td><td>兼容保留</td><td>低频高级配置</td></tr>
+      <tr><td><code>forja remote transfer status</code></td><td><code>forja list remote</code></td><td>纯配置列举，归入 list remote</td></tr>
       <tr><td><code>forja remote transfer set/clear/run</code></td><td>兼容保留</td><td>低频高级配置</td></tr>
       <tr><td><code>forja remote qt status</code></td><td><code>forja status</code></td><td>统一 status</td></tr>
       <tr><td><code>forja remote qt init</code></td><td><code>forja init --remote</code></td><td>统一 init</td></tr>
@@ -437,7 +442,7 @@ FORJA_LANG=zh forja status --json    # 中文</code></pre>
       <tr><td><code>forja.qt.clean</code></td><td><code>forja.clean</code></td><td>隐藏旧 ID</td></tr>
       <tr><td><code>forja.qt.run</code></td><td><code>forja.run</code></td><td>隐藏旧 ID</td></tr>
       <tr><td><code>forja.qt.stop</code></td><td><code>forja.stop</code></td><td>隐藏旧 ID</td></tr>
-      <tr><td><code>forja.qt.debug</code></td><td><code>forja.run --debug</code></td><td>隐藏旧 ID</td></tr>
+      <tr><td><code>forja.qt.debug</code></td><td><code>forja.debug</code></td><td>仅 VSCode；CLI 返回 <code>run.debugRequiresVSCode</code></td></tr>
       <tr><td><code>forja.qt.openWithQtDesigner</code></td><td>保留（Explorer .ui 上下文）</td><td>上下文命令，不进入 CLI</td></tr>
       <tr><td><code>forja.qt.rcc</code></td><td><code>forja.build</code>（QuickPick 选 rcc）</td><td>隐藏旧 ID</td></tr>
       <tr><td><code>forja.qt.runCustomCommand</code></td><td><code>forja.run --custom &lt;name&gt;</code></td><td>隐藏旧 ID</td></tr>
@@ -792,7 +797,7 @@ src/test/unifiedCliSync.test.ts</code></pre>
       <tr><td>SDK qmake rejected</td><td><code>forja build qmake --json</code></td><td>报错：SDK 没有 qmake 步骤</td></tr>
       <tr><td>SDK fresh build</td><td><code>forja build fresh --json</code></td><td>rebuild 或 clean+build</td></tr>
       <tr><td>Qt run</td><td><code>forja run --detach --json</code></td><td>返回 pid/logFile</td></tr>
-      <tr><td>Qt run debug</td><td><code>forja run --debug --json</code></td><td>启动调试</td></tr>
+      <tr><td>Qt run debug</td><td><code>forja.debug</code>（仅 VSCode）</td><td>启动调试；CLI 返回 <code>run.debugRequiresVSCode</code></td></tr>
       <tr><td>Qt run custom</td><td><code>forja run --custom myCmd --json</code></td><td>运行已保存命令</td></tr>
       <tr><td>SDK run rejected</td><td><code>forja run --json</code></td><td>失败，next action <code>forja build</code></td></tr>
       <tr><td>Remote Qt build</td><td><code>forja use --remote</code> + <code>forja build --json</code></td><td>远程 prepared Qt build</td></tr>
@@ -871,7 +876,7 @@ src/test/unifiedCliSync.test.ts</code></pre>
           <li><a href="#command-plan">2.7 CommandPlan</a></li>
           <li><a href="#server-summary">2.8 ServerSummary / ServerDetail</a></li>
           <li><a href="#remote-summary">2.9 RemoteSummary</a></li>
-          <li><a href="#list-vs-doctor">2.10 List vs Doctor 边界</a></li>
+          <li><a href="#list-vs-doctor">2.10 List vs Doctor vs Status 边界</a></li>
           <li><a href="#locale">2.11 Locale</a></li>
         </ul>
       </li>

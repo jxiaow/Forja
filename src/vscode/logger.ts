@@ -7,6 +7,10 @@ import type * as vscode from 'vscode';
 import { createLoggerBase, setOutputWriter, log as baseLog, warn as baseWarn, error as baseError } from '../core/loggerBase';
 import type { ScopedLogger } from '../core/loggerBase';
 
+export function getOutputChannel(): vscode.OutputChannel | null {
+    return _channel;
+}
+
 export type { ScopedLogger };
 
 let _channel: vscode.OutputChannel | null = null;

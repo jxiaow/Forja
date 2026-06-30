@@ -118,7 +118,14 @@
   </ol>
 
   <h2 id="absorbed">吸收的旧命令</h2>
-  <p><code>forja qt status</code>、<code>forja sdk status</code>、<code>forja remote status</code>、<code>forja sync status</code>、<code>forja qt ps</code>、<code>forja remote qt ps</code>、<code>forja remote transfer status</code>、<code>forja remote workspace status</code>、<code>forja remote forja-bin status</code>、<code>forja remote build-order status</code></p>
+  <p><code>forja qt status</code>、<code>forja sdk status</code>、<code>forja remote status</code>、<code>forja sync status</code>、<code>forja qt ps</code>、<code>forja remote qt ps</code></p>
+  <p><strong>注意</strong>：以下旧命令已归入 <code>forja list remote</code>（纯配置列举）：<code>forja remote workspace status</code>、<code>forja remote forja-bin status</code>、<code>forja remote build-order status</code>、<code>forja remote transfer status</code></p>
+
+  <h2 id="boundary">与 <code>list</code> 的边界</h2>
+  <ul>
+    <li><code>status</code> 回答"能不能用"，只输出 readiness 判断所需的最小摘要（server/remotePath/locked/workspaceMode）。</li>
+    <li><code>list remote</code> 回答"配了什么"，输出全部远程配置细节（workspace/bin/build-order/transfer/repos）。</li>
+  </ul>
 
   <h2 id="result">Result</h2>
   <pre><code class="language-typescript">interface StatusResult extends ForjaJsonResult {
@@ -141,7 +148,7 @@ interface RemoteStatusSummary {
     runAt: 'local' | 'remote';
     server?: { id: string; name: string; host: string };
     remotePath?: string;
-    remoteForjaVersion?: string;
+    remoteForjaBin?: string;
     locked?: boolean;
     workspaceMode?: 'legacy' | 'staged';
 }
@@ -310,7 +317,7 @@ Next:
         "runAt": "remote",
         "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
         "remotePath": "/home/user/project",
-        "remoteForjaVersion": "1.2.3",
+        "remoteForjaBin": "1.2.3",
         "locked": false,
         "workspaceMode": "legacy"
     },
@@ -683,7 +690,7 @@ Next:
         "runAt": "remote",
         "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
         "remotePath": "/home/user/project",
-        "remoteForjaVersion": "0.9.0",
+        "remoteForjaBin": "0.9.0",
         "locked": false
     },
     "diagnostics": [
@@ -734,7 +741,7 @@ Next:
         "runAt": "remote",
         "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
         "remotePath": "/home/user/project",
-        "remoteForjaVersion": "1.2.3",
+        "remoteForjaBin": "1.2.3",
         "locked": true
     },
     "diagnostics": [
@@ -1028,6 +1035,7 @@ Next:
       <li><a href="#syntax">语法</a></li>
       <li><a href="#behavior">行为</a></li>
       <li><a href="#absorbed">吸收的旧命令</a></li>
+      <li><a href="#boundary">与 list 的边界</a></li>
       <li><a href="#result">Result</a></li>
       <li><a href="#readiness">Readiness 语义</a></li>
       <li><a href="#diag-codes">Status 诊断码表</a></li>

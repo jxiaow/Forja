@@ -18,7 +18,7 @@ export interface ExecuteRemoteCleanUntrackedResult {
     cleaned: string[];
     recursive: boolean;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export async function executeRemoteCleanUntracked(options: ExecuteRemoteCleanUntrackedOptions): Promise<ExecuteRemoteCleanUntrackedResult> {
@@ -80,7 +80,7 @@ function result(
     cleaned: string[],
     diagnostics: RemoteDiagnostic[]
 ): ExecuteRemoteCleanUntrackedResult {
-    return { ok, action: 'cleanUntracked', mode: 'remote', repo: options.repo, cleaned, recursive: options.recursive, diagnostics, nextActions: [] };
+    return { ok, action: 'cleanUntracked', mode: 'remote', repo: options.repo, cleaned, recursive: options.recursive, diagnostics };
 }
 
 function trim(value: string): string {

@@ -1,5 +1,10 @@
 # Forja Command Consolidation Migration And Implementation Plan
 
+> **Superseded:** This document is the pre-v2 planning record. The authoritative implementation source is
+> [`v2/index.md`](v2/index.md) and its per-command spec pages. If this file conflicts with v2, follow v2.
+> Known obsolete items in this record include the 10-command surface, `forja use --target`,
+> `forja use --remote`, `forja use --server`, old VSCode Command ID compatibility, and the old compatibility-first CLI policy.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the user-facing Qt/SDK/Remote/Sync command tree with a small intent-based command surface while preserving existing implementation capabilities behind compatibility adapters.

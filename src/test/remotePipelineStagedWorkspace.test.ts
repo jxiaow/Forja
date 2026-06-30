@@ -156,8 +156,8 @@ test('staged prepared action runs readiness and remote action in the primary sta
 
         assert.equal(result.ok, true);
         assert.equal(result.actionRemotePath, stagedWorkspace + '/app');
-        assert.ok(commands.some(command => command.includes(`cd '${stagedWorkspace}/app'`) && command.includes('qt') && command.includes('build')));
-        assert.ok(commands.some(command => command.includes(`cd '${stagedWorkspace}/app'`) && command.includes('qt') && command.includes('status')));
+        assert.ok(commands.some(command => command.includes(`cd '${stagedWorkspace}/app'`) && command.includes('build')));
+        assert.ok(commands.some(command => command.includes(`cd '${stagedWorkspace}/app'`) && command.includes('status')));
         assert.equal(commands.some(command => command.includes("cd '/home/xw/workspace/dev'") && command.includes('$HOME/.forja/bin/forja')), false);
     } finally {
         fs.rmSync(fixture.root, { recursive: true, force: true });
@@ -302,7 +302,7 @@ test('staged prepared action uses mapped remote repo name for primary action pat
 
         assert.equal(result.ok, true);
         assert.equal(result.actionRemotePath, stagedWorkspace + '/linux-app');
-        assert.ok(commands.some(command => command.includes(`cd '${stagedWorkspace}/linux-app'`) && command.includes('qt') && command.includes('build')));
+        assert.ok(commands.some(command => command.includes(`cd '${stagedWorkspace}/linux-app'`) && command.includes('build')));
         assert.equal(commands.some(command => command.includes(`cd '${stagedWorkspace}'`) && command.includes('$HOME/.forja/bin/forja')), false);
         assert.ok(commands.some(command => command.includes("repo_dir='/home/xw/workspace/forja-remote/release-mapped/linux-app'")));
     } finally {

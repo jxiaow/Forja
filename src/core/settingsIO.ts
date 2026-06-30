@@ -88,6 +88,17 @@ export interface RemoteSettings {
     profile: string;
     remoteWorkspace: string;
     repos: RemoteRepoSettings[];
+    // Remote execution target (separate from sync)
+    selectedServer: string;
+    remotePaths: Record<string, string>;
+}
+
+export interface ActiveTargetSettings {
+    kind: 'qt' | 'sdk';
+    project: string;
+    mode: 'debug' | 'release';
+    arch: 'x86' | 'x64';
+    runAt: 'local' | 'remote';
 }
 
 export interface ForjaSettings {
@@ -142,7 +153,9 @@ export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
     workspaceMode: 'legacy',
     profile: '',
     remoteWorkspace: '',
-    repos: []
+    repos: [],
+    selectedServer: '',
+    remotePaths: {}
 };
 
 export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
@@ -163,8 +176,43 @@ export function projectsDir(): string {
     return path.join(forjaConfigDir(), 'projects');
 }
 
+// ── 全局配置 ──
+
+export interface GlobalConfig {
+    lang: string;
+}
+
+const DEFAULT_GLOBAL_CONFIG: GlobalConfig = { lang: '' };
+
+export function globalConfigPath(): string {
+    return path.join(forjaConfigDir(), 'config.json');
+}
+
+export function loadGlobalConfig(): GlobalConfig {
+    const filePath = globalConfigPath();
+    try {
+        if (fs.existsSync(filePath)) {
+            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            return { lang: typeof raw.lang === 'string' ? raw.lang : '' };
+        }
+    } catch {
+        // ignore
+    }
+    return { ...DEFAULT_GLOBAL_CONFIG };
+}
+
+export function saveGlobalConfig(config: Partial<GlobalConfig>): void {
+    const current = loadGlobalConfig();
+    const merged = { ...current, ...config };
+    const dir = forjaConfigDir();
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    fs.writeFileSync(globalConfigPath(), JSON.stringify(merged, null, 2), 'utf8');
+}
+
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
-export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync' | 'remote'): string {
+export type ConfigType = 'qt' | 'sdk' | 'sync' | 'remote' | 'activeTarget';
+
+export function projectConfigPath(workspace: string, type: ConfigType): string {
     const normalized = workspace.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     const hash = crypto.createHash('sha256').update(`${normalized}:${type}`).digest('hex').slice(0, 12);
     return path.join(projectsDir(), `${hash}.json`);
@@ -175,7 +223,7 @@ export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'
  * 子目录没有自己的配置时，自动继承父目录的。
  * 返回找到的第一个配置文件路径，没找到则返回当前 workspace 路径（用于新建）。
  */
-export function resolveConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync' | 'remote'): string {
+export function resolveConfigPath(workspace: string, type: ConfigType): string {
     let current = workspace;
     for (;;) {
         const filePath = projectConfigPath(current, type);
@@ -204,6 +252,18 @@ function resolveUniqueDescendantConfigPath(workspace: string, type: 'qt' | 'sdk'
     return matches.length === 1 ? matches[0].filePath : null;
 }
 
+// ── Corruption tracking ──
+
+const _corruptedConfigs: string[] = [];
+
+export function getCorruptedConfigs(): string[] {
+    return [..._corruptedConfigs];
+}
+
+export function clearCorruptedConfigs(): void {
+    _corruptedConfigs.length = 0;
+}
+
 // ── Qt 配置读写 ──
 
 export function loadQtSettings(workspace: string): QtSettings {
@@ -214,6 +274,7 @@ export function loadQtSettings(workspace: string): QtSettings {
             return sanitizeQt(raw);
         }
     } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push(filePath); }
         warnSettingsLoadFailure('qt', filePath, e);
     }
     return { ...DEFAULT_QT };
@@ -240,6 +301,7 @@ export function loadSdkSettings(workspace: string): SdkSettings {
             return sanitizeSdk(raw);
         }
     } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push(filePath); }
         warnSettingsLoadFailure('sdk', filePath, e);
     }
     return { ...DEFAULT_SDK };
@@ -269,6 +331,7 @@ export function loadSyncSettings(workspace: string): SyncSettings {
             return sanitizeSync(raw);
         }
     } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push(filePath); }
         warnSettingsLoadFailure('sync', filePath, e);
     }
     return { ...DEFAULT_SYNC };
@@ -295,6 +358,7 @@ export function loadRemoteSettings(workspace: string): RemoteSettings {
             return sanitizeRemote(raw);
         }
     } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push(filePath); }
         warnSettingsLoadFailure('remote', filePath, e);
     }
     return { ...DEFAULT_REMOTE };
@@ -309,6 +373,56 @@ export function saveRemoteSettings(workspace: string, settings: RemoteSettings):
         ...settings
     };
     fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+}
+
+// ── ActiveTarget 读写 ──
+
+export function loadActiveTarget(workspace: string): ActiveTargetSettings | null {
+    const filePath = resolveConfigPath(workspace, 'activeTarget');
+    try {
+        if (fs.existsSync(filePath)) {
+            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            const result = sanitizeActiveTarget(raw);
+            if (result && typeof raw.workspace === 'string' && raw.workspace !== workspace) {
+                const configWorkspace = raw.workspace as string;
+                if (result.project && !path.isAbsolute(result.project)) {
+                    const absoluteProject = path.resolve(configWorkspace, result.project);
+                    const relativeToCurrent = path.relative(workspace, absoluteProject);
+                    result.project = relativeToCurrent;
+                }
+            }
+            return result;
+        }
+    } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push(filePath); }
+        warnSettingsLoadFailure('activeTarget', filePath, e);
+    }
+    return null;
+}
+
+export function saveActiveTarget(workspace: string, settings: ActiveTargetSettings): void {
+    const filePath = projectConfigPath(workspace, 'activeTarget');
+    _ensureDir(filePath);
+    const data: Record<string, unknown> = {
+        workspace,
+        type: 'activeTarget',
+        ...settings
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+}
+
+function sanitizeActiveTarget(raw: Record<string, unknown>): ActiveTargetSettings | null {
+    const kind = raw.kind;
+    const project = raw.project;
+    if (kind !== 'qt' && kind !== 'sdk') { return null; }
+    if (typeof project !== 'string' || !project) { return null; }
+    return {
+        kind,
+        project,
+        mode: (raw.mode === 'debug' || raw.mode === 'release') ? raw.mode : 'debug',
+        arch: (raw.arch === 'x86' || raw.arch === 'x64') ? raw.arch : 'x64',
+        runAt: (raw.runAt === 'local' || raw.runAt === 'remote') ? raw.runAt : 'local',
+    };
 }
 
 // ── VS 路径推导 ──
@@ -364,11 +478,19 @@ function _ensureDir(filePath: string): void {
     }
 }
 
-function warnSettingsLoadFailure(type: 'qt' | 'sdk' | 'sync' | 'remote', filePath: string, e: unknown): void {
+function warnSettingsLoadFailure(type: ConfigType, filePath: string, e: unknown): void {
     warn(`${type} 配置读取失败 (invalid JSON or read error): ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
 }
 
 function isString(v: unknown): v is string { return typeof v === 'string'; }
+
+function sanitizeStringRecord(v: Record<string, unknown>): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const [k, val] of Object.entries(v)) {
+        if (typeof val === 'string') { result[k] = val; }
+    }
+    return result;
+}
 function isBool(v: unknown): v is boolean { return typeof v === 'boolean'; }
 function isStringArray(v: unknown): v is string[] { return Array.isArray(v) && v.every(i => typeof i === 'string'); }
 function isNumber(v: unknown): v is number { return typeof v === 'number'; }
@@ -498,7 +620,11 @@ function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
         workspaceMode: raw.workspaceMode === 'staged' || raw.workspaceMode === 'managed' ? 'staged' : d.workspaceMode,
         profile: isString(raw.profile) ? raw.profile : d.profile,
         remoteWorkspace: isString(raw.remoteWorkspace) ? raw.remoteWorkspace : d.remoteWorkspace,
-        repos
+        repos,
+        selectedServer: isString(raw.selectedServer) ? raw.selectedServer : d.selectedServer,
+        remotePaths: (raw.remotePaths && typeof raw.remotePaths === 'object' && !Array.isArray(raw.remotePaths))
+            ? sanitizeStringRecord(raw.remotePaths as Record<string, unknown>)
+            : d.remotePaths
     };
 }
 

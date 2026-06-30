@@ -4,7 +4,7 @@ const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', '
 
 const helpText = `Forja Qt CLI — qmake 项目构建工具
 
-用法: forja qt <command> [options]
+用法: forja <command> [options]    (Qt 项目)
 
 命令:
   init        自动初始化本地配置（检测环境、保存可自动确定的配置）
@@ -39,17 +39,17 @@ use 选项:
   --detach               run 成功构建后后台启动程序
 
 示例:
-  forja qt status --json            查看配置状态和下一步
-  forja qt init --json              初始化并保存可自动确定的配置
-  forja qt use --mode release       确认/切换到 release 配置
-  forja qt use --project app.pro --target MyApp
-  forja qt use --qt-path /usr/local/qt5.15.2
-  forja qt use --mode release --arch x64
-  forja qt build                    执行构建
-  forja qt build --plan             查看构建命令（不执行）
-  forja qt run --detach             后台构建并运行
-  forja qt ps --json                查看后台运行状态
-  forja qt status                   查看当前状态
+  forja status --json            查看配置状态和下一步
+  forja setup --json              初始化并保存可自动确定的配置
+  forja use target --mode release       确认/切换到 release 配置
+  forja use target --project app.pro
+  forja use qt --qt-path /usr/local/qt5.15.2
+  forja use target --mode release --arch x64
+  forja build                    执行构建
+  forja build --plan             查看构建命令（不执行）
+  forja run --detach             后台构建并运行
+  forja ps --json                查看后台运行状态
+  forja status                   查看当前状态
 `;
 
 export function isHelpRequest(args: string[]): boolean {

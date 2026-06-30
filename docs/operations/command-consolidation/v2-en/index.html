@@ -77,7 +77,7 @@
   <h2 id="commands">1. End-User Command Set</h2>
   <pre><code class="language-bash">forja status      — Current status and next-step suggestion
 forja init        — First-time initialization (detect + save unambiguous config)
-forja list        — Enumerate options (targets/servers/remote-repos)
+forja list        — Enumerate options (targets/servers/remote-repos/env/remote)
 forja use         — Select target, build config, execution endpoint
 forja build       — Build current target
 forja run         — Run current target
@@ -213,8 +213,8 @@ interface ServerDetail extends ServerSummary {
     transferConfigured?: boolean;
 }</code></pre>
 
-  <h3 id="list-vs-doctor">2.10 List vs Doctor Boundary</h3>
-  <p><code>list</code> answers "what exists", <code>doctor</code> answers "does it work". Toolchain detection (Qt/VS/jom/make scanning) is diagnostic in nature and belongs entirely to <code>doctor</code>.</p>
+  <h3 id="list-vs-doctor">2.10 List vs Doctor vs Status Boundary</h3>
+  <p><code>list</code> answers "what exists/what is configured", <code>doctor</code> answers "does it work", <code>status</code> answers "current state and next step".</p>
 
   <table>
     <thead>
@@ -224,9 +224,13 @@ interface ServerDetail extends ServerSummary {
       <tr><td>"What projects exist?"</td><td><code>forja list</code></td><td>File scan, pure enumeration</td></tr>
       <tr><td>"What servers exist?"</td><td><code>forja list servers</code></td><td>Read config, pure enumeration</td></tr>
       <tr><td>"What remote repos exist?"</td><td><code>forja list remote-repos</code></td><td>Read config, pure enumeration</td></tr>
+      <tr><td>"Where are Qt/VS/jom paths?"</td><td><code>forja list env</code></td><td>Path enumeration, pure discovery</td></tr>
+      <tr><td>"What is configured for remote?"</td><td><code>forja list remote</code></td><td>Config enumeration (workspace/bin/build-order/transfer/repos)</td></tr>
       <tr><td>"Is Qt/VS/jom installed?"</td><td><code>forja doctor</code></td><td>System probing, diagnostic</td></tr>
       <tr><td>"Can SSH connect?"</td><td><code>forja doctor</code></td><td>Connection verification, diagnostic</td></tr>
       <tr><td>"Is sync config complete?"</td><td><code>forja doctor</code></td><td>Config validation, diagnostic</td></tr>
+      <tr><td>"What is the current state?"</td><td><code>forja status</code></td><td>Readiness summary + nextActions</td></tr>
+      <tr><td>"Can remote be used?"</td><td><code>forja status</code></td><td>Remote readiness judgment (minimal summary)</td></tr>
     </tbody>
   </table>
 
@@ -316,15 +320,16 @@ FORJA_LANG=zh forja status --json    # Chinese</code></pre>
       <tr><td><code>forja remote test</code></td><td><code>forja doctor --remote</code></td><td>Absorbed into doctor</td></tr>
       <tr><td><code>forja remote bootstrap</code></td><td><code>forja doctor fix --remote</code> or <code>forja init --remote</code></td><td>Bootstrap repair &rarr; doctor fix; first deploy &rarr; init</td></tr>
       <tr><td><code>forja remote unlock</code></td><td><code>forja doctor unlock &lt;lock-id&gt;</code></td><td>Doctor sub-action</td></tr>
-      <tr><td><code>forja remote workspace status</code></td><td><code>forja status</code> / <code>forja list remote-repos</code></td><td>Status &rarr; status, listing &rarr; list</td></tr>
+      <tr><td><code>forja remote workspace status</code></td><td><code>forja list remote</code></td><td>Pure config enumeration, goes to list remote</td></tr>
       <tr><td><code>forja remote workspace use</code></td><td><code>forja use --remote-workspace</code></td><td>Hidden flag</td></tr>
       <tr><td><code>forja remote workspace clear</code></td><td>Compat retained</td><td>Low-frequency operation</td></tr>
       <tr><td><code>forja remote repo list</code></td><td><code>forja list remote-repos</code></td><td>List subcategory</td></tr>
       <tr><td><code>forja remote repo set/remove/clear</code></td><td>Compat retained</td><td>Low-frequency advanced config</td></tr>
-      <tr><td><code>forja remote forja-bin status</code></td><td><code>forja status</code></td><td>Remote readiness</td></tr>
+      <tr><td><code>forja remote forja-bin status</code></td><td><code>forja list remote</code></td><td>Pure config enumeration, goes to list remote</td></tr>
       <tr><td><code>forja remote forja-bin use/clear</code></td><td><code>forja use --remote-forja-bin</code></td><td>Hidden flag</td></tr>
-      <tr><td><code>forja remote build-order status/set/clear</code></td><td>Compat retained</td><td>Low-frequency advanced config</td></tr>
-      <tr><td><code>forja remote transfer status</code></td><td><code>forja status</code></td><td>Transfer readiness</td></tr>
+      <tr><td><code>forja remote build-order status</code></td><td><code>forja list remote</code></td><td>Pure config enumeration, goes to list remote</td></tr>
+      <tr><td><code>forja remote build-order set/clear</code></td><td>Compat retained</td><td>Low-frequency advanced config</td></tr>
+      <tr><td><code>forja remote transfer status</code></td><td><code>forja list remote</code></td><td>Pure config enumeration, goes to list remote</td></tr>
       <tr><td><code>forja remote transfer set/clear/run</code></td><td>Compat retained</td><td>Low-frequency advanced config</td></tr>
       <tr><td><code>forja remote qt status</code></td><td><code>forja status</code></td><td>Unified status</td></tr>
       <tr><td><code>forja remote qt init</code></td><td><code>forja init --remote</code></td><td>Unified init</td></tr>
@@ -386,7 +391,7 @@ FORJA_LANG=zh forja status --json    # Chinese</code></pre>
       <tr><td><code>forja.qt.clean</code></td><td><code>forja.clean</code></td><td>Hide old ID</td></tr>
       <tr><td><code>forja.qt.run</code></td><td><code>forja.run</code></td><td>Hide old ID</td></tr>
       <tr><td><code>forja.qt.stop</code></td><td><code>forja.stop</code></td><td>Hide old ID</td></tr>
-      <tr><td><code>forja.qt.debug</code></td><td><code>forja.run --debug</code></td><td>Hide old ID</td></tr>
+      <tr><td><code>forja.qt.debug</code></td><td><code>forja.debug</code></td><td>VSCode only; CLI returns <code>run.debugRequiresVSCode</code></td></tr>
       <tr><td><code>forja.qt.openWithQtDesigner</code></td><td>Retained (Explorer .ui context)</td><td>Context command, not in CLI</td></tr>
       <tr><td><code>forja.qt.rcc</code></td><td><code>forja.build</code> (QuickPick rcc)</td><td>Hide old ID</td></tr>
       <tr><td><code>forja.qt.runCustomCommand</code></td><td><code>forja.run --custom &lt;name&gt;</code></td><td>Hide old ID</td></tr>
@@ -723,7 +728,7 @@ src/test/unifiedCliSync.test.ts</code></pre>
       <tr><td>SDK qmake rejected</td><td><code>forja build qmake --json</code></td><td>Error: SDK has no qmake step</td></tr>
       <tr><td>SDK fresh build</td><td><code>forja build fresh --json</code></td><td>rebuild or clean+build</td></tr>
       <tr><td>Qt run</td><td><code>forja run --detach --json</code></td><td>Return pid/logFile</td></tr>
-      <tr><td>Qt run debug</td><td><code>forja run --debug --json</code></td><td>Start debug</td></tr>
+      <tr><td>Qt run debug</td><td><code>forja.debug</code> (VSCode only)</td><td>Start debug; CLI returns <code>run.debugRequiresVSCode</code></td></tr>
       <tr><td>Qt run custom</td><td><code>forja run --custom myCmd --json</code></td><td>Run saved command</td></tr>
       <tr><td>SDK run rejected</td><td><code>forja run --json</code></td><td>Fail, next action <code>forja build</code></td></tr>
       <tr><td>Remote Qt build</td><td><code>forja use --remote</code> + <code>forja build --json</code></td><td>Remote prepared Qt build</td></tr>
@@ -800,7 +805,7 @@ src/test/unifiedCliSync.test.ts</code></pre>
           <li><a href="#command-plan">2.7 CommandPlan</a></li>
           <li><a href="#server-summary">2.8 ServerSummary / ServerDetail</a></li>
           <li><a href="#remote-summary">2.9 RemoteSummary</a></li>
-          <li><a href="#list-vs-doctor">2.10 List vs Doctor Boundary</a></li>
+          <li><a href="#list-vs-doctor">2.10 List vs Doctor vs Status Boundary</a></li>
           <li><a href="#locale">2.11 Locale</a></li>
         </ul>
       </li>

@@ -27,7 +27,7 @@ export interface ExecuteRemoteBranchSyncResult {
     mode: 'remote';
     repos: RemoteBranchSyncRepoResult[];
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export async function executeRemoteBranchSync(options: ExecuteRemoteBranchSyncOptions): Promise<ExecuteRemoteBranchSyncResult> {
@@ -128,7 +128,7 @@ export async function executeRemoteBranchSync(options: ExecuteRemoteBranchSyncOp
     }
 
     const ok = diagnostics.every(item => item.level !== 'error');
-    return { ok, action: 'branchSync', mode: 'remote', repos, diagnostics, nextActions: ok ? [] : ['修复 branchSync 诊断后重试'] };
+    return { ok, action: 'branchSync', mode: 'remote', repos, diagnostics, nextAction: ok ? undefined : '修复 branchSync 诊断后重试' };
 }
 
 async function rollbackPreservedStash(runner: RemoteRunner, repoDir: string, stashActive: boolean, diagnostics: RemoteDiagnostic[], repoDiagnostics: RemoteDiagnostic[], repoName: string): Promise<void> {

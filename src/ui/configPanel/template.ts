@@ -187,6 +187,13 @@ export function getHtml(data: TemplateData): string {
         html = html.replace(/<!--IF_WIN-->/g, '').replace(/<!--END_WIN-->/g, '');
     }
 
+    // 条件区块：<!--IF_QT-->...<!--END_QT-->（仅 Qt 模块激活时显示）
+    if (!data.qtActive) {
+        html = html.replace(/<!--IF_QT-->[\s\S]*?<!--END_QT-->/g, '');
+    } else {
+        html = html.replace(/<!--IF_QT-->/g, '').replace(/<!--END_QT-->/g, '');
+    }
+
     // 变量替换：{{key}}
     html = html.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
         return vars[key] ?? '';

@@ -57,29 +57,39 @@
 <p><strong>Responsibility</strong>: Read-only enumeration of available options. Pure file/config enumeration, no system probing.</p>
 
   <h2 id="syntax">Syntax</h2>
-  <pre><code class="language-bash">forja list [targets|servers|remote-repos|env] [--workspace &lt;path&gt;] [--json]
-forja list servers --detail &lt;id&gt; [--json]</code></pre>
+  <pre><code class="language-bash">forja list [targets|servers|remote-repos|env|remote] [--workspace &lt;path&gt;] [--json]
+forja list servers --detail &lt;id&gt; [--json]
+forja list remote [--detail] [--workspace &lt;path&gt;] [--json]</code></pre>
 
   <h2 id="behavior">Behavior</h2>
   <ul>
     <li><code>targets</code> (default): List Qt .pro + SDK .sln/Makefile, mark current target and configuration completeness.</li>
     <li><code>servers</code>: List ServerSummary, no password output.</li>
-    <li><code>servers --detail &lt;id&gt;</code>: Return ServerDetail.</li>
+    <li><code>servers --detail &lt;id&gt;</code>: Return ServerDetail, no password output.</li>
     <li><code>remote-repos</code>: List remote repo mappings.</li>
     <li><code>env</code>: List detected toolchain paths on the system (Qt/VS/jom/make). Pure path discovery, no health validation.</li>
+    <li><code>remote</code>: List complete remote configuration details (workspace/bin/build-order/transfer/repos). Pure config read, no health validation.</li>
+    <li><code>remote --detail</code>: Expand full buildOrder list and transfer artifacts list.</li>
+  </ul>
+
+  <h2 id="boundary">Boundary with <code>status</code></h2>
+  <ul>
+    <li><code>list remote</code> answers "what is configured", outputs all configuration details.</li>
+    <li><code>status</code> answers "can it be used", only outputs minimal summary needed for readiness judgment (server/remotePath/locked/workspaceMode).</li>
   </ul>
 
   <h2 id="absorbed">Absorbed Commands</h2>
-  <p><code>forja qt projects</code>, <code>forja sdk projects</code>, <code>forja sync servers</code>, <code>forja sync server</code>, <code>forja remote repo list</code>, <code>forja qt env</code>, <code>forja sdk env</code></p>
+  <p><code>forja qt projects</code>, <code>forja sdk projects</code>, <code>forja sync servers</code>, <code>forja sync server</code>, <code>forja remote repo list</code>, <code>forja qt env</code>, <code>forja sdk env</code>, <code>forja remote workspace status</code>, <code>forja remote forja-bin status</code>, <code>forja remote build-order status</code>, <code>forja remote transfer status</code></p>
 
   <h2 id="result">Result</h2>
   <pre><code class="language-typescript">interface ListResult extends ForjaJsonResult {
     action: 'list';
-    category: 'targets' | 'servers' | 'remote-repos' | 'env';
+    category: 'targets' | 'servers' | 'remote-repos' | 'env' | 'remote';
     targets?: TargetCandidate[];
     servers?: ServerSummary[] | ServerDetail;
-    remote?: RemoteSummary;
+    remoteRepos?: RemoteRepoSettings[];
     env?: EnvSummary;
+    remote?: RemoteConfigDetail;
 }
 
 interface EnvSummary {
@@ -87,6 +97,20 @@ interface EnvSummary {
     vs?: Array&lt;{ path: string; version?: string }&gt;;
     jom?: string;              // Windows only
     make?: string;             // POSIX only
+}
+
+interface RemoteConfigDetail {
+    workspaceMode: 'legacy' | 'staged';
+    remoteWorkspace?: string;
+    remoteForjaBin?: string;
+    buildOrder?: RemoteBuildOrderItem[];
+    transfer?: {
+        configured: boolean;
+        deployServer?: string;
+        deployPath?: string;
+        artifacts?: string[];
+    };
+    repos?: RemoteRepoSettings[];
 }</code></pre>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
@@ -99,6 +123,7 @@ interface EnvSummary {
     <ul>
       <li><a href="#syntax">Syntax</a></li>
       <li><a href="#behavior">Behavior</a></li>
+      <li><a href="#boundary">Boundary with status</a></li>
       <li><a href="#absorbed">Absorbed Commands</a></li>
       <li><a href="#result">Result</a></li>
     </ul>

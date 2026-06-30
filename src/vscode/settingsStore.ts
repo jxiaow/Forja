@@ -45,22 +45,19 @@ function _load(): ForjaSettings {
 function _saveQt(): void {
     const ws = _getWorkspace('qt');
     if (!ws) { return; }
-    try { saveQtSettings(ws, _settings.qt); }
-    catch (e) { logger.warn(`写入 Qt 配置失败: ${e instanceof Error ? e.message : e}`); }
+    saveQtSettings(ws, _settings.qt);
 }
 
 function _saveSdk(): void {
     const ws = _getWorkspace('sdk');
     if (!ws) { return; }
-    try { saveSdkSettings(ws, _settings.sdk); }
-    catch (e) { logger.warn(`写入 SDK 配置失败: ${e instanceof Error ? e.message : e}`); }
+    saveSdkSettings(ws, _settings.sdk);
 }
 
 function _saveSync(): void {
     const ws = _getWorkspace('sync');
     if (!ws) { return; }
-    try { saveSyncSettings(ws, _settings.sync); }
-    catch (e) { logger.warn(`写入 Sync 配置失败: ${e instanceof Error ? e.message : e}`); }
+    saveSyncSettings(ws, _settings.sync);
 }
 
 /** 初始化配置存储，加载配置并监听文件变化 */
@@ -97,25 +94,37 @@ function _reload(): void {
     const newRemote = JSON.stringify(_settings.remote);
     if (oldQt === newQt && oldSdk === newSdk && oldSync === newSync && oldRemote === newRemote) { return; }
 
-    // 只通知实际有变化的 section
+    // 只通知实际有变化的 key
     if (oldQt !== newQt) {
+        const oldQtParsed = JSON.parse(oldQt) as QtSettings;
         for (const key of Object.keys(_settings.qt) as QtKey[]) {
-            _listeners.forEach(fn => fn('qt', key, _settings));
+            if (JSON.stringify(oldQtParsed[key]) !== JSON.stringify(_settings.qt[key])) {
+                _listeners.forEach(fn => fn('qt', key, _settings));
+            }
         }
     }
     if (oldSdk !== newSdk) {
+        const oldSdkParsed = JSON.parse(oldSdk) as SdkSettings;
         for (const key of Object.keys(_settings.sdk) as SdkKey[]) {
-            _listeners.forEach(fn => fn('sdk', key, _settings));
+            if (JSON.stringify(oldSdkParsed[key]) !== JSON.stringify(_settings.sdk[key])) {
+                _listeners.forEach(fn => fn('sdk', key, _settings));
+            }
         }
     }
     if (oldSync !== newSync) {
+        const oldSyncParsed = JSON.parse(oldSync) as SyncSettings;
         for (const key of Object.keys(_settings.sync) as SyncKey[]) {
-            _listeners.forEach(fn => fn('sync', key, _settings));
+            if (JSON.stringify(oldSyncParsed[key]) !== JSON.stringify(_settings.sync[key])) {
+                _listeners.forEach(fn => fn('sync', key, _settings));
+            }
         }
     }
     if (oldRemote !== newRemote) {
+        const oldRemoteParsed = JSON.parse(oldRemote);
         for (const key of Object.keys(_settings.remote)) {
-            _listeners.forEach(fn => fn('remote', key, _settings));
+            if (JSON.stringify(oldRemoteParsed[key]) !== JSON.stringify((_settings.remote as unknown as Record<string, unknown>)[key])) {
+                _listeners.forEach(fn => fn('remote', key, _settings));
+            }
         }
     }
 }
@@ -130,8 +139,13 @@ export function getQtSetting<K extends QtKey>(key: K): QtSettings[K] {
 export function setQtSetting<K extends QtKey>(key: K, value: QtSettings[K]): void {
     if (JSON.stringify(_settings.qt[key]) === JSON.stringify(value)) { return; }
     _settings.qt[key] = value;
-    _saveQt();
-    _listeners.forEach(fn => fn('qt', key, _settings));
+    try {
+        _saveQt();
+        _listeners.forEach(fn => fn('qt', key, _settings));
+    } catch (e) {
+        logger.warn(`写入 Qt 配置失败，内存状态已回滚: ${e instanceof Error ? e.message : e}`);
+        _settings.qt = _load().qt;
+    }
 }
 
 // ── SDK API ──
@@ -144,8 +158,13 @@ export function getSdkSetting<K extends SdkKey>(key: K): SdkSettings[K] {
 export function setSdkSetting<K extends SdkKey>(key: K, value: SdkSettings[K]): void {
     if (JSON.stringify(_settings.sdk[key]) === JSON.stringify(value)) { return; }
     _settings.sdk[key] = value;
-    _saveSdk();
-    _listeners.forEach(fn => fn('sdk', key, _settings));
+    try {
+        _saveSdk();
+        _listeners.forEach(fn => fn('sdk', key, _settings));
+    } catch (e) {
+        logger.warn(`写入 SDK 配置失败，内存状态已回滚: ${e instanceof Error ? e.message : e}`);
+        _settings.sdk = _load().sdk;
+    }
 }
 
 // ── Sync API ──
@@ -158,8 +177,13 @@ export function getSyncSetting<K extends SyncKey>(key: K): SyncSettings[K] {
 export function setSyncSetting<K extends SyncKey>(key: K, value: SyncSettings[K]): void {
     if (JSON.stringify(_settings.sync[key]) === JSON.stringify(value)) { return; }
     _settings.sync[key] = value;
-    _saveSync();
-    _listeners.forEach(fn => fn('sync', key, _settings));
+    try {
+        _saveSync();
+        _listeners.forEach(fn => fn('sync', key, _settings));
+    } catch (e) {
+        logger.warn(`写入 Sync 配置失败，内存状态已回滚: ${e instanceof Error ? e.message : e}`);
+        _settings.sync = _load().sync;
+    }
 }
 
 // ── 通用 API ──

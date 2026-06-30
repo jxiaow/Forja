@@ -19,7 +19,7 @@ export interface ExecuteRemoteTransferResult {
     deployPath: string;
     transferred: Array<{ source: string; destination: string }>;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export interface RemoteTransferStatusResult {
@@ -35,7 +35,7 @@ export interface RemoteTransferStatusResult {
     artifacts: string[];
     plan: Array<{ source: string; destination: string }>;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export function buildRemoteTransferStatus(options: {
@@ -44,7 +44,7 @@ export function buildRemoteTransferStatus(options: {
     deployServer: ServerConfig | null;
 }): RemoteTransferStatusResult {
     const diagnostics: RemoteDiagnostic[] = [];
-    const nextActions: string[] = [];
+    let nextAction: string | undefined = undefined
     if (!options.transfer) {
         return {
             ready: false,
@@ -54,7 +54,7 @@ export function buildRemoteTransferStatus(options: {
             artifacts: [],
             plan: [],
             diagnostics: [{ level: 'warning', message: 'remote transfer 尚未配置' }],
-            nextActions: ['forja remote transfer set --server <id> --path <deployPath> --artifact <path>']
+            nextAction: 'forja use remote transfer set --server <name> --path <deployPath> --artifact <path>'
         };
     }
 
@@ -69,14 +69,14 @@ export function buildRemoteTransferStatus(options: {
     }
     if (!options.remotePath) {
         diagnostics.push({ level: 'error', message: 'sync remotePath 未配置，无法生成 transfer plan' });
-        nextActions.push('配置 sync server 和 remotePath');
+        nextAction = '配置 sync server 和 remotePath';
     }
     if (!options.deployServer) {
         diagnostics.push({ level: 'error', message: '部署服务器不存在: ' + options.transfer.deployServer });
-        nextActions.push('检查 ~/.forja/servers.json');
+        nextAction = '检查 ~/.forja/servers.json';
     } else if (options.deployServer.authMode === 'password') {
         diagnostics.push({ level: 'error', message: 'remote transfer direct 模式不支持部署机 password auth，请在编译机到部署机之间配置 SSH key' });
-        nextActions.push('在编译机配置到部署机的 SSH key');
+        nextAction = '在编译机配置到部署机的 SSH key';
     }
 
     const plan = options.remotePath && diagnostics.length === 0
@@ -99,7 +99,7 @@ export function buildRemoteTransferStatus(options: {
         artifacts: options.transfer.artifacts,
         plan,
         diagnostics,
-        nextActions: unique(nextActions)
+        nextAction
     };
 }
 
@@ -117,7 +117,7 @@ export async function executeRemoteTransfer(options: ExecuteRemoteTransferOption
     }
     if (options.deployServer.authMode === 'password') {
         diagnostics.push({ level: 'error', message: 'remote transfer direct 模式不支持部署机 password auth，请在编译机到部署机之间配置 SSH key' });
-        return result(false, options, transferred, diagnostics, ['在编译机配置到部署机的 SSH key']);
+        return result(false, options, transferred, diagnostics, '在编译机配置到部署机的 SSH key');
     }
     for (const artifact of options.transfer.artifacts) {
         const artifactError = validateRelativePath(artifact, 'artifact');
@@ -197,7 +197,7 @@ function result(
     options: ExecuteRemoteTransferOptions,
     transferred: ExecuteRemoteTransferResult['transferred'],
     diagnostics: RemoteDiagnostic[],
-    nextActions: string[] = []
+    nextAction?: string
 ): ExecuteRemoteTransferResult {
     return {
         ok,
@@ -207,14 +207,10 @@ function result(
         deployPath: options.transfer.deployPath,
         transferred,
         diagnostics,
-        nextActions
+        nextAction
     };
 }
 
 function trim(value: string): string {
     return value.trim().split(/\r?\n/).slice(0, 3).join('\n');
-}
-
-function unique(values: string[]): string[] {
-    return Array.from(new Set(values));
 }

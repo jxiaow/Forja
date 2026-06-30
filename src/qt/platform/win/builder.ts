@@ -46,7 +46,7 @@ export const winConfig: PlatformConfig = {
         return `cd /d "${dir}"`;
     },
 
-    killCommand(exeName: string): string {
+    killCommand(exeName: string, _exePath?: string): string {
         return buildProcessKillCommand(exeName);
     },
 

@@ -15,6 +15,7 @@ docs/**
 .work/**
 .qtpilot/**
 .compilot/**
+.qwen/**
 **/tsconfig.json
 **/.eslintrc.json
 eslint.config.mjs

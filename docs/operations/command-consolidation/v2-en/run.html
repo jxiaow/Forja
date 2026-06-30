@@ -57,7 +57,9 @@
 <p><strong>Responsibility</strong>: Run the current target. Qt supports running; SDK does not by default.</p>
 
   <h2 id="syntax">Syntax</h2>
-  <pre><code class="language-bash">forja run [--detach] [--debug] [--custom &lt;name&gt;] [--workspace &lt;path&gt;] [--json]</code></pre>
+  <pre><code class="language-bash">forja run [--detach] [--custom &lt;name&gt;] [--plan] [--workspace &lt;path&gt;] [--json]
+forja run designer &lt;ui-file&gt; [--workspace &lt;path&gt;] [--json]</code></pre>
+  <blockquote><strong>Note</strong>: <code>--debug</code> is only available in VSCode (via <code>forja.debug</code> command or status bar debug button). CLI does not support debug sessions.</blockquote>
 
   <h2 id="behavior">Behavior</h2>
   <ol>
@@ -66,19 +68,21 @@
     <li>Qt remote: remote prepare then run.</li>
     <li>SDK: fail, suggest <code>forja build</code>.</li>
     <li><code>--detach</code>: run in background, return pid/logFile.</li>
-    <li><code>--debug</code>: debug run. Qt targets only.</li>
     <li><code>--custom &lt;name&gt;</code>: run a saved custom command (only allows referencing saved names, no arbitrary shell strings). Qt targets only.</li>
-    <li><code>--debug</code> and <code>--custom</code> are mutually exclusive.</li>
-    <li><code>--detach --json</code> required (until foreground JSON streaming is implemented).</li>
+    <li><code>designer &lt;ui-file&gt;</code>: open a .ui file in Qt Designer.</li>
+    <li><code>--plan</code>: show build/run plan without executing.</li>
+    <li><code>--json</code> recommended with <code>--detach</code> until foreground JSON streaming is implemented.</li>
   </ol>
 
   <h2 id="absorbed">Absorbed Commands</h2>
-  <p><code>forja qt run</code>, <code>forja qt run --detach</code>, <code>forja qt debug</code>, <code>forja qt runCustomCommand</code>, <code>forja remote qt run</code>, <code>forja remote qt runDetached</code></p>
+  <p><code>forja qt run</code>, <code>forja qt run --detach</code>, <code>forja qt runCustomCommand</code>, <code>forja remote qt run</code>, <code>forja remote qt runDetached</code></p>
+  <p>Debug: <code>forja qt debug</code> &rarr; <code>forja.debug</code> (VSCode only)</p>
+  <p>Designer: <code>forja qt openWithQtDesigner</code> &rarr; <code>forja run designer &lt;ui-file&gt;</code></p>
 
   <h2 id="result">Result</h2>
   <pre><code class="language-typescript">interface RunResult extends ForjaJsonResult {
     action: 'run';
-    runAction: 'default' | 'detach' | 'debug' | 'custom';
+    runAction: 'default' | 'detach' | 'debug' | 'custom' | 'designer';
     runtime?: RuntimeState;
     exitCode?: number;
     logFile?: string;

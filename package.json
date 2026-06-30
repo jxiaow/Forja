@@ -1,9 +1,9 @@
 {
   "name": "forja",
-  "displayName": "Forja",
+  "displayName": "Forja (Dev)",
   "publisher": "forja",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.54",
+  "version": "0.7.54-dev",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -24,173 +24,92 @@
   "contributes": {
     "commands": [
       {
-        "command": "forja.config.openPage",
-        "title": "Forja: 打开配置页"
+        "command": "forja.status",
+        "title": "Forja: Status"
       },
       {
-        "command": "forja.showActions",
-        "title": "Forja: 显示操作菜单"
+        "command": "forja.setup",
+        "title": "Forja: Setup"
+      },
+      {
+        "command": "forja.list",
+        "title": "Forja: List"
+      },
+      {
+        "command": "forja.use",
+        "title": "Forja: Use Target"
+      },
+      {
+        "command": "forja.config.openPage",
+        "title": "Forja: Open Config Page"
+      },
+      {
+        "command": "forja.server",
+        "title": "Forja: Server"
+      },
+      {
+        "command": "forja.build",
+        "title": "Forja: Build"
+      },
+      {
+        "command": "forja.run",
+        "title": "Forja: Run"
+      },
+      {
+        "command": "forja.debug",
+        "title": "Forja: Debug"
+      },
+      {
+        "command": "forja.stop",
+        "title": "Forja: Stop"
+      },
+      {
+        "command": "forja.clean",
+        "title": "Forja: Clean"
+      },
+      {
+        "command": "forja.doctor",
+        "title": "Forja: Doctor"
+      },
+      {
+        "command": "forja.sync",
+        "title": "Forja: Sync Changes"
+      },
+      {
+        "command": "forja.openDesigner",
+        "title": "Forja: Open with Qt Designer"
       },
       {
         "command": "forja.showSyncTab",
         "title": "Forja: 打开远程页"
       },
       {
-        "command": "forja.qt.selectProject",
-        "title": "Forja Qt: 选择项目"
-      },
-      {
-        "command": "forja.qt.loadManualProject",
-        "title": "Forja Qt: 加载手动项目"
-      },
-      {
-        "command": "forja.qt.showActions",
-        "title": "Forja Qt: 显示操作菜单"
-      },
-      {
-        "command": "forja.qt.qmake",
-        "title": "Forja Qt: QMake"
-      },
-      {
-        "command": "forja.qt.build",
-        "title": "Forja Qt: Build"
-      },
-      {
-        "command": "forja.qt.clean",
-        "title": "Forja Qt: Clean"
-      },
-      {
-        "command": "forja.qt.run",
-        "title": "Forja Qt: Run"
-      },
-      {
-        "command": "forja.qt.stop",
-        "title": "Forja Qt: 停止"
-      },
-      {
-        "command": "forja.qt.debug",
-        "title": "Forja Qt: 调试"
-      },
-      {
-        "command": "forja.qt.openWithQtDesigner",
-        "title": "Forja Qt: 用 Qt Designer 打开"
-      },
-      {
         "command": "forja.syncTestConnection",
         "title": "Forja: 测试远程连接"
       },
       {
-        "command": "forja.syncChangedFiles",
-        "title": "Forja: 同步变更文件到远程"
-      },
-      {
-        "command": "forja.qt.rcc",
-        "title": "Forja Qt: RCC 编译"
-      },
-      {
-        "command": "forja.qt.runCustomCommand",
-        "title": "Forja Qt: 执行自定义命令"
-      },
-      {
-        "command": "forja.sdk.build",
-        "title": "Forja SDK: Build",
-        "enablement": "forja.sdk.activated"
-      },
-      {
-        "command": "forja.sdk.rebuild",
-        "title": "Forja SDK: Rebuild",
-        "enablement": "forja.sdk.activated"
-      },
-      {
-        "command": "forja.sdk.clean",
-        "title": "Forja SDK: Clean",
-        "enablement": "forja.sdk.activated"
-      },
-      {
-        "command": "forja.sdk.selectProject",
-        "title": "Forja SDK: Select Project",
-        "enablement": "forja.sdk.activated"
-      },
-      {
-        "command": "forja.sdk.showActions",
-        "title": "Forja SDK: Show Actions",
-        "enablement": "forja.sdk.activated"
-      },
-      {
-        "command": "forja.remote.status",
-        "title": "Forja Remote: Status"
-      },
-      {
-        "command": "forja.remote.doctor",
-        "title": "Forja Remote: Doctor"
-      },
-      {
-        "command": "forja.remote.workbench",
+        "command": "forja.remoteWorkbench",
         "title": "Forja Remote: Workbench"
       },
       {
-        "command": "forja.remote.execution.pick",
-        "title": "Forja: Select Execution Location"
-      },
-      {
-        "command": "forja.remote.execution.local",
-        "title": "Forja: Use Local Execution"
-      },
-      {
-        "command": "forja.remote.execution.remote",
-        "title": "Forja: Use Remote Execution"
-      },
-      {
-        "command": "forja.remote.test",
+        "command": "forja.remoteTest",
         "title": "Forja Remote: Test"
       },
       {
-        "command": "forja.remote.bootstrap",
+        "command": "forja.remoteBootstrap",
         "title": "Forja Remote: Bootstrap"
       },
       {
-        "command": "forja.remote.transfer.status",
+        "command": "forja.remoteTransferStatus",
         "title": "Forja Remote: Transfer Status"
       },
       {
-        "command": "forja.remote.qt.build",
-        "title": "Forja Remote Qt: Build"
+        "command": "forja.ps",
+        "title": "Forja Remote: PS"
       },
       {
-        "command": "forja.remote.qt.clean",
-        "title": "Forja Remote Qt: Clean"
-      },
-      {
-        "command": "forja.remote.qt.qmake",
-        "title": "Forja Remote Qt: QMake"
-      },
-      {
-        "command": "forja.remote.qt.run",
-        "title": "Forja Remote Qt: Run"
-      },
-      {
-        "command": "forja.remote.qt.runDetached",
-        "title": "Forja Remote Qt: Run Detached"
-      },
-      {
-        "command": "forja.remote.qt.stop",
-        "title": "Forja Remote Qt: Stop"
-      },
-      {
-        "command": "forja.remote.qt.ps",
-        "title": "Forja Remote Qt: PS"
-      },
-      {
-        "command": "forja.remote.sdk.build",
-        "title": "Forja Remote SDK: Build"
-      },
-      {
-        "command": "forja.remote.sdk.rebuild",
-        "title": "Forja Remote SDK: Rebuild"
-      },
-      {
-        "command": "forja.remote.sdk.clean",
-        "title": "Forja Remote SDK: Clean"
+        "command": "forja._showActions",
+        "title": "Forja: Actions"
       }
     ],
     "menus": {
@@ -200,22 +119,42 @@
           "when": "false"
         },
         {
-          "command": "forja.qt.loadManualProject",
+          "command": "forja.syncTestConnection",
           "when": "false"
         },
         {
-          "command": "forja.qt.runCustomCommand",
+          "command": "forja._showActions",
+          "when": "false"
+        },
+        {
+          "command": "forja.remoteWorkbench",
+          "when": "false"
+        },
+        {
+          "command": "forja.remoteTest",
+          "when": "false"
+        },
+        {
+          "command": "forja.remoteBootstrap",
+          "when": "false"
+        },
+        {
+          "command": "forja.remoteTransferStatus",
+          "when": "false"
+        },
+        {
+          "command": "forja.ps",
           "when": "false"
         }
       ],
       "explorer/context": [
         {
-          "command": "forja.qt.openWithQtDesigner",
+          "command": "forja.openDesigner",
           "when": "resourceExtname == .ui",
           "group": "navigation@100"
         },
         {
-          "command": "forja.syncChangedFiles",
+          "command": "forja.sync",
           "when": "resourceScheme == file",
           "group": "navigation@101"
         }
@@ -248,9 +187,13 @@
     "test": "npm run compile && node --test --test-reporter=spec out/test",
     "lint": "eslint src/",
     "build:cli": "npm run compile && node scripts/build-cli.js",
+    "build:cli:dev": "npm run compile && node scripts/build-cli.js --channel dev",
     "package": "npm run compile && node scripts/package-vs.js",
+    "package:dev": "npm run compile && node scripts/package-vs.js --channel dev",
     "package:cli": "npm run build:cli",
+    "package:cli:dev": "npm run build:cli:dev",
     "package:all": "npm run package && npm run package:cli",
+    "package:all:dev": "npm run package:dev && npm run package:cli:dev",
     "release": "node scripts/release.js",
     "vsix": "vsce package --allow-missing-repository",
     "harness:check": "node harness/core/automation/check-harness.js",

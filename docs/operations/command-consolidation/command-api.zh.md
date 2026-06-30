@@ -4,13 +4,14 @@
 
 ## 公开命令集
 
-只对外暴露以下 10 个顶层命令：
+对外暴露以下 11 个顶层命令：
 
 ```bash
 forja status
-forja init
+forja setup
 forja list
 forja use
+forja server
 forja build
 forja run
 forja stop
@@ -34,26 +35,19 @@ forja sync test-connection
 
 ## 最终可见动作
 
-公开 API 的可见动作必须受控。顶层命令不扩张，二级动作也不能变成新的模块树。
-
 | 主命令 | 可见动作 | 说明 |
 | --- | --- | --- |
-| `forja status` | 无 | 查看当前状态和下一步。 |
-| `forja init` | 无 | 自动初始化。 |
-| `forja list` | `targets`、`env`、`servers`、`remote-repos` | 只读列举可选项。默认 `targets`。 |
-| `forja use` | 无 | 选择目标、构建配置、执行端和远程配置。复杂配置优先走交互流程。 |
+| `forja status` | `--process` | 查看当前状态和下一步。 |
+| `forja setup` | `--local-only` | 一站式初始化（本地 + 远程）。 |
+| `forja list` | `targets`、`env`、`servers`、`remote-repos`、`remote`、`config`、`lang` | 只读列举可选项和配置。默认 `targets`。 |
+| `forja use` | `target`、`execution`、`sync`、`remote`、`qt`、`sdk`、`lang` | 选择目标、构建配置、执行端和远程配置。 |
+| `forja server` | `add`、`update`、`remove` | 管理共享 SSH server。 |
 | `forja build` | `fresh`、`qmake`、`rcc` | 构建相关动作。 |
-| `forja run` | 无 | 运行当前目标。调试用 `--debug` 修饰。 |
+| `forja run` | `designer <ui-file>`、`--custom <name>`、`--detach` | 运行当前目标。 |
 | `forja stop` | 无 | 停止当前运行目标。 |
 | `forja clean` | 无 | 清理构建产物。 |
 | `forja doctor` | `fix`、`unlock`、`restore`、`reset`、`clean-untracked` | 诊断和恢复动作。 |
-| `forja sync` | `plan`、`reset` | 同步和同步预览。 |
-
-不进入公开动作的能力：
-
-- 服务器增删改、remote repo mapping、remote forja-bin、build-order、artifact transfer 配置属于低频高级配置。它们可以由 `forja use` 的交互流程承接，或在迁移期通过旧兼容命令承接，但不出现在主帮助和 `nextActions`。
-- artifact transfer 的执行不再暴露为 `forja sync transfer ...`。如果当前配置启用产物传输，`forja sync` 在同步流程中执行或给出提示；`forja status` / `forja doctor` 负责展示和检查其配置状态。
-- VSCode-only 工具动作，例如 “用 Qt Designer 打开”，保留为上下文命令，不进入 CLI 公开 API。
+| `forja sync` | `plan`、`reset`、`transfer` | 同步和同步预览。 |
 
 ## 通用概念
 
@@ -71,8 +65,6 @@ interface ActiveTarget {
 }
 ```
 
-字段说明：
-
 | 字段 | 含义 |
 | --- | --- |
 | `kind` | 当前目标类型，`qt` 表示 qmake 项目，`sdk` 表示 `.sln` 或 `Makefile` 项目。 |
@@ -82,8 +74,6 @@ interface ActiveTarget {
 | `runAt` | 执行端。`local` 表示本机执行，`remote` 表示通过远程流水线执行。 |
 
 ### Candidate
-
-`forja list` 返回的候选目标。
 
 ```ts
 interface TargetCandidate {
@@ -102,17 +92,19 @@ interface TargetCandidate {
 
 ```ts
 interface Diagnostic {
+  code: string;                        // 稳定机器码，格式: <domain>.<condition>
   level: 'info' | 'warning' | 'error';
-  message: string;
-  hint?: string;
+  message: string;                     // 人读文本，跟随 locale
+  hint?: string;                       // 人读提示，跟随 locale
+  params?: Record<string, string>;     // 模板变量，供 message/hint 插值
 }
 ```
+
+`code` 不随语言变化，AI/脚本用 `code` 判断，不依赖 `message` 文本。
 
 ### JSON 输出 Envelope
 
 所有 `--json` 输出必须是合法 JSON。命令成功时退出码为 `0`，失败时退出码为 `1`。
-
-基础结构：
 
 ```ts
 interface ForjaJsonResult {
@@ -122,6 +114,7 @@ interface ForjaJsonResult {
   activeTarget?: ActiveTarget;
   diagnostics?: Diagnostic[];
   nextActions?: string[];
+  [key: string]: unknown;   // 各命令可扩展额外字段
 }
 ```
 
@@ -130,17 +123,14 @@ interface ForjaJsonResult {
 - `ok` 和 `action` 必须始终存在。
 - `diagnostics` 只在有诊断时输出。
 - `nextActions` 只输出新命令，不输出旧命令。
-- 文本模式可以提示兼容命令迁移；JSON 模式不输出噪音文案。
-- 路径字段优先使用正斜杠或平台原生路径，但语义必须稳定。
+- 文本模式下 `nextActions` 中去除 `--json` 后缀。
 
 ### 共享数据结构
 
 #### Readiness
 
-`status` 和 `doctor` 使用 readiness 表达就绪状态。
-
 ```ts
-type ReadinessState = 'ready' | 'blocked' | 'missing' | 'unknown' | 'not-selected';
+type ReadinessState = 'ready' | 'configured' | 'blocked' | 'missing' | 'unknown' | 'not-selected';
 
 interface Readiness {
   target?: ReadinessState;
@@ -148,13 +138,10 @@ interface Readiness {
   sync?: ReadinessState;
   remote?: ReadinessState;
   runtime?: ReadinessState;
-  transfer?: ReadinessState;
 }
 ```
 
 #### CheckResult
-
-`doctor` 的检查项。
 
 ```ts
 interface CheckResult {
@@ -168,8 +155,6 @@ interface CheckResult {
 
 #### RuntimeState
 
-`status --process`、`run`、`stop` 可返回运行态信息。
-
 ```ts
 interface RuntimeState {
   running: boolean;
@@ -182,8 +167,6 @@ interface RuntimeState {
 
 #### CommandPlan
 
-带 `--plan` 的构建、清理、初始化命令可以返回计划。
-
 ```ts
 interface CommandPlan {
   mode: 'dryRun';
@@ -194,9 +177,7 @@ interface CommandPlan {
 }
 ```
 
-#### ServerSummary
-
-服务器列表和远程配置摘要不输出密码。
+#### ServerSummary / ServerDetail
 
 ```ts
 interface ServerSummary {
@@ -208,27 +189,53 @@ interface ServerSummary {
   authMode: 'key' | 'password';
   selected?: boolean;
 }
+
+interface ServerDetail extends ServerSummary {
+  privateKeyPath?: string;
+  strictHostKeyChecking?: boolean;
+}
 ```
 
-#### RemoteSummary
+不输出密码。
 
-远程相关配置摘要。
+#### EnvSummary
 
 ```ts
-interface RemoteSummary {
-  runAt: 'local' | 'remote';
+interface EnvSummary {
+  qt?: string;
+  vs?: string;
+  jom?: string;
+  make?: string;
+}
+```
+
+#### ConfigSummary
+
+```ts
+interface ConfigSummary {
+  lang?: string;
+  qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string };
+  sdk?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
+  sync?: { configured: boolean; enabled?: boolean; selectedServer?: string; remotePath?: string };
+  remote?: RemoteConfigSummary;
+}
+```
+
+#### RemoteConfigSummary
+
+```ts
+interface RemoteConfigSummary {
+  selectedServer?: string;
   server?: ServerSummary;
   remotePath?: string;
   remoteWorkspace?: string;
   remoteForjaBin?: string;
-  buildOrder?: string[];
+  buildOrder?: { target: string; action: string; args: string[] }[];
   transferConfigured?: boolean;
 }
 ```
 
 #### SyncPlan
-
-同步预览输出。
 
 ```ts
 interface SyncPlan {
@@ -243,126 +250,32 @@ interface SyncPlan {
 }
 ```
 
-#### Command Result Types
-
-每个命令的 JSON 输出都继承 `ForjaJsonResult`。
-
-```ts
-interface StatusResult extends ForjaJsonResult {
-  action: 'status';
-  readiness: Readiness;
-  runtime?: RuntimeState;
-  remote?: RemoteSummary;
-}
-
-interface InitResult extends ForjaJsonResult {
-  action: 'init';
-  detected: {
-    qtTargets: number;
-    sdkTargets: number;
-  };
-  saved?: Partial<ActiveTarget>;
-  plan?: CommandPlan;
-}
-
-interface ListResult extends ForjaJsonResult {
-  action: 'list';
-  category: 'targets' | 'env' | 'servers' | 'remote-repos';
-  targets?: TargetCandidate[];
-  servers?: ServerSummary[];
-  remote?: RemoteSummary;
-  env?: Record<string, unknown>;
-}
-
-interface UseResult extends ForjaJsonResult {
-  action: 'use';
-  activeTarget?: ActiveTarget;
-  remote?: RemoteSummary;
-  changed: string[];
-}
-
-interface BuildResult extends ForjaJsonResult {
-  action: 'build';
-  buildAction: 'default' | 'fresh' | 'qmake' | 'rcc';
-  plan?: CommandPlan;
-  durationMs?: number;
-  exitCode?: number;
-  errors?: string[];
-}
-
-interface RunResult extends ForjaJsonResult {
-  action: 'run';
-  runtime?: RuntimeState;
-  exitCode?: number;
-  logFile?: string;
-}
-
-interface StopResult extends ForjaJsonResult {
-  action: 'stop';
-  state: 'stopped' | 'not-running' | 'unsupported';
-  runtime?: RuntimeState;
-}
-
-interface CleanResult extends ForjaJsonResult {
-  action: 'clean';
-  plan?: CommandPlan;
-  durationMs?: number;
-  exitCode?: number;
-}
-
-interface DoctorResult extends ForjaJsonResult {
-  action: 'doctor';
-  doctorAction: 'check' | 'fix' | 'unlock' | 'restore' | 'reset' | 'clean-untracked';
-  checks?: CheckResult[];
-  changed?: string[];
-}
-
-interface SyncResult extends ForjaJsonResult {
-  action: 'sync';
-  syncAction: 'run' | 'plan' | 'reset';
-  plan?: SyncPlan;
-  server?: string;
-  remotePath?: string;
-  uploaded?: string[];
-  deleted?: string[];
-  skipped?: string[];
-  transfer?: {
-    configured: boolean;
-    planned?: boolean;
-    executed?: boolean;
-    artifacts?: string[];
-  };
-}
-```
-
 ### 通用参数
 
 | 参数 | 适用命令 | 含义 |
 | --- | --- | --- |
 | `--workspace <path>` | 所有命令 | 指定工作区。默认当前目录。 |
 | `--json` | 所有命令 | 输出结构化 JSON。 |
-| `--plan` | `init`、`build`、`clean` | 只预览，不执行会产生外部影响的动作。 |
+| `--lang <locale>` | 所有命令 | 临时覆盖语言（`zh` / `en`）。 |
+| `--plan` | `setup`、`build`、`clean`、`doctor fix` | 只预览，不执行会产生外部影响的动作。 |
 
 ### 动作与参数规则
 
-公开命令遵循：
-
 ```bash
-forja <主命令> <动作> [对象] [--修饰参数]
+forja <主命令> <子命令> [对象] [--修饰参数]
 ```
 
-规则：
+- 子命令用位置参数表达：`forja build qmake`、`forja doctor unlock <lock-id>`、`forja sync plan`。
+- `--flag` 只表达修饰参数：`--json`、`--workspace`、`--force`、`--file`。
+- 未知 flag 会报错，不会静默忽略。
 
-- 动作用位置参数表达，例如 `forja build qmake`、`forja doctor unlock <lock-id>`、`forja sync plan`。
-- `--flag` 只表达修饰参数，例如 `--json`、`--workspace`、`--remote`、`--force`、`--recursive`、`--file`。
-- 不使用 `--restore`、`--reset`、`--unlock`、`--clean-untracked` 这类“看起来是开关、实际是动作”的公开新语法。
-- 迁移期可以兼容旧 flag 形态，但新帮助、`nextActions`、VSCode API 和 AI 工具推荐路径必须使用位置动作。
+---
 
 ## `forja status`
 
 ### 功能
 
-查看当前工作区状态和下一步建议。它是轻量、只读命令，不做深度 SSH、不做完整工具链探测、不修改配置。
+查看当前工作区状态和下一步建议。轻量、只读，不做深度 SSH、不做完整工具链探测、不修改配置。
 
 ### 语法
 
@@ -374,23 +287,17 @@ forja status [--process] [--workspace <path>] [--json]
 
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `--process` | boolean | 否 | 同时返回当前目标运行态，覆盖旧 `qt ps` / `remote qt ps` 能力。 |
+| `--process` | boolean | 否 | 同时返回当前目标运行态。 |
 | `--workspace` | path | 否 | 工作区路径。 |
 | `--json` | boolean | 否 | 输出 JSON。 |
 
 ### 行为
 
-1. 读取 workspace。
-2. 读取 `activeTarget`。
-3. 读取 Qt、SDK、Sync、Remote 设置摘要。
-4. 如果没有 `activeTarget`：
-   - 如果有多个候选目标，不猜。
-   - 返回 `nextActions: ["forja list", "forja use"]`。
-5. 如果有 `activeTarget`：
-   - 检查项目文件是否存在。
-   - 检查 `mode`、`arch`、`runAt` 是否有效。
-   - 汇总本地、同步、远程和运行状态。
-6. 传入 `--process` 时，返回 `runtime` 字段；不传时只给摘要 readiness。
+1. 读取 workspace 和 `activeTarget`。
+2. 读取 Qt、SDK、Sync、Remote 设置摘要。
+3. 如果没有 `activeTarget`，返回 `nextActions: ["forja list targets", "forja use target --project <path>"]`。
+4. 如果有 `activeTarget`，汇总 readiness。
+5. `--process` 时返回 `runtime` 字段。
 
 ### JSON 输出
 
@@ -415,135 +322,123 @@ forja status [--process] [--workspace <path>] [--json]
 }
 ```
 
-### 失败示例
+---
 
-没有当前目标且存在多个候选：
-
-```json
-{
-  "ok": false,
-  "action": "status",
-  "diagnostics": [
-    {
-      "level": "warning",
-      "message": "当前工作区存在多个 Forja 目标，尚未选择 active target"
-    }
-  ],
-  "nextActions": ["forja list", "forja use"]
-}
-```
-
-## `forja init`
+## `forja setup`
 
 ### 功能
 
-首次初始化。它只写入可自动确定的配置，不替用户做模糊选择。
+一站式初始化。替代旧 `forja init`，同时处理本地初始化和远程配置。
 
 ### 语法
 
 ```bash
-forja init [--workspace <path>] [--remote] [--plan] [--json]
+forja setup [--local-only] [--host <host>] [--username <user>] [--port <port>] [--server <id>] [--remote-path <path>] [--plan] [--json]
 ```
 
 ### 输入
 
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `--workspace` | path | 否 | 工作区路径。 |
-| `--remote` | boolean | 否 | 同时检查远程初始化条件。 |
-| `--plan` | boolean | 否 | 预览将保存的配置，不写入。 |
+| `--local-only` | boolean | 否 | 只做本地初始化，跳过远程配置。 |
+| `--host <host>` | string | 否 | 远程主机地址（自动创建 server）。 |
+| `--username <user>` | string | 否 | 远程用户名。 |
+| `--port <port>` | number | 否 | SSH 端口（默认 22）。 |
+| `--server <id>` | string | 否 | 指定已有 server ID。 |
+| `--remote-path <path>` | path | 否 | 远程工作根路径。 |
+| `--plan` | boolean | 否 | 预览，不写入配置。 |
 | `--json` | boolean | 否 | 输出 JSON。 |
-
-不接受：
-
-```bash
---project
---mode
---arch
---qt-path
---vs-dev-shell
---vs-dev-cmd
-```
-
-这些显式选择属于 `forja use`。
 
 ### 行为
 
-1. 扫描 Qt 目标。
-2. 扫描 SDK 目标。
-3. 检测 Qt、VS、jom、make 等工具链。
-4. 保存无歧义的默认配置。
-5. 如果整个 workspace 只有一个目标，则保存为 `activeTarget`。
-6. 如果存在多个目标或同时存在 Qt/SDK，不选择，返回 `forja list` 和 `forja use`。
-7. `--remote` 只处理远程初始化前置条件，不替用户选择服务器。
+**Phase 1 — 本地初始化**：
+1. 扫描 Qt/SDK 目标。
+2. 检测工具链（Qt、VS、jom、make）。
+3. 保存无歧义的默认配置。
+
+**Phase 2 — 远程配置**（`--local-only` 时跳过）：
+1. 解析服务器（`--server` > `--host` 自动创建 > 已有单个 server）。
+2. 配置远程路径和同步。
+3. 部署 Forja 到远程。
+4. 远程初始化。
+5. 切换执行模式到 remote。
 
 ### JSON 输出
 
 ```json
 {
   "ok": true,
-  "action": "init",
+  "action": "setup",
   "workspace": "C:/repo",
-  "detected": {
+  "local": {
     "qtTargets": 2,
-    "sdkTargets": 1
+    "sdkTargets": 1,
+    "toolchain": { "qt": true, "vs": true, "jom": true },
+    "configured": true
   },
-  "saved": {
-    "mode": "debug",
-    "arch": "x64"
+  "remote": {
+    "serverId": "abc-123",
+    "serverName": "dev",
+    "host": "10.0.0.1",
+    "remotePath": "/home/dev/workspace",
+    "syncEnabled": true,
+    "forjaDeployed": true,
+    "forjaVersion": "0.7.0",
+    "executionMode": "remote",
+    "configured": true
   },
-  "nextActions": ["forja list", "forja use"]
+  "steps": {
+    "localConfig": "done",
+    "serverSetup": "done",
+    "remoteConfig": "done",
+    "syncSetup": "done",
+    "forjaDeploy": "done",
+    "remoteInit": "done",
+    "executionSwitch": "done"
+  },
+  "nextActions": ["forja build", "forja status"]
 }
 ```
+
+---
 
 ## `forja list`
 
 ### 功能
 
-列出可选项。它只读，不修改配置。
+列出可选项和配置摘要。只读，不修改配置。
 
 ### 语法
 
 ```bash
-forja list [targets|env|servers|remote-repos] [--workspace <path>] [--json]
+forja list <category> [--workspace <path>] [--json]
 forja list servers --detail <id> [--json]
 ```
 
-默认分类是 `targets`。
+**必须指定分类参数**，不支持裸 `forja list`。
+
+### 分类
+
+| 分类 | 说明 |
+| --- | --- |
+| `targets` | 列出 Qt `.pro` 和 SDK `.sln`/`Makefile` 候选目标。 |
+| `env` | 列出 Qt/VS/jom/make 候选路径。 |
+| `servers` | 列出 SSH server。`--detail <id>` 查看单个详情。 |
+| `remote-repos` | 列出远程 repo 映射。 |
+| `remote` | 列出远程配置（workspace/bin/build-order/transfer/repos）。 |
+| `config` | 列出 Qt/SDK/Sync/Remote 已保存配置摘要。 |
+| `lang` | 显示当前语言设置。 |
 
 ### 输入
 
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `category` | enum | 否 | `targets`、`env`、`servers`、`remote-repos`。 |
+| `category` | enum | 是 | 分类参数。 |
 | `--detail <id>` | string | 否 | 查看单个服务器详情，仅用于 `servers`。 |
 | `--workspace` | path | 否 | 工作区路径。 |
 | `--json` | boolean | 否 | 输出 JSON。 |
 
-### 行为
-
-`targets`：
-
-- 列出 Qt `.pro`。
-- 列出 SDK `.sln` / `Makefile`。
-- 标记当前目标。
-- 标记配置是否完整。
-
-`env`：
-
-- 列出 Qt/VS/jom/make 候选。
-- 不保存设置。
-
-`servers`：
-
-- 列出服务器 ID、名称、host、username。
-- 不输出密码。
-
-`remote-repos`：
-
-- 列出远程 repo 映射。
-
-### JSON 输出
+### JSON 输出（targets）
 
 ```json
 {
@@ -557,61 +452,52 @@ forja list servers --detail <id> [--json]
       "label": "Qt apps/client/client.pro",
       "current": true,
       "configured": true
-    },
-    {
-      "kind": "sdk",
-      "project": "sdk/NemoSDK.sln",
-      "label": "SDK sdk/NemoSDK.sln",
-      "current": false,
-      "configured": false
     }
   ]
 }
 ```
 
+---
+
 ## `forja use`
 
 ### 功能
 
-选择当前 Forja 使用的目标、构建配置、执行端和远程配置。它是唯一普通配置入口。
+选择当前 Forja 使用的目标、构建配置、执行端和远程配置。
 
 ### 语法
 
 ```bash
-forja use [--workspace <path>] [--json]
-forja use --target <project> [--json]
-forja use --kind qt|sdk [--json]
-forja use --mode debug|release [--arch x86|x64] [--json]
-forja use --local [--json]
-forja use --remote [--json]
-forja use --server <id> --remote-path <path> [--json]
-forja use --remote-workspace <path> [--json]
-forja use --remote-forja-bin <path> [--json]
+forja use target [--project <path>] [--mode debug|release] [--arch x86|x64] [--json]
+forja use execution --local|--remote [--json]
+forja use sync --server <id> --remote-path <path> [--enable|--disable] [--json]
+forja use remote --server <id> --remote-path <path> [--json]
+forja use remote workspace --mode legacy|staged --path <path> [--clear] [--json]
+forja use remote repo --local <name> --remote <name> --role <role> --path <path> [--json]
+forja use remote forja-bin --path <path> [--clear] [--json]
+forja use remote build-order <qt:build> <sdk:build> ... [--clear] [--json]
+forja use remote transfer --server <id> --path <path> --artifact <path> [--clear] [--json]
+forja use qt --qt-path <path> [--vs-dev-shell <path>] [--qmake-target <name>] [--qmake-args <args>] [--json]
+forja use sdk --vs-dev-cmd <path> [--json]
+forja use lang <zh|en> [--json]
 ```
 
-### 输入
+### 子命令说明
 
-| 输入 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `--target <project>` | path | 否 | 选择当前项目。`.pro` 推断为 Qt，`.sln`/`Makefile` 推断为 SDK。 |
-| `--kind qt|sdk` | enum | 否 | 只切换目标类型。只有该类型唯一候选时才自动成功。 |
-| `--mode debug|release` | enum | 否 | 设置构建模式。 |
-| `--arch x86|x64` | enum | 否 | 设置架构。 |
-| `--local` | boolean | 否 | 设置 `runAt=local`。 |
-| `--remote` | boolean | 否 | 设置 `runAt=remote`。 |
-| `--server <id>` | string | 否 | 选择远程服务器。 |
-| `--remote-path <path>` | path | 和 `--server` 一起使用 | 设置远程工作根路径。 |
-| `--remote-workspace <path>` | path | 否 | 设置 staged/managed remote workspace 路径。 |
-| `--remote-forja-bin <path>` | path | 否 | 设置远端 Forja 可执行文件路径。 |
-
-### 行为
-
-1. 无参数且是交互终端：进入选择流程。
-2. 有参数：只更新显式传入字段。
-3. `--target` 必须位于 workspace 内。
-4. `--kind` 遇到多个候选时失败并提示 `forja list`。
-5. `--remote` 不自动创建服务器配置。
-6. 成功后返回 `nextActions: ["forja status"]`。
+| 子命令 | 说明 |
+| --- | --- |
+| `target` | 选择项目、设置 mode/arch。 |
+| `execution` | 切换执行端（local/remote）。 |
+| `sync` | 配置同步 server/path、启用/禁用。 |
+| `remote` | 快捷设置 server + remote-path。 |
+| `remote workspace` | 设置远程 workspace 路径和模式。 |
+| `remote repo` | 配置远程 repo 映射。 |
+| `remote forja-bin` | 设置远端 Forja 可执行文件路径。 |
+| `remote build-order` | 设置远程构建顺序。 |
+| `remote transfer` | 配置 artifact transfer。 |
+| `qt` | 设置 Qt 工具链路径。 |
+| `sdk` | 设置 SDK 工具链路径。 |
+| `lang` | 设置界面语言。 |
 
 ### JSON 输出
 
@@ -619,52 +505,80 @@ forja use --remote-forja-bin <path> [--json]
 {
   "ok": true,
   "action": "use",
-  "changed": ["activeTarget", "runAt"],
+  "useTarget": "target",
+  "changed": ["activeTarget"],
   "activeTarget": {
     "kind": "qt",
     "project": "apps/client/client.pro",
     "mode": "release",
     "arch": "x64",
-    "runAt": "remote"
+    "runAt": "local"
   },
   "nextActions": ["forja status"]
 }
 ```
 
-### 常见失败
+---
 
-多个 Qt 目标时执行：
+## `forja server`
+
+### 功能
+
+管理共享 SSH server。增删改操作。
+
+### 语法
 
 ```bash
-forja use --kind qt --json
+forja server add --name <name> --host <host> --username <user> [--port <port>] [--auth-mode key|password] [--private-key-path <path>] [--password <pass>] [--strict-host-key-checking] [--json]
+forja server update <id> [--name <name>] [--host <host>] [--username <user>] [--port <port>] [--json]
+forja server remove <id> [--json]
 ```
 
-输出：
+### 输入（add）
+
+| 输入 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `--name <name>` | string | 是 | 服务器名称。 |
+| `--host <host>` | string | 是 | 主机地址。 |
+| `--username <user>` | string | 是 | 用户名。 |
+| `--port <port>` | number | 否 | SSH 端口（默认 22）。 |
+| `--auth-mode key|password` | enum | 否 | 认证模式（默认 key）。 |
+| `--private-key-path <path>` | path | 否 | 私钥路径。 |
+| `--password <pass>` | string | 否 | 密码（authMode=password 时）。 |
+| `--strict-host-key-checking` | boolean | 否 | 启用严格主机密钥检查。 |
+| `--no-strict-host-key-checking` | boolean | 否 | 禁用严格主机密钥检查。 |
+
+### JSON 输出
 
 ```json
 {
-  "ok": false,
-  "action": "use",
-  "diagnostics": [
-    {
-      "level": "warning",
-      "message": "检测到多个 Qt 目标，无法仅根据 kind 自动选择"
-    }
-  ],
-  "nextActions": ["forja list", "forja use --target <project>"]
+  "ok": true,
+  "action": "server",
+  "serverAction": "add",
+  "server": {
+    "id": "abc-123",
+    "name": "dev",
+    "host": "10.0.0.1",
+    "port": 22,
+    "username": "dev",
+    "authMode": "key"
+  },
+  "changed": ["servers"]
 }
 ```
+
+---
 
 ## `forja build`
 
 ### 功能
 
-构建当前 active target。它统一处理 Qt、SDK、本地和远程。
+构建当前 active target。统一处理 Qt、SDK、本地和远程。
 
 ### 语法
 
 ```bash
-forja build [fresh|qmake|rcc] [--workspace <path>] [--plan] [--json]
+forja build [fresh|qmake|rcc] [--workspace <path>] [--plan] [--project <path>] [--json]
 ```
 
 ### 输入
@@ -673,6 +587,7 @@ forja build [fresh|qmake|rcc] [--workspace <path>] [--plan] [--json]
 | --- | --- | --- | --- |
 | `action` | enum | 否 | 为空、`fresh`、`qmake`、`rcc`。 |
 | `--plan` | boolean | 否 | 只输出计划，不执行构建。 |
+| `--project <path>` | path | 否 | 直接指定项目路径（绕过 activeTarget）。 |
 | `--workspace` | path | 否 | 工作区路径。 |
 | `--json` | boolean | 否 | 输出 JSON。 |
 
@@ -685,22 +600,13 @@ forja build [fresh|qmake|rcc] [--workspace <path>] [--plan] [--json]
 | `forja build qmake` | 只跑 qmake。 | 失败：SDK 没有 qmake 步骤。 |
 | `forja build rcc` | 只跑 rcc。 | 失败：SDK 没有 rcc 步骤。 |
 
-### 行为
-
-1. 读取 active target。
-2. 没有 active target 时失败，返回 `forja list` 和 `forja use`。
-3. `runAt=local` 时调用本地 Qt/SDK 后端。
-4. `runAt=remote` 时先做远程 preflight 和 workspace prepare，再调用远程 Qt/SDK 后端。
-5. `qmake` 和 `rcc` 只适用于 Qt target。
-6. `--plan` 不执行构建、不修改远端。
-
 ### JSON 输出
 
 ```json
 {
   "ok": true,
   "action": "build",
-  "buildAction": "qmake",
+  "buildAction": "default",
   "activeTarget": {
     "kind": "qt",
     "project": "apps/client/client.pro",
@@ -712,40 +618,19 @@ forja build [fresh|qmake|rcc] [--workspace <path>] [--plan] [--json]
 }
 ```
 
-失败示例：
-
-```json
-{
-  "ok": false,
-  "action": "build",
-  "buildAction": "qmake",
-  "activeTarget": {
-    "kind": "sdk",
-    "project": "sdk/NemoSDK.sln",
-    "mode": "debug",
-    "arch": "x64",
-    "runAt": "local"
-  },
-  "diagnostics": [
-    {
-      "level": "error",
-      "message": "当前 SDK 目标没有 qmake 构建步骤"
-    }
-  ],
-  "nextActions": ["forja build"]
-}
-```
+---
 
 ## `forja run`
 
 ### 功能
 
-运行当前目标。Qt 支持运行；SDK 默认不支持运行。
+运行当前目标。Qt 支持运行；SDK 不支持。
 
 ### 语法
 
 ```bash
-forja run [--detach] [--debug] [--custom <name>] [--workspace <path>] [--json]
+forja run [--detach] [--custom <name>] [--plan] [--workspace <path>] [--json]
+forja run designer <ui-file> [--workspace <path>] [--json]
 ```
 
 ### 输入
@@ -753,20 +638,12 @@ forja run [--detach] [--debug] [--custom <name>] [--workspace <path>] [--json]
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `--detach` | boolean | 否 | 后台运行。 |
-| `--debug` | boolean | 否 | 调试运行，覆盖旧 `forja.qt.debug` 能力。仅 Qt 目标支持。 |
-| `--custom <name>` | string | 否 | 运行已保存的自定义命令，覆盖旧 `forja.qt.runCustomCommand` 能力。仅 Qt 目标支持。 |
+| `--custom <name>` | string | 否 | 运行已保存自定义命令。仅 Qt。 |
+| `--plan` | boolean | 否 | 显示计划，不执行。 |
 | `--workspace` | path | 否 | 工作区路径。 |
 | `--json` | boolean | 否 | 输出 JSON。 |
 
-### 行为
-
-1. 读取 active target。
-2. Qt local：必要时构建，然后运行。
-3. Qt remote：远程准备后运行。
-4. SDK：失败，提示 `forja build`。
-5. `--detach --json` 返回 pid 和 logFile。
-6. `--debug` 和 `--custom` 互斥。
-7. `--custom` 只允许引用已保存的自定义命令名称，不接受任意 shell 字符串，避免把 `run` 变成通用 shell 执行器。
+> `--debug` 仅在 VSCode 中可用，CLI 不支持调试会话。
 
 ### JSON 输出
 
@@ -774,6 +651,7 @@ forja run [--detach] [--debug] [--custom <name>] [--workspace <path>] [--json]
 {
   "ok": true,
   "action": "run",
+  "runAction": "default",
   "activeTarget": {
     "kind": "qt",
     "project": "apps/client/client.pro",
@@ -781,10 +659,17 @@ forja run [--detach] [--debug] [--custom <name>] [--workspace <path>] [--json]
     "arch": "x64",
     "runAt": "local"
   },
-  "pid": 12345,
-  "logFile": "C:/repo/.forja/logs/run.log"
+  "runtime": {
+    "running": true,
+    "pid": 12345,
+    "executablePath": "C:/repo/debug/app.exe",
+    "logFile": "C:/repo/.forja/logs/run.log",
+    "runAt": "local"
+  }
 }
 ```
+
+---
 
 ## `forja stop`
 
@@ -798,22 +683,22 @@ forja run [--detach] [--debug] [--custom <name>] [--workspace <path>] [--json]
 forja stop [--workspace <path>] [--json]
 ```
 
-### 行为
-
-- Qt local：停止本地进程。
-- Qt remote：停止远程进程。
-- SDK：返回不支持运行态。
-- 没有运行记录：返回 `state: "not-running"`，不视为严重错误。
-
 ### JSON 输出
 
 ```json
 {
   "ok": true,
   "action": "stop",
-  "state": "stopped"
+  "state": "stopped",
+  "runtime": {
+    "running": false,
+    "pid": 12345,
+    "runAt": "local"
+  }
 }
 ```
+
+---
 
 ## `forja clean`
 
@@ -827,13 +712,6 @@ forja stop [--workspace <path>] [--json]
 forja clean [--workspace <path>] [--plan] [--json]
 ```
 
-### 行为
-
-- Qt local：调用 Qt clean。
-- SDK local：调用 SDK clean。
-- Remote：远程 preflight 后调用远程 clean。
-- `--plan` 只输出计划，不删除产物。
-
 ### JSON 输出
 
 ```json
@@ -846,21 +724,24 @@ forja clean [--workspace <path>] [--plan] [--json]
     "mode": "release",
     "arch": "x64",
     "runAt": "local"
-  }
+  },
+  "state": "cleaned"
 }
 ```
+
+---
 
 ## `forja doctor`
 
 ### 功能
 
-深度诊断。它比 `status` 慢，负责检查工具链、同步配置、SSH、远端 Forja、远程 workspace 和恢复建议。
+深度诊断。比 `status` 慢，负责检查工具链、同步配置、SSH、远端 Forja、远程 workspace 和恢复建议。
 
 ### 语法
 
 ```bash
-forja doctor [--remote] [--workspace <path>] [--json]
-forja doctor fix [--remote] [--workspace <path>] [--json]
+forja doctor [--remote] [--server <id>] [--workspace <path>] [--json]
+forja doctor fix [--remote] [--server <id>] [--plan] [--workspace <path>] [--json]
 forja doctor unlock <lock-id> [--force] [--workspace <path>] [--json]
 forja doctor restore <repo> <paths...> [--workspace <path>] [--json]
 forja doctor reset <repo> <paths...> [--workspace <path>] [--json]
@@ -872,21 +753,11 @@ forja doctor clean-untracked <repo> <paths...> [--recursive] [--workspace <path>
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `action` | enum | 否 | 为空、`fix`、`unlock`、`restore`、`reset`、`clean-untracked`。 |
-| `--remote` | boolean | 否 | 即使当前 `runAt=local`，也检查远程配置。 |
-| `lock-id` | string | `unlock` | 解远程锁。 |
-| `repo` | string | 恢复场景 | 指定远端 repo。 |
-| `paths...` | path[] | 恢复场景 | 受影响的远端路径。 |
+| `--remote` | boolean | 否 | 即使 `runAt=local`，也检查远程。 |
+| `--server <id>` | string | 否 | 指定服务器。 |
+| `--force` | boolean | 否 | 强制执行恢复动作。 |
 | `--recursive` | boolean | 否 | 递归清理未跟踪文件。 |
-| `--force` | boolean | 否 | 强制执行显式恢复动作。 |
-
-### 行为
-
-1. 检查当前 active target。
-2. 检查本地工具链。
-3. 检查 sync 配置。
-4. 当 `runAt=remote` 或传入 `--remote` 时检查远程。
-5. `fix` 只允许非破坏性修复。
-6. 恢复类动作必须显式传入对应参数，不能由普通 `doctor` 自动执行。
+| `--plan` | boolean | 否 | 只预览修复计划。 |
 
 ### JSON 输出
 
@@ -903,40 +774,33 @@ forja doctor clean-untracked <repo> <paths...> [--recursive] [--workspace <path>
 }
 ```
 
+---
+
 ## `forja sync`
 
 ### 功能
 
-同步变更文件。它保留为顶层命令，因为“同步”是独立用户目标。
+同步变更文件到远程。
 
 ### 语法
 
 ```bash
-forja sync [--workspace <path>] [--file <path>] [--repo <name-or-path>] [--json]
-forja sync plan [--workspace <path>] [--file <path>] [--repo <name-or-path>] [--json]
+forja sync [--workspace <path>] [--file <path>] [--repo <name>] [--server <id>] [--json]
+forja sync plan [--workspace <path>] [--file <path>] [--repo <name>] [--server <id>] [--json]
 forja sync reset [--workspace <path>] [--json]
+forja sync transfer [--workspace <path>] [--json]
 ```
 
 ### 输入
 
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `action` | enum | 否 | 为空、`plan`、`reset`。 |
-| `--file <path>` | path | 否 | 指定单个文件，可重复。 |
-| `--repo <name-or-path>` | string | 否 | 指定 repo 名称或单仓库远程目标路径。 |
+| `action` | enum | 否 | 为空、`plan`、`reset`、`transfer`。 |
+| `--file <path>` | path | 否 | 指定文件，可重复。 |
+| `--repo <name>` | string | 否 | 指定 repo。 |
+| `--server <id>` | string | 否 | 临时覆盖服务器。 |
 | `--workspace` | path | 否 | 工作区路径。 |
 | `--json` | boolean | 否 | 输出 JSON。 |
-
-### 行为
-
-1. 读取 sync 配置。
-2. 缺少 server 或 remote path 时失败，不尝试 SSH。
-3. `plan` 只输出计划。
-4. `--file` 限定同步文件。
-5. `--repo` 限定 repo 或覆盖单仓库远程路径。
-6. `reset` 只清状态，不上传。
-7. 如果当前配置启用了 artifact transfer，`sync` 可以在普通同步后执行产物传输；`sync plan` 只展示将要传输的摘要，不执行传输。
-8. artifact transfer 的配置不通过公开 `sync transfer ...` 子命令暴露；状态查看归 `status`，深度检查归 `doctor`，选择/修改归 `use` 的高级配置流程。
 
 ### JSON 输出
 
@@ -947,7 +811,7 @@ forja sync reset [--workspace <path>] [--json]
   "syncAction": "run",
   "server": "dev",
   "remotePath": "/home/dev/workspace",
-  "uploaded": ["app/src/main.cpp", "app/src/main.h"],
+  "uploaded": ["app/src/main.cpp"],
   "deleted": [],
   "skipped": [],
   "transfer": {
@@ -958,24 +822,7 @@ forja sync reset [--workspace <path>] [--json]
 }
 ```
 
-缺配置示例：
-
-```json
-{
-  "ok": false,
-  "action": "sync",
-  "diagnostics": [
-    {
-      "level": "error",
-      "message": "尚未配置同步服务器或远程路径"
-    }
-  ],
-  "nextActions": [
-    "forja list servers",
-    "forja use --server <id> --remote-path <path>"
-  ]
-}
-```
+---
 
 ## 错误码和退出码
 
@@ -986,37 +833,29 @@ forja sync reset [--workspace <path>] [--json]
 | 配置缺失 | `1` | `false` |
 | 构建失败 | `1` | `false` |
 | 远程连接失败 | `1` | `false` |
-| 用户取消交互 | `0` | `false` 或不输出变更，具体由交互实现决定 |
+| 未知 flag | `1` | `false` |
+| 用户取消交互 | `0` | `false` |
+
+## Locale
+
+诊断消息和文本输出支持多语言。`--lang` flag > 已保存的 lang 设置 > `FORJA_LANG` 环境变量 > 系统 locale > 默认 `en`。
+
+**不影响**：
+- `Diagnostic.code` — 永远英文机器码
+- `nextActions` 命令字符串 — 永远英文命令
 
 ## VSCode 对外命令 API
-
-VSCode Command Palette 只显示：
 
 | Command ID | 标题 | 对应 CLI |
 | --- | --- | --- |
 | `forja.status` | `Forja: Status` | `forja status` |
-| `forja.init` | `Forja: Init` | `forja init` |
-| `forja.list` | `Forja: List Targets` | `forja list` |
-| `forja.use` | `Forja: Use Target` | `forja use` |
+| `forja.setup` | `Forja: Setup` | `forja setup` |
+| `forja.list` | `Forja: List` | `forja list` |
+| `forja.use` | `Forja: Use` | `forja use` |
+| `forja.server` | `Forja: Server` | `forja server` |
 | `forja.build` | `Forja: Build` | `forja build` |
 | `forja.run` | `Forja: Run` | `forja run` |
 | `forja.stop` | `Forja: Stop` | `forja stop` |
 | `forja.clean` | `Forja: Clean` | `forja clean` |
 | `forja.doctor` | `Forja: Doctor` | `forja doctor` |
-| `forja.sync` | `Forja: Sync Changes` | `forja sync` |
-
-兼容命令 ID 继续注册但隐藏，例如：
-
-```text
-forja.qt.build
-forja.sdk.build
-forja.remote.qt.build
-```
-
-## 兼容与弃用
-
-- 旧 CLI 命令迁移期继续可用。
-- 旧 VSCode command ID 不删除。
-- 新文档、新 `nextActions`、新帮助文本只推荐统一命令。
-- 文本输出可以提示迁移；JSON 输出不默认加入弃用噪音。
-- 对外 API 以本文档为准。
+| `forja.sync` | `Forja: Sync` | `forja sync` |

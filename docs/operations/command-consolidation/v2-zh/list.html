@@ -57,29 +57,39 @@
 <p><strong>职责</strong>：只读列举可选项。纯文件/配置枚举，不做系统探测。</p>
 
   <h2 id="syntax">语法</h2>
-  <pre><code class="language-bash">forja list [targets|servers|remote-repos|env] [--workspace &lt;path&gt;] [--json]
-forja list servers --detail &lt;id&gt; [--json]</code></pre>
+  <pre><code class="language-bash">forja list [targets|servers|remote-repos|env|remote] [--workspace &lt;path&gt;] [--json]
+forja list servers --detail &lt;id&gt; [--json]
+forja list remote [--detail] [--workspace &lt;path&gt;] [--json]</code></pre>
 
   <h2 id="behavior">行为</h2>
   <ul>
     <li><code>targets</code>（默认）：列出 Qt .pro + SDK .sln/Makefile，标记当前目标和配置完整度。</li>
     <li><code>servers</code>：列出 ServerSummary，不输出密码。</li>
-    <li><code>servers --detail &lt;id&gt;</code>：返回 ServerDetail。</li>
+    <li><code>servers --detail &lt;id&gt;</code>：返回 ServerDetail，不输出密码。</li>
     <li><code>remote-repos</code>：列出远程 repo 映射。</li>
     <li><code>env</code>：列出系统上检测到的工具链路径（Qt/VS/jom/make）。纯路径发现，不做健康验证。</li>
+    <li><code>remote</code>：列出远程配置完整详情（workspace/bin/build-order/transfer/repos）。纯配置读取，不做健康验证。</li>
+    <li><code>remote --detail</code>：展开 buildOrder 完整列表和 transfer artifacts 列表。</li>
+  </ul>
+
+  <h2 id="boundary">与 <code>status</code> 的边界</h2>
+  <ul>
+    <li><code>list remote</code> 回答"配了什么"，输出全部配置细节。</li>
+    <li><code>status</code> 回答"能不能用"，只输出 readiness 判断所需的最小摘要（server/remotePath/locked/workspaceMode）。</li>
   </ul>
 
   <h2 id="absorbed">吸收的旧命令</h2>
-  <p><code>forja qt projects</code>、<code>forja sdk projects</code>、<code>forja sync servers</code>、<code>forja sync server</code>、<code>forja remote repo list</code>、<code>forja qt env</code>、<code>forja sdk env</code></p>
+  <p><code>forja qt projects</code>、<code>forja sdk projects</code>、<code>forja sync servers</code>、<code>forja sync server</code>、<code>forja remote repo list</code>、<code>forja qt env</code>、<code>forja sdk env</code>、<code>forja remote workspace status</code>、<code>forja remote forja-bin status</code>、<code>forja remote build-order status</code>、<code>forja remote transfer status</code></p>
 
   <h2 id="result">Result</h2>
   <pre><code class="language-typescript">interface ListResult extends ForjaJsonResult {
     action: 'list';
-    category: 'targets' | 'servers' | 'remote-repos' | 'env';
+    category: 'targets' | 'servers' | 'remote-repos' | 'env' | 'remote';
     targets?: TargetCandidate[];
     servers?: ServerSummary[] | ServerDetail;
-    remote?: RemoteSummary;
+    remoteRepos?: RemoteRepoSettings[];
     env?: EnvSummary;
+    remote?: RemoteConfigDetail;
 }
 
 interface EnvSummary {
@@ -87,6 +97,20 @@ interface EnvSummary {
     vs?: Array&lt;{ path: string; version?: string }&gt;;
     jom?: string;              // Windows only
     make?: string;             // POSIX only
+}
+
+interface RemoteConfigDetail {
+    workspaceMode: 'legacy' | 'staged';
+    remoteWorkspace?: string;
+    remoteForjaBin?: string;
+    buildOrder?: RemoteBuildOrderItem[];
+    transfer?: {
+        configured: boolean;
+        deployServer?: string;
+        deployPath?: string;
+        artifacts?: string[];
+    };
+    repos?: RemoteRepoSettings[];
 }</code></pre>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
@@ -99,6 +123,7 @@ interface EnvSummary {
     <ul>
       <li><a href="#syntax">语法</a></li>
       <li><a href="#behavior">行为</a></li>
+      <li><a href="#boundary">与 status 的边界</a></li>
       <li><a href="#absorbed">吸收的旧命令</a></li>
       <li><a href="#result">Result</a></li>
     </ul>

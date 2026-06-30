@@ -1,5 +1,5 @@
 /**
- * SDK CLI entry point — called by the unified forja dispatcher.
+ * SDK CLI entry point — called by the forja dispatcher.
  * Provides init/env/projects/status/build/rebuild/clean operations for .sln and Makefile projects.
  */
 
@@ -263,29 +263,27 @@ export function extractErrors(output: string): string[] {
     return output.split(/\r?\n/).filter(l => errorPattern.test(l)).slice(0, 20);
 }
 
-function appendDiagnosticsAndNextActions(lines: string[], diagnostics?: SdkDiagnostic[], nextActions?: string[]): void {
+function appendDiagnosticsAndNextAction(lines: string[], diagnostics?: SdkDiagnostic[], nextAction?: string): void {
     if (diagnostics && diagnostics.length > 0) {
         lines.push('');
         for (const diagnostic of diagnostics) {
             lines.push(`${diagnostic.level}: ${diagnostic.message}`);
         }
     }
-    if (nextActions && nextActions.length > 0) {
+    if (nextAction) {
         lines.push('');
         lines.push('下一步:');
-        for (const action of nextActions) {
-            lines.push(`  ${action}`);
-        }
+        lines.push(`  ${nextAction}`);
     }
 }
 
-function formatSdkInitText(resolved: Record<string, unknown>, diagnostics: SdkDiagnostic[], nextActions: string[]): string {
+function formatSdkInitText(resolved: Record<string, unknown>, diagnostics: SdkDiagnostic[], nextAction?: string): string {
     const lines = [
         `SDK 配置已保存: mode=${resolved.mode}, arch=${resolved.arch}`
     ];
     if (resolved.project) { lines.push(`项目: ${resolved.project}`); }
     if (resolved.vsDevCmdPath) { lines.push(`VS Dev Cmd: ${resolved.vsDevCmdPath}`); }
-    appendDiagnosticsAndNextActions(lines, diagnostics, nextActions);
+    appendDiagnosticsAndNextAction(lines, diagnostics, nextAction);
     return lines.join('\n');
 }
 
@@ -306,7 +304,7 @@ function formatSdkProjectsText(available: Array<Record<string, string>>, current
     return lines.join('\n');
 }
 
-function formatSdkFailureText(action: string, diagnostics: SdkDiagnostic[], nextActions: string[], errors: string[] = [], exitCode?: number): string {
+function formatSdkFailureText(action: string, diagnostics: SdkDiagnostic[], nextAction?: string, errors: string[] = [], exitCode?: number): string {
     const lines = exitCode === undefined
         ? [`SDK ${action} 失败`]
         : [`SDK ${action} 失败 (退出码: ${exitCode})`];
@@ -316,7 +314,7 @@ function formatSdkFailureText(action: string, diagnostics: SdkDiagnostic[], next
             lines.push(`  ${error}`);
         }
     }
-    appendDiagnosticsAndNextActions(lines, diagnostics, nextActions);
+    appendDiagnosticsAndNextAction(lines, diagnostics, nextAction);
     return lines.join('\n');
 }
 
@@ -325,7 +323,7 @@ function getHelpText(): string {
 Forja SDK CLI
 
 用法:
-  forja sdk <action> [options]
+  forja <action> [options]    (SDK 项目)
 
 动作:
   init      初始化本地配置（检测 VS 环境、保存可自动确定的配置）
@@ -347,11 +345,11 @@ Forja SDK CLI
   --json                 JSON 格式输出
 
 示例:
-  forja sdk status --json
-  forja sdk init --json
-  forja sdk use --project Makefile --mode release --json
-  forja sdk env --json
-  forja sdk build --plan --json
+  forja status --json
+  forja setup --json
+  forja use target --project Makefile --mode release --json
+  forja list env --json
+  forja build --plan --json
 `.trim();
 }
 
@@ -395,29 +393,29 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             if (!options.vsDevCmd && vsInstallations.length > 1) { autoSelected.push('vsDevCmd'); }
             if (!settings.pinnedProject && project) { autoSelected.push('project'); }
             if (autoSelected.length > 0) {
-                diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 forja sdk status --json 查看当前配置` });
+                diagnostics.push({ level: 'warning', message: `部分配置为自动选择（${autoSelected.join(', ')}），可用 forja status --json 查看当前配置` });
             }
             if (!project) {
                 if (candidates.length > 1) {
-                    diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，未自动选择，可用 forja sdk projects --json 查看全部` });
+                    diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，未自动选择，可用 forja list targets --json 查看全部` });
                 } else if (candidates.length === 0) {
                     diagnostics.push({ level: 'warning', message: '未检测到项目文件' });
                 }
             }
-            diagnostics.unshift({ level: 'warning', message: `mode/arch 使用默认值 ${mode}/${arch}，可用 forja sdk use --mode <mode> --arch <arch> --json 修改` });
+            diagnostics.unshift({ level: 'warning', message: `mode/arch 使用默认值 ${mode}/${arch}，可用 forja use target --mode <mode> --arch <arch> --json 修改` });
 
             const resolved = { mode, arch, vsDevCmdPath: vsDevCmd || undefined, project: project || undefined };
-            const nextActions = ['forja sdk status --json'];
+            const nextAction = 'forja status --json';
             const out: Record<string, unknown> = {
                 ok: true,
                 action: 'init',
                 resolved,
-                nextActions
+                nextAction
             };
             if (diagnostics.length > 0) { out.diagnostics = diagnostics; }
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else { console.log(formatSdkInitText(resolved, diagnostics, nextActions)); }
+            else { console.log(formatSdkInitText(resolved, diagnostics, nextAction)); }
             return;
         }
 
@@ -437,11 +435,11 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 ok: true,
                 action: 'use',
                 resolved: { mode, arch, vsDevCmdPath: vsDevCmd || undefined, project: project || undefined },
-                nextActions: ['forja sdk status --json']
+                nextAction: 'forja status --json'
             };
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else { console.log('SDK 配置已更新，可执行 forja sdk status 查看状态'); }
+            else { console.log('SDK 配置已更新，可执行 forja status 查看状态'); }
             return;
         }
 
@@ -461,7 +459,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                     ...getSdkPlatformAvailable({ vsInstallations, makePath })
                 },
                 configHints: {
-                    usage: 'forja sdk use [options] --json',
+                    usage: 'forja use target [options] --json',
                     mode: '--mode debug|release',
                     ...(getSdkAvailableArch().length > 1 ? { arch: `--arch ${getSdkAvailableArch().join('|')}` } : {}),
                     ...getSdkPlatformConfigHints()
@@ -501,7 +499,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 action: 'projects',
                 current: currentProject,
                 available,
-                configHints: { usage: 'forja sdk use --project <path> --json' }
+                configHints: { usage: 'forja use target --project <path> --json' }
             };
             if (currentProject && !fs.existsSync(path.join(options.workspace, currentProject))) {
                 out.currentExists = false;
@@ -559,7 +557,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             if (!hasSettings) { diagnostics.push({ level: 'warning', message: '尚未初始化' }); }
             if (!projectExists) {
                 if (candidates.length > 1) {
-                    diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，请使用 forja sdk use --project <path> 指定` });
+                    diagnostics.push({ level: 'warning', message: `发现 ${candidates.length} 个项目文件，请使用 forja use target --project <path> 指定` });
                 } else if (candidates.length === 0) {
                     diagnostics.push({ level: 'warning', message: '未找到项目文件' });
                 } else if (hasSettings) {
@@ -594,7 +592,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                     diagnostics.forEach(d => console.log(`${d.level}: ${d.message}`));
                 }
                 console.log('');
-                console.log(`下一步: forja sdk ${nextAction}`);
+                console.log(`下一步: forja ${nextAction}`);
             }
             return;
         }
@@ -602,15 +600,15 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         const hasSettings = fs.existsSync(sdkSettingsFilePath(options.workspace));
         if (!hasSettings) {
             const diagnostics: SdkDiagnostic[] = [{ level: 'error', message: '尚未初始化' }];
-            const nextActions = ['forja sdk status --json'];
+            const nextAction = 'forja status --json';
             const out = {
                 ok: false,
                 action: options.action,
                 diagnostics,
-                nextActions
+                nextAction
             };
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else { console.error(formatSdkFailureText(options.action, diagnostics, nextActions)); }
+            else { console.error(formatSdkFailureText(options.action, diagnostics, nextAction)); }
             process.exitCode = 1;
             return;
         }
@@ -625,7 +623,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                     action: options.action,
                     project: settings.pinnedProject,
                     diagnostics: [{ level: 'error', message: `项目文件不存在: ${settings.pinnedProject}` }],
-                    nextActions: ['forja sdk status --json']
+                    nextAction: 'forja status --json'
                 };
                 if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
                 else { console.error(`项目文件不存在: ${settings.pinnedProject}`); }
@@ -635,15 +633,15 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         }
         if (!projectPath) {
             if (candidates.length === 0) {
-                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未找到项目文件' }], nextActions: ['forja sdk status --json'] };
+                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未找到项目文件' }], nextAction: 'forja status --json' };
                 if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
                 else { console.error('未找到 .sln 或 Makefile 项目文件'); }
                 process.exitCode = 1;
                 return;
             } else {
-                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未选择 SDK 项目' }], nextActions: ['forja sdk status --json'] };
+                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未选择 SDK 项目' }], nextAction: 'forja status --json' };
                 if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-                else { console.error('未选择 SDK 项目，请先执行 forja sdk status'); }
+                else { console.error('未选择 SDK 项目，请先执行 forja status'); }
                 process.exitCode = 1;
                 return;
             }
@@ -682,7 +680,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
         if (errors.length > 0) { out.errors = errors; }
         if (!out.ok) {
             out.diagnostics = [{ level: 'error', message: '命令执行失败' }];
-            out.nextActions = ['forja sdk status --json'];
+            out.nextAction = 'forja status --json';
         }
 
         if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
@@ -692,7 +690,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 console.error(formatSdkFailureText(
                     options.action,
                     out.diagnostics as SdkDiagnostic[],
-                    out.nextActions as string[],
+                    out.nextAction as string,
                     errors,
                     executed.exitCode
                 ));

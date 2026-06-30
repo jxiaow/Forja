@@ -28,11 +28,13 @@ export interface ExecuteRemoteBridgeResult {
     stderr: string;
     result?: unknown;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): Promise<ExecuteRemoteBridgeResult> {
-    const remoteArgs = [options.target, options.action, '--workspace', options.remotePath, ...options.args];
+    // New unified CLI: commands are top-level (build, run, status, etc.)
+    // No more 'qt'/'sdk' subcommand prefix
+    const remoteArgs = [options.action, '--workspace', options.remotePath, ...options.args];
     if (options.json && !remoteArgs.includes('--json')) {
         remoteArgs.push('--json');
     }
@@ -70,8 +72,7 @@ export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): 
         stdout: executed.stdout,
         stderr: executed.stderr,
         result: parsed,
-        diagnostics,
-        nextActions: []
+        diagnostics
     };
 }
 

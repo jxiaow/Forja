@@ -121,7 +121,7 @@ test('SDK CLI accepts use config options', async () => {
         assert.equal(parsed.resolved.project, 'Makefile');
         assert.equal(parsed.resolved.mode, 'release');
         assert.equal(parsed.resolved.arch, 'x64');
-        assert.deepEqual(parsed.nextActions, ['forja sdk status --json']);
+        assert.deepEqual(parsed.nextActions, ['forja status --json']);
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
         else { process.env.HOME = oldHome; }
@@ -155,7 +155,7 @@ test('SDK CLI build accepts --plan and routes missing config to status', async (
     assert.equal(process.exitCode, 1);
     assert.equal(parsed.ok, false);
     assert.equal(parsed.action, 'build');
-    assert.deepEqual(parsed.nextActions, ['forja sdk status --json']);
+    assert.deepEqual(parsed.nextActions, ['forja status --json']);
 });
 
 test('SDK CLI rejects removed --dry-run alias', async () => {
@@ -233,7 +233,7 @@ test('SDK CLI projects text includes use hint', async () => {
         const output = await captureOutput(() => runSdkCli(['projects', '--workspace', ws]));
 
         assert.match(output, /SDK 项目列表:/);
-        assert.match(output, /修改: forja sdk use --project <path> --json/);
+        assert.match(output, /修改: forja use target --project <path> --json/);
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
         else { process.env.HOME = oldHome; }
@@ -258,7 +258,7 @@ test('SDK CLI init text includes default warnings and next action', async () => 
         assert.match(output, /SDK 配置已保存/);
         assert.match(output, /warning: mode\/arch 使用默认值/);
         assert.match(output, /下一步:/);
-        assert.match(output, /forja sdk status --json/);
+        assert.match(output, /forja status --json/);
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
         else { process.env.HOME = oldHome; }
@@ -283,7 +283,7 @@ test('SDK CLI build text includes next action when config is missing', async () 
         assert.equal(process.exitCode, 1);
         assert.match(output, /error: 尚未初始化/);
         assert.match(output, /下一步:/);
-        assert.match(output, /forja sdk status --json/);
+        assert.match(output, /forja status --json/);
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
         else { process.env.HOME = oldHome; }
@@ -597,7 +597,7 @@ test('SDK CLI build plan requires saved SDK config even when one candidate exist
 
         assert.equal(process.exitCode, 1);
         assert.equal(parsed.ok, false);
-        assert.deepEqual(parsed.nextActions, ['forja sdk status --json']);
+        assert.deepEqual(parsed.nextActions, ['forja status --json']);
         assert.ok(parsed.diagnostics[0].message.includes('尚未初始化'));
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }

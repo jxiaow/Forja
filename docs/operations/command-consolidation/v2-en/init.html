@@ -517,12 +517,13 @@ Error: Failed to write configuration: Permission denied</code></pre>
   <h2 id="implementation-details">Implementation Details</h2>
 
   <h3 id="remote-bridge-command">--remote Bridge Command Construction</h3>
-  <p><code>forja init --remote</code> actually executes the following remote command format:</p>
+  <p><code>forja init --remote</code> executes remote init via <code>executeRemoteBridge</code> for each detected target kind (qt/sdk):</p>
   <pre><code class="language-bash">cd &lt;remotePath&gt; &amp;&amp; &lt;remoteForjaBin&gt; &lt;target&gt; init --workspace &lt;remotePath&gt; --json</code></pre>
   <ul>
-    <li><code>&lt;target&gt;</code>: Determined by the local active target's <code>kind</code> (<code>qt</code> or <code>sdk</code>). If not set, defaults to <code>qt</code>.</li>
+    <li><code>&lt;target&gt;</code>: <code>qt</code> or <code>sdk</code>, determined by the detected target kinds. If an activeTarget exists, only its kind is used. Otherwise defaults to <code>qt</code>.</li>
     <li><code>&lt;remoteForjaBin&gt;</code>: From <code>RemoteSettings.remoteForjaBin</code>, defaults to <code>$HOME/.forja/bin/forja</code>.</li>
     <li>Timeout: Default 120 seconds (consistent with bridge default).</li>
+    <li>If the remote Forja binary is not found (exit 127/126), returns an error pointing to <code>forja doctor fix --remote</code>.</li>
   </ul>
 
   <h3 id="active-target-storage">ActiveTarget Storage</h3>

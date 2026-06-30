@@ -5,54 +5,62 @@ import * as path from 'path';
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 
-test('package contributes only generic sync commands', () => {
+test('package contributes only v2 commands', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8'));
     const commands = pkg.contributes.commands.map((c: { command: string }) => c.command);
 
-    assert.ok(commands.includes('forja.syncChangedFiles'));
+    // v2 commands
+    assert.ok(commands.includes('forja.status'));
+    assert.ok(commands.includes('forja.setup'));
+    assert.ok(commands.includes('forja.list'));
+    assert.ok(commands.includes('forja.use'));
+    assert.ok(commands.includes('forja.server'));
+    assert.ok(commands.includes('forja.build'));
+    assert.ok(commands.includes('forja.run'));
+    assert.ok(commands.includes('forja.stop'));
+    assert.ok(commands.includes('forja.clean'));
+    assert.ok(commands.includes('forja.doctor'));
+    assert.ok(commands.includes('forja.sync'));
+
+    // Old commands should not exist
+    assert.ok(!commands.includes('forja.qt.build'));
+    assert.ok(!commands.includes('forja.sdk.build'));
+    assert.ok(!commands.includes('forja.remote.status'));
+    assert.ok(!commands.includes('forja.syncChangedFiles'));
+
+    // Internal/advanced commands (hidden from command palette)
     assert.ok(commands.includes('forja.syncTestConnection'));
-    assert.ok(!commands.includes('forja.qt.syncChangedFiles'));
-    assert.ok(!commands.includes('forja.qt.syncTestConnection'));
-});
+    assert.ok(commands.includes('forja.showSyncTab'));
+    assert.ok(commands.includes('forja.remoteWorkbench'));
+    assert.ok(commands.includes('forja.remoteTest'));
+    assert.ok(commands.includes('forja.remoteBootstrap'));
+    assert.ok(commands.includes('forja.remoteTransferStatus'));
+    assert.ok(commands.includes('forja.ps'));
 
-test('sync status bar and config panel use generic sync command ids', () => {
-    const watcher = fs.readFileSync(path.join(repoRoot, 'src', 'sync', 'syncWatcher.ts'), 'utf-8');
-    const messageHandler = fs.readFileSync(path.join(repoRoot, 'src', 'ui', 'configPanel', 'messageHandler.ts'), 'utf-8');
-
-    assert.match(watcher, /forja\.syncChangedFiles/);
-    assert.match(watcher, /forja\.showSyncTab/);
-    assert.doesNotMatch(watcher, /forja\.qt\.syncChangedFiles/);
-    assert.doesNotMatch(watcher, /forja\.qt\.showSyncTab/);
-    assert.match(messageHandler, /forja\.syncChangedFiles/);
+    // Verify internal commands are hidden from command palette
+    const palette = pkg.contributes.menus.commandPalette || [];
+    const hiddenCommands = palette.filter((p: { when: string }) => p.when === 'false').map((p: { command: string }) => p.command);
+    assert.ok(hiddenCommands.includes('forja.remoteWorkbench'));
+    assert.ok(hiddenCommands.includes('forja.remoteTest'));
+    assert.ok(hiddenCommands.includes('forja.remoteBootstrap'));
+    assert.ok(hiddenCommands.includes('forja.remoteTransferStatus'));
+    assert.ok(hiddenCommands.includes('forja.ps'));
 });
 
 test('sync command accepts a resource uri for single-file sync', () => {
-    const commands = fs.readFileSync(path.join(repoRoot, 'src', 'qt', 'commands.ts'), 'utf-8');
+    const cmds = fs.readFileSync(path.join(repoRoot, 'src', 'vscode', 'commands.ts'), 'utf-8');
     const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8'));
 
-    assert.match(commands, /\['forja\.syncChangedFiles',\s*\(uri\?: vscode\.Uri\) => executeSyncChangedFiles\(uri\)\]/);
-    assert.ok(pkg.contributes.menus['explorer/context'].some((item: { command: string }) => item.command === 'forja.syncChangedFiles'));
+    assert.match(cmds, /forja\.sync/);
+    assert.ok(pkg.contributes.menus['explorer/context'].some((item: { command: string }) => item.command === 'forja.sync'));
 });
 
-test('extension registers only generic sync tab command', () => {
+test('extension registers commands', () => {
     const extension = fs.readFileSync(path.join(repoRoot, 'src', 'extension.ts'), 'utf-8');
 
-    assert.match(extension, /forja\.showSyncTab/);
-    assert.doesNotMatch(extension, /forja\.qt\.showSyncTab/);
-});
-
-test('internal registered commands have contributed metadata and stay hidden from command palette', () => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8'));
-    const commands = pkg.contributes.commands.map((c: { command: string }) => c.command);
-    const hiddenPaletteCommands = (pkg.contributes.menus.commandPalette || [])
-        .filter((item: { when?: string }) => item.when === 'false')
-        .map((item: { command: string }) => item.command);
-
-    assert.ok(commands.includes('forja.showSyncTab'));
-    assert.ok(commands.includes('forja.qt.loadManualProject'));
-    assert.ok(hiddenPaletteCommands.includes('forja.showSyncTab'));
-    assert.ok(hiddenPaletteCommands.includes('forja.qt.loadManualProject'));
-    assert.ok(hiddenPaletteCommands.includes('forja.qt.runCustomCommand'));
+    assert.match(extension, /registerCommands/);
+    assert.doesNotMatch(extension, /registerQtCommands/);
+    assert.doesNotMatch(extension, /registerRemoteCommands/);
 });
 
 test('sync test connection quick pick resolves duplicate server names by id', () => {

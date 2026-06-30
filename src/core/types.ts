@@ -32,3 +32,53 @@ export interface EnvInfo {
     vsCandidates: VSInfo[];
     jom: string | null;
 }
+
+// ── CLI execution result types (shared by qt/cli, sdk/shared, cli/commands) ──
+
+export type CliAction = 'init' | 'use' | 'status' | 'env' | 'projects' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'ps' | 'rcc';
+export type CliExecutionMode = 'dryRun' | 'execute';
+export type CliBuildMode = 'debug' | 'release';
+export type CliArch = 'x86' | 'x64';
+
+export interface CliDiagnostic {
+    level: 'info' | 'warning' | 'error';
+    message: string;
+}
+
+export interface CliResolvedConfig {
+    mode: CliBuildMode;
+    arch: CliArch;
+    qtPath: string;
+    vsDevShell: string;
+    target: string;
+    jomPath?: string;
+    qtVersion?: string;
+    vsVersion?: string;
+    project?: string;
+}
+
+export interface CliResult {
+    ok: boolean;
+    action: CliAction;
+    mode: CliExecutionMode;
+    workspace: string;
+    project: string | null;
+    commands: string[];
+    shellCommand: string;
+    nextAction?: string;
+    exitCode: number | null;
+    durationMs: number;
+    stdout: string;
+    stderr: string;
+    errors: string[];
+    warningSummary?: { total: number; summary: string };
+    logFile: string | null;
+    buildLogFile?: string;
+    executablePath?: string;
+    pid?: number;
+    runtimeExitCode?: number;
+    diagnostics: CliDiagnostic[];
+    resolved: CliResolvedConfig | null;
+    rccProjectPath?: string;
+    data?: Record<string, unknown>;
+}

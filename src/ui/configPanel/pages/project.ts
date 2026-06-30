@@ -135,12 +135,15 @@ function buildQtSection(data: TemplateData): string {
         { value: 'c++23', label: 'C++23' }
     ], data.cppStandard);
     h += '</div></div>';
-    h += '<div class="ci" style="flex-direction:column;align-items:stretch"><div class="cii"><div class="cil">排除目录</div>';
-    h += '<div class="cid">IntelliSense 扫描时跳过，已内置 build*, debug, release</div></div>';
-    h += '<div style="margin-top:8px">';
-    h += '<div class="tag-input" id="edw">';
-    h += '<input id="edi" placeholder="回车添加" onkeydown="onEK(event)"/>';
-    h += '</div></div></div>';
+    // 排除目录 — 仅 Qt 目录扫描模式需要，SDK 从 .vcxproj 解析不需要
+    if (data.qtActive) {
+        h += '<div class="ci" style="flex-direction:column;align-items:stretch"><div class="cii"><div class="cil">排除目录</div>';
+        h += '<div class="cid">Qt IntelliSense 目录扫描时跳过，已内置 build*, debug, release</div></div>';
+        h += '<div style="margin-top:8px">';
+        h += '<div class="tag-input" id="edw">';
+        h += '<input id="edi" placeholder="回车添加" onkeydown="onEK(event)"/>';
+        h += '</div></div></div>';
+    }
     h += '<div style="margin-top:12px"><button class="btn btn-primary"';
     h += " onclick=\"vscode.postMessage({command:'generateIntelliSense',";
     h += "cStandard:document.querySelector('#cStd .csel-trigger').dataset.value,";
@@ -279,6 +282,14 @@ function buildSdkSection(data: TemplateData): string {
     h += 'event.currentTarget.classList.add("active");';
     h += 'vscode.postMessage({command:"saveSdkArch",value:a})}';
     h += '</script>';
+
+    // SDK IntelliSense 生成按钮
+    h += '<div class="ci" style="margin-top:12px">';
+    h += '<button class="btn btn-primary"';
+    h += " onclick=\"vscode.postMessage({command:'generateIntelliSense',";
+    h += "cStandard:document.querySelector('#cStd .csel-trigger')?.dataset.value,";
+    h += "cppStandard:document.querySelector('#cppStd .csel-trigger')?.dataset.value})\">";
+    h += '生成 SDK IntelliSense 配置</button></div>';
 
     h += '</details>';
     return h;

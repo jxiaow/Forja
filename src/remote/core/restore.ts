@@ -19,7 +19,7 @@ export interface ExecuteRemoteRestoreResult {
     targetId?: string;
     stateCleaned?: boolean;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export async function executeRemoteRestore(options: ExecuteRemoteRestoreOptions): Promise<ExecuteRemoteRestoreResult> {
@@ -102,7 +102,7 @@ function buildOverlayCleanupCommand(targetId: string, repo: string, paths: strin
 }
 
 function result(ok: boolean, repo: string, restored: string[], diagnostics: RemoteDiagnostic[], targetId?: string, stateCleaned?: boolean): ExecuteRemoteRestoreResult {
-    return { ok, action: 'restore', mode: 'remote', repo, restored, targetId, stateCleaned, diagnostics, nextActions: [] };
+    return { ok, action: 'restore', mode: 'remote', repo, restored, targetId, stateCleaned, diagnostics };
 }
 
 function trim(value: string): string {

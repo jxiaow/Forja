@@ -517,12 +517,13 @@ Error: Failed to write configuration: Permission denied</code></pre>
   <h2 id="implementation-details">实现细节</h2>
 
   <h3 id="remote-bridge-command">--remote Bridge 命令构造</h3>
-  <p><code>forja init --remote</code> 实际执行的远端命令格式：</p>
+  <p><code>forja init --remote</code> 通过 <code>executeRemoteBridge</code> 对每个检测到的 target kind（qt/sdk）分别执行远端初始化：</p>
   <pre><code class="language-bash">cd &lt;remotePath&gt; &amp;&amp; &lt;remoteForjaBin&gt; &lt;target&gt; init --workspace &lt;remotePath&gt; --json</code></pre>
   <ul>
-    <li><code>&lt;target&gt;</code>：根据本地 active target 的 <code>kind</code> 决定（<code>qt</code> 或 <code>sdk</code>）。若未设置，默认 <code>qt</code>。</li>
+    <li><code>&lt;target&gt;</code>：<code>qt</code> 或 <code>sdk</code>，由本地检测到的 target kind 决定。若有 activeTarget 则只用其 kind，否则默认 <code>qt</code>。</li>
     <li><code>&lt;remoteForjaBin&gt;</code>：来自 <code>RemoteSettings.remoteForjaBin</code>，默认 <code>$HOME/.forja/bin/forja</code>。</li>
     <li>超时：默认 120 秒（与 bridge 默认值一致）。</li>
+    <li>远端 Forja bin 不存在时（exit 127/126），返回错误并指向 <code>forja doctor fix --remote</code>。</li>
   </ul>
 
   <h3 id="active-target-storage">ActiveTarget 存储</h3>

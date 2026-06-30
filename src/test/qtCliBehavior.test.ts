@@ -52,7 +52,7 @@ test('qt env text shows mode and arch candidates without mandatory json hint', a
     assert.match(output, /debug/);
     assert.match(output, /release/);
     assert.match(output, /可用 arch:/);
-    assert.match(output, /修改: forja qt use --mode <mode> --qt-path <path> \[options\]/);
+    assert.match(output, /修改: forja use target --mode/);
     assert.doesNotMatch(output, /修改: .*--json/);
 });
 
@@ -62,7 +62,7 @@ test('qt projects text use hint includes optional target without mandatory json 
 
     const output = await captureStdout(() => runQtCli(['projects', '--workspace', workspace]));
 
-    assert.match(output, /修改: forja qt use --project <path> \[--target <name>\]/);
+    assert.match(output, /修改: forja use target --project <path>/);
     assert.doesNotMatch(output, /修改: .*--json/);
 });
 
@@ -78,9 +78,9 @@ test('qt init text includes env next step for auto-selected Qt path without mand
 
         assert.match(output, /warning: 部分配置为自动选择/);
         assert.match(output, /下一步:/);
-        assert.match(output, /forja qt env/);
-        assert.match(output, /forja qt projects/);
-        assert.match(output, /forja qt use --project <path>/);
+        assert.match(output, /forja list env/);
+        assert.match(output, /forja list targets/);
+        assert.match(output, /forja use target --project <path>/);
         assert.doesNotMatch(output, /下一步:[\s\S]*--json/);
     } finally {
         if (oldPath === undefined) { delete process.env.FORJA_QT_PATH; }
@@ -399,8 +399,8 @@ test('forja sync status --json reports missing sync configuration', async () => 
     assert.equal(data.checks.remotePath, false);
     assert.deepEqual(data.missing, ['enabled', 'servers', 'selectedServer', 'remotePath']);
     assert.equal(data.nextAction, 'servers');
-    assert.ok(data.nextActions.includes('forja sync servers --json'));
-    assert.ok(data.nextActions.includes('forja sync add-server --name <name> --host <host> --username <name> --json'));
+    assert.ok(data.nextAction === 'forja sync servers --json');
+    assert.ok(data.nextAction === 'forja sync add-server --name <name> --host <host> --username <name> --json');
     assert.equal(process.exitCode, 1);
 });
 
@@ -436,12 +436,12 @@ test('forja sync status --json reports ready sync target without git repository'
     assert.equal(data.remotePath, '/remote/app');
     assert.deepEqual(data.missing, []);
     assert.equal(data.nextAction, 'sync');
-    assert.ok(data.nextActions.includes('forja sync --plan --json'));
-    assert.ok(data.nextActions.includes('forja sync test-connection --json'));
+    assert.ok(data.nextAction === 'forja sync --plan --json');
+    assert.ok(data.nextAction === 'forja sync test-connection --json');
     assert.equal(process.exitCode, 0);
 });
 
-test('forja sync use persists selected server and remote path', async () => {
+test('forja use sync persists selected server and remote path', async () => {
     const workspace = makeWorkspace();
     writeServers([{
         id: 'server-1',
@@ -541,14 +541,14 @@ test('forja sync test-connection reports missing password without spawning ssh',
     assert.equal(data.ok, false);
     assert.equal(data.action, 'test-connection');
     assert.match(data.diagnostics[0].message, /未提供密码/);
-    assert.ok(data.nextActions.includes('设置环境变量 FORJA_SSH_PASSWORD 后重试'));
+    assert.ok(data.nextAction === '设置环境变量 FORJA_SSH_PASSWORD 后重试');
     assert.equal(process.exitCode, 1);
 });
 
 test('forja sync help documents workflow and persistent use command', async () => {
     const output = await captureStdout(() => runSyncCli(['--help']));
 
-    assert.match(output, /forja sync use --server <id>/);
+    assert.match(output, /forja use sync --server <id>/);
     assert.match(output, /forja sync test-connection/);
     assert.match(output, /--server .*临时/);
     assert.match(output, /use .*保存/);
@@ -685,7 +685,7 @@ test('forja sync server selectors reject duplicate server names', async () => {
     assert.match(data.diagnostics[0].message, /匹配到多个服务器/);
 });
 
-test('forja sync use migrates existing unique server name selection without dropping remote path', async () => {
+test('forja use sync migrates existing unique server name selection without dropping remote path', async () => {
     const workspace = makeWorkspace();
     writeServers([]);
 

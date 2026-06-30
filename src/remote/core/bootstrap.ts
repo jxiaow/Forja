@@ -12,7 +12,7 @@ export interface BootstrapArtifactResult {
     artifactPath?: string;
     sha256?: string;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export interface RemoteUploader {
@@ -35,7 +35,7 @@ export interface ExecuteRemoteBootstrapResult {
     remoteBin: string;
     stages: Array<{ name: string; ok: boolean; message?: string }>;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export function findBootstrapArtifact(root: string = process.cwd()): BootstrapArtifactResult {
@@ -64,11 +64,11 @@ export function findBootstrapArtifact(root: string = process.cwd()): BootstrapAr
             version,
             artifactPath,
             diagnostics: [{ level: 'error', message: `缺少 bootstrap artifact: ${artifactPath}` }],
-            nextActions: ['npm run build:cli', 'npm run package:all']
+            nextAction: 'npm run build:cli'
         };
     }
     const sha256 = crypto.createHash('sha256').update(fs.readFileSync(artifactPath)).digest('hex');
-    return { ok: true, version, artifactPath, sha256, diagnostics: [], nextActions: [] };
+    return { ok: true, version, artifactPath, sha256, diagnostics: [] };
 }
 
 export function findPackageRoot(start: string): string | null {
@@ -95,7 +95,7 @@ function packStandalonePackage(packageRoot: string, version: string): BootstrapA
         const filename = parsed[0]?.filename || `forja-${version}.tgz`;
         const artifactPath = path.join(outDir, filename);
         if (fs.existsSync(artifactPath)) {
-            return { ok: true, version, artifactPath, diagnostics: [], nextActions: [] };
+            return { ok: true, version, artifactPath, diagnostics: [] };
         }
         return missing(`standalone bootstrap artifact 生成失败: ${artifactPath}`);
     } catch (error) {
@@ -104,7 +104,7 @@ function packStandalonePackage(packageRoot: string, version: string): BootstrapA
             ok: false,
             version,
             diagnostics: [{ level: 'error', message: `standalone bootstrap artifact 生成失败: ${message}` }],
-            nextActions: ['确认本机 npm 可用后重试 forja remote bootstrap']
+            nextAction: '确认本机 npm 可用后重试 forja doctor fix --remote'
         };
     }
 }
@@ -117,7 +117,7 @@ export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOpti
 
     if (!artifact.ok || !artifact.version || !artifact.artifactPath || !artifact.sha256) {
         diagnostics.push({ level: 'error', message: 'bootstrap artifact 不可用' });
-        return { ok: false, action: 'bootstrap', mode: 'remote', version: artifact.version, artifact: artifact.artifactPath, sha256: artifact.sha256, remoteBin, stages, diagnostics, nextActions: artifact.nextActions };
+        return { ok: false, action: 'bootstrap', mode: 'remote', version: artifact.version, artifact: artifact.artifactPath, sha256: artifact.sha256, remoteBin, stages, diagnostics, nextAction: artifact.nextAction };
     }
 
     const version = artifact.version;
@@ -133,7 +133,7 @@ export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOpti
     if (preflight.exitCode !== 0) {
         const detail = trim(preflight.stderr);
         diagnostics.push({ level: 'error', message: '远端缺少 node 或 npm，或 ~/.forja 不可写，无法执行 bootstrap 安装' + (detail ? ': ' + detail : '') });
-        return failure(artifact, remoteBin, stages, diagnostics, bootstrapFallbackActions());
+        return failure(artifact, remoteBin, stages, diagnostics, bootstrapFallbackAction());
     }
 
     const prepare = await options.runner.run(`mkdir -p ${homePath('.forja', 'bootstrap')} ${homePath('.forja', 'runtime', version)} ${homePath('.forja', 'bin')}`, 10000);
@@ -192,8 +192,7 @@ export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOpti
         sha256: artifact.sha256,
         remoteBin,
         stages,
-        diagnostics,
-        nextActions: []
+        diagnostics
     };
 }
 
@@ -202,7 +201,7 @@ function failure(
     remoteBin: string,
     stages: ExecuteRemoteBootstrapResult['stages'],
     diagnostics: RemoteDiagnostic[],
-    nextActions: string[] = []
+    nextAction?: string
 ): ExecuteRemoteBootstrapResult {
     return {
         ok: false,
@@ -214,16 +213,12 @@ function failure(
         remoteBin,
         stages,
         diagnostics,
-        nextActions
+        nextAction
     };
 }
 
-function bootstrapFallbackActions(): string[] {
-    return [
-        '在远端预装 Node.js 和 npm 后重试 forja remote bootstrap',
-        '配置 remoteForjaBin 指向远端已有 forja CLI',
-        'forja remote doctor --json'
-    ];
+function bootstrapFallbackAction(): string {
+    return '在远端预装 Node.js 和 npm 后重试 forja doctor fix --remote';
 }
 
 function homePath(...segments: string[]): string {
@@ -235,5 +230,5 @@ function trim(value: string): string {
 }
 
 function missing(message: string): BootstrapArtifactResult {
-    return { ok: false, diagnostics: [{ level: 'error', message }], nextActions: ['npm run build:cli', 'npm run package:all'] };
+    return { ok: false, diagnostics: [{ level: 'error', message }], nextAction: 'npm run build:cli' };
 }

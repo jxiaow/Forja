@@ -112,7 +112,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
                 process.exitCode = 1;
-                writeOutput(blockedResult('bootstrap', resolved.diagnostics, resolved.nextActions), options.json);
+                writeOutput(blockedResult('bootstrap', resolved.diagnostics, resolved.nextAction), options.json);
                 return;
             }
             const artifact = findBootstrapArtifact(cliPackageRoot());
@@ -138,7 +138,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 settings.buildOrder = [];
                 saveRemoteSettings(options.workspace, settings);
             }
-            writeOutput({ ok: true, action: 'buildOrder', mode: 'remote', buildOrder: settings.buildOrder, diagnostics: [], nextActions: [] }, options.json);
+            writeOutput({ ok: true, action: 'buildOrder', mode: 'remote', buildOrder: settings.buildOrder, diagnostics: [] }, options.json);
             return;
         }
         if (options.action === 'workspaceSettings') {
@@ -155,7 +155,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 settings.repos = [];
                 saveRemoteSettings(options.workspace, settings);
             }
-            writeOutput({ ok: true, action: 'workspace', mode: 'remote', workspaceMode: settings.workspaceMode, profile: settings.profile, remoteWorkspace: settings.remoteWorkspace, repos: settings.repos, diagnostics: [], nextActions: [] }, options.json);
+            writeOutput({ ok: true, action: 'workspace', mode: 'remote', workspaceMode: settings.workspaceMode, profile: settings.profile, remoteWorkspace: settings.remoteWorkspace, repos: settings.repos, diagnostics: [] }, options.json);
             return;
         }
         if (options.action === 'repoSettings') {
@@ -171,7 +171,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 settings.repos = [];
                 saveRemoteSettings(options.workspace, settings);
             }
-            writeOutput({ ok: true, action: 'repo', mode: 'remote', repos: settings.repos, diagnostics: [], nextActions: [] }, options.json);
+            writeOutput({ ok: true, action: 'repo', mode: 'remote', repos: settings.repos, diagnostics: [] }, options.json);
             return;
         }
         if (options.action === 'forjaBinSettings') {
@@ -183,7 +183,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 settings.remoteForjaBin = '';
                 saveRemoteSettings(options.workspace, settings);
             }
-            writeOutput({ ok: true, action: 'forjaBin', mode: 'remote', remoteForjaBin: settings.remoteForjaBin, diagnostics: [], nextActions: [] }, options.json);
+            writeOutput({ ok: true, action: 'forjaBin', mode: 'remote', remoteForjaBin: settings.remoteForjaBin, diagnostics: [] }, options.json);
             return;
         }
         if (options.action === 'transfer') {
@@ -202,19 +202,19 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 const transfer = settings.transfer;
                 if (!transfer) {
                     process.exitCode = 1;
-                    writeOutput({ ok: false, action: 'transfer', mode: 'remote', diagnostics: [{ level: 'error', message: 'remote transfer 尚未配置' }], nextActions: ['forja remote transfer set --server <id> --path <deployPath> --artifact <path>'] }, options.json);
+                    writeOutput({ ok: false, action: 'transfer', mode: 'remote', diagnostics: [{ level: 'error', message: 'remote transfer 尚未配置' }], nextAction: 'forja use remote transfer set --server <id> --path <deployPath> --artifact <path>' }, options.json);
                     return;
                 }
                 const resolved = resolveRemoteConfig(options.workspace);
                 if (!resolved.config) {
                     process.exitCode = 1;
-                    writeOutput({ ...blockedResult('transfer', resolved.diagnostics, resolved.nextActions) }, options.json);
+                    writeOutput({ ...blockedResult('transfer', resolved.diagnostics, resolved.nextAction) }, options.json);
                     return;
                 }
                 const deployServer = getServerById(transfer.deployServer);
                 if (!deployServer) {
                     process.exitCode = 1;
-                    writeOutput({ ok: false, action: 'transfer', mode: 'remote', diagnostics: [{ level: 'error', message: '部署服务器不存在: ' + transfer.deployServer }], nextActions: ['检查 ~/.forja/servers.json'] }, options.json);
+                    writeOutput({ ok: false, action: 'transfer', mode: 'remote', diagnostics: [{ level: 'error', message: '部署服务器不存在: ' + transfer.deployServer }], nextAction: '检查 ~/.forja/servers.json' }, options.json);
                     return;
                 }
                 const runner = createSshRunner(resolved.config.server, resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null);
@@ -231,14 +231,14 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 transfer: settings.transfer,
                 deployServer
             });
-            writeOutput({ ok: true, action: 'transfer', mode: 'remote', status, transfer: settings.transfer, diagnostics: [...resolved.diagnostics, ...status.diagnostics], nextActions: unique([...resolved.nextActions, ...status.nextActions]) }, options.json);
+            writeOutput({ ok: true, action: 'transfer', mode: 'remote', status, transfer: settings.transfer, diagnostics: [...resolved.diagnostics, ...status.diagnostics], nextAction: resolved.nextAction || status.nextAction }, options.json);
             return;
         }
         if (options.action === 'bridge') {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
                 process.exitCode = 1;
-                writeOutput({ ...blockedResult('bridge', resolved.diagnostics, resolved.nextActions), target: options.target, remoteAction: options.remoteAction }, options.json);
+                writeOutput({ ...blockedResult('bridge', resolved.diagnostics, resolved.nextAction), target: options.target, remoteAction: options.remoteAction }, options.json);
                 return;
             }
             const runner = createSshRunner(resolved.config.server, resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null);
@@ -268,7 +268,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
                 process.exitCode = 1;
-                writeOutput({ ...blockedResult('preparedAction', resolved.diagnostics, resolved.nextActions), target: options.target, remoteAction: options.remoteAction }, options.json);
+                writeOutput({ ...blockedResult('preparedAction', resolved.diagnostics, resolved.nextAction), target: options.target, remoteAction: options.remoteAction }, options.json);
                 return;
             }
             const password = resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null;
@@ -311,7 +311,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const resolved = resolveRemoteConfig(options.workspace);
             if (!resolved.config) {
                 process.exitCode = 1;
-                writeOutput({ ...blockedResult(options.action, resolved.diagnostics, resolved.nextActions), target: options.target }, options.json);
+                writeOutput({ ...blockedResult(options.action, resolved.diagnostics, resolved.nextAction), target: options.target }, options.json);
                 return;
             }
             const runner = createSshRunner(resolved.config.server, resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null);
@@ -338,7 +338,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
         const resolved = resolveRemoteConfig(options.workspace);
         if (!resolved.config) {
             process.exitCode = 1;
-            writeOutput(blockedResult('unlock', resolved.diagnostics, resolved.nextActions), options.json);
+            writeOutput(blockedResult('unlock', resolved.diagnostics, resolved.nextAction), options.json);
             return;
         }
         const runner = createSshRunner(resolved.config.server, resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null);
@@ -681,8 +681,8 @@ function remoteSupportMessage(target: RemoteBridgeTarget): string {
     return 'remote sdk 仅支持 status/init/use/build/rebuild/clean/restore/reset/clean-untracked';
 }
 
-function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'cleanUntracked' | 'preparedAction' | 'transfer', diagnostics: RemoteDiagnostic[], nextActions: string[]): Record<string, unknown> {
-    return { ok: false, action, mode: 'remote', diagnostics, nextActions };
+function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'cleanUntracked' | 'preparedAction' | 'transfer', diagnostics: RemoteDiagnostic[], nextAction?: string): Record<string, unknown> {
+    return { ok: false, action, mode: 'remote', diagnostics, nextAction };
 }
 
 function parseBuildOrderItems(items: string[]): RemoteBuildOrderItem[] {
@@ -774,10 +774,6 @@ function isRemoteRepoRole(value: unknown): value is RemoteRepoSettings['role'] {
         || value === 'skip';
 }
 
-function unique(values: string[]): string[] {
-    return Array.from(new Set(values));
-}
-
 function cliPackageRoot(): string {
     return findPackageRoot(__dirname) || path.resolve(__dirname, '..', '..', '..');
 }
@@ -794,7 +790,7 @@ function writeOutput(result: unknown, json: boolean): void {
         stdout?: string;
         remote?: { stdout?: string };
         diagnostics?: Array<{ message: string }>;
-        nextActions?: string[];
+        nextAction?: string;
         server?: string;
         remotePath?: string;
         remoteSettings?: {
@@ -807,7 +803,7 @@ function writeOutput(result: unknown, json: boolean): void {
             configured: boolean;
             plan: Array<{ source: string; destination: string }>;
         };
-        checks?: Array<{ name: string; ok: boolean | null; message?: string; nextActions?: string[] }>;
+        checks?: Array<{ name: string; ok: boolean | null; message?: string; nextAction?: string }>;
         autoFixes?: Array<{ name: string; available: boolean; command: string; reason?: string }>;
     };
     if (out.action === 'status') {
@@ -842,9 +838,9 @@ function formatRemoteDoctor(out: {
     overall?: string;
     server?: string;
     remotePath?: string;
-    checks?: Array<{ name: string; ok: boolean | null; message?: string; nextActions?: string[] }>;
+    checks?: Array<{ name: string; ok: boolean | null; message?: string; nextAction?: string }>;
     diagnostics?: Array<{ message: string }>;
-    nextActions?: string[];
+    nextAction?: string;
     autoFixes?: Array<{ name: string; available: boolean; command: string; reason?: string }>;
 }): string {
     const lines = ['Remote doctor: ' + (out.overall || 'unknown')];
@@ -860,8 +856,9 @@ function formatRemoteDoctor(out: {
     if (out.diagnostics && out.diagnostics.length > 0) {
         for (const item of out.diagnostics) { lines.push('diagnostic: ' + item.message); }
     }
-    if (out.nextActions && out.nextActions.length > 0) {
-        for (const item of out.nextActions) { lines.push('next: ' + item); }
+    if (out.nextAction) {
+        if (out.nextAction) {
+            const item = out.nextAction; lines.push('next: ' + item); }
     }
     return lines.join('\n');
 }
@@ -876,7 +873,7 @@ function formatRemoteStatus(out: {
         transfer: { configured: boolean; deployServer: string | null; deployPath: string | null; artifactCount: number };
     };
     diagnostics?: Array<{ message: string }>;
-    nextActions?: string[];
+    nextAction?: string;
 }): string {
     const lines = ['Remote status: ' + (out.overall || 'unknown')];
     if (out.server) { lines.push('server: ' + out.server); }
@@ -890,8 +887,9 @@ function formatRemoteStatus(out: {
     if (out.diagnostics && out.diagnostics.length > 0) {
         for (const item of out.diagnostics) { lines.push('diagnostic: ' + item.message); }
     }
-    if (out.nextActions && out.nextActions.length > 0) {
-        for (const item of out.nextActions) { lines.push('next: ' + item); }
+    if (out.nextAction) {
+        if (out.nextAction) {
+            const item = out.nextAction; lines.push('next: ' + item); }
     }
     return lines.join('\n');
 }

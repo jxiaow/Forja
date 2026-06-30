@@ -118,7 +118,8 @@ function runCancellableProcess(command: string, args: string[], askpass: ReturnT
 /** SCP 上传单个文件。 */
 export async function scpUpload(server: ServerConfig, localFile: string, remoteFile: string, password: string | null, token?: CancellationTokenLike): Promise<void> {
     const baseArgs = buildScpArgs(server);
-    const dest = `${sshTarget(server)}:${quoteForRemoteShell(remoteFile)}`;
+    // SCP 远程路径不经过本地 shell，不要加 shell 引号——引号会被远端当作文件名的一部分
+    const dest = `${sshTarget(server)}:${remoteFile}`;
     const args = [...baseArgs, localFile, dest];
 
     const askpass = createAskpassEnv(server.authMode === 'password' ? password : null);
@@ -176,7 +177,7 @@ export async function ensureRemoteDir(server: ServerConfig, remoteDir: string, p
 
 /** 测试 SSH 连接。 */
 export async function testConnection(server: ServerConfig, password: string | null): Promise<TestConnectionResult> {
-    const sshArgs = buildSshArgs(server, { extraOptions: ['ConnectTimeout=10'] });
+    const sshArgs = buildSshArgs(server);
     const args = [...sshArgs, sshTarget(server), 'echo ok'];
     const askpass = createAskpassEnv(
         server.authMode === 'password' ? password : null, `test-${process.pid}`

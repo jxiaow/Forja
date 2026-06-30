@@ -28,8 +28,8 @@ export function createBuilder(config: PlatformConfig): PlatformBuilder {
             return new vscode.ShellExecution(exec.commandLine);
         },
 
-        killApp(exeName: string): string {
-            return config.killCommand(exeName);
+        killApp(exeName: string, exePath?: string): string {
+            return config.killCommand(exeName, exePath);
         },
 
         qmakeCommands(cfg: BuildConfig, extraConfigs: string[] = []): CommandPlan {

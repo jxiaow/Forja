@@ -78,7 +78,14 @@
   </ol>
 
   <h2 id="absorbed">Absorbed Commands</h2>
-  <p><code>forja qt status</code>, <code>forja sdk status</code>, <code>forja remote status</code>, <code>forja sync status</code>, <code>forja qt ps</code>, <code>forja remote qt ps</code>, <code>forja remote transfer status</code>, <code>forja remote workspace status</code>, <code>forja remote forja-bin status</code>, <code>forja remote build-order status</code></p>
+  <p><code>forja qt status</code>, <code>forja sdk status</code>, <code>forja remote status</code>, <code>forja sync status</code>, <code>forja qt ps</code>, <code>forja remote qt ps</code></p>
+  <p><strong>Note</strong>: The following old commands have been moved to <code>forja list remote</code> (pure config enumeration): <code>forja remote workspace status</code>, <code>forja remote forja-bin status</code>, <code>forja remote build-order status</code>, <code>forja remote transfer status</code></p>
+
+  <h2 id="boundary">Boundary with <code>list</code></h2>
+  <ul>
+    <li><code>status</code> answers "can it be used", only outputs minimal summary needed for readiness judgment (server/remotePath/locked/workspaceMode).</li>
+    <li><code>list remote</code> answers "what is configured", outputs all remote configuration details (workspace/bin/build-order/transfer/repos).</li>
+  </ul>
 
   <h2 id="result">Result</h2>
   <pre><code class="language-typescript">interface StatusResult extends ForjaJsonResult {
@@ -101,7 +108,7 @@ interface RemoteStatusSummary {
     runAt: 'local' | 'remote';
     server?: { id: string; name: string; host: string };
     remotePath?: string;
-    remoteForjaVersion?: string;
+    remoteForjaBin?: string;
     locked?: boolean;
     workspaceMode?: 'legacy' | 'staged';
 }
@@ -270,7 +277,7 @@ Next:
         "runAt": "remote",
         "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
         "remotePath": "/home/user/project",
-        "remoteForjaVersion": "1.2.3",
+        "remoteForjaBin": "1.2.3",
         "locked": false,
         "workspaceMode": "legacy"
     },
@@ -643,7 +650,7 @@ Next:
         "runAt": "remote",
         "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
         "remotePath": "/home/user/project",
-        "remoteForjaVersion": "0.9.0",
+        "remoteForjaBin": "0.9.0",
         "locked": false
     },
     "diagnostics": [
@@ -694,7 +701,7 @@ Next:
         "runAt": "remote",
         "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
         "remotePath": "/home/user/project",
-        "remoteForjaVersion": "1.2.3",
+        "remoteForjaBin": "1.2.3",
         "locked": true
     },
     "diagnostics": [
@@ -988,6 +995,7 @@ Next:
       <li><a href="#syntax">Syntax</a></li>
       <li><a href="#behavior">Behavior</a></li>
       <li><a href="#absorbed">Absorbed Commands</a></li>
+      <li><a href="#boundary">Boundary with list</a></li>
       <li><a href="#result">Result</a></li>
       <li><a href="#readiness">Readiness Semantics</a></li>
       <li><a href="#diag-codes">Status Diagnostic Code Table</a></li>

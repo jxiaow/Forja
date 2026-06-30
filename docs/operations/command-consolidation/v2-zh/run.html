@@ -57,7 +57,9 @@
 <p><strong>职责</strong>：运行当前目标。Qt 支持运行，SDK 默认不支持。</p>
 
   <h2 id="syntax">语法</h2>
-  <pre><code class="language-bash">forja run [--detach] [--debug] [--custom &lt;name&gt;] [--workspace &lt;path&gt;] [--json]</code></pre>
+  <pre><code class="language-bash">forja run [--detach] [--custom &lt;name&gt;] [--plan] [--workspace &lt;path&gt;] [--json]
+forja run designer &lt;ui-file&gt; [--workspace &lt;path&gt;] [--json]</code></pre>
+  <blockquote><strong>注意</strong>：<code>--debug</code> 仅在 VSCode 中可用（通过 <code>forja.debug</code> 命令或状态栏调试按钮），CLI 不支持调试会话。</blockquote>
 
   <h2 id="behavior">行为</h2>
   <ol>
@@ -66,19 +68,21 @@
     <li>Qt remote：远程 prepare 后运行。</li>
     <li>SDK：失败，提示 <code>forja build</code>。</li>
     <li><code>--detach</code>：后台运行，返回 pid/logFile。</li>
-    <li><code>--debug</code>：调试运行。仅 Qt 目标。</li>
     <li><code>--custom &lt;name&gt;</code>：运行已保存的自定义命令（只允许引用已保存名称，不接受任意 shell 字符串）。仅 Qt 目标。</li>
-    <li><code>--debug</code> 和 <code>--custom</code> 互斥。</li>
-    <li><code>--detach --json</code> 要求（前台 JSON streaming 未实现前）。</li>
+    <li><code>designer &lt;ui-file&gt;</code>：用 Qt Designer 打开 .ui 文件。</li>
+    <li><code>--plan</code>：显示构建/运行计划，不执行。</li>
+    <li><code>--json</code> 推荐与 <code>--detach</code> 一起使用（前台 JSON streaming 未实现前）。</li>
   </ol>
 
   <h2 id="absorbed">吸收的旧命令</h2>
-  <p><code>forja qt run</code>、<code>forja qt run --detach</code>、<code>forja qt debug</code>、<code>forja qt runCustomCommand</code>、<code>forja remote qt run</code>、<code>forja remote qt runDetached</code></p>
+  <p><code>forja qt run</code>、<code>forja qt run --detach</code>、<code>forja qt runCustomCommand</code>、<code>forja remote qt run</code>、<code>forja remote qt runDetached</code></p>
+  <p>调试：<code>forja qt debug</code> &rarr; <code>forja.debug</code>（仅 VSCode）</p>
+  <p>设计器：<code>forja qt openWithQtDesigner</code> &rarr; <code>forja run designer &lt;ui-file&gt;</code></p>
 
   <h2 id="result">Result</h2>
   <pre><code class="language-typescript">interface RunResult extends ForjaJsonResult {
     action: 'run';
-    runAction: 'default' | 'detach' | 'debug' | 'custom';
+    runAction: 'default' | 'detach' | 'debug' | 'custom' | 'designer';
     runtime?: RuntimeState;
     exitCode?: number;
     logFile?: string;

@@ -1,15 +1,16 @@
 /**
- * 统一状态栏 — Qt 和 SDK 共用一套 status bar item。
+ * 状态栏 — Qt 和 SDK 共用一套 status bar item。
  *
- * 显示当前活跃模块的项目名 + 构建模式，点击弹出统一 quick menu。
+ * 显示当前活跃模块的项目名 + 构建模式，点击弹出 quick menu。
  * play 按钮根据活跃模块执行 run（Qt）或 build（SDK）。
  */
 import * as vscode from 'vscode';
 import { getState, setState, onStateChange, BuildMode, Arch } from '../vscode/qtState';
 import { onSettingsChange } from '../vscode/settingsStore';
-import { getTarget, getCustomCommands } from '../qt/services/configService';
+import { getTarget, getCustomCommands, getWorkspaceRoot } from '../qt/services/configService';
 import { getEffectiveProjectName } from '../qt/project/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';
+import { loadActiveTarget, saveActiveTarget, loadQtSettings, loadSdkSettings } from '../core/settingsIO';
 
 export type ActiveModule = 'qt' | 'sdk';
 
@@ -31,9 +32,44 @@ export function setActiveModule(m: ActiveModule): void {
     _updateDisplay();
 }
 
-export function activateSdkModuleIfNoQtProject(): void {
-    if (getState().currentProject) { return; }
-    setActiveModule('sdk');
+/** Switch activeTarget to match the selected module by restoring from domain config.
+ *  Returns true if a matching target was restored, false if no saved project exists. */
+function _syncActiveTarget(kind: ActiveModule): boolean {
+    const workspace = getWorkspaceRoot() || process.cwd();
+    const current = loadActiveTarget(workspace);
+    if (!current || current.kind === kind) { return true; }
+
+    if (kind === 'qt') {
+        const qt = loadQtSettings(workspace);
+        if (qt.pinnedProject) {
+            saveActiveTarget(workspace, {
+                ...current,
+                kind: 'qt',
+                project: qt.pinnedProject.relative,
+                mode: qt.mode || current.mode,
+                arch: qt.arch || current.arch,
+            });
+            return true;
+        }
+    } else {
+        const sdk = loadSdkSettings(workspace);
+        if (sdk.pinnedProject) {
+            saveActiveTarget(workspace, {
+                ...current,
+                kind: 'sdk',
+                project: sdk.pinnedProject,
+                mode: sdk.mode || current.mode,
+                arch: sdk.arch || current.arch,
+            });
+            return true;
+        }
+    }
+
+    return false;
+}
+
+export function activateSdkModuleIfNoQtProject(_workspace?: string): void {
+    // No auto-switching — let user choose module explicitly via status bar
 }
 
 export function getRunStatusBarItem(): vscode.StatusBarItem { return _runItem; }
@@ -49,10 +85,10 @@ export function setSdkState(opts: { projectName?: string; mode?: string; arch?: 
 
 export function onSdkUpdate(fn: (update: { mode: string; arch: string }) => void): void { _sdkUpdateListeners.push(fn); }
 
-export function createUnifiedStatusBar(context: vscode.ExtensionContext): void {
+export function createStatusBar(context: vscode.ExtensionContext): void {
     _projectModeItem = vscode.window.createStatusBarItem('forja.projectMode', vscode.StatusBarAlignment.Left, 113);
     _projectModeItem.name = 'Forja: Project';
-    _projectModeItem.command = 'forja.showActions';
+    _projectModeItem.command = 'forja._showActions';
     context.subscriptions.push(_projectModeItem);
 
     _runItem = vscode.window.createStatusBarItem('forja.run', vscode.StatusBarAlignment.Left, 112);
@@ -61,7 +97,7 @@ export function createUnifiedStatusBar(context: vscode.ExtensionContext): void {
 
     _debugItem = vscode.window.createStatusBarItem('forja.debug', vscode.StatusBarAlignment.Left, 111);
     _debugItem.name = 'Forja: Debug';
-    _debugItem.command = 'forja.qt.debug';
+    _debugItem.command = 'forja.debug';
     _debugItem.text = '$(debug-alt)';
     _debugItem.tooltip = '构建并启动调试';
     context.subscriptions.push(_debugItem);
@@ -77,9 +113,9 @@ export function createUnifiedStatusBar(context: vscode.ExtensionContext): void {
         }
     }));
 
-    // 注册统一 showActions 命令
+    // 注册内部 showActions 命令（状态栏专用）
     context.subscriptions.push(
-        vscode.commands.registerCommand('forja.showActions', () => showUnifiedActions())
+        vscode.commands.registerCommand('forja._showActions', () => showActions())
     );
 
     _updateDisplay();
@@ -111,11 +147,11 @@ function _updateQtDisplay(): void {
     } else if (state.isRunning) {
         _runItem.text = '$(debug-stop)';
         _runItem.tooltip = 'Forja: 终止程序';
-        _runItem.command = 'forja.qt.stop';
+        _runItem.command = 'forja.stop';
     } else {
         _runItem.text = '$(play)';
         _runItem.tooltip = 'Forja: 构建并运行';
-        _runItem.command = 'forja.qt.run';
+        _runItem.command = 'forja.run';
     }
     _runItem.show();
 
@@ -126,7 +162,7 @@ function _updateQtDisplay(): void {
     } else {
         _debugItem.text = '$(debug-alt)';
         _debugItem.tooltip = 'Forja: 构建并启动调试';
-        _debugItem.command = 'forja.qt.debug';
+        _debugItem.command = 'forja.debug';
     }
     _debugItem.show();
 }
@@ -145,7 +181,7 @@ function _updateSdkDisplay(): void {
         _projectModeItem.tooltip = 'Forja SDK 模式 — 点击切换模块/模式/项目';
         _runItem.text = '$(play)';
         _runItem.tooltip = 'Forja SDK: Build';
-        _runItem.command = 'forja.sdk.build';
+        _runItem.command = 'forja.build';
         _runItem.show();
     }
     _projectModeItem.color = _sdkMode === 'debug'
@@ -157,7 +193,20 @@ function _updateSdkDisplay(): void {
     _debugItem.hide();
 }
 
-export async function showUnifiedActions(): Promise<void> {
+/**
+ * 将 mode/arch 变更同步写入 activeTarget 文件，
+ * 确保后续 forja.build 读到正确的 mode/arch。
+ */
+function _syncActiveTargetModeArch(mode: BuildMode, arch: Arch): void {
+    const ws = getWorkspaceRoot();
+    if (!ws) { return; }
+    const current = loadActiveTarget(ws);
+    if (!current) { return; }
+    if (current.mode === mode && current.arch === arch) { return; }
+    saveActiveTarget(ws, { ...current, mode, arch });
+}
+
+export async function showActions(): Promise<void> {
     const state = getState();
     const isWin = process.platform === 'win32';
     type Item = vscode.QuickPickItem & { action: string };
@@ -250,7 +299,10 @@ export async function showUnifiedActions(): Promise<void> {
         const changed = state.mode !== m || state.arch !== a;
         setState('mode', m as BuildMode);
         setState('arch', a as Arch);
-        if (changed) { await vscode.commands.executeCommand('forja.qt.qmake'); }
+        if (changed) {
+            _syncActiveTargetModeArch(m as BuildMode, a as Arch);
+            await vscode.commands.executeCommand('forja.build', 'qmake');
+        }
     } else if (selected.action.startsWith('sdk:mode:')) {
         const [, , m, a] = selected.action.split(':');
         setActiveModule('sdk');
@@ -259,19 +311,33 @@ export async function showUnifiedActions(): Promise<void> {
         // 通过回调通知 SDK 模块持久化（由 SDK 模块使用正确的 workspace 路径写入）
         _sdkUpdateListeners.forEach(fn => fn({ mode: m, arch: a }));
         _updateDisplay();
-    } else if (selected.action === 'qt:qmake') { vscode.commands.executeCommand('forja.qt.qmake'); }
-    else if (selected.action === 'qt:build') { vscode.commands.executeCommand('forja.qt.build'); }
-    else if (selected.action === 'qt:rcc') { vscode.commands.executeCommand('forja.qt.rcc'); }
-    else if (selected.action === 'qt:clean') { vscode.commands.executeCommand('forja.qt.clean'); }
-    else if (selected.action === 'sdk:build') { vscode.commands.executeCommand('forja.sdk.build'); }
-    else if (selected.action === 'sdk:rebuild') { vscode.commands.executeCommand('forja.sdk.rebuild'); }
-    else if (selected.action === 'sdk:clean') { vscode.commands.executeCommand('forja.sdk.clean'); }
+    } else if (selected.action === 'qt:qmake') { vscode.commands.executeCommand('forja.build', 'qmake'); }
+    else if (selected.action === 'qt:build') { vscode.commands.executeCommand('forja.build'); }
+    else if (selected.action === 'qt:rcc') { vscode.commands.executeCommand('forja.build', 'rcc'); }
+    else if (selected.action === 'qt:clean') { vscode.commands.executeCommand('forja.clean'); }
+    else if (selected.action === 'sdk:build') { vscode.commands.executeCommand('forja.build'); }
+    else if (selected.action === 'sdk:rebuild') { vscode.commands.executeCommand('forja.build', 'fresh'); }
+    else if (selected.action === 'sdk:clean') { vscode.commands.executeCommand('forja.clean'); }
     else if (selected.action.startsWith('qt:custom:')) {
         const idx = parseInt(selected.action.split(':')[2], 10);
         const cmd = customCmds[idx];
-        if (cmd) { vscode.commands.executeCommand('forja.qt.runCustomCommand', cmd.name, cmd.command); }
-    } else if (selected.action === 'qt:selectProject') { vscode.commands.executeCommand('forja.qt.selectProject'); }
-    else if (selected.action === 'sdk:selectProject') { vscode.commands.executeCommand('forja.sdk.showActions'); }
-    else if (selected.action === 'switch:qt') { setActiveModule('qt'); }
-    else if (selected.action === 'switch:sdk') { setActiveModule('sdk'); }
+        if (cmd) { vscode.commands.executeCommand('forja.run', cmd.name, cmd.command); }
+    } else if (selected.action === 'qt:selectProject') {
+        const ch = require('../vscode/logger').getOutputChannel();
+        if (ch) { ch.appendLine('[DEBUG] qt:selectProject → forja._selectTarget qt'); }
+        vscode.commands.executeCommand('forja._selectTarget', 'qt');
+    }
+    else if (selected.action === 'sdk:selectProject') {
+        const ch = require('../vscode/logger').getOutputChannel();
+        if (ch) { ch.appendLine('[DEBUG] sdk:selectProject → forja._selectTarget sdk'); }
+        vscode.commands.executeCommand('forja._selectTarget', 'sdk');
+    }
+    else if (selected.action === 'switch:qt') {
+        if (_syncActiveTarget('qt')) { setActiveModule('qt'); }
+        else { vscode.commands.executeCommand('forja.list'); }
+    }
+    else if (selected.action === 'switch:sdk') {
+        if (_syncActiveTarget('sdk')) { setActiveModule('sdk'); }
+        else { vscode.commands.executeCommand('forja.list'); }
+    }
 }

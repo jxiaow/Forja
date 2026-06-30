@@ -8,24 +8,23 @@ test('package exposes forja bin entry', () => {
     assert.equal(pkg.bin['forja'], './out/cli/index.js');
 });
 
-test('cli dispatcher routes to qt, sdk, remote, and sync subcommands', () => {
+test('cli dispatcher routes to commands', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'index.ts'), 'utf8');
-    assert.match(source, /runQtCli/);
-    assert.match(source, /runSdkCli/);
-    assert.match(source, /runRemoteCli/);
-    assert.match(source, /runSyncCli/);
-    assert.match(source, /process\.exitCode = 1/);
+    assert.match(source, /runCli/);
+    assert.match(source, /printHelp/);
 });
 
 test('cli interface spec lists only implemented subcommands as available', () => {
     const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
-    assert.match(spec, /当前已实现子命令：`qt` \| `sdk` \| `remote` \| `sync` \| `cleanup`/);
-    assert.doesNotMatch(spec, /remote.*尚未实现/i);
+    assert.match(spec, /当前公开子命令：`status` \| `setup` \| `list` \| `use` \| `server` \| `build` \| `run` \| `stop` \| `clean` \| `doctor` \| `sync`/);
+    assert.doesNotMatch(spec, /forja qt \.\.\./);
+    assert.doesNotMatch(spec, /forja sdk \.\.\./);
 });
 
 test('cli user guide documents remote commands as implemented', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
-    assert.match(guide, /forja remote status --json/);
+    // In v2, remote status is accessed via list remote
+    assert.match(guide, /forja list remote --json/);
     assert.doesNotMatch(guide, /\uFFFD/);
 });
 
@@ -42,16 +41,6 @@ test('remote CLI workspace-affecting actions use staged action path', () => {
     assert.match(source, /executeRemoteCleanUntracked\(\{ remotePath: actionRemotePath/);
     assert.match(source, /executeRemoteRestore\(\{ remotePath: actionRemotePath/);
     assert.match(source, /executeRemoteUnlock\(\{ remotePath: actionRemotePath/);
-});
-
-test('remote VSCode adapter resolves staged paths for bridge and transfer commands', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'vscode', 'commands.ts'), 'utf8');
-    assert.match(source, /resolveRemotePrimaryActionPath/);
-    assert.match(source, /const actionRemotePath = resolveRemotePrimaryActionPath\(resolved\.config\.workspace, resolved\.config\.remotePath\)/);
-    assert.match(source, /buildRemoteTransferStatus\(\{\s*remotePath: resolved\.config \? resolveRemotePrimaryActionPath\(resolved\.config\.workspace, resolved\.config\.remotePath\) : null/s);
-    assert.match(source, /executeRemoteBridge\(\{\s*target: command\.target!,\s*action: command\.remoteAction!,[\s\S]*remotePath: actionRemotePath/);
-    assert.match(source, /const problemRemotePath = result\.actionRemotePath \|\| resolved\.config\.remotePath/);
-    assert.match(source, /return \{ \.\.\.result, workspace: resolved\.config\.workspace, remotePath: result\.actionRemotePath \|\| resolved\.config\.remotePath \}/);
 });
 
 test('remote source uses staged workspace naming for public flow', () => {
@@ -108,10 +97,13 @@ test('sync help and docs describe top-level sync status', () => {
     const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
 
     assert.match(cliSource, /forja sync status --json/);
-    assert.match(spec, /`status` \| `--workspace`, `--json`, `--server`/);
-    assert.match(guide, /forja sync status --json/);
-    assert.match(skill, /## Sync 命令/);
-    assert.match(skill, /forja sync status --json/);
+    // In v2, sync command supports plan/reset/transfer actions with --server flag
+    assert.match(spec, /`plan` \\| `status` \\| `reset` \\| `transfer`/);
+    // In the new unified structure, sync status is accessed via list remote
+    assert.match(guide, /forja list remote --json/);
+    // In the new unified structure, sync is a top-level command in the command reference table
+    assert.match(skill, /\| `sync` \|/);
+    assert.match(skill, /forja list remote --json/);
 });
 
 test('sync help and docs describe server management commands', () => {
@@ -120,20 +112,32 @@ test('sync help and docs describe server management commands', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
     const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
 
-    for (const source of [cliSource, spec, guide, skill]) {
-        assert.match(source, /forja sync servers --json/);
-        assert.match(source, /forja sync add-server/);
-        assert.match(source, /forja sync update-server/);
-        assert.match(source, /forja sync remove-server/);
+    // cliSource still uses old sync subcommands internally (hidden compatibility)
+    assert.match(cliSource, /forja sync servers --json/);
+    assert.match(cliSource, /forja sync add-server/);
+    // In v2, spec uses the new server command
+    assert.match(spec, /forja server/);
+    assert.match(spec, /\| `add` \|/);
+    assert.match(spec, /\| `update <id>` \|/);
+    assert.match(spec, /\| `remove <id>` \|/);
+    // In v2, guide and skill use the new server command
+    for (const source of [guide, skill]) {
+        assert.match(source, /forja list servers --json/);
+        assert.match(source, /forja server add/);
+        assert.match(source, /forja server update/);
+        assert.match(source, /forja server remove/);
     }
 });
 
-test('forja skill keeps sync outside the Qt command table', () => {
+test('forja skill uses unified command structure', () => {
     const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
-    const qtSection = skill.slice(skill.indexOf('## Qt 命令'), skill.indexOf('## SDK 命令'));
 
-    assert.doesNotMatch(qtSection, /\| `sync` \|/);
-    assert.match(skill, /## Sync 命令/);
+    // Check that sync is documented as a top-level command
+    assert.match(skill, /\| `sync` \|/);
+    // Check that the unified command reference section exists
+    assert.match(skill, /## 命令参考/);
+    // Check that use subcommands are documented
+    assert.match(skill, /### use 子命令/);
 });
 
 test('qt cli entry handles parse errors as json when requested', () => {

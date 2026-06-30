@@ -23,7 +23,7 @@ export interface ExecuteRemoteShellFallbackResult {
     stderr: string;
     result?: unknown;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
     fallback: 'shell';
 }
 
@@ -62,7 +62,7 @@ export async function executeRemoteShellFallback(options: ExecuteRemoteShellFall
         stderr: executed.stderr,
         result: parsed,
         diagnostics,
-        nextActions: executed.exitCode === 0 ? [] : [`forja remote ${options.target} status --json`, '检查远端 qmake/make/Makefile'],
+        nextAction: executed.exitCode === 0 ? undefined : 'forja status --json',
         fallback: 'shell'
     };
 }

@@ -31,6 +31,8 @@ export interface ExecutePreparedRemoteActionOptions extends PrepareRemoteWorkspa
     json: boolean;
     stream?: boolean;
     buildOrder?: RemoteBuildOrderItem[];
+    /** Active target project path (relative to workspace) — synced to remote before action */
+    activeProject?: string;
 }
 
 export type ExecutePreparedRemoteActionResult = Omit<PrepareRemoteWorkspaceResult, 'action'> & {
@@ -49,7 +51,7 @@ export interface PrepareRemoteWorkspaceResult {
     repos: RepoBaselineState[];
     stages: RemoteStage[];
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOptions): Promise<PrepareRemoteWorkspaceResult> {
@@ -62,7 +64,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
     const workspaceRemotePath = stagedMode && remoteSettings.remoteWorkspace ? remoteSettings.remoteWorkspace : options.remotePath;
     let repoPlans: RemoteRepoPlan[] = [];
 
-    const fail = (stage: string, nextActions: string[] = ['修复 remote prepare 诊断后重试'], lock?: RemoteLockMetadata): PrepareRemoteWorkspaceResult => ({
+    const fail = (stage: string, nextAction?: string, lock?: RemoteLockMetadata): PrepareRemoteWorkspaceResult => ({
         ok: false,
         action: 'prepareWorkspace',
         mode: 'remote',
@@ -72,7 +74,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         repos,
         stages,
         diagnostics,
-        nextActions
+        nextAction: nextAction || '修复 remote prepare 诊断后重试'
     });
 
     const local = stagedMode ? await inspectLocalRepositories({ workspace: options.workspace, git: options.git, allowUnpushed: true }) : undefined;
@@ -97,13 +99,13 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         diagnostics.push(...plan.diagnostics);
         stages.push({ stage: 'baselinePlan', ok: plan.ok, message: plan.ok ? plan.repos.map(repo => repo.strategy).join(',') : 'blocked' });
         if (!plan.ok) {
-            return fail('baselinePlan', plan.nextActions);
+            return fail('baselinePlan', plan.nextAction);
         }
     } else {
         stages.push({ stage: 'baselinePrecheck', ok: baseline.ok, message: baseline.overall });
         diagnostics.push(...baseline.diagnostics);
         if (!baseline.ok) {
-            return fail('baselinePrecheck', baseline.nextActions);
+            return fail('baselinePrecheck', baseline.nextAction);
         }
     }
 
@@ -121,7 +123,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
     if (!lockResult.ok || !lock?.lockId) {
         return fail('acquireLock', undefined, lock);
     }
-    const failWithLock = (stage: string, nextActions?: string[]): PrepareRemoteWorkspaceResult => fail(stage, nextActions, lock);
+    const failWithLock = (stage: string, nextAction?: string): PrepareRemoteWorkspaceResult => fail(stage, nextAction, lock);
 
     let result: PrepareRemoteWorkspaceResult | undefined;
     try {
@@ -149,7 +151,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             diagnostics.push(...overlayRestore.diagnostics);
             if (!overlayRestore.ok) {
                 stages.push({ stage: 'overlaySync', ok: false, message: 'overlay restore failed' });
-                result = failWithLock('overlaySync', ['修复 overlay restore 诊断后重试']);
+                result = failWithLock('overlaySync', '修复 overlay restore 诊断后重试');
                 return result;
             }
 
@@ -159,7 +161,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
                 diagnostics.push(...branchSync.diagnostics);
                 stages.push({ stage: 'branchSync', ok: branchSync.ok, message: 'git' });
                 if (!branchSync.ok) {
-                    result = failWithLock('branchSync', branchSync.nextActions);
+                    result = failWithLock('branchSync', branchSync.nextAction);
                     return result;
                 }
             }
@@ -171,7 +173,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
                 repos = mergeBundleRepos(repos, bundle.repos);
                 stages.push({ stage: 'bundleBaseline', ok: bundle.ok, message: 'bundle' });
                 if (!bundle.ok) {
-                    result = failWithLock('bundleBaseline', bundle.nextActions);
+                    result = failWithLock('bundleBaseline', bundle.nextAction);
                     return result;
                 }
             }
@@ -180,7 +182,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             diagnostics.push(...links.diagnostics);
             stages.push({ stage: 'workspaceLink', ok: links.ok, message: links.linked.join(',') || 'none' });
             if (!links.ok) {
-                result = failWithLock('workspaceLink', links.nextActions);
+                result = failWithLock('workspaceLink', links.nextAction);
                 return result;
             }
         } else {
@@ -188,7 +190,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             diagnostics.push(...branchSync.diagnostics);
             stages.push({ stage: 'branchSync', ok: branchSync.ok, message: 'git' });
             if (!branchSync.ok) {
-                result = failWithLock('branchSync', branchSync.nextActions);
+                result = failWithLock('branchSync', branchSync.nextAction);
                 return result;
             }
         }
@@ -216,7 +218,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         diagnostics.push(...overlaySync.diagnostics);
         stages.push({ stage: 'overlaySync', ok: overlaySync.ok });
         if (!overlaySync.ok) {
-            result = failWithLock('overlaySync', overlaySync.nextActions);
+            result = failWithLock('overlaySync', overlaySync.nextAction);
             return result;
         }
 
@@ -232,7 +234,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
         diagnostics.push(...postBaseline.diagnostics);
         stages.push({ stage: 'baselineCheck', ok: postBaseline.ok, message: postBaseline.overall });
         if (!postBaseline.ok) {
-            result = failWithLock('baselineCheck', postBaseline.nextActions);
+            result = failWithLock('baselineCheck', postBaseline.nextAction);
             return result;
         }
 
@@ -244,8 +246,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             lock,
             repos,
             stages,
-            diagnostics,
-            nextActions: []
+            diagnostics
         };
         return result;
     } finally {
@@ -259,7 +260,7 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
                 if (!release.ok) {
                     result.ok = false;
                     result.failedStage = result.failedStage || 'releaseLock';
-                    result.nextActions = ['手动检查或 unlock 远端 lock'];
+                    result.nextAction = '手动检查或 unlock 远端 lock';
                 }
             }
         }
@@ -274,7 +275,14 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
     const stagedMode = remoteSettings.workspaceMode === 'staged';
     const workspaceRemotePath = stagedMode && remoteSettings.remoteWorkspace ? remoteSettings.remoteWorkspace : options.remotePath;
     const remoteForjaBin = remoteSettings.remoteForjaBin || undefined;
-    if (!stagedMode) {
+
+    // Build args: include --project for target-aware commands so remote forja knows which project
+    const extraArgs: string[] = [];
+    if (options.activeProject && ['build', 'rebuild', 'clean', 'run', 'qmake'].includes(options.action)) {
+        extraArgs.push('--project', options.activeProject);
+    }
+
+    if (!stagedMode && !options.activeProject) {
         const readinessFailure = await runTargetReadiness(readinessTargets, workspaceRemotePath, options.runner, remoteForjaBin);
         if (readinessFailure) { return readinessFailure; }
     }
@@ -285,31 +293,45 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
         return base;
     }
     const actionRemotePath = prepared.actionRemotePath || workspaceRemotePath;
-    if (stagedMode) {
-        const readinessFailure = await runTargetReadiness(readinessTargets, actionRemotePath, options.runner, remoteForjaBin);
-        if (readinessFailure) {
-            if (isRemoteForjaUnavailable(readinessFailure.remote)) {
-                base.diagnostics.push({ level: 'warning', message: 'remote forja 不可用，后续尝试 shell fallback' });
-                base.stages.push({ stage: 'targetReadiness', ok: true, message: 'shell fallback' });
-            } else {
-                readinessFailure.stages = [...base.stages, ...readinessFailure.stages];
-                return readinessFailure;
-            }
-        }
-        if (!base.stages.some(stage => stage.stage === 'targetReadiness')) {
-            base.stages.push({ stage: 'targetReadiness', ok: true, message: readinessTargets.join(',') });
-        }
-    } else {
+    if (!stagedMode) {
         base.stages.unshift({ stage: 'targetReadiness', ok: true, message: readinessTargets.join(',') });
     }
 
     try {
+        if (stagedMode && !options.activeProject) {
+            const readinessFailure = await runTargetReadiness(readinessTargets, actionRemotePath, options.runner, remoteForjaBin);
+            if (readinessFailure) {
+                if (isRemoteForjaUnavailable(readinessFailure.remote)) {
+                    base.diagnostics.push({ level: 'warning', message: 'remote forja 不可用，后续尝试 shell fallback' });
+                    base.stages.push({ stage: 'targetReadiness', ok: true, message: 'shell fallback' });
+                } else {
+                    // Only add readiness-specific stages and diagnostics, not the combined ones
+                    const readinessOnlyStages = readinessFailure.stages.filter(s =>
+                        !base.stages.some(bs => bs.stage === s.stage && bs.message === s.message)
+                    );
+                    const readinessOnlyDiagnostics = readinessFailure.diagnostics.filter(d =>
+                        !base.diagnostics.some(bd => bd.message === d.message && bd.level === d.level)
+                    );
+                    base.ok = false;
+                    base.failedStage = 'targetReadiness';
+                    base.diagnostics.push(...readinessOnlyDiagnostics);
+                    base.stages.push(...readinessOnlyStages);
+                    base.nextAction = readinessFailure.nextAction;
+                    return base;
+                }
+            }
+            if (!base.stages.some(stage => stage.stage === 'targetReadiness')) {
+                base.stages.push({ stage: 'targetReadiness', ok: true, message: readinessTargets.join(',') });
+            }
+        }
+
         base.remoteActions = [];
+
         for (const action of actions) {
             const remote = await executeRemoteBridge({
                 target: action.target,
                 action: action.action,
-                args: action.args,
+                args: [...extraArgs, ...action.args],
                 json: options.json,
                 stream: actions.length === 1 ? options.stream : false,
                 remotePath: actionRemotePath,
@@ -331,7 +353,7 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
                 if (!fallback.ok) {
                     base.ok = false;
                     base.failedStage = 'remoteShellFallback';
-                    base.nextActions = fallback.nextActions;
+                    base.nextAction = fallback.nextAction;
                     break;
                 }
                 continue;
@@ -343,7 +365,7 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
             if (!remote.ok) {
                 base.ok = false;
                 base.failedStage = 'remoteAction';
-                base.nextActions = remote.nextActions;
+                base.nextAction = remote.nextAction;
                 break;
             }
         }
@@ -351,15 +373,17 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
         base.ok = false;
         base.failedStage = 'remoteAction';
         base.diagnostics.push({ level: 'error', message: error instanceof Error ? error.message : String(error) });
-        base.nextActions = ['检查远端 action 参数后重试'];
+        base.nextAction = '检查远端 action 参数后重试';
     } finally {
-        const release = await executeRemoteReleaseLock({ remotePath: workspaceRemotePath, lockId: prepared.lock!.lockId, runner: options.runner });
-        base.diagnostics.push(...release.diagnostics);
-        base.stages.push({ stage: 'releaseLock', ok: release.ok, message: release.removed ? 'removed' : release.diagnostics[0]?.message });
-        if (!release.ok) {
-            base.ok = false;
-            base.failedStage = base.failedStage || 'releaseLock';
-            base.nextActions = ['手动检查或 unlock 远端 lock'];
+        if (prepared.lock?.lockId) {
+            const release = await executeRemoteReleaseLock({ remotePath: workspaceRemotePath, lockId: prepared.lock.lockId, runner: options.runner });
+            base.diagnostics.push(...release.diagnostics);
+            base.stages.push({ stage: 'releaseLock', ok: release.ok, message: release.removed ? 'removed' : release.diagnostics[0]?.message });
+            if (!release.ok) {
+                base.ok = false;
+                base.failedStage = base.failedStage || 'releaseLock';
+                base.nextAction = '手动检查或 unlock 远端 lock';
+            }
         }
     }
     return base;
@@ -433,7 +457,7 @@ async function runTargetReadiness(
                 repos: [],
                 stages: [{ stage: 'targetReadiness', ok: false, message: target }],
                 diagnostics: readiness.diagnostics,
-                nextActions: readiness.nextActions.length > 0 ? readiness.nextActions : [`forja remote ${target} status --json`],
+                nextAction: readiness.nextAction || 'forja status --json',
                 remote: readiness
             };
         }

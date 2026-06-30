@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { getServerById } from '../../core/serverStore';
-import { loadRemoteSettings, loadSyncSettings } from '../../core/settingsIO';
+import { loadRemoteSettings, loadSyncSettings, RemoteSettings, SyncSettings } from '../../core/settingsIO';
 import { stagedWorkspaceRepoPath } from './stagedWorkspace';
 import { RemoteConfig, RemoteDiagnostic, RemoteLayer } from './types';
 
@@ -8,20 +8,29 @@ export interface ResolveRemoteConfigResult {
     config?: RemoteConfig;
     layer: RemoteLayer;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
-export function resolveRemoteConfig(workspace: string): ResolveRemoteConfigResult {
-    const resolvedWorkspace = path.resolve(workspace);
-    const sync = loadSyncSettings(resolvedWorkspace);
-    if (!sync.enabled || !sync.selectedServer) {
-        return blocked('sync 未启用或未选择服务器');
+/**
+ * Pure resolution — all inputs explicit, no config I/O.
+ * Callers who already have configs loaded use this directly.
+ */
+export function resolveRemoteConfigFrom(
+    resolvedWorkspace: string,
+    remote: RemoteSettings,
+    sync: SyncSettings,
+    serverOverride?: string,
+): ResolveRemoteConfigResult {
+    const serverId = serverOverride || remote.selectedServer || sync.selectedServer;
+    if (!serverId) {
+        return blocked('未选择服务器');
     }
-    const server = getServerById(sync.selectedServer);
+    const server = getServerById(serverId);
     if (!server) {
-        return blocked(`sync 服务器不存在: ${sync.selectedServer}`);
+        return blocked(`服务器不存在: ${serverId}`);
     }
-    const remotePath = sync.remotePaths[sync.selectedServer] || '';
+    // Prefer remote.remotePaths, fall back to sync.remotePaths for backward compatibility
+    const remotePath = remote.remotePaths[serverId] || sync.remotePaths[serverId] || '';
     if (!remotePath) {
         return blocked(`服务器 ${server.name || server.id} 未配置 remotePath`);
     }
@@ -29,8 +38,17 @@ export function resolveRemoteConfig(workspace: string): ResolveRemoteConfigResul
         config: { workspace: resolvedWorkspace, server, remotePath, ignore: sync.ignore },
         layer: { name: 'syncConfig', ok: true, message: 'ready' },
         diagnostics: [],
-        nextActions: []
     };
+}
+
+/**
+ * Convenience wrapper — loads configs then delegates to resolveRemoteConfigFrom.
+ */
+export function resolveRemoteConfig(workspace: string, serverOverride?: string): ResolveRemoteConfigResult {
+    const resolvedWorkspace = path.resolve(workspace);
+    const remote = loadRemoteSettings(resolvedWorkspace);
+    const sync = loadSyncSettings(resolvedWorkspace);
+    return resolveRemoteConfigFrom(resolvedWorkspace, remote, sync, serverOverride);
 }
 
 export function resolveRemoteActionPath(workspace: string, remotePath: string): string {
@@ -56,9 +74,9 @@ function blocked(message: string): ResolveRemoteConfigResult {
             name: 'syncConfig',
             ok: false,
             message,
-            nextActions: ['配置 sync server 和 remotePath']
+            nextAction: '配置 sync server 和 remotePath'
         },
         diagnostics: [{ level: 'error', message }],
-        nextActions: ['配置 sync server 和 remotePath']
+        nextAction: '配置 sync server 和 remotePath'
     };
 }
