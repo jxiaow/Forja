@@ -6,7 +6,7 @@
 
 **语法**：
 ```
-forja status [--process] [--workspace <path>] [--json] [--lang <locale>]
+forja status [--workspace <path>] [--json] [--lang <locale>]
 ```
 
 **行为**：
@@ -15,7 +15,7 @@ forja status [--process] [--workspace <path>] [--json] [--lang <locale>]
 3. 读取 readiness 判断所需的最小设置，不返回完整配置摘要。
 4. 无 active target 时：扫描候选数量，不猜测，返回 `forja list` + `forja use target --project <path>`。
 5. 有 active target 时：验证项目存在、mode/arch 有效、runAt 配置完整。
-6. `--process` 返回 `runtime` 字段；不传只给 readiness 摘要。
+6. `runtime` 字段始终返回，读取本地 runState 文件（轻量操作）。
 7. `nextAction` 可提示 `forja list config` 查看配置、`forja use target --project <path>` 切换目标、`forja use qt|sdk ...` 修改配置。
 8. status 只使用本地可读配置、缓存的 remote metadata、已有 lock/runState 摘要；不会为了判断状态主动发起 SSH、上传、bootstrap 或远程命令。需要实时 SSH/版本/路径可达性验证时指向 `forja doctor --remote`。
 
@@ -26,7 +26,7 @@ forja status [--process] [--workspace <path>] [--json] [--lang <locale>]
 `forja remote workspace status`、`forja remote forja-bin status`、`forja remote build-order status`、`forja remote transfer status`
 
 **与 `list` 的边界**：
-- `status` 回答"能不能用"，只输出 readiness 判断所需的最小摘要（server/remotePath/locked/workspaceMode）。
+- `status` 回答"能不能用"，只输出 readiness 判断所需的最小摘要（server/remotePath/workspaceMode）。
 - `status` 可以在 `nextAction` 中提示查看或切换配置的命令，但不展开配置内容。
 - `list config` 回答"当前保存了哪些配置摘要"，输出 Qt/SDK/Sync/Remote 配置摘要。
 - `list remote` 回答"配了什么"，输出全部远程配置细节（workspace/bin/build-order/transfer/repos）。
@@ -37,7 +37,7 @@ forja status [--process] [--workspace <path>] [--json] [--lang <locale>]
 | 旧 Command ID | 新 Command ID | 说明 |
 |---------------|---------------|------|
 | `forja.remote.status` | `forja.status` | 远程 readiness 归统一 status |
-| `forja.remote.qt.ps` | `forja.status` | `--process` 或 UI runtime 区域 |
+| `forja.remote.qt.ps` | `forja.status` | runtime 区域 |
 | `forja.remote.transfer.status` | `forja.list` / `forja.status` | 纯配置详情归 list，readiness 摘要归 status |
 | `forja.remote.workbench` | `forja.status` / QuickPick | 工作台入口收敛为状态 + 操作建议 |
 
@@ -49,13 +49,13 @@ interface StatusResult extends ForjaJsonResult {
     toolchain?: ToolchainSummary;
     remote?: RemoteStatusSummary;
     sync?: SyncStatusSummary;
-    runtime?: RuntimeState;    // 仅 --process
+    runtime?: RuntimeState;
     nextAction?: string;
 }
 
 interface ToolchainSummary {
     qt?: { path: string; version?: string };
-    vs?: { path: string };
+    vs?: { path: string; version?: string };
     jom?: string;              // Windows only
     make?: boolean;            // POSIX only
 }
@@ -65,7 +65,6 @@ interface RemoteStatusSummary {
     server?: { id: string; name: string; host: string };
     remotePath?: string;
     remoteForjaBin?: string;
-    locked?: boolean;  // reserved — requires SSH probe, not populated by lightweight status
     workspaceMode?: 'legacy' | 'staged';
 }
 
@@ -84,30 +83,29 @@ interface SyncStatusSummary {
 | toolchain | Qt/VS/jom/make 就绪 | 有路径但未验证可用性 | 路径无效或版本不对 | 缺少工具链 | 无法判断 | — |
 | sync | server + remotePath 完整 | 有配置但未验证 SSH | 配置有阻塞（如服务器被删） | 缺少 server/path | 无法判断 | 未配置 |
 | remote | SSH + forja + path 就绪 | 有配置但未连接 | SSH/forja 失败或被锁 | 缺少 server | 无法判断 | runAt=local |
-| runtime | 进程运行中 | — | — | — | 无法查询 | 未运行（`--process` 无进程时） |
+| runtime | 进程运行中 | — | — | — | 无法查询 | 未运行（无进程时） |
 
-**Status 诊断码表**（code 仅为标识符，不出现在 JSON 输出中）：
+**Status 诊断表**：
 
-| code | level | EN message | ZH message |
-|------|-------|-----------|-----------|
-| `workspace.notFound` | error | Workspace does not exist: {path} | Workspace 不存在: {path} |
-| `workspace.configCorrupt` | error | Config file parse failed: {file} — {detail} | 配置文件解析失败: {file} — {detail} |
-| `target.notSelected` | warning | No active target selected | 未选择 active target |
-| `target.mixedNotSelected` | info | Found {qtCount} Qt and {sdkCount} SDK targets, none selected | 发现 {qtCount} 个 Qt 目标和 {sdkCount} 个 SDK 目标，未选择 |
-| `target.projectMissing` | error | Project file does not exist: {project} | 项目文件不存在: {project} |
-| `target.makefileMismatch` | warning | Makefile does not match current config ({diff}) | Makefile 与当前配置不匹配（{diff}） |
-| `toolchain.neverInit` | warning | Not initialized, no config found | 未初始化，未找到任何配置 |
-| `toolchain.qtMissing` | error | Qt not found at configured path: {path} | Qt 路径无效或不存在: {path} |
-| `toolchain.vsMissing` | error | VS dev environment not found (vsDevShell) | 未找到 VS 开发环境 (vsDevShell) |
-| `toolchain.jomMissing` | warning | jom not found (optional, recommended for faster builds) | 未找到 jom（可选，推荐安装以加速构建） |
-| `toolchain.makeMissing` | error | make not found | 未找到 make 工具 |
-| `remote.serverMissing` | error | runAt=remote but no server configured | runAt=remote 但未配置服务器和远程路径 |
-| `remote.forjaBinDefault` | info | Remote Forja bin not configured, will use default | 远程 Forja 二进制未配置，将使用默认值 |
-| `remote.pathMissing` | error | Remote path not configured: {path} | 未配置远程路径: {path} |
-| `sync.serverDeleted` | error | Sync server "{server}" does not exist | 同步服务器 "{server}" 不存在 |
-| `sync.notEnabled` | error | Remote sync not enabled | 远程同步未启用 |
-| `sync.remotePathMissing` | error | Remote path not configured | 未配置远程路径 |
-| `sync.neverConfigured` | warning | No sync server added | 未添加同步服务器 |
+| key | level | EN message | ZH message |
+|-----|-------|-----------|-----------|
+| `sts.workspaceNotFound` | error | Workspace does not exist: {path} | Workspace 不存在: {path} |
+| `sts.configCorrupted` | error | Config file parse failed: {file} — {detail} | 配置文件解析失败: {file} — {detail} |
+| `noActiveTarget` | warning | No active target selected | 未选择 active target |
+| `sts.targetsFound` | info | Found {qtCount} Qt and {sdkCount} SDK targets, none selected | 发现 {qtCount} 个 Qt 目标和 {sdkCount} 个 SDK 目标，未选择 |
+| `sts.projectFileMissing` | error | Project file does not exist: {project} | 项目文件不存在: {project} |
+| `sts.makefileMismatch` | warning | Makefile does not match current config ({diff}) | Makefile 与当前配置不匹配（{diff}） |
+| `notInitialized` | warning | Not initialized, no config found | 未初始化，未找到任何配置 |
+| `qtNotFound` | error | Qt not found at configured path: {path} | Qt 路径无效或不存在: {path} |
+| `vsNotFoundDetail` | error | VS dev environment not found (vsDevShell) | 未找到 VS 开发环境 (vsDevShell) |
+| `jomNotFound` | warning | jom not found (optional, recommended for faster builds) | 未找到 jom（可选，推荐安装以加速构建） |
+| `makeNotFound` | error | make not found | 未找到 make 工具 |
+| `remoteNoServer` | error | runAt=remote but no server configured | runAt=remote 但未配置服务器和远程路径 |
+| `remoteForjaBinDefault` | info | Remote Forja bin not configured, will use default | 远程 Forja 二进制未配置，将使用默认值 |
+| `remotePathNotConfigured` | error | Remote path not configured: {path} | 未配置远程路径: {path} |
+| `sts.syncServerNotFound` | error | Sync server "{server}" does not exist | 同步服务器 "{server}" 不存在 |
+| `noSyncServer` | warning | No sync server added | 未添加同步服务器 |
+| `sts.syncNotEnabled` | info | Sync not configured; configure with forja use sync for remote builds | 同步未配置，远程构建可用 forja use sync 配置 |
 
 **正常场景**：
 
@@ -123,7 +121,7 @@ _空 workspace_：
         "remote": "not-selected"
     },
     "diagnostics": [
-        { "level": "warning", "message": "No active target selected" }
+        { "level": "warning", "message": "No active target selected", "fix": "forja setup" }
     ],
     "nextAction": "forja setup"
 }
@@ -184,7 +182,6 @@ _SDK 项目 + Remote_：
         "server": { "id": "srv1", "name": "dev-server", "host": "192.168.1.10" },
         "remotePath": "/home/user/project",
         "remoteForjaBin": "/home/user/.forja/bin/forja",
-        "locked": false,
         "workspaceMode": "legacy"
     },
     "sync": {
@@ -196,7 +193,7 @@ _SDK 项目 + Remote_：
 }
 ```
 
-_`--process` 有运行中进程_：
+_有运行中进程_：
 ```json
 {
     "ok": true,
@@ -260,7 +257,7 @@ _从未初始化_：
         "remote": "not-selected"
     },
     "diagnostics": [
-        { "level": "warning", "message": "Not initialized, no config found" }
+        { "level": "warning", "message": "Not initialized, no config found", "fix": "forja setup" }
     ],
     "nextAction": "forja setup"
 }
@@ -320,9 +317,9 @@ _工具链缺失_：
         "qt": { "path": "C:/Qt/old-path" }
     },
     "diagnostics": [
-        { "level": "error", "message": "Qt not found at configured path: C:/Qt/old-path", "hint": "Qt installation may have changed, reconfigure with forja use", "params": { "path": "C:/Qt/old-path" } },
-        { "level": "error", "message": "VS dev environment not found (vsDevShell)", "hint": "Install Visual Studio and configure vcvarsall.bat" },
-        { "level": "warning", "message": "jom not found (optional, recommended for faster builds)" }
+        { "level": "error", "message": "Qt not found at configured path: C:/Qt/old-path", "hint": "Qt installation may have changed, reconfigure with forja use", "fix": "forja list env qt", "params": { "path": "C:/Qt/old-path" } },
+        { "level": "error", "message": "VS dev environment not found (vsDevShell)", "hint": "Install Visual Studio and configure vcvarsall.bat", "fix": "forja list env vs" },
+        { "level": "warning", "message": "jom not found (optional, recommended for faster builds)", "fix": "forja list env qt" }
     ],
     "nextAction": "forja list env qt"
 }
@@ -358,7 +355,7 @@ _runAt=remote 但未配置服务器_：
 _Sync 配置的服务器被删除_：
 ```json
 {
-    "ok": false,
+    "ok": true,
     "action": "status",
     "workspace": "/path/to/workspace",
     "readiness": {
@@ -376,7 +373,7 @@ _Sync 配置的服务器被删除_：
     },
     "sync": { "enabled": true },
     "diagnostics": [
-        { "level": "error", "message": "Sync server \"old-server\" does not exist", "hint": "Server was deleted, please re-select", "params": { "server": "old-server" } }
+        { "level": "error", "message": "Sync server \"old-server\" does not exist", "hint": "Server was deleted, please re-select", "fix": "forja list servers", "params": { "server": "old-server" } }
     ],
     "nextAction": "forja list servers"
 }
@@ -395,7 +392,7 @@ _混合 workspace 未选择_：
         "remote": "not-selected"
     },
     "diagnostics": [
-        { "level": "info", "message": "Found 2 Qt and 1 SDK targets, none selected", "params": { "qtCount": "2", "sdkCount": "1" } }
+        { "level": "info", "message": "Found 2 Qt and 1 SDK targets, none selected", "fix": "forja list targets", "params": { "qtCount": "2", "sdkCount": "1" } }
     ],
     "nextAction": "forja list targets"
 }
@@ -467,12 +464,13 @@ _SDK on POSIX 缺少 make_：
     },
     "toolchain": { "make": false },
     "diagnostics": [
-        { "level": "error", "message": "make not found", "hint": "Install build-essential or equivalent toolchain" }
-    ]
+        { "level": "error", "message": "make not found", "hint": "Install build-essential or equivalent toolchain", "fix": "forja doctor" }
+    ],
+    "nextAction": "forja doctor"
 }
 ```
 
-_`--process` 无运行记录_：
+_无运行记录_：
 ```json
 {
     "ok": true,
@@ -536,7 +534,7 @@ Next:
   forja build
 ```
 
-_`--process` 有运行中进程_：
+_有运行中进程_：
 ```
 Forja status
 Workspace: /path/to/workspace
@@ -650,9 +648,11 @@ Target: sdk Makefile release x86 local
 Readiness: target=ready toolchain=missing sync=not-selected remote=not-selected
 Error: make not found
   hint: Install build-essential or equivalent toolchain
+Next:
+  forja doctor
 ```
 
-_`--process` 无运行记录_：
+_无运行记录_：
 ```
 Forja status
 Workspace: /path/to/workspace
@@ -664,15 +664,16 @@ Next:
 ```
 
 **`ok` 判定规则**：
-- 任何 readiness 维度为 `blocked`、`missing`、`unknown` → `ok: false`
-- 所有维度为 `ready`、`configured`、`not-selected` → `ok: true`
-- `runtime` 不影响 `ok` 值
+- target/toolchain 为 `blocked`、`missing`、`unknown` → `ok: false`
+- target 为 `not-selected` → `ok: false`
+- remote 为 `blocked`、`missing` → `ok: false`
+- `sync`、`runtime` 不影响 `ok` 值（sync 问题不阻塞本地构建）
 
 **验证点**：
 
 - `forja status --json` 在无 active target 时不猜测目标。
-- `forja status --process --json` 返回 runtime，且 runtime 不影响 `ok`。
-- `forja status --json --lang zh` 只本地化 message/hint，不改变 diagnostic code。
+- `forja status --json` 始终返回 runtime 字段，且 runtime 不影响 `ok`。
+- `forja status --json --lang zh` 只本地化 message/hint，不改变 readiness 枚举值和 fix 命令。
 - runAt=remote 缺 server/path 时返回 `remote=missing` 并指向 `forja list servers` + `forja use remote --server`。
 - `forja status --json` 不主动 SSH；远程深度检查（SSH 连通性、版本兼容、锁状态）由 `forja doctor --remote` 负责。
 - 纯远程配置详情不从 status 展开，指向 `forja list remote`。

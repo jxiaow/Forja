@@ -254,9 +254,11 @@ function resolveUniqueDescendantConfigPath(workspace: string, type: 'qt' | 'sdk'
 
 // ── Corruption tracking ──
 
-const _corruptedConfigs: string[] = [];
+export interface CorruptedConfig { path: string; detail: string }
 
-export function getCorruptedConfigs(): string[] {
+const _corruptedConfigs: CorruptedConfig[] = [];
+
+export function getCorruptedConfigs(): CorruptedConfig[] {
     return [..._corruptedConfigs];
 }
 
@@ -274,7 +276,7 @@ export function loadQtSettings(workspace: string): QtSettings {
             return sanitizeQt(raw);
         }
     } catch (e) {
-        if (e instanceof SyntaxError) { _corruptedConfigs.push(filePath); }
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
         warnSettingsLoadFailure('qt', filePath, e);
     }
     return { ...DEFAULT_QT };
@@ -301,7 +303,7 @@ export function loadSdkSettings(workspace: string): SdkSettings {
             return sanitizeSdk(raw);
         }
     } catch (e) {
-        if (e instanceof SyntaxError) { _corruptedConfigs.push(filePath); }
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
         warnSettingsLoadFailure('sdk', filePath, e);
     }
     return { ...DEFAULT_SDK };
@@ -331,7 +333,7 @@ export function loadSyncSettings(workspace: string): SyncSettings {
             return sanitizeSync(raw);
         }
     } catch (e) {
-        if (e instanceof SyntaxError) { _corruptedConfigs.push(filePath); }
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
         warnSettingsLoadFailure('sync', filePath, e);
     }
     return { ...DEFAULT_SYNC };
@@ -358,7 +360,7 @@ export function loadRemoteSettings(workspace: string): RemoteSettings {
             return sanitizeRemote(raw);
         }
     } catch (e) {
-        if (e instanceof SyntaxError) { _corruptedConfigs.push(filePath); }
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
         warnSettingsLoadFailure('remote', filePath, e);
     }
     return { ...DEFAULT_REMOTE };
@@ -394,7 +396,7 @@ export function loadActiveTarget(workspace: string): ActiveTargetSettings | null
             return result;
         }
     } catch (e) {
-        if (e instanceof SyntaxError) { _corruptedConfigs.push(filePath); }
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
         warnSettingsLoadFailure('activeTarget', filePath, e);
     }
     return null;

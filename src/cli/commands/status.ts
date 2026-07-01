@@ -13,7 +13,7 @@ import { aggregateCandidates } from './candidates';
 import {
     loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings,
     getCorruptedConfigs, clearCorruptedConfigs,
-    QtSettings, SdkSettings, SyncSettings, RemoteSettings,
+    QtSettings, SdkSettings, SyncSettings, RemoteSettings, CorruptedConfig,
 } from '../../core/settingsIO';
 import { readRunState, resolveRunProcessStatus } from '../../qt/shared/localState';
 import { getServerById } from '../../core/serverStore';
@@ -33,7 +33,7 @@ export interface StatusResult extends ForjaJsonResult {
 
 export interface ToolchainSummary {
     qt?: { path: string; version?: string };
-    vs?: { path: string };
+    vs?: { path: string; version?: string };
     jom?: string;
     make?: boolean;
 }
@@ -43,7 +43,6 @@ export interface RemoteStatusSummary {
     server?: { id: string; name: string; host: string };
     remotePath?: string;
     remoteForjaBin?: string;
-    locked?: boolean;          // reserved — requires SSH probe, not populated by lightweight status
     workspaceMode?: 'legacy' | 'staged';
 }
 
@@ -53,7 +52,7 @@ export interface SyncStatusSummary {
     remotePath?: string;
 }
 
-export function runStatus(workspace: string, options: { process?: boolean } = {}): StatusResult {
+export function runStatus(workspace: string): StatusResult {
     const diagnostics: Diagnostic[] = [];
     const readiness: Readiness = {};
 
@@ -80,14 +79,17 @@ export function runStatus(workspace: string, options: { process?: boolean } = {}
     const corrupted = getCorruptedConfigs();
     clearCorruptedConfigs();
     if (corrupted.length > 0) {
+        const detail = corrupted.map((c: CorruptedConfig) => `${path.basename(c.path)} — ${c.detail}`).join(', ');
         return {
             ok: false,
             action: 'status',
             readiness: { target: 'unknown', toolchain: 'unknown', sync: 'unknown', remote: 'unknown' },
             diagnostics: [{
                 level: 'error',
-                message: `${T('sts.configCorrupted')}: ${corrupted.map((f: string) => path.basename(f)).join(', ')}`,
-                params: { files: corrupted.join(', ') },
+                message: `${T('sts.configCorrupted')}: ${detail}`,
+                hint: T('sts.configCorruptedHint'),
+                fix: 'forja setup',
+                params: { file: corrupted.map((c: CorruptedConfig) => c.path).join(', '), detail: corrupted.map((c: CorruptedConfig) => c.detail).join('; ') },
             }],
             nextAction: 'forja setup',
         };
@@ -104,7 +106,7 @@ export function runStatus(workspace: string, options: { process?: boolean } = {}
         if (qtCount > 0 || sdkCount > 0) {
             diagnostics.push({
                 level: 'info',
-                message: `Found ${qtCount} Qt and ${sdkCount} SDK targets, ${T('sts.targetsNoneSelected')}`,
+                message: T('sts.targetsFound').replace('{0}', String(qtCount)).replace('{1}', String(sdkCount)),
                 fix: 'forja list targets',
                 params: { qtCount: String(qtCount), sdkCount: String(sdkCount) },
             });
@@ -169,20 +171,32 @@ export function runStatus(workspace: string, options: { process?: boolean } = {}
         }
     } else {
         toolchainSummary = buildToolchainSummary(activeTarget, qtConfig, sdkConfig);
-        readiness.toolchain = assessToolchainReadiness(toolchainSummary, activeTarget, diagnostics);
+        readiness.toolchain = assessToolchainReadiness(toolchainSummary, activeTarget, diagnostics, qtConfig.qtPath);
     }
 
     // ── Sync readiness ──
     const syncServer = syncConfig.selectedServer ? getServerById(syncConfig.selectedServer) : null;
     if (!syncConfig.enabled) {
         readiness.sync = 'not-selected';
-        // Only warn if there's a remote target that might need sync
         if (activeTarget?.runAt === 'remote' && !syncConfig.selectedServer) {
             diagnostics.push({
                 level: 'warning',
                 message: T('noSyncServer'),
-                hint: 'forja use sync --server <name> --remote-path <path>',
+                hint: T('noSyncServerHint'),
                 fix: 'forja list servers',
+            });
+        } else if (activeTarget?.runAt === 'remote' && syncConfig.selectedServer) {
+            diagnostics.push({
+                level: 'warning',
+                message: T('sts.syncNotEnabled'),
+                hint: T('noSyncServerHint'),
+                fix: 'forja use sync',
+            });
+        } else if (activeTarget?.runAt === 'local' && !syncConfig.selectedServer) {
+            diagnostics.push({
+                level: 'info',
+                message: T('sts.syncNotEnabled'),
+                fix: 'forja use sync',
             });
         }
     } else {
@@ -190,7 +204,7 @@ export function runStatus(workspace: string, options: { process?: boolean } = {}
             readiness.sync = 'blocked';
             diagnostics.push({
                 level: 'error',
-                message: `${T('sts.syncServerMissing')} "${syncConfig.selectedServer}" ${T('sts.syncServerDoesNotExist')}`,
+                message: T('sts.syncServerNotFound').replace('{0}', syncConfig.selectedServer),
                 hint: T('serverDeleted'),
                 fix: 'forja list servers',
                 params: { server: syncConfig.selectedServer },
@@ -201,8 +215,9 @@ export function runStatus(workspace: string, options: { process?: boolean } = {}
                 readiness.sync = 'missing';
                 diagnostics.push({
                     level: 'error',
-                    message: T('remotePathNotConfigured'),
+                    message: `${T('remotePathNotConfigured')}: ${syncConfig.selectedServer}`,
                     fix: 'forja use sync',
+                    params: { server: syncConfig.selectedServer },
                 });
             } else {
                 readiness.sync = 'configured';
@@ -234,10 +249,12 @@ export function runStatus(workspace: string, options: { process?: boolean } = {}
             }
             // Check remote path
             if (!resolvedRemote.config.remotePath) {
+                const serverId = remoteConfig.selectedServer || syncConfig.selectedServer || '';
                 diagnostics.push({
                     level: 'error',
-                    message: T('remotePathNotConfigured'),
+                    message: serverId ? `${T('remotePathNotConfigured')}: ${serverId}` : T('remotePathNotConfigured'),
                     fix: 'forja list servers',
+                    params: serverId ? { server: serverId } : undefined,
                 });
                 readiness.remote = 'missing';
             } else {
@@ -254,12 +271,8 @@ export function runStatus(workspace: string, options: { process?: boolean } = {}
         readiness,
         diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
         activeTarget: activeTarget ?? undefined,
+        ...(toolchainSummary ? { toolchain: toolchainSummary } : {}),
     };
-
-    // Toolchain summary (reuse cached result)
-    if (toolchainSummary) {
-        result.toolchain = toolchainSummary;
-    }
 
     // Remote summary
     if (activeTarget && activeTarget.runAt === 'remote') {
@@ -267,31 +280,46 @@ export function runStatus(workspace: string, options: { process?: boolean } = {}
     }
 
     // Sync summary
-    if (syncConfig.selectedServer) {
+    if (syncConfig.enabled) {
         result.sync = {
-            enabled: syncConfig.enabled,
+            enabled: true,
             server: syncServer ? { id: syncServer.id, name: syncServer.name, host: syncServer.host } : undefined,
-            remotePath: syncConfig.remotePaths[syncConfig.selectedServer] || undefined,
+            remotePath: syncConfig.selectedServer ? (syncConfig.remotePaths[syncConfig.selectedServer] || undefined) : undefined,
         };
     }
 
-    // Runtime (--process)
-    if (options.process) {
-        result.runtime = buildRuntimeState(workspace, activeTarget, diagnostics);
-        if (result.runtime.running) {
-            readiness.runtime = 'ready';
-        } else {
-            readiness.runtime = 'not-selected';
-        }
+    // Runtime
+    result.runtime = buildRuntimeState(workspace, activeTarget, diagnostics, readiness);
+    if (!readiness.runtime) {
+        // buildRuntimeState only sets readiness.runtime on error ('unknown');
+        // normal path: derive from process state
+        readiness.runtime = result.runtime.running ? 'ready' : 'not-selected';
     }
 
-    // Next action — prioritize error/warning fixes over info; don't suggest build when errors exist
-    const errorWarningFix = diagnostics.find(d => (d.level === 'error' || d.level === 'warning') && d.fix);
-    const infoFix = diagnostics.find(d => d.level === 'info' && d.fix);
-    const hasErrors = diagnostics.some(d => d.level === 'error');
-    result.nextAction = errorWarningFix?.fix || infoFix?.fix || (hasErrors ? undefined : 'forja build');
+    // Next action — running process takes priority, then first diagnostic fix, then default to build
+    if (result.runtime?.running) {
+        result.nextAction = 'forja stop';
+    } else {
+        const firstFix = diagnostics.find(d => d.fix)?.fix;
+        const hasErrors = diagnostics.some(d => d.level === 'error');
+        result.nextAction = firstFix || (hasErrors ? undefined : 'forja build');
+    }
 
     return result;
+}
+
+function extractVsVersion(vsPath: string): string | undefined {
+    const m = vsPath.match(/(2022|2019|2017)/);
+    if (m) { return m[1]; }
+    const n = vsPath.match(/\\(\d{2})\\/);
+    if (n) {
+        const v = parseInt(n[1], 10);
+        if (v >= 18) { return '2026'; }
+        if (v >= 17) { return '2022'; }
+        if (v === 16) { return '2019'; }
+        if (v === 15) { return '2017'; }
+    }
+    return undefined;
 }
 
 function buildToolchainSummary(target: ActiveTarget, qtConfig: QtSettings, sdkConfig: SdkSettings): ToolchainSummary {
@@ -301,14 +329,14 @@ function buildToolchainSummary(target: ActiveTarget, qtConfig: QtSettings, sdkCo
             const m = qtConfig.qtPath.match(/(\d+\.\d+\.\d+)/);
             summary.qt = { path: qtConfig.qtPath, version: m ? m[1] : undefined };
         }
-        if (qtConfig.vsInstall) { summary.vs = { path: qtConfig.vsInstall }; }
+        if (qtConfig.vsInstall) { summary.vs = { path: qtConfig.vsInstall, version: extractVsVersion(qtConfig.vsInstall) }; }
         if (qtConfig.jomPath) { summary.jom = qtConfig.jomPath; }
         if (process.platform !== 'win32') {
             summary.make = !!detectMake();
         }
     } else {
         if (process.platform === 'win32') {
-            if (sdkConfig.vsInstall) { summary.vs = { path: sdkConfig.vsInstall }; }
+            if (sdkConfig.vsInstall) { summary.vs = { path: sdkConfig.vsInstall, version: extractVsVersion(sdkConfig.vsInstall) }; }
         } else {
             // On POSIX, SDK uses make, not VS
             summary.make = !!detectMake();
@@ -317,18 +345,21 @@ function buildToolchainSummary(target: ActiveTarget, qtConfig: QtSettings, sdkCo
     return summary;
 }
 
-function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarget, diagnostics: Diagnostic[]): ReadinessState {
+function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarget, diagnostics: Diagnostic[], qtPath?: string): ReadinessState {
     if (target.kind === 'qt') {
+        let qtOk = true;
         if (!summary.qt?.path) {
+            qtOk = false;
+            const pathSuffix = qtPath ? `: ${qtPath}` : '';
             diagnostics.push({
                 level: 'error',
-                message: T('qtNotFound'),
+                message: `${T('qtNotFound')}${pathSuffix}`,
                 hint: T('qtReconfigure'),
                 fix: 'forja list env qt',
+                params: qtPath ? { path: qtPath } : undefined,
             });
-            return 'missing';
         }
-        // Platform-specific requirements
+        // Platform-specific requirements — check all tools even if Qt is missing
         if (process.platform === 'win32') {
             // Windows Qt requires VS
             if (!summary.vs?.path) {
@@ -338,7 +369,6 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarge
                     hint: T('installVs'),
                     fix: 'forja list env vs',
                 });
-                // Don't return early — still check optional tools below
             }
             // jom is optional but recommended on Windows
             if (!summary.jom) {
@@ -348,7 +378,7 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarge
                     fix: 'forja list env qt',
                 });
             }
-            if (!summary.vs?.path) { return 'missing'; }
+            if (!qtOk || !summary.vs?.path) { return 'missing'; }
         } else {
             // POSIX Qt requires make
             if (!summary.make) {
@@ -356,6 +386,7 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarge
                     level: 'error',
                     message: T('makeNotFound'),
                     hint: T('installBuildEssential'),
+                    fix: 'forja doctor',
                 });
                 return 'missing';
             }
@@ -381,6 +412,7 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarge
                 level: 'error',
                 message: T('makeNotFound'),
                 hint: T('installBuildEssential'),
+                fix: 'forja doctor',
             });
             return 'missing';
         }
@@ -402,7 +434,7 @@ function buildRemoteStatusSummary(remoteConfig: RemoteSettings, syncConfig: Sync
     };
 }
 
-function buildRuntimeState(workspace: string, target: ActiveTarget | null, diagnostics: Diagnostic[]): RuntimeState {
+function buildRuntimeState(workspace: string, target: ActiveTarget | null, diagnostics: Diagnostic[], readiness: Readiness): RuntimeState {
     // Read local run state from the Qt localState file
     if (!target) {
         return { running: false, runAt: 'local' };
@@ -426,21 +458,19 @@ function buildRuntimeState(workspace: string, target: ActiveTarget | null, diagn
                 level: 'warning',
                 message: `${T('sts.failedToReadRunState')}: ${e instanceof Error ? e.message : String(e)}`,
             });
+            readiness.runtime = 'unknown';
+            return { running: false, runAt: target.runAt };
         }
     }
     return { running: false, runAt: target.runAt };
 }
 
 function assessOk(readiness: Readiness): boolean {
-    // sync is intentionally excluded: sync issues don't block local builds
-    // runtime is also excluded: process state doesn't affect build readiness
-    for (const key of ['target', 'toolchain', 'remote'] as const) {
-        const val = readiness[key];
-        if (val === 'blocked' || val === 'missing') { return false; }
-    }
-    // target=not-selected with no error → ok depends on whether there are errors
-    if (readiness.target === 'not-selected') { return false; }
-    if (readiness.toolchain === 'unknown') { return false; }
+    // sync/remote=not-selected are OK; sync issues don't block local builds,
+    // runtime is also excluded: process state doesn't affect build readiness.
+    if (readiness.target === 'blocked' || readiness.target === 'missing' || readiness.target === 'not-selected') { return false; }
+    if (readiness.toolchain === 'blocked' || readiness.toolchain === 'missing' || readiness.toolchain === 'unknown') { return false; }
+    if (readiness.remote === 'blocked' || readiness.remote === 'missing') { return false; }
     return true;
 }
 
@@ -466,7 +496,7 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         const tc = result.toolchain;
         const tcParts: string[] = [];
         if (tc.qt) { tcParts.push(`Qt ${tc.qt.version || shortPath(tc.qt.path)}`); }
-        if (tc.vs) { tcParts.push(`VS ${shortPath(tc.vs.path)}`); }
+        if (tc.vs) { tcParts.push(`VS ${tc.vs.version || shortPath(tc.vs.path)}`); }
         if (tc.jom) { tcParts.push('jom'); }
         if (tc.make) { tcParts.push('make'); }
         if (tcParts.length > 0) { lines.push(`${T('toolchainLabel')}${tcParts.join(', ')}`); }
@@ -483,8 +513,12 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
 
     if (result.sync) {
         const s = result.sync;
-        if (s.enabled && s.server) {
-            lines.push(`${T('syncLabel')}${T('enabledStatus')} → ${s.server.name}:${s.remotePath || ''}`);
+        if (s.enabled) {
+            if (s.server) {
+                lines.push(`${T('syncLabel')}${T('enabledStatus')} → ${s.server.name}:${s.remotePath || ''}`);
+            } else {
+                lines.push(`${T('syncLabel')}${T('enabledStatus')} (${T('sts.syncServerMissing')})`);
+            }
         }
     }
 

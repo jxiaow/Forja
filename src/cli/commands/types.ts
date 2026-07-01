@@ -224,7 +224,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     disabledStatus:                { en: 'disabled',                     zh: '未启用' },
     executable:                    { en: 'executable:',                  zh: '可执行文件：' },
     log:                           { en: 'log:',                         zh: '日志：' },
-    pid:                           { en: 'pid',                          zh: '进程' },
+    pid:                           { en: 'pid ',                          zh: '进程 ' },
     // readiness keys
     readinessTarget:               { en: 'target',                       zh: '目标' },
     readinessToolchain:            { en: 'toolchain',                    zh: '工具链' },
@@ -241,6 +241,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     noActiveTarget:                { en: 'No active target selected',    zh: '未选择活动目标' },
     notInitialized:                { en: 'Not initialized, no config found', zh: '未初始化，未找到配置' },
     noSyncServer:                  { en: 'No sync server added',         zh: '未添加同步服务器' },
+    noSyncServerHint:              { en: 'Add a sync server with forja use sync', zh: '使用 forja use sync 添加同步服务器' },
     remotePathNotConfigured:       { en: 'Remote path not configured',   zh: '远程路径未配置' },
     remoteNoServer:                { en: 'runAt=remote but no server configured', zh: '执行位置=远程但未配置服务器' },
     remoteForjaBinDefault:         { en: 'Remote Forja bin not configured, will use default: $HOME/.forja/bin/forja', zh: '远程 Forja 二进制未配置，将使用默认值：$HOME/.forja/bin/forja' },
@@ -514,8 +515,8 @@ const UI: Record<string, { en: string; zh: string }> = {
         zh: '用法: forja <命令> [动作] [选项]\n\n命令:\n  status     查看工作区就绪状态\n  setup      一站式初始化（本地 + 远程）\n  list       列出目标、服务器、仓库、环境、配置\n  use        选择目标、执行模式、同步、远程设置\n  server     管理远程服务器（添加/更新/删除）\n  build      构建当前目标\n  run        运行已构建的应用\n  stop       停止运行中的应用\n  clean      清理构建产物\n  doctor     深度诊断与修复\n  sync       与远程服务器同步文件\n\n全局选项:\n  --help, -h       显示帮助\n  --version, -v    显示版本\n  --json           JSON 输出\n  --lang <locale>  语言: zh 或 en\n  --workspace <p>  指定工作区（默认当前目录）',
     },
     'help.status': {
-        en: 'Usage: forja status [--process] [--lang <locale>] [--json]',
-        zh: '用法: forja status [--process] [--lang <locale>] [--json]',
+        en: 'Usage: forja status [--lang <locale>] [--json]',
+        zh: '用法: forja status [--lang <locale>] [--json]',
     },
     'help.setup': {
         en: `Usage:
@@ -670,15 +671,17 @@ Options (remote):
     'srv.serverNotFound':               { en: 'Server not found',                   zh: '服务器未找到' },
     // status diagnostics
     'sts.workspaceNotFound':            { en: 'Workspace does not exist',           zh: '工作区不存在' },
-    'sts.configCorrupted':              { en: 'Config file(s) corrupted',           zh: '配置文件损坏' },
-    'sts.targetsNoneSelected':          { en: 'none selected',                       zh: '未选择' },
+    'sts.configCorrupted':              { en: 'Config file parse failed',               zh: '配置文件解析失败' },
+    'sts.configCorruptedHint':           { en: 'File may be corrupted, delete and re-run forja setup', zh: '文件可能已损坏，请删除后重新运行 forja setup' },
     'sts.projectFileMissing':           { en: 'Project file does not exist',        zh: '项目文件不存在' },
-    'sts.syncServerMissing':            { en: 'Sync server',                        zh: '同步服务器' },
-    'sts.syncServerDoesNotExist':       { en: 'does not exist',                     zh: '不存在' },
     'sts.failedToReadRunState':         { en: 'Failed to read run state',           zh: '读取运行状态失败' },
     'sts.forjaStatus':                  { en: 'Forja status',                       zh: 'Forja 状态' },
     'sts.makefileMismatch':             { en: 'Makefile does not match current config', zh: 'Makefile 与当前配置不匹配' },
     'sts.makefileMismatchHint':         { en: 'Re-run qmake to regenerate Makefile', zh: '重新运行 qmake 以重新生成 Makefile' },
+    'sts.targetsFound':                 { en: 'Found {0} Qt and {1} SDK targets, none selected', zh: '找到 {0} 个 Qt 和 {1} 个 SDK 目标，未选择' },
+    'sts.syncServerNotFound':           { en: 'Sync server "{0}" does not exist', zh: '同步服务器 "{0}" 不存在' },
+    'sts.syncServerMissing':            { en: 'server not found',                  zh: '服务器未找到' },
+    'sts.syncNotEnabled':               { en: 'Sync not configured; use forja use sync for remote builds', zh: '同步未配置，远程构建可用 forja use sync 配置' },
     // list diagnostics
     'lst.qtPathNotConfigured':          { en: 'Qt path not configured',             zh: 'Qt 路径未配置' },
     'lst.vsInstallNotConfigured':       { en: 'VS install not configured',          zh: 'VS 安装未配置' },
