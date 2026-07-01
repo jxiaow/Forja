@@ -3,12 +3,13 @@
  * Output format follows v2 spec: RunResult interface.
  */
 import * as path from 'path';
+import * as fs from 'fs';
 import * as cp from 'child_process';
 import { requireActiveTarget } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
-import { executeRemotePlan } from '../../remote/core/plan';
+import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
 import { loadQtSettings } from '../../core/settingsIO';
 import { launchDesigner } from '../../qt/build/designer';
@@ -74,6 +75,22 @@ export async function runRun(workspace: string, options: {
     }
     const target = targetResult.target;
 
+    // Validate project file exists
+    const runProjectPath = path.isAbsolute(target.project)
+        ? target.project
+        : path.join(workspace, target.project);
+    if (!fs.existsSync(runProjectPath)) {
+        return {
+            ok: false,
+            action: 'run',
+            runAction: 'default',
+            workspace,
+            activeTarget: target,
+            diagnostics: [diag('error', `Target project missing: ${target.project}`)],
+            nextAction: 'forja list targets',
+        };
+    }
+
     // ── --debug：CLI 层无法启动 VSCode 调试器 ──
     if (options.debug) {
         return {
@@ -109,6 +126,7 @@ export async function runRun(workspace: string, options: {
 
     // --plan: return dry-run info without executing (check BEFORE remote branch)
     if (options.plan && target.runAt === 'remote') {
+        const sshCmd = buildRemoteShellCommand(workspace, `run${options.detach ? ' --detach' : ''}`);
         return {
             ok: true,
             action: 'run',
@@ -117,8 +135,8 @@ export async function runRun(workspace: string, options: {
             activeTarget: target,
             plan: {
                 mode: 'dryRun',
-                commands: [`forja remote run --target qt --workspace ${workspace}${options.detach ? ' --detach' : ''}`],
-                shellCommand: `ssh <server> "cd <remotePath> && forja run${options.detach ? ' --detach' : ''}"`,
+                commands: [sshCmd],
+                shellCommand: sshCmd,
             },
         };
     }
@@ -131,6 +149,7 @@ export async function runRun(workspace: string, options: {
             args: options.detach ? ['--detach'] : [],
             json: options.json ?? false,
             stream: !(options.json ?? false) && !options.detach,
+            activeProject: target.project,
         });
 
         return {

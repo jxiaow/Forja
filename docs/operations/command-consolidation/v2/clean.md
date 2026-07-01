@@ -21,13 +21,14 @@ forja clean [--workspace <path>] [--plan] [--json]
 
 ## 行为
 
-1. 读取 active target；缺失时返回 `forja list` + `forja use target --project <path>`。
-2. `kind=qt`：调用现有 Qt clean 后端。
-3. `kind=sdk`：调用现有 SDK clean 后端。
-4. `runAt=remote`：通过 remote prepared action 执行对应 clean。
-5. `--plan` 只展示将执行的命令和可能删除的构建目录，不删除文件。
-6. 无构建产物时视为成功，输出 `state: "already-clean"` 或空 changed 列表。
-7. clean 失败不自动执行 restore/reset/clean-untracked。
+1. 读取 active target；缺失时返回 `forja list targets` + `forja use target --project <path>`。
+2. 校验项目文件是否存在；缺失时返回 `forja list targets`。
+3. `kind=qt`：调用现有 Qt clean 后端。
+4. `kind=sdk`：调用现有 SDK clean 后端。
+5. `runAt=remote`：通过 remote prepared action 执行对应 clean。
+6. `--plan` 只展示将执行的命令，不删除文件。
+7. 无构建产物时视为成功，输出 `state: "already-clean"`。
+8. clean 失败不自动执行 restore/reset/clean-untracked。
 
 ## 吸收的旧命令
 
@@ -61,15 +62,14 @@ interface CleanResult extends ForjaJsonResult {
 }
 ```
 
-## 诊断码
+## 诊断场景
 
-| code | level | 触发条件 | nextActions |
-|------|-------|----------|-------------|
-| `clean.targetNotSelected` | error | 没有 active target | `forja list`, `forja use target --project <path>` |
-| `clean.targetMissing` | error | 项目文件不存在 | `forja list`, `forja use target --project <path>` |
-| `clean.remoteMissing` | error | runAt=remote 但远程配置不完整 | `forja list remote`, `forja use remote --server <id> --remote-path <path>` |
-| `clean.remoteBlocked` | error | remote prepare/lock/SSH 失败 | `forja doctor --remote` |
-| `clean.commandFailed` | error | 后端 clean 失败 | `forja doctor` |
+| 场景 | level | message 前缀 | nextAction |
+|------|-------|-------------|------------|
+| 没有 active target | error | `Target not selected:` | `forja list targets` |
+| 项目文件不存在 | error | `Target project missing:` | `forja list targets` |
+| 远程配置不完整 | error | （透传 remote 层） | `forja doctor --remote` |
+| 后端 clean 失败 | error | `Qt clean failed:` / `SDK clean failed:` | `forja doctor` |
 
 ## 正常场景
 
@@ -79,10 +79,10 @@ interface CleanResult extends ForjaJsonResult {
     "action": "clean",
     "state": "cleaned",
     "activeTarget": { "kind": "qt", "project": "app/app.pro", "mode": "release", "arch": "x64", "runAt": "local" },
-    "changed": ["build/app"],
+    "changed": ["app"],
     "durationMs": 400,
     "exitCode": 0,
-    "nextActions": ["forja build"]
+    "nextAction": "forja build"
 }
 ```
 
@@ -91,8 +91,7 @@ interface CleanResult extends ForjaJsonResult {
     "ok": true,
     "action": "clean",
     "state": "already-clean",
-    "activeTarget": { "kind": "sdk", "project": "sdk/project.sln", "mode": "release", "arch": "x64", "runAt": "local" },
-    "nextActions": ["forja build"]
+    "activeTarget": { "kind": "sdk", "project": "sdk/project.sln", "mode": "release", "arch": "x64", "runAt": "local" }
 }
 ```
 
@@ -103,25 +102,41 @@ interface CleanResult extends ForjaJsonResult {
     "ok": false,
     "action": "clean",
     "diagnostics": [
-        { "code": "clean.targetNotSelected", "level": "error", "message": "No active target selected" }
+        { "level": "error", "message": "Target not selected: No active target. Run `forja setup` or `forja use target --project <path>`." }
     ],
-    "nextActions": ["forja list", "forja use target --project <path>"]
+    "nextAction": "forja list targets"
+}
+```
+
+```json
+{
+    "ok": false,
+    "action": "clean",
+    "activeTarget": { "kind": "qt", "project": "app/app.pro", "mode": "release", "arch": "x64", "runAt": "local" },
+    "diagnostics": [
+        { "level": "error", "message": "Qt clean failed: jom: target 'clean' failed" }
+    ],
+    "nextAction": "forja doctor"
 }
 ```
 
 ## 文本输出
 
 ```
-Forja clean succeeded
-Target: qt app/app.pro release x64 local
-Cleaned: build/app
+Clean succeeded
+Target: qt · app/app.pro · release/x64 · local
+State: cleaned
+Cleaned: app
+Duration: 400ms
 Next:
   forja build
 ```
 
 ## 验证点
 
-- `forja clean --json` 对 Qt/SDK 本地目标分别路由到旧 clean 能力。
+- `forja clean --json` 对 Qt/SDK 本地目标分别路由到对应 clean 后端。
 - `forja clean --plan --json` 不删除文件。
 - runAt=remote 时路由到 remote clean。
-- 无构建产物时成功且不报错。
+- 无构建产物时返回 `state: "already-clean"`。
+- 项目文件不存在时返回结构化错误。
+- clean 失败时诊断信息包含具体错误内容。

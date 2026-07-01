@@ -9,7 +9,7 @@ import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
 import { createSdkPlan } from '../../sdk/shared/plan';
-import { executeRemotePlan } from '../../remote/core/plan';
+import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, diag, T } from './types';
 import { loadSdkSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 
@@ -26,6 +26,47 @@ export interface CleanResult {
     diagnostics?: Diagnostic[];
     nextAction?: string;
 }
+
+// ── Build artifact detection ──
+
+const BUILD_ARTIFACT_EXTENSIONS = new Set([
+    '.o', '.obj', '.exe', '.dll', '.lib', '.a', '.so', '.dylib', '.pdb', '.ilk',
+]);
+
+function hasBuildArtifacts(dir: string, maxFiles = 2000): boolean {
+    if (!fs.existsSync(dir)) { return false; }
+    let count = 0;
+    function scan(current: string, depth: number): boolean {
+        if (depth > 4 || count > maxFiles) { return false; }
+        let entries: fs.Dirent[];
+        try { entries = fs.readdirSync(current, { withFileTypes: true }); } catch { return false; }
+        for (const entry of entries) {
+            if (count > maxFiles) { return false; }
+            if (entry.name.startsWith('.')) { continue; }
+            if (entry.isDirectory()) {
+                if (scan(path.join(current, entry.name), depth + 1)) { return true; }
+            } else if (entry.isFile()) {
+                count++;
+                if (BUILD_ARTIFACT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    return scan(dir, 0);
+}
+
+function getBuildOutputDir(projectPath: string, kind: 'qt' | 'sdk'): string {
+    const projectDir = path.dirname(projectPath);
+    const basename = path.basename(projectPath).toLowerCase();
+    if (kind === 'sdk' && basename === 'cmakelists.txt') {
+        return path.join(projectDir, 'build');
+    }
+    return projectDir;
+}
+
+// ── CLI options builder ──
 
 function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: boolean): CliOptions {
     return {
@@ -44,6 +85,22 @@ function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: b
         json: false,
     };
 }
+
+// ── Error extraction ──
+
+function extractCleanError(executed: { errors?: string[]; stderr?: string }): string {
+    if (executed.errors?.length) {
+        return executed.errors.slice(0, 3).join('; ');
+    }
+    const stderr = executed.stderr?.trim();
+    if (stderr) {
+        const lines = stderr.split('\n').filter(l => l.trim());
+        return lines.slice(-3).join('; ');
+    }
+    return '';
+}
+
+// ── Main ──
 
 export async function runClean(workspace: string, options: { plan?: boolean; json?: boolean } = {}): Promise<CleanResult> {
     const wantsJson = options.json ?? process.argv.includes('--json');
@@ -75,14 +132,30 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             ok: false,
             action: 'clean',
             workspace,
-            diagnostics: [diag('error', targetResult.error)],
+            diagnostics: [diag('error', `Target not selected: ${targetResult.error}`)],
             nextAction: targetResult.nextAction,
         };
     }
     const target = targetResult.target;
 
-    // --plan: return dry-run info without executing (check BEFORE remote branch)
+    // Validate project file exists
+    const projectPath = path.isAbsolute(target.project)
+        ? target.project
+        : path.join(workspace, target.project);
+    if (!fs.existsSync(projectPath)) {
+        return {
+            ok: false,
+            action: 'clean',
+            workspace,
+            activeTarget: target,
+            diagnostics: [diag('error', `Target project missing: ${target.project}`)],
+            nextAction: 'forja list targets',
+        };
+    }
+
+    // --plan + remote: return dry-run info without executing
     if (options.plan && target.runAt === 'remote') {
+        const sshCmd = buildRemoteShellCommand(workspace, 'clean');
         return {
             ok: true,
             action: 'clean',
@@ -90,18 +163,20 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             activeTarget: target,
             plan: {
                 mode: 'dryRun',
-                commands: [`forja remote clean --target ${target.kind} --workspace ${workspace}`],
-                shellCommand: `ssh <server> "cd <remotePath> && forja clean"`,
+                commands: [sshCmd],
+                shellCommand: sshCmd,
             },
         };
     }
 
+    // Remote execution
     if (target.runAt === 'remote') {
         const remoteResult = await executeRemotePlan({
             workspace,
             target: target.kind,
             action: 'clean',
             json: wantsJson,
+            activeProject: target.project,
         });
 
         return {
@@ -111,18 +186,21 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             activeTarget: target,
             state: remoteResult.ok ? 'cleaned' : undefined,
             exitCode: remoteResult.exitCode,
-            diagnostics: remoteResult.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
+            diagnostics: remoteResult.ok
+                ? undefined
+                : remoteResult.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
             nextAction: remoteResult.nextAction,
         };
     }
 
+    // SDK local
     if (target.kind === 'sdk') {
         const sdkSettings = loadSdkSettings(workspace);
         const vsDevCmdPath = resolveVsDevCmdPath(sdkSettings.vsInstall);
         const plan = createSdkPlan({
             action: 'clean',
             workspace,
-            project: path.isAbsolute(target.project) ? target.project : path.join(workspace, target.project),
+            project: projectPath,
             mode: target.mode,
             arch: target.arch,
             vsDevCmdPath: vsDevCmdPath || undefined,
@@ -138,11 +216,23 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             };
         }
 
+        const buildDir = getBuildOutputDir(projectPath, 'sdk');
+        if (!hasBuildArtifacts(buildDir)) {
+            return {
+                ok: true,
+                action: 'clean',
+                workspace,
+                activeTarget: target,
+                state: 'already-clean',
+            };
+        }
+
         const started = Date.now();
         const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false });
         const durationMs = Date.now() - started;
 
         const ok = executed.exitCode === 0;
+        const changed = ok ? [path.relative(workspace, buildDir) || '.'] : undefined;
         return {
             ok,
             action: 'clean',
@@ -151,7 +241,8 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             state: ok ? 'cleaned' : undefined,
             exitCode: executed.exitCode ?? undefined,
             durationMs: executed.durationMs > 0 ? executed.durationMs : durationMs,
-            diagnostics: ok ? undefined : [diag('error', 'SDK clean failed')],
+            changed,
+            diagnostics: ok ? undefined : [diag('error', `SDK clean failed: ${extractCleanError(executed) || 'unknown error'}`)],
             nextAction: ok ? 'forja build' : 'forja doctor',
         };
     }
@@ -162,13 +253,16 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     try {
         const planned = await createActionPlan(cliOptions);
         if (!planned.ok) {
+            const isTargetMissing = planned.diagnostics.some(d => /not found|does not exist|missing/i.test(d.message));
             return {
                 ok: false,
                 action: 'clean',
                 workspace,
                 activeTarget: target,
                 diagnostics: planned.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-                nextAction: planned.nextAction?.replace(/\s+--json/g, ''),
+                nextAction: isTargetMissing
+                    ? 'forja list targets'
+                    : planned.nextAction?.replace(/\s+--json/g, ''),
             };
         }
 
@@ -182,17 +276,31 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             };
         }
 
+        const buildDir = getBuildOutputDir(projectPath, 'qt');
+        if (!hasBuildArtifacts(buildDir)) {
+            return {
+                ok: true,
+                action: 'clean',
+                workspace,
+                activeTarget: target,
+                state: 'already-clean',
+            };
+        }
+
         const executed = await runCliResult(planned, { streaming: !wantsJson, detach: false });
+        const ok = executed.ok;
+        const changed = ok ? [path.relative(workspace, buildDir) || '.'] : undefined;
         return {
-            ok: executed.ok,
+            ok,
             action: 'clean',
             workspace,
             activeTarget: target,
-            state: executed.ok ? 'cleaned' : undefined,
+            state: ok ? 'cleaned' : undefined,
             exitCode: executed.exitCode ?? undefined,
             durationMs: executed.durationMs > 0 ? executed.durationMs : undefined,
-            diagnostics: executed.ok ? undefined : [diag('error', 'Qt clean failed')],
-            nextAction: executed.ok ? 'forja build' : 'forja doctor',
+            changed,
+            diagnostics: ok ? undefined : [diag('error', `Qt clean failed: ${extractCleanError(executed) || 'unknown error'}`)],
+            nextAction: ok ? 'forja build' : 'forja doctor',
         };
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -219,6 +327,11 @@ export function outputCleanResult(result: CleanResult, wantsJson: boolean): void
         }
         if (result.state) {
             console.log(`${T('state')}${result.state}`);
+        }
+        if (result.changed?.length) {
+            for (const c of result.changed) {
+                console.log(`${T('cleaned')}${c}`);
+            }
         }
         if (result.durationMs) {
             console.log(`${T('duration')}${result.durationMs}ms`);

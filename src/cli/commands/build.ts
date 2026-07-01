@@ -9,7 +9,7 @@ import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
 import { createSdkPlan } from '../../sdk/shared/plan';
-import { executeRemotePlan } from '../../remote/core/plan';
+import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, diag, T } from './types';
 import { loadQtSettings, loadSdkSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 
@@ -129,6 +129,22 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     }
     const target = targetResult.target;
 
+    // Validate project file exists
+    const buildProjectPath = path.isAbsolute(target.project)
+        ? target.project
+        : path.join(workspace, target.project);
+    if (!fs.existsSync(buildProjectPath)) {
+        return {
+            ok: false,
+            action: 'build',
+            buildAction,
+            workspace,
+            activeTarget: target,
+            diagnostics: [diag('error', `Target project missing: ${target.project}`)],
+            nextAction: 'forja list targets',
+        };
+    }
+
     if ((buildAction === 'qmake' || buildAction === 'rcc') && target.kind === 'sdk') {
         return {
             ok: false,
@@ -157,6 +173,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     // --plan: return dry-run info without executing (check BEFORE remote branch)
     if (options.plan && target.runAt === 'remote') {
         const remoteAction = buildAction === 'fresh' ? 'rebuild' : buildAction === 'qmake' ? 'qmake' : 'build';
+        const sshCmd = buildRemoteShellCommand(workspace, remoteAction);
         return {
             ok: true,
             action: 'build',
@@ -165,8 +182,8 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             activeTarget: target,
             plan: {
                 mode: 'dryRun',
-                commands: [`forja remote ${remoteAction} --target ${target.kind} --workspace ${workspace}`],
-                shellCommand: `ssh <server> "cd <remotePath> && forja ${remoteAction}"`,
+                commands: [sshCmd],
+                shellCommand: sshCmd,
             },
         };
     }

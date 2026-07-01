@@ -353,6 +353,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     clean:                         { en: 'Clean',                        zh: '清理' },
     cleanSucceeded:                { en: 'succeeded',                    zh: '成功' },
     cleanFailed:                   { en: 'failed',                       zh: '失败' },
+    cleaned:                       { en: 'Cleaned:',                     zh: '已清理：' },
     state:                         { en: 'State:',                       zh: '状态：' },
     processStopped:                { en: 'Process stopped',              zh: '进程已停止' },
     noRunningProcess:              { en: 'No running process',           zh: '没有运行中的进程' },

@@ -127,3 +127,18 @@ export async function executeRemotePlan(options: RemotePlanOptions): Promise<Rem
         };
     }
 }
+
+/**
+ * Build an actual SSH shell command for --plan display.
+ * Resolves server host/username and remote path from settings.
+ */
+export function buildRemoteShellCommand(workspace: string, action: string): string {
+    const remoteSettings = loadRemoteSettings(workspace);
+    const syncSettings = loadSyncSettings(workspace);
+    const serverId = remoteSettings.selectedServer || syncSettings.selectedServer;
+    if (!serverId) { return `ssh <server> "cd <remotePath> && forja ${action}"`; }
+    const server = getServerById(serverId);
+    if (!server) { return `ssh <server> "cd <remotePath> && forja ${action}"`; }
+    const remotePath = remoteSettings.remotePaths[serverId] || syncSettings.remotePaths[serverId] || '<remotePath>';
+    return `ssh ${server.username}@${server.host} "cd ${remotePath} && forja ${action}"`;
+}
