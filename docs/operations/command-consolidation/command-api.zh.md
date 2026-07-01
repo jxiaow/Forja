@@ -37,7 +37,7 @@ forja sync test-connection
 
 | 主命令 | 可见动作 | 说明 |
 | --- | --- | --- |
-| `forja status` | `--process` | 查看当前状态和下一步。 |
+| `forja status` | （无） | 查看当前状态和下一步。 |
 | `forja setup` | `--local-only` | 一站式初始化（本地 + 远程）。 |
 | `forja list` | `targets`、`env`、`servers`、`remote-repos`、`remote`、`config`、`lang` | 只读列举可选项和配置。默认 `targets`。 |
 | `forja use` | `target`、`execution`、`sync`、`remote`、`qt`、`sdk`、`lang` | 选择目标、构建配置、执行端和远程配置。 |
@@ -92,15 +92,15 @@ interface TargetCandidate {
 
 ```ts
 interface Diagnostic {
-  code: string;                        // 稳定机器码，格式: <domain>.<condition>
   level: 'info' | 'warning' | 'error';
   message: string;                     // 人读文本，跟随 locale
   hint?: string;                       // 人读提示，跟随 locale
+  fix?: string;                        // 可执行的修复命令
   params?: Record<string, string>;     // 模板变量，供 message/hint 插值
 }
 ```
 
-`code` 不随语言变化，AI/脚本用 `code` 判断，不依赖 `message` 文本。
+`fix` 命令不随语言变化，AI/脚本可直接执行。
 
 ### JSON 输出 Envelope
 
@@ -280,14 +280,13 @@ forja <主命令> <子命令> [对象] [--修饰参数]
 ### 语法
 
 ```bash
-forja status [--process] [--workspace <path>] [--json]
+forja status [--workspace <path>] [--json]
 ```
 
 ### 输入
 
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `--process` | boolean | 否 | 同时返回当前目标运行态。 |
 | `--workspace` | path | 否 | 工作区路径。 |
 | `--json` | boolean | 否 | 输出 JSON。 |
 
@@ -295,9 +294,9 @@ forja status [--process] [--workspace <path>] [--json]
 
 1. 读取 workspace 和 `activeTarget`。
 2. 读取 Qt、SDK、Sync、Remote 设置摘要。
-3. 如果没有 `activeTarget`，返回 `nextActions: ["forja list targets", "forja use target --project <path>"]`。
+3. 如果没有 `activeTarget`，返回 `nextAction: "forja list targets"`。
 4. 如果有 `activeTarget`，汇总 readiness。
-5. `--process` 时返回 `runtime` 字段。
+5. 始终返回 `runtime` 字段（轻量本地读取）。
 
 ### JSON 输出
 
@@ -318,7 +317,7 @@ forja status [--process] [--workspace <path>] [--json]
     "sync": "configured",
     "remote": "not-selected"
   },
-  "nextActions": ["forja build"]
+  "nextAction": "forja build"
 }
 ```
 
@@ -856,8 +855,7 @@ forja sync transfer [--workspace <path>] [--json]
 诊断消息和文本输出支持多语言。`--lang` flag > 已保存的 lang 设置 > `FORJA_LANG` 环境变量 > 系统 locale > 默认 `en`。
 
 **不影响**：
-- `Diagnostic.code` — 永远英文机器码
-- `nextActions` 命令字符串 — 永远英文命令
+- `nextAction` 命令字符串 — 永远英文命令
 
 ## VSCode 对外命令 API
 

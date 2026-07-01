@@ -297,15 +297,13 @@ function outputResult(result: ForjaJsonResult, wantsJson: boolean, textFormatter
 // ── Status ──
 
 function handleStatus(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): void {
-    const statusUnknown = findUnknownFlags(argv, new Set(['--process']), new Set());
+    const statusUnknown = findUnknownFlags(argv, new Set(), new Set());
     if (statusUnknown.length > 0) {
-        outputResult({ ok: false, action: 'status', diagnostics: [{ level: 'error', message: unknownFlagsMessage(statusUnknown, new Set(['--process'])) }], nextAction: 'forja status' }, wantsJson);
+        outputResult({ ok: false, action: 'status', diagnostics: [{ level: 'error', message: unknownFlagsMessage(statusUnknown, new Set()) }], nextAction: 'forja status' }, wantsJson);
         process.exitCode = 1;
         return;
     }
-    const result = runStatus(workspace, {
-        process: hasFlag(argv, '--process'),
-    });
+    const result = runStatus(workspace);
     outputResult(result, wantsJson, (r) => formatStatusText(r as Parameters<typeof formatStatusText>[0], locale));
 }
 

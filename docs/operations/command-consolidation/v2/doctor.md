@@ -54,7 +54,7 @@ forja doctor clean-untracked <repo> <paths...> [--recursive] [--force] [--worksp
 6. `unlock` 只释放指定 lock；无 `--force` 时必须校验 lock owner/stage 可安全释放。
 7. `restore`/`reset`/`clean-untracked` 是破坏性操作，不在 `doctor` 或 `fix` 中自动执行；`--force` 只跳过安全确认，不扩大路径范围。
 8. doctor 不负责选择目标，不写 active target；需要用户选择时指向 `forja list` + `forja use target --project <path>`。
-9. 文本输出可包含详细建议；JSON 只输出稳定 code、check status 和 nextActions。
+9. 文本输出可包含详细建议；JSON 只输出稳定 code、check status 和 nextAction。
 10. 旧 `remote test/doctor --bootstrap` 的“检查失败时部署/更新远端 Forja bin”组合语义归 `doctor fix --remote`；普通 `doctor --remote` 只检查，不上传。
 
 ## 吸收的旧命令
@@ -102,13 +102,13 @@ interface CheckResult {
     status: 'ready' | 'blocked' | 'warning' | 'skipped' | 'unknown';
     message?: string;
     diagnostics?: Diagnostic[];
-    nextActions?: string[];
+    nextAction?: string;
 }
 ```
 
 ## 诊断码
 
-| code | level | 触发条件 | nextActions |
+| code | level | 触发条件 | nextAction |
 |------|-------|----------|-------------|
 | `doctor.targetNotSelected` | warning | 没有 active target | `forja list`, `forja use target --project <path>` |
 | `doctor.targetMissing` | error | active target 项目文件不存在 | `forja list`, `forja use target --project <path>` |
@@ -138,9 +138,9 @@ interface CheckResult {
         { "name": "target", "status": "ready" },
         { "name": "toolchain-qt", "status": "ready" },
         { "name": "toolchain-vs", "status": "ready" },
-        { "name": "sync", "status": "warning", "nextActions": ["forja use sync --server <id> --remote-path <path>"] }
+        { "name": "sync", "status": "warning", "nextAction": "forja use sync --server <id> --remote-path <path>" }
     ],
-    "nextActions": ["forja status"]
+    "nextAction": "forja status"
 }
 ```
 
@@ -154,7 +154,7 @@ interface CheckResult {
         { "name": "cleanup", "status": "ready" },
         { "name": "remote", "status": "ready" }
     ],
-    "nextActions": ["forja status"]
+    "nextAction": "forja status"
 }
 ```
 
@@ -172,10 +172,10 @@ interface CheckResult {
             "diagnostics": [
                 { "code": "doctor.remoteForjaMissing", "level": "error", "message": "Remote Forja bin not installed" }
             ],
-            "nextActions": ["forja doctor fix --remote"]
+            "nextAction": "forja doctor fix --remote"
         }
     ],
-    "nextActions": ["forja doctor fix --remote"]
+    "nextAction": "forja doctor fix --remote"
 }
 ```
 
@@ -187,7 +187,7 @@ interface CheckResult {
     "diagnostics": [
         { "code": "doctor.remoteLocked", "level": "warning", "message": "Remote lock does not match the requested lock id" }
     ],
-    "nextActions": ["forja doctor --remote"]
+    "nextAction": "forja doctor --remote"
 }
 ```
 
@@ -234,4 +234,4 @@ Next:
 - `forja doctor fix --plan --json` 预览 cleanup/remote fix，不写配置、不上传文件。
 - `forja doctor unlock <id> --json` 只释放指定 lock。
 - `forja doctor restore/reset/clean-untracked ... --force --json` 覆盖旧 remote 破坏性恢复动作的 force 语义。
-- 隐藏破坏性子动作不出现在主帮助、nextActions 和 Command Palette。
+- 隐藏破坏性子动作不出现在主帮助、nextAction 和 Command Palette。

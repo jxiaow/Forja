@@ -13,7 +13,7 @@ forja stop [--workspace <path>] [--json]
 
 | 问题 | 归属 |
 |------|------|
-| 查看是否运行中 | `forja status --process` |
+| 查看是否运行中 | `forja status` |
 | 停止当前 Qt 运行进程 | `forja stop` |
 | 解除远端 lock | `forja doctor unlock <lock-id>` |
 | 停止构建任务 | 现阶段不纳入 `stop`，由后端任务系统处理 |
@@ -60,7 +60,7 @@ interface StopResult extends ForjaJsonResult {
 | `stop.unsupportedTarget` | error | SDK target 执行 stop | `forja status` |
 | `stop.remoteMissing` | error | runAt=remote 配置不完整 | `forja list remote`, `forja use remote --server <id> --remote-path <path>` |
 | `stop.remoteBlocked` | error | remote bridge stop 失败 | `forja doctor --remote` |
-| `stop.commandFailed` | error | 本地 kill 或远程 stop 失败 | `forja status --process` |
+| `stop.commandFailed` | error | 本地 kill 或远程 stop 失败 | `forja status` |
 
 ## 正常场景
 

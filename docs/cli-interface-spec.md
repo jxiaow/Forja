@@ -33,9 +33,7 @@ forja <subcommand> [action] [options]
 
 ### `forja status`
 
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `--process` | boolean | 同时返回运行态信息 |
+无额外参数。runtime 信息始终包含在输出中。
 
 ### `forja setup`
 
@@ -152,7 +150,7 @@ interface ForjaJsonResult {
   workspace?: string;
   activeTarget?: ActiveTarget;
   diagnostics?: Diagnostic[];
-  nextActions?: string[];
+  nextAction?: string;
   [key: string]: unknown;
 }
 ```
@@ -169,10 +167,10 @@ interface ActiveTarget {
 }
 
 interface Diagnostic {
-  code: string;                        // 稳定机器码
   level: 'info' | 'warning' | 'error';
   message: string;                     // 人读文本，跟随 locale
   hint?: string;
+  fix?: string;                        // 可执行的修复命令
   params?: Record<string, string>;
 }
 
@@ -383,9 +381,9 @@ interface SyncResult extends ForjaJsonResult {
 ## 错误处理约定
 
 1. **`--json` 模式始终输出合法 JSON**，即使内部异常
-2. 异常时输出格式：`{ "ok": false, "action": "...", "diagnostics": [{ "code": "...", "level": "error", "message": "..." }] }`
-3. `diagnostics` 中的 `code` 是稳定机器码，`message` 跟随 locale
-4. `nextActions` 提供可直接执行的命令建议
+2. 异常时输出格式：`{ "ok": false, "action": "...", "diagnostics": [{ "level": "error", "message": "..." }] }`
+3. `diagnostics` 中的 `message` 跟随 locale，`fix` 提供可执行的修复命令
+4. `nextAction` 提供可直接执行的命令建议
 5. 退出码：`0` = 成功，`1` = 失败
 
 ---
@@ -397,6 +395,5 @@ interface SyncResult extends ForjaJsonResult {
 **优先级**：`--lang` flag > 已保存的 lang > `FORJA_LANG` 环境变量 > 系统 locale > 默认 `en`
 
 **不影响**：
-- `Diagnostic.code` — 永远英文机器码
-- `nextActions` 命令字符串 — 永远英文命令
+- `nextAction` 命令字符串 — 永远英文命令
 - `ReadinessState` 值 — 永远英文枚举

@@ -353,7 +353,7 @@ forja use remote transfer set --server server-2 --path /deploy/app --artifact ou
     "runAt": "local"
   },
   "diagnostics": [],
-  "nextActions": [],
+  "nextAction": "forja build",
   "exitCode": 0,
   "errors": [],
   "logFile": "/path/to/log"

@@ -142,13 +142,13 @@ interface ForjaJsonResult {
     workspace?: string;
     activeTarget?: ActiveTarget;
     diagnostics?: Diagnostic[];
-    nextActions?: string[];
+    nextAction?: string;
 }
 ```
 
 规则：
 - `ok` 和 `action` 必须始终存在。
-- `nextActions` 只输出新命令。
+- `nextAction` 只输出新命令。
 - 文本输出和 JSON 都不推荐旧用户命令。
 - 退出码：成功 `0`，失败 `1`，用户取消 `0`。
 - `activeTarget` 只表示当前执行目标；已保存配置不放进通用 envelope。
@@ -192,7 +192,7 @@ interface RuntimeState {
 }
 ```
 
-`status --process` 查看，`run --detach` 启动，`stop` 终止。三者共享结构但职责不同。
+`status` 查看，`run --detach` 启动，`stop` 终止。三者共享结构但职责不同。
 
 ### 2.7 CommandPlan
 
@@ -256,7 +256,7 @@ interface RemoteConfigSummary {
 | "Qt/VS/jom 能用吗？" | `forja doctor` | 健康验证，属诊断 |
 | "SSH 能连上吗？" | `forja doctor` | 连接验证，属诊断 |
 | "sync 配置完整吗？" | `forja doctor` | 配置校验，属诊断 |
-| "当前状态如何？" | `forja status` | readiness 摘要 + nextActions |
+| "当前状态如何？" | `forja status` | readiness 摘要 + nextAction |
 | "远程能用吗？" | `forja status` | remote readiness 判断（最小摘要） |
 
 ### 2.11 Locale
@@ -279,7 +279,7 @@ FORJA_LANG=zh forja status --json    # 中文
 **不影响**：
 - `Diagnostic.code` — 永远英文机器码
 - `ReadinessState` 值 — 永远 `ready`/`configured`/`blocked`/`missing`/`unknown`/`not-selected`
-- `nextActions` 命令字符串 — 永远英文命令
+- `nextAction` 命令字符串 — 永远英文命令
 
 **Readiness 状态文本映射**：
 
@@ -312,7 +312,7 @@ FORJA_LANG=zh forja status --json    # 中文
 | `forja qt clean` | `forja clean` | 统一 clean |
 | `forja qt run` | `forja run` | 统一 run；`--plan` 保留为 `forja run --plan` |
 | `forja qt stop` | `forja stop` | 统一 stop |
-| `forja qt ps` | `forja status --process` | runtime 归 status |
+| `forja qt ps` | `forja status` | runtime 归 status |
 | `forja qt rcc` | `forja build rcc` | build 子动作 |
 
 ### 4.2 SDK CLI 映射
@@ -359,7 +359,7 @@ FORJA_LANG=zh forja status --json    # 中文
 | `forja remote qt qmake` | `forja build qmake` | 统一 build qmake |
 | `forja remote qt run` | `forja run` | 统一 run |
 | `forja remote qt stop` | `forja stop` | 统一 stop |
-| `forja remote qt ps` | `forja status --process` | runtime 归 status |
+| `forja remote qt ps` | `forja status` | runtime 归 status |
 | `forja remote qt restore` | `forja doctor restore [--force]` | 隐藏破坏性操作 |
 | `forja remote qt reset` | `forja doctor reset [--force]` | 隐藏破坏性操作 |
 | `forja remote qt clean-untracked` | `forja doctor clean-untracked [--recursive] [--force]` | 隐藏破坏性操作 |
@@ -399,7 +399,7 @@ FORJA_LANG=zh forja status --json    # 中文
 |---------------|---------------|------|
 | `forja.qt.selectProject` | `forja.use` | 统一目标选择；CLI/API 等价 `forja use target --project <path>` |
 | `forja.qt.loadManualProject` | `forja.use` | 手动项目加载；CLI/API 等价 `forja use target --project <path>` |
-| `forja.qt.showActions` | `forja.status` / QuickPick | 统一操作菜单从 status nextActions 派生 |
+| `forja.qt.showActions` | `forja.status` / QuickPick | 统一操作菜单从 status nextAction 派生 |
 | `forja.qt.qmake` | `forja.build` | build 子动作；CLI/API 等价 `forja build qmake` |
 | `forja.qt.build` | `forja.build` | 构建 |
 | `forja.qt.clean` | `forja.clean` | 清理 |
@@ -434,7 +434,7 @@ FORJA_LANG=zh forja status --json    # 中文
 | `forja.remote.execution.pick` | `forja.use`（runAt 选择） | 执行端选择 |
 | `forja.remote.execution.local` | `forja.use` | 切本地；CLI/API 等价 `forja use execution --local` |
 | `forja.remote.execution.remote` | `forja.use` | 切远程；CLI/API 等价 `forja use execution --remote` |
-| `forja.remote.workbench` | `forja.status` / QuickPick | 远程工作台由 status + nextActions 承接 |
+| `forja.remote.workbench` | `forja.status` / QuickPick | 远程工作台由 status + nextAction 承接 |
 | `forja.remote.status` | `forja.status` | 远程 readiness |
 | `forja.remote.doctor` | `forja.doctor` | 远程诊断；CLI/API 等价 `forja doctor --remote` |
 | `forja.remote.test` | `forja.doctor` | 连接测试；CLI/API 等价 `forja doctor --remote` |
@@ -446,7 +446,7 @@ FORJA_LANG=zh forja status --json    # 中文
 | `forja.remote.qt.run` | `forja.run` | runAt=remote |
 | `forja.remote.qt.runDetached` | `forja.run` | runAt=remote；CLI/API 等价 `forja run --detach` |
 | `forja.remote.qt.stop` | `forja.stop` | runAt=remote |
-| `forja.remote.qt.ps` | `forja.status` | remote runtime；CLI/API 等价 `forja status --process` |
+| `forja.remote.qt.ps` | `forja.status` | remote runtime；CLI/API 等价 `forja status` |
 | `forja.remote.sdk.build` | `forja.build` | runAt=remote |
 | `forja.remote.sdk.rebuild` | `forja.build` | runAt=remote；CLI/API 等价 `forja build fresh` |
 | `forja.remote.sdk.clean` | `forja.clean` | runAt=remote |
@@ -457,7 +457,7 @@ FORJA_LANG=zh forja status --json    # 中文
 |---------------|---------------|------|
 | `forja.config.openPage` | `forja.use` | 配置 UI 入口 |
 | `forja.showSyncTab` | `forja.use` / `forja.sync` | 远程配置或同步页由新命令 UI 承接 |
-| `forja.showActions` | `forja.status` / QuickPick | 统一操作菜单由 status nextActions 承接 |
+| `forja.showActions` | `forja.status` / QuickPick | 统一操作菜单由 status nextAction 承接 |
 
 ---
 
@@ -510,7 +510,7 @@ forja <主命令> <动作> [对象] [--修饰参数]
 - 动作用位置参数：`forja build qmake`、`forja doctor unlock <lock-id>`、`forja sync plan`。
 - `--flag` 只表达修饰：`--json`、`--workspace`、`--force`、`--file`。
 - 不引入 `--restore`、`--reset`、`--unlock`、`--clean-untracked` 这类"看起来是开关、实际是动作"的新公开语法。
-- 新帮助、`nextActions`、VSCode commands、AI 工具推荐路径只使用新命令。
+- 新帮助、`nextAction`、VSCode commands、AI 工具推荐路径只使用新命令。
 
 ---
 
@@ -592,9 +592,9 @@ src/cli/unified/
 | 文件 | 变更 |
 |------|------|
 | `src/cli/index.ts` | 路由到 11 个新命令；旧用户命令不进入产品帮助 |
-| `src/qt/shared/qtCore.ts` | nextActions 改用新命令 |
+| `src/qt/shared/qtCore.ts` | nextAction 改用新命令 |
 | `src/sdk/cli/index.ts` | 暴露可复用的 build/status 函数 |
-| `src/sync/cli.ts` | nextActions 改用新命令 |
+| `src/sync/cli.ts` | nextAction 改用新命令 |
 | `src/remote/cli/index.ts` | 暴露可复用 hooks 供新命令调用 |
 | `src/remote/vscode/commands.ts` | 删除旧 remote command ID 注册，改为新统一命令 adapter |
 | `src/qt/commands.ts` | 删除旧 Qt command ID 注册，改为新统一命令 adapter |
@@ -638,8 +638,8 @@ src/test/unifiedCliSync.test.ts
 
 - [ ] 创建 `src/cli/unified/status.ts`、`init.ts`、`list.ts`、`use.ts`、`server.ts`。
 - [ ] 创建 `src/cli/unified/index.ts`：顶层路由新命令。
-- [ ] 修改 `src/cli/index.ts`：只将 11 个新顶层用户命令作为公开路由；旧 CLI 用户入口不进入 help/nextActions。
-- [ ] 更新旧 Qt/SDK 的 nextActions 中指向 status/use/projects 的部分。
+- [ ] 修改 `src/cli/index.ts`：只将 11 个新顶层用户命令作为公开路由；旧 CLI 用户入口不进入 help/nextAction。
+- [ ] 更新旧 Qt/SDK 的 nextAction 中指向 status/use/projects 的部分。
 - [ ] 添加 VSCode 命令 `forja.status`/`forja.init`/`forja.list`/`forja.use`/`forja.server`，注册 + `package.json`。
 
 **依赖**：Stage 1。
@@ -676,7 +676,7 @@ src/test/unifiedCliSync.test.ts
 - [ ] 将 `sync test-connection`、`remote test`、`remote doctor` 能力吸收到 doctor。
 - [ ] 在 `src/sync/cli.ts` parser 中新增位置动作 `plan`，等价于 `--plan`。
 - [ ] 将 `remote transfer run` 能力吸收到 `forja sync transfer`。
-- [ ] 保留 sync 执行行为，更新 nextActions 指向 list/use。
+- [ ] 保留 sync 执行行为，更新 nextAction 指向 list/use。
 - [ ] 将 `cleanup` 能力吸收到 `doctor fix`。
 
 **依赖**：Stage 2（status 模式已稳定）。
@@ -701,7 +701,7 @@ src/test/unifiedCliSync.test.ts
 **验证**：
 - Command Palette 搜索 "Forja" 只显示新命令集 + 新上下文命令。
 - `forja --help` 显示新命令集。
-- 旧 CLI 用户命令不出现在公开 help、nextActions 或用户文档。
+- 旧 CLI 用户命令不出现在公开 help、nextAction 或用户文档。
 
 ### Stage 6: Verification
 
@@ -773,7 +773,7 @@ Stage 2 和 Stage 3 可在 Stage 1 完成后并行推进。Stage 4 依赖 Stage 
 | Doctor toolchain missing | `forja doctor --json`（无 Qt 环境） | `toolchain-qt` check = missing/blocked |
 | Doctor fix cleanup | `forja doctor fix --json` | 清理残留配置 |
 | Doctor fix plan | `forja doctor fix --plan --json` | 预览 cleanup/remote fix |
-| Status process | `forja status --process --json` | 返回 runtime 信息 |
+| Status runtime | `forja status --json` | 返回 runtime 信息 |
 
 ---
 
@@ -781,7 +781,7 @@ Stage 2 和 Stage 3 可在 Stage 1 完成后并行推进。Stage 4 依赖 Stage 
 
 ### 第一版发布后
 
-- 用户文档、CLI help、Command Palette、nextActions 只展示新命令。
+- 用户文档、CLI help、Command Palette、nextAction 只展示新命令。
 - 旧 CLI 用户命令不作为产品设计入口。
 - 旧 VSCode command ID 不兼容保留；扩展命令面直接替换为新 ID。
 

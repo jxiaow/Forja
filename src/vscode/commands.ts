@@ -96,7 +96,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             try {
                 const { runStatus, formatStatusText } = await import('../cli/commands/status');
                 const { resolveLocale } = await import('../cli/commands/types');
-                const result = runStatus(workspace(), { process: false });
+                const result = runStatus(workspace());
                 const locale = resolveLocale(undefined, loadGlobalConfig().lang);
                 const text = formatStatusText(result, locale);
                 const ch = getOutputChannel();

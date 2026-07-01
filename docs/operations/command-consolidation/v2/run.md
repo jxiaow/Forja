@@ -22,7 +22,7 @@ forja run designer <ui-file> [--workspace <path>] [--json]
 | 执行已保存自定义命令 | `forja run --custom <name>` |
 | 预览运行命令 | `forja run --plan` |
 | 用 Qt Designer 打开 .ui 文件 | `forja run designer <ui-file>` |
-| 查看运行状态 | `forja status --process` |
+| 查看运行状态 | `forja status` |
 | 停止运行 | `forja stop` |
 
 ## 行为
@@ -106,7 +106,7 @@ interface RunResult extends ForjaJsonResult {
         "logFile": "~/.forja/logs/app.log",
         "runAt": "local"
     },
-    "nextActions": ["forja status --process", "forja stop"]
+    "nextActions": ["forja status", "forja stop"]
 }
 ```
 
@@ -145,7 +145,7 @@ Target: qt app/app.pro release x64 local
 Runtime: running (pid 12345)
 Log: ~/.forja/logs/app.log
 Next:
-  forja status --process
+  forja status
   forja stop
 ```
 
