@@ -515,8 +515,20 @@ const UI: Record<string, { en: string; zh: string }> = {
         zh: '用法: forja <命令> [动作] [选项]\n\n命令:\n  status     查看工作区就绪状态\n  setup      一站式初始化（本地 + 远程）\n  list       列出目标、服务器、仓库、环境、配置\n  use        选择目标、执行模式、同步、远程设置\n  server     管理远程服务器（添加/更新/删除）\n  build      构建当前目标\n  run        运行已构建的应用\n  stop       停止运行中的应用\n  clean      清理构建产物\n  doctor     深度诊断与修复\n  sync       与远程服务器同步文件\n\n全局选项:\n  --help, -h       显示帮助\n  --version, -v    显示版本\n  --json           JSON 输出\n  --lang <locale>  语言: zh 或 en\n  --workspace <p>  指定工作区（默认当前目录）',
     },
     'help.status': {
-        en: 'Usage: forja status [--lang <locale>] [--json]',
-        zh: '用法: forja status [--lang <locale>] [--json]',
+        en: `Usage:
+  forja status                     Show workspace readiness and runtime status
+
+Options:
+  --json                  Output as JSON
+  --lang <locale>         Language: zh or en
+  --workspace <path>      Workspace directory (default: current directory)`,
+        zh: `用法:
+  forja status                     查看工作区就绪状态和运行时信息
+
+选项:
+  --json                  JSON 格式输出
+  --lang <locale>         语言: zh 或 en
+  --workspace <路径>      工作区目录（默认当前目录）`,
     },
     'help.setup': {
         en: `Usage:
