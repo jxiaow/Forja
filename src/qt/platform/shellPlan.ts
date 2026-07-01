@@ -28,7 +28,6 @@ export interface ShellPlanBuilder {
     qmakeCommands(cfg: BuildConfig, extraConfigs?: string[]): CommandPlan;
     buildCommands(cfg: BuildConfig): CommandPlan;
     cleanCommands(cfg: BuildConfig): CommandPlan;
-    stopCommands(exeName: string): string[];
 }
 
 export function createShellPlanBuilder(config: PlatformConfig): ShellPlanBuilder {
@@ -77,10 +76,6 @@ export function createShellPlanBuilder(config: PlatformConfig): ShellPlanBuilder
                 commands: assembleCommands(cfg, [config.cleanCommand]),
                 matcher: config.cleanMatcher
             };
-        },
-
-        stopCommands(exeName: string): string[] {
-            return config.stopCommands(exeName);
         }
     };
 }

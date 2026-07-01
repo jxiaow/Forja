@@ -80,6 +80,39 @@ Separate pure logic (returns result) from I/O layer (handles output/exitCode).
 
 ## Gotchas
 
+### Converting void → result return type
+When a function currently returns `void` and handles output internally (common in older commands), refactor to return a result object:
+
+1. Change return type from `Promise<void>` to `Promise<ResultType>`
+2. Remove all `outputResult()` and `process.exitCode` calls from the function body
+3. Export the `output*Result()` function if not already exported
+4. Move output + exitCode handling to the CLI dispatcher (index.ts)
+5. VSCode command calls the same function and maps result to `vscode.window.show*Message`
+
+```typescript
+// Before: function handles its own output
+export async function runStop(workspace: string): Promise<void> {
+  const result: StopResult = { ... };
+  outputStopResult(result, wantsJson, locale);
+  process.exitCode = result.ok ? 0 : 1;
+}
+
+// After: function returns result, caller handles output
+export async function runStop(workspace: string): Promise<StopResult> {
+  return { ok: true, state: 'stopped', ... };
+}
+// CLI dispatcher:
+const result = await runStop(workspace, { json: wantsJson });
+outputStopResult(result, wantsJson);
+if (!result.ok) { process.exitCode = 1; }
+// VSCode command:
+const result = await runStop(workspace());
+if (result.state === 'stopped') { vscode.window.showInformationMessage('...'); }
+```
+
+### Don't leave dead parameters
+After moving output to the caller, parameters that were only used for output (like `locale` passed to `T()`) become dead. Remove them from the function signature. The global locale mechanism (used by `T()`) makes per-call locale parameters unnecessary.
+
 ### Async spawn errors
 When using `cp.spawn`, the `error` event is async. Don't return `ok: true` immediately after spawn. Use Promise to wait for `spawn` or `error` event:
 

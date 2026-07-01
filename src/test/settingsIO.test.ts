@@ -89,7 +89,6 @@ test('loadQtSettings reads from ~/.forja/projects/<hash>.json', () => {
     assert.equal(settings.cStandard, 'c11');
     assert.equal(settings.fileSyncPromptEnabled, true);
     assert.equal(settings.pinnedProject, null);
-    assert.equal(settings.runtimeProcessName, '');
     assert.equal(settings.qmakeArgs, '');
 });
 
@@ -106,7 +105,6 @@ test('loadQtSettings preserves all field types correctly', () => {
         qtPath: 'D:/Qt',
         arch: 'x64',
         mode: 'release',
-        runtimeProcessName: 'DemoAppWorker',
         qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug',
         scanExcludeDirs: ['vendor'],
         pinnedProject: { root: 'C:/ws', relative: 'app.pro' },
@@ -118,7 +116,6 @@ test('loadQtSettings preserves all field types correctly', () => {
     assert.equal(settings.qtPath, 'D:/Qt');
     assert.equal(settings.arch, 'x64');
     assert.equal(settings.mode, 'release');
-    assert.equal(settings.runtimeProcessName, 'DemoAppWorker');
     assert.equal(settings.qmakeArgs, 'DEFINES+=FEATURE_X CONFIG+=qml_debug');
     assert.deepEqual(settings.scanExcludeDirs, ['vendor']);
     assert.deepEqual(settings.pinnedProject, { root: 'C:/ws', relative: 'app.pro' });

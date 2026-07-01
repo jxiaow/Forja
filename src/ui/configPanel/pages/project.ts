@@ -80,12 +80,6 @@ function buildQtSection(data: TemplateData): string {
     h += ' placeholder="例如 DEFINES+=FEATURE_X CONFIG+=qml_debug"';
     h += " onblur=\"vscode.postMessage({command:'saveQmakeArgs',";
     h += "value:this.value.trim()})\"/></div></div>";
-    h += '<div class="ci"><div class="cii"><div class="cil">停止进程名</div>';
-    h += '<div class="cid">运行前先停止的进程名，留空使用输出名称</div></div>';
-    h += `<div class="cic"><input id="runtimeProcessName" value="${esc(data.runtimeProcessName)}"`;
-    h += ' placeholder="例如 DemoAppWorker，留空自动"';
-    h += " onblur=\"vscode.postMessage({command:'saveRuntimeProcessName',";
-    h += "value:this.value.trim().replace(/\\.exe$/i,'')})\"/></div></div>";
     h += '<div class="ci"><div class="cii"><div class="cil">RCC 项目</div>';
     h += '<div class="cid">资源编译器项目路径，留空自动扫描</div></div>';
     h += '<div class="cic"><div class="input-row">';

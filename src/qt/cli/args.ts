@@ -1,6 +1,6 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'stop', 'ps', 'rcc'];
+const validActions: CliAction[] = ['init', 'use', 'status', 'env', 'projects', 'qmake', 'build', 'clean', 'run', 'ps', 'rcc'];
 
 const helpText = `Forja Qt CLI — qmake 项目构建工具
 
@@ -91,7 +91,6 @@ const actionAllowedFlags: Record<CliAction, Set<string>> = {
     build: new Set([...commonFlags, ...planFlags]),
     clean: new Set([...commonFlags, ...planFlags]),
     run: new Set([...commonFlags, ...planFlags, '--detach']),
-    stop: new Set(commonFlags),
     ps: new Set(commonFlags),
     rcc: new Set([...commonFlags, ...planFlags])
 };

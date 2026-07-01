@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getBuildConfig, getQtSourcePath } from '../services/configService';
+import { getBuildConfig, getQtSourcePath, getWorkspaceRoot } from '../services/configService';
 import { setState } from '../../vscode/qtState';
 import { getMakefileInfo } from '../project/projectManager';
-import { build, qmakeForDebug, stopCurrentTarget } from './buildManager';
+import { build, qmakeForDebug } from './buildManager';
 import { createLogger } from '../../vscode/logger';
 
 const isWin = process.platform === 'win32';
@@ -202,7 +202,11 @@ export async function startDebug(): Promise<void> {
     }
 
     await stopExistingDebugSessions(mfInfo.exePath);
-    stopCurrentTarget();
+    const { runStop } = await import('../../cli/commands/stop');
+    const stopResult = await runStop(getWorkspaceRoot() || process.cwd());
+    if (!stopResult.ok && stopResult.state !== 'not-running') {
+        logger.warn(`Stop before debug: ${stopResult.diagnostics?.[0]?.message ?? 'failed'}`);
+    }
 
     const qtSourcePath = getEffectiveQtSourcePath(cfg.qtPath);
     const sourceFileMap = createQtSourceFileMap(qtSourcePath);

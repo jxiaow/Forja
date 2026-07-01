@@ -7,10 +7,9 @@ import * as cp from 'child_process';
 import { requireActiveTarget } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
-import { textOutput } from '../../qt/cli/index';
-import { CliOptions, CliResult } from '../../qt/cli/types';
+import { CliOptions } from '../../qt/cli/types';
 import { executeRemotePlan } from '../../remote/core/plan';
-import { ActiveTarget, Diagnostic, RuntimeState, diag, Locale, T } from './types';
+import { ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
 import { loadQtSettings } from '../../core/settingsIO';
 import { launchDesigner } from '../../qt/build/designer';
 
@@ -83,8 +82,8 @@ export async function runRun(workspace: string, options: {
             runAction: 'debug',
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', 'Debug is only available in VSCode. Use the "Forja: Debug" command or status bar debug button.')],
-            nextAction: 'forja run',
+            diagnostics: [diag('error', 'Debug is only available in VSCode. Use the "Forja: Debug" command from the Command Palette, or click the debug button in the status bar.')],
+            nextAction: 'Open VSCode Command Palette → "Forja: Debug"',
         };
     }
 
@@ -278,6 +277,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
             cwd: projectDir,
             shell: true,
             stdio: ['inherit', 'pipe', 'pipe'],
+            timeout: 5 * 60 * 1000,
         });
 
         const stdout = result.stdout?.toString() ?? '';
@@ -287,6 +287,18 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
         if (!json) {
             if (stdout) { process.stdout.write(stdout); }
             if (stderr) { process.stderr.write(stderr); }
+        }
+
+        if (result.error) {
+            return {
+                ok: false,
+                action: 'run',
+                runAction: 'custom',
+                workspace,
+                activeTarget: target,
+                diagnostics: [diag('error', `Custom command "${customName}" failed: ${result.error.message}`)],
+                nextAction: 'forja doctor',
+            };
         }
 
         const exitCode = result.status ?? 1;
@@ -324,13 +336,9 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
     }
 }
 
-import { stripJson } from './index';
-
-export function outputRunResult(result: RunResult, wantsJson: boolean, locale: Locale, qtResult?: CliResult): void {
+export function outputRunResult(result: RunResult, wantsJson: boolean): void {
     if (wantsJson) {
         console.log(JSON.stringify(result, null, 2));
-    } else if (qtResult) {
-        console.log(textOutput(qtResult));
     } else {
         const status = result.ok ? T('runCompleted') : T('runFailed');
         console.log(`${T('run')} ${status}`);

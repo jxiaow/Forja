@@ -7,12 +7,10 @@ import * as fs from 'fs';
 import { requireActiveTarget } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
-import { textOutput } from '../../qt/cli/index';
-import { CliOptions, CliResult } from '../../qt/cli/types';
-import { createSdkPlan, executeSdkAsync, extractSdkErrors } from '../../sdk/shared/plan';
+import { CliOptions } from '../../qt/cli/types';
+import { createSdkPlan } from '../../sdk/shared/plan';
 import { executeRemotePlan } from '../../remote/core/plan';
-import { ensureLocalStateDir } from '../../qt/shared/localState';
-import { ActiveTarget, Diagnostic, diag, Locale, T } from './types';
+import { ActiveTarget, Diagnostic, diag, T } from './types';
 import { loadQtSettings, loadSdkSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 
 export type BuildAction = 'default' | 'fresh' | 'qmake' | 'rcc';
@@ -27,6 +25,7 @@ export interface BuildResult {
     durationMs?: number;
     exitCode?: number;
     errors?: string[];
+    warningSummary?: { total: number; summary: string };
     logFile?: string;
     diagnostics?: Diagnostic[];
     nextAction?: string;
@@ -72,6 +71,13 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             return {
                 ok: false, action: 'build', buildAction, workspace,
                 diagnostics: [diag('error', `Cannot determine project kind from: ${projectPath}`)],
+                nextAction: 'forja list targets',
+            };
+        }
+        if (!fs.existsSync(projectPath)) {
+            return {
+                ok: false, action: 'build', buildAction, workspace,
+                diagnostics: [diag('error', `Project file not found: ${projectPath}`)],
                 nextAction: 'forja list targets',
             };
         }
@@ -188,61 +194,77 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     }
 
     if (target.kind === 'sdk') {
-        const sdkAction = buildAction === 'fresh' ? 'rebuild' : 'build';
-        const sdkSettings = loadSdkSettings(workspace);
-        const vsDevCmdPath = resolveVsDevCmdPath(sdkSettings.vsInstall);
-        const plan = createSdkPlan({
-            action: sdkAction as 'build' | 'rebuild' | 'clean',
-            workspace,
-            project: path.isAbsolute(target.project) ? target.project : path.join(workspace, target.project),
-            mode: target.mode,
-            arch: target.arch,
-            vsDevCmdPath: vsDevCmdPath || undefined,
-        });
+        try {
+            const sdkAction = buildAction === 'fresh' ? 'rebuild' : 'build';
+            const sdkSettings = loadSdkSettings(workspace);
+            const vsDevCmdPath = resolveVsDevCmdPath(sdkSettings.vsInstall);
+            const plan = createSdkPlan({
+                action: sdkAction as 'build' | 'rebuild' | 'clean',
+                workspace,
+                project: path.isAbsolute(target.project) ? target.project : path.join(workspace, target.project),
+                mode: target.mode,
+                arch: target.arch,
+                vsDevCmdPath: vsDevCmdPath || undefined,
+            });
 
-        if (options.plan) {
+            if (options.plan) {
+                return {
+                    ok: true,
+                    action: 'build',
+                    buildAction,
+                    workspace,
+                    activeTarget: target,
+                    plan: { mode: 'dryRun', commands: plan.commands, shellCommand: plan.shellCommand },
+                };
+            }
+
+            const started = Date.now();
+            const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false });
+            const durationMs = Date.now() - started;
+
+            const ok = executed.exitCode === 0;
             return {
-                ok: true,
+                ok,
                 action: 'build',
                 buildAction,
                 workspace,
                 activeTarget: target,
-                plan: { mode: 'dryRun', commands: plan.commands, shellCommand: plan.shellCommand },
+                exitCode: executed.exitCode ?? undefined,
+                durationMs: executed.durationMs > 0 ? executed.durationMs : durationMs,
+                errors: executed.errors?.length > 0 ? executed.errors : undefined,
+                warningSummary: executed.warningSummary,
+                logFile: executed.logFile ?? undefined,
+                diagnostics: ok ? undefined : [diag('error', executed.errors?.length > 0 ? `SDK build failed (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : 'SDK build failed')],
+                nextAction: ok ? undefined : 'forja doctor',
+            };
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            return {
+                ok: false,
+                action: 'build',
+                buildAction,
+                workspace,
+                activeTarget: target,
+                diagnostics: [diag('error', message)],
+                nextAction: 'forja doctor',
             };
         }
-
-        const started = Date.now();
-        const executed = await executeSdkAsync(plan.shellCommand, workspace);
-        const durationMs = Date.now() - started;
-        const errors = executed.exitCode !== 0 ? extractSdkErrors(executed.stdout + '\n' + executed.stderr) : [];
-
-        const logFile = path.join(workspace, '.forja', 'logs', `sdk-${sdkAction}-${Date.now()}.log`);
-        try {
-            ensureLocalStateDir(workspace);
-            fs.mkdirSync(path.dirname(logFile), { recursive: true });
-            fs.writeFileSync(logFile, `$ ${plan.shellCommand}\n\n${executed.stdout}\n${executed.stderr}`, 'utf8');
-        } catch { /* log write failure must not fail the build result */ }
-
-        const ok = executed.exitCode === 0;
-        return {
-            ok,
-            action: 'build',
-            buildAction,
-            workspace,
-            activeTarget: target,
-            exitCode: executed.exitCode,
-            durationMs,
-            errors: errors.length > 0 ? errors : undefined,
-            logFile,
-            diagnostics: ok ? undefined : [diag('error', 'SDK build failed')],
-            nextAction: ok ? undefined : 'forja doctor',
-        };
     }
 
     // Qt local
     const cliOptions = buildQtCliOptions(workspace, target, buildAction, options.plan ?? false);
 
     try {
+        // fresh = clean first, then build
+        if (buildAction === 'fresh' && !options.plan) {
+            const cleanOpts = buildQtCliOptions(workspace, target, 'default', false);
+            cleanOpts.action = 'clean';
+            const cleanPlan = await createActionPlan(cleanOpts);
+            if (cleanPlan.ok && cleanPlan.commands.length > 0) {
+                await runCliResult(cleanPlan, { streaming: false, detach: false });
+            }
+        }
+
         const planned = await createActionPlan(cliOptions);
         if (!planned.ok) {
             return {
@@ -257,6 +279,20 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         }
 
         if (options.plan) {
+            if (buildAction === 'fresh') {
+                const cleanOpts = buildQtCliOptions(workspace, target, 'default', true);
+                cleanOpts.action = 'clean';
+                const cleanPlan = await createActionPlan(cleanOpts);
+                const combinedCommands = [...(cleanPlan.ok ? cleanPlan.commands : []), ...planned.commands];
+                return {
+                    ok: true,
+                    action: 'build',
+                    buildAction,
+                    workspace,
+                    activeTarget: target,
+                    plan: { mode: 'dryRun', commands: combinedCommands, shellCommand: combinedCommands.join(' && ') },
+                };
+            }
             return {
                 ok: true,
                 action: 'build',
@@ -276,9 +312,10 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             activeTarget: target,
             exitCode: executed.exitCode ?? undefined,
             durationMs: executed.durationMs > 0 ? executed.durationMs : undefined,
-            errors: executed.errors.length > 0 ? executed.errors : undefined,
+            errors: executed.errors?.length > 0 ? executed.errors : undefined,
+            warningSummary: executed.warningSummary,
             logFile: executed.logFile ?? undefined,
-            diagnostics: executed.ok ? undefined : [diag('error', 'Qt build failed')],
+            diagnostics: executed.ok ? undefined : [diag('error', executed.errors?.length > 0 ? `Qt build failed (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : 'Qt build failed')],
             nextAction: executed.ok ? 'forja run' : 'forja doctor',
         };
     } catch (e) {
@@ -295,11 +332,9 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     }
 }
 
-export function outputBuildResult(result: BuildResult, wantsJson: boolean, locale: Locale, qtResult?: CliResult): void {
+export function outputBuildResult(result: BuildResult, wantsJson: boolean): void {
     if (wantsJson) {
         console.log(JSON.stringify(result, null, 2));
-    } else if (qtResult) {
-        console.log(textOutput(qtResult));
     } else {
         const status = result.ok ? T('buildSucceeded') : T('buildFailed');
         console.log(`${T('build')} ${status}`);
@@ -318,6 +353,9 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean, local
             for (const err of result.errors) {
                 console.log(`  ${err}`);
             }
+        }
+        if (result.warningSummary && result.warningSummary.total > 0) {
+            console.log(`${T('warnings')} ${result.warningSummary.total} (${result.warningSummary.summary})`);
         }
         if (result.diagnostics) {
             for (const d of result.diagnostics) {

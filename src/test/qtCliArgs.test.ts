@@ -54,7 +54,7 @@ test('parseCliArgs accepts use config options', () => {
 
 test('parseCliArgs rejects build config options on execution and read-only actions', () => {
     const restrictedFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target', '--qmake-args'];
-    for (const action of ['init', 'build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'ps', 'stop', 'rcc']) {
+    for (const action of ['init', 'build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'ps', 'rcc']) {
         for (const flag of restrictedFlags) {
             assert.throws(
                 () => parseCliArgs([action, flag, 'value']),

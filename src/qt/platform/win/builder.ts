@@ -6,15 +6,6 @@ export function getVsDevCmd(vsDevShell: string): string {
     return vsDevShell.replace(/Launch-VsDevShell\.ps1$/i, 'VsDevCmd.bat');
 }
 
-function buildProcessKillCommand(exeName: string): string {
-    const imageName = exeName.replace(/\.exe$/i, '') + '.exe';
-    // taskkill /F /IM <exe> — 强制终止目标进程
-    // 2>nul — 进程不存在时屏蔽错误信息
-    // ( ... || ver>nul) — 括号强制 CMD 先求值此组，
-    //   避免 || 与 && 同级左结合导致 taskkill 成功时跳过后续整条链
-    return `(taskkill /F /IM ${imageName} 2>nul || ver>nul)`;
-}
-
 export const winConfig: PlatformConfig = {
     shellExecutable: 'cmd.exe',
     shellArgs: ['/c'],
@@ -44,14 +35,6 @@ export const winConfig: PlatformConfig = {
 
     cdCommand(dir: string): string {
         return `cd /d "${dir}"`;
-    },
-
-    killCommand(exeName: string, _exePath?: string): string {
-        return buildProcessKillCommand(exeName);
-    },
-
-    stopCommands(exeName: string): string[] {
-        return [buildProcessKillCommand(exeName)];
     },
 
     qmakeSpec: 'win32-msvc',

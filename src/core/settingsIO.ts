@@ -24,7 +24,6 @@ export interface QtSettings {
     pinnedProject: { root: string; relative: string } | null;
     target: string;
     qmakeArgs: string;
-    runtimeProcessName: string;
     cStandard: string;
     cppStandard: string;
     designerPath: string;
@@ -119,7 +118,6 @@ export const DEFAULT_QT: Readonly<QtSettings> = {
     pinnedProject: null,
     target: '',
     qmakeArgs: '',
-    runtimeProcessName: '',
     cStandard: 'c11',
     cppStandard: 'c++11',
     designerPath: '',
@@ -524,7 +522,6 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
         pinnedProject,
         target: isString(raw.target) ? raw.target : d.target,
         qmakeArgs: isString(raw.qmakeArgs) ? raw.qmakeArgs : d.qmakeArgs,
-        runtimeProcessName: isString(raw.runtimeProcessName) ? raw.runtimeProcessName : d.runtimeProcessName,
         cStandard: isString(raw.cStandard) ? raw.cStandard : d.cStandard,
         cppStandard: isString(raw.cppStandard) ? raw.cppStandard : d.cppStandard,
         designerPath: isString(raw.designerPath) ? raw.designerPath : d.designerPath,

@@ -7,12 +7,10 @@ import * as fs from 'fs';
 import { requireActiveTarget } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
-import { textOutput } from '../../qt/cli/index';
-import { CliOptions, CliResult } from '../../qt/cli/types';
-import { createSdkPlan, executeSdkAsync } from '../../sdk/shared/plan';
+import { CliOptions } from '../../qt/cli/types';
+import { createSdkPlan } from '../../sdk/shared/plan';
 import { executeRemotePlan } from '../../remote/core/plan';
-import { ensureLocalStateDir } from '../../qt/shared/localState';
-import { ActiveTarget, Diagnostic, diag, Locale, T } from './types';
+import { ActiveTarget, Diagnostic, diag, T } from './types';
 import { loadSdkSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 
 export interface CleanResult {
@@ -141,15 +139,8 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
         }
 
         const started = Date.now();
-        const executed = await executeSdkAsync(plan.shellCommand, workspace);
+        const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false });
         const durationMs = Date.now() - started;
-
-        const logFile = path.join(workspace, '.forja', 'logs', `sdk-clean-${Date.now()}.log`);
-        try {
-            ensureLocalStateDir(workspace);
-            fs.mkdirSync(path.dirname(logFile), { recursive: true });
-            fs.writeFileSync(logFile, `$ ${plan.shellCommand}\n\n${executed.stdout}\n${executed.stderr}`, 'utf8');
-        } catch { /* log write failure must not fail the clean result */ }
 
         const ok = executed.exitCode === 0;
         return {
@@ -158,8 +149,8 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             workspace,
             activeTarget: target,
             state: ok ? 'cleaned' : undefined,
-            exitCode: executed.exitCode,
-            durationMs,
+            exitCode: executed.exitCode ?? undefined,
+            durationMs: executed.durationMs > 0 ? executed.durationMs : durationMs,
             diagnostics: ok ? undefined : [diag('error', 'SDK clean failed')],
             nextAction: ok ? 'forja build' : 'forja doctor',
         };
@@ -216,13 +207,9 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     }
 }
 
-import { stripJson } from './index';
-
-export function outputCleanResult(result: CleanResult, wantsJson: boolean, locale: Locale, qtResult?: CliResult): void {
+export function outputCleanResult(result: CleanResult, wantsJson: boolean): void {
     if (wantsJson) {
         console.log(JSON.stringify(result, null, 2));
-    } else if (qtResult) {
-        console.log(textOutput(qtResult));
     } else {
         const status = result.ok ? T('cleanSucceeded') : T('cleanFailed');
         console.log(`${T('clean')} ${status}`);

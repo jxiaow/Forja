@@ -17,7 +17,6 @@ function createTemplateData(): TemplateData {
         scanExcludeDirs: '',
         target: '',
         qmakeArgs: '',
-        runtimeProcessName: '',
         isWin: true,
         autoDevShell: '',
         autoQtPath: '',
@@ -69,17 +68,6 @@ test('config panel exposes qmake custom arguments', () => {
     assert.match(html, /id="qmakeArgs"/);
     assert.match(html, /value="DEFINES\+=FEATURE_X CONFIG\+=qml_debug"/);
     assert.match(html, /saveQmakeArgs/);
-});
-
-test('config panel exposes runtime process name override', () => {
-    const html = getHtml({
-        ...createTemplateData(),
-        runtimeProcessName: 'DemoAppWorker'
-    });
-
-    assert.match(html, /id="runtimeProcessName"/);
-    assert.match(html, /value="DemoAppWorker"/);
-    assert.match(html, /saveRuntimeProcessName/);
 });
 
 test('qmake target input falls back to current project target when override is empty', () => {

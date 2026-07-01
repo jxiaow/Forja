@@ -36,18 +36,9 @@ function decodeWinOutput(buffer: Buffer): string {
     }
 }
 
-/**
- * No-op wrapper kept for compatibility (previously set chcp 65001).
- * MSVC/jom output encoding is handled by decodeWinOutput using the system
- * locale encoding (e.g. GBK on zh-CN systems).
- */
-function wrapForUtf8(commandLine: string): string {
-    return commandLine;
-}
-
 function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' }, (error, stdout, stderr) => {
+        cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' }, (error, stdout, stderr) => {
             let exitCode = 0;
             if (error) {
                 const execError = error as cp.ExecException;
@@ -71,7 +62,7 @@ function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; 
  */
 function executeStreaming(commandLine: string, cwd: string, executablePath?: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        const child = cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' });
+        const child = cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' });
 
         let stdout = '';
         let stderr = '';
@@ -132,7 +123,7 @@ async function resolveDetachedRunPid(
     }
 
     const previous = new Set(previousPids);
-    const deadline = Date.now() + 2000;
+    const deadline = Date.now() + 5000;
 
     do {
         const currentPids = findExecutablePids(executablePath);
@@ -146,7 +137,7 @@ async function resolveDetachedRunPid(
     return null;
 }
 
-function terminateExecutable(executablePath: string | undefined): void {
+export function terminateExecutable(executablePath: string | undefined): void {
     if (!executablePath) {
         return;
     }
@@ -165,13 +156,16 @@ function terminateExecutable(executablePath: string | undefined): void {
     }
 }
 
-export function buildRunCommand(project: string, mode: string, arch: string): string | null {
+export function buildRunCommand(project: string, mode: string, arch: string, qtPath?: string): string | null {
     const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
     if (!runtimeTarget) {
         return null;
     }
 
     if (process.platform === 'win32') {
+        if (qtPath) {
+            return `set "PATH=${qtPath}\\bin;%PATH%" && ${shellQuote(runtimeTarget.exePath)}`;
+        }
         return shellQuote(runtimeTarget.exePath);
     }
 
@@ -234,11 +228,15 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         return result;
     }
 
+    // Pre-kill previous instance by executable path (path-aware, more precise than shell-level name-based kill)
+    if (result.action === 'run') {
+        terminateExecutable(result.executablePath);
+    }
+
     const started = Date.now();
     const commandParts = [...result.commands];
 
-    // stop is always synchronous — detach makes no sense for a kill command
-    const effectiveDetach = options?.detach && result.action !== 'stop';
+    const effectiveDetach = !!options?.detach;
 
     // Detach mode for run: build first, then launch exe separately
     if (effectiveDetach && result.action === 'run' && commandParts.length > 1) {

@@ -345,6 +345,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     buildFailed:                   { en: 'failed',                       zh: '失败' },
     duration:                      { en: 'Duration:',                    zh: '耗时：' },
     errors:                        { en: 'Errors:',                      zh: '错误：' },
+    warnings:                      { en: 'Warnings:',                    zh: '警告：' },
     run:                           { en: 'Run',                          zh: '运行' },
     runCompleted:                  { en: 'completed',                    zh: '已完成' },
     runFailed:                     { en: 'failed',                       zh: '失败' },
@@ -356,6 +357,9 @@ const UI: Record<string, { en: string; zh: string }> = {
     processStopped:                { en: 'Process stopped',              zh: '进程已停止' },
     noRunningProcess:              { en: 'No running process',           zh: '没有运行中的进程' },
     stopNotSupported:              { en: 'Stop not supported for this target', zh: '此目标不支持停止' },
+    stopSdkUnsupported:            { en: 'SDK target does not support stop. SDK builds are not long-running.', zh: 'SDK 目标不支持停止。SDK 构建不是长运行进程。' },
+    stopTerminateFailed:           { en: 'Failed to terminate process',  zh: '终止进程失败' },
+    stopStillRunning:              { en: 'Process still running',        zh: '进程仍在运行' },
     // init
     initFailed:                    { en: 'Forja setup failed',           zh: 'Forja 初始化失败' },
     initPlan:                      { en: 'Forja setup plan (dry run)',   zh: 'Forja 初始化计划（预演）' },
@@ -609,8 +613,30 @@ Options (remote):
         zh: '用法: forja server <add|update|remove> [选项] [--json]',
     },
     'help.build': {
-        en: 'Usage: forja build [fresh|qmake|rcc] [--plan] [--json]',
-        zh: '用法: forja build [fresh|qmake|rcc] [--plan] [--json]',
+        en: `Usage:
+  forja build                      Build current active target
+  forja build fresh                Clean and rebuild from scratch
+  forja build qmake                Regenerate Makefile only
+  forja build rcc                  Compile Qt resource files only
+
+Options:
+  --plan                  Dry run, show commands without executing
+  --project <path>        Build a specific project file (.pro/.sln/Makefile/CMakeLists.txt)
+  --json                  Output as JSON
+  --lang <locale>         Language: zh or en
+  --workspace <path>      Workspace directory (default: current directory)`,
+        zh: `用法:
+  forja build                      构建当前活动目标
+  forja build fresh                清理后全量重建
+  forja build qmake                仅重新生成 Makefile
+  forja build rcc                  仅编译 Qt 资源文件
+
+选项:
+  --plan                  预演模式，只显示命令不执行
+  --project <路径>        构建指定项目文件（.pro/.sln/Makefile/CMakeLists.txt）
+  --json                  JSON 格式输出
+  --lang <locale>         语言: zh 或 en
+  --workspace <路径>      工作区目录（默认当前目录）`,
     },
     'help.run': {
         en: 'Usage: forja run [designer <ui-file>] [--detach] [--debug] [--custom <cmd>] [--plan] [--json]',

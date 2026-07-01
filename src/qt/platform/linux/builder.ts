@@ -19,20 +19,6 @@ export const linuxConfig: PlatformConfig = {
         return `cd "${dir}"`;
     },
 
-    killCommand(exeName: string, exePath?: string): string {
-        if (exePath) {
-            // Only kill processes whose executable path matches our build output
-            return `for _p in $(pgrep -x "${exeName}" 2>/dev/null); do `
-                + `[ "$(readlink /proc/$_p/exe 2>/dev/null)" = "${exePath}" ] && kill $_p 2>/dev/null; `
-                + `done; true`;
-        }
-        return `pkill -x "${exeName}" 2>/dev/null; true`;
-    },
-
-    stopCommands(exeName: string): string[] {
-        return [`pkill -x ${exeName}`];
-    },
-
     qmakeSpec: 'linux-g++',
     qmakeExtraArgs(): string { return ''; },
     qmakeMatcher: '$gcc',

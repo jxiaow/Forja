@@ -469,10 +469,6 @@ details[open] .arrow { transform: rotate(90deg); }
       <div class="hint">Qt IntelliSense 目录扫描时跳过，已内置排除 build*, debug, release</div>
     </div>
     <!--END_QT-->
-    <div class="field">
-      <label>停止进程名</label>
-      <input id="runtimeProcessName" value="{{runtimeProcessName}}" placeholder="例如 DemoAppWorker，留空使用 TARGET" onchange="saveRuntimeProcessName()" />
-    </div>
     <button class="btn btn-full" style="margin-top:10px;" onclick="generateIntelliSense()">生成 IntelliSense 配置</button>
 
     <details>
@@ -793,10 +789,6 @@ function saveTarget() {
   lastSavedTarget = savedValue;
   input.dataset.savedTarget = savedValue;
   vscode.postMessage({ command: 'saveQmakeTarget', value: savedValue });
-}
-function saveRuntimeProcessName() {
-  const val = document.getElementById('runtimeProcessName').value.trim().replace(/\.exe$/i, '');
-  vscode.postMessage({ command: 'saveRuntimeProcessName', value: val });
 }
 function saveQmakeArgs() {
   const val = document.getElementById('qmakeArgs').value.trim();

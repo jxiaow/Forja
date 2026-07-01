@@ -171,12 +171,6 @@ export async function handleMessage(
             await updateConfig('qmakeArgs', String(msg.value || '').trim());
             break;
         }
-        case 'saveRuntimeProcessName': {
-            const value = String(msg.value || '').replace(/\.exe$/i, '');
-            logger.info(`保存运行前停止进程名: "${value}"`);
-            await updateConfig('runtimeProcessName', value);
-            break;
-        }
         case 'saveManualProPath': {
             logger.info(`手动指定 .pro: "${msg.value}"`);
             if (msg.value) {

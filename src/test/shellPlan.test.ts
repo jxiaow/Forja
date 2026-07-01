@@ -66,28 +66,3 @@ test('shell plan builder exposes shell execution metadata', () => {
     assert.equal(exec.shellExecutable, 'cmd.exe');
     assert.deepEqual(exec.shellArgs, ['/c']);
 });
-
-test('pre-run kill command is non-fatal and supports path-based matching', () => {
-    const winKill = winConfig.killCommand('demo');
-    const linuxKill = linuxConfig.killCommand('demo');
-    const linuxKillWithPath = linuxConfig.killCommand('demo', '/usr/local/bin/demo');
-
-    assert.match(winKill, /^\(taskkill \/F \/IM demo\.exe/);
-    assert.match(winKill, /2>nul/);
-    assert.match(winKill, /\|\| ver>nul\)$/);
-    assert.doesNotMatch(winKill, /powershell/);
-    assert.doesNotMatch(winKill, /projectDir/);
-    assert.deepEqual(winConfig.stopCommands('demo'), [winKill]);
-
-    // Without exePath: name-based, non-fatal
-    assert.match(linuxKill, /pkill -x "demo"/);
-    assert.doesNotMatch(linuxKill, /exit 1/, 'kill must not block the build');
-    assert.match(linuxKill, /; true$/, 'kill must always succeed (fire-and-forget)');
-
-    // With exePath: path-based matching via /proc/*/exe
-    assert.match(linuxKillWithPath, /pgrep -x "demo"/);
-    assert.match(linuxKillWithPath, /readlink \/proc\/\$_p\/exe/);
-    assert.match(linuxKillWithPath, /\/usr\/local\/bin\/demo/);
-    assert.doesNotMatch(linuxKillWithPath, /pkill/, 'path-based kill must not use pkill');
-    assert.match(linuxKillWithPath, /; true$/, 'path-based kill must also be non-fatal');
-});

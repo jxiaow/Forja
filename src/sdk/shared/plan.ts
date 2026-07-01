@@ -4,7 +4,6 @@
  */
 import * as os from 'os';
 import * as path from 'path';
-import * as cp from 'child_process';
 import * as fs from 'fs';
 import { CliResult } from '../../core/types';
 
@@ -85,6 +84,21 @@ export function buildCommand(options: SdkPlanOptions): string[] {
         // Resolve actual platform from .sln file
         const platform = resolveSolutionPlatform(options.project, config, options.arch);
         commands.push(`msbuild "${options.project}" /t:${msbuildAction} /p:Configuration=${config} /p:Platform=${platform} /m`);
+    } else if (path.basename(options.project).toLowerCase() === 'cmakelists.txt') {
+        const projectDir = path.dirname(options.project);
+        const buildDir = path.join(projectDir, 'build');
+        if (isWindows && options.vsDevCmdPath) {
+            commands.push(`call "${options.vsDevCmdPath}" -arch=${options.arch} -no_logo`);
+        }
+        if (options.action === 'clean') {
+            commands.push(`cmake --build "${buildDir}" --target clean`);
+        } else {
+            const configFlag = options.mode === 'release' ? '-DCMAKE_BUILD_TYPE=Release' : '-DCMAKE_BUILD_TYPE=Debug';
+            commands.push(`cmake -B "${buildDir}" -S "${projectDir}" ${configFlag}`);
+            const parallelFlag = '--parallel';
+            const buildAction = options.action === 'rebuild' ? '--clean-first' : '';
+            commands.push(`cmake --build "${buildDir}" ${buildAction} ${parallelFlag}`.trim());
+        }
     } else {
         const makefileDir = path.dirname(options.project);
         const target = options.action === 'clean' ? 'clean'
@@ -93,14 +107,6 @@ export function buildCommand(options: SdkPlanOptions): string[] {
         commands.push(`make -C "${makefileDir}" ${target} -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)`.trim());
     }
     return commands;
-}
-
-/**
- * Extract error lines from compiler output.
- */
-export function extractSdkErrors(output: string): string[] {
-    const errorPattern = /\): error |:\s+error\s+[A-Z]+\d+:|: error:|: fatal error |: fatal error:/i;
-    return output.split(/\r?\n/).filter(l => errorPattern.test(l)).slice(0, 20);
 }
 
 /**
@@ -128,23 +134,4 @@ export function createSdkPlan(options: SdkPlanOptions): CliResult {
         diagnostics: [],
         resolved: null,
     };
-}
-
-/**
- * Execute async command (for SDK builds).
- * Reuses the same pattern as Qt's commandRunner.
- */
-export function executeSdkAsync(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    return new Promise(resolve => {
-        cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'utf8' }, (error, stdout, stderr) => {
-            let exitCode = 0;
-            if (error) {
-                const execError = error as cp.ExecException;
-                if (typeof execError.code === 'number') { exitCode = execError.code; }
-                else if (execError.signal) { exitCode = 128; }
-                else { exitCode = 1; }
-            }
-            resolve({ exitCode, stdout: stdout || '', stderr: stderr || '' });
-        });
-    });
 }

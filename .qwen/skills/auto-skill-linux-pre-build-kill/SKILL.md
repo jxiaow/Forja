@@ -1,48 +1,53 @@
 ---
 name: linux-pre-build-kill
-description: Linux pre-build process kill must verify executable path via /proc/pid/exe — never kill by name alone, never block the build
+description: Pre-build process kill must be path-aware — use Node.js-level terminateByPath, never shell-level name-based kill
 source: auto-skill
 extracted_at: '2026-06-30T03:15:11.395Z'
 ---
 
-# Linux Pre-Build Process Kill
+# Pre-Build Process Kill — Path-Aware, Node.js Level
 
-When killing a process before build (to allow overwriting the executable), follow these rules:
+When killing a previous instance before build/run (to allow overwriting the executable), use **Node.js-level path-based kill** — never shell-level name-based kill.
 
-## Never kill by name alone
+## The Rule: Kill at Node.js Level, Not Shell Level
 
-`pkill -x "AppName"` matches ANY process with that name — it could be an unrelated program. Only kill after verifying the process is actually running our build output.
+Shell commands (`taskkill /IM`, `pkill -x`) match by process name — this can kill unrelated processes with the same name from different directories. Instead, do the kill in Node.js before the command chain:
 
-## Use /proc/pid/exe for path-based matching
-
-```bash
-for _p in $(pgrep -x "AppName" 2>/dev/null); do
-  [ "$(readlink /proc/$_p/exe 2>/dev/null)" = "/full/path/to/build/output/AppName" ] && kill $_p 2>/dev/null
-done; true
+```typescript
+// In runCliResult, before executing the build/run chain:
+if (result.action === 'run' || result.action === 'build') {
+    terminateByPath(result.executablePath);
+}
 ```
 
-This reads the actual executable symlink from procfs — only processes running our specific binary get killed.
+`terminateByPath` uses `findExecutablePids(executablePath)` which:
+- **Windows**: PowerShell `Get-CimInstance Win32_Process` matches by `ExecutablePath`
+- **Linux**: `ps -axo pid=,comm=,args=` + `/proc/pid/exe` symlink comparison
 
-## Never block the build
+Both are path-aware — only processes running our specific binary get killed.
 
-Always end with `; true` so the kill step is non-fatal. If the process is ours and the file is locked, `make` will fail with a clear "text file busy" error. If it's not ours, the build proceeds normally.
+## Why Not Shell-Level Kill
+
+1. **Name-based kill is imprecise** — `taskkill /IM app.exe` kills ALL `app.exe` processes, even from different build directories
+2. **CMD escaping makes path-based shell commands impractical** — embedding PowerShell path matching in a CMD command chain has intractable quoting issues with `&`, `|`, `$`
+3. **Node.js already has the infrastructure** — `findExecutablePids` does path-aware matching on both platforms
+
+## Shell-Level Kill Remains as Fallback Only
+
+The `killCommand(exeName, exePath?)` interface still exists for:
+- `stop` action (uses `stopCommands`)
+- Dry-run output visibility
+
+But for the critical pre-build/run kill, always prefer the Node.js-level `terminateByPath`.
+
+## Never Block the Build
+
+The Node.js kill is fire-and-forget — if the process doesn't exist or can't be killed, execution continues. If the file is locked, the build will fail with a clear OS error.
 
 ## Fallback when exePath is unknown
 
-When the build output path is not available (e.g., Makefile not yet generated), fall back to name-based `pkill` but still make it non-fatal:
-
-```bash
-pkill -x "AppName" 2>/dev/null; true
-```
-
-## killCommand interface
-
-```typescript
-killCommand(exeName: string, exePath?: string): string;
-```
-
-Pass `exePath` when available (from `resolveRuntimeTarget().exePath`). Omit it only in fallback scenarios.
+When `executablePath` is not set (e.g., Makefile not yet generated), `terminateByPath` is a no-op. The build proceeds normally — there's no previous instance to kill if we don't know the executable path.
 
 ## Why
 
-User's build failed because `pkill` sent SIGTERM, `pgrep` checked immediately (process still dying), and `exit 1` aborted the entire build command before `make` ever ran. Then on review: killing by name alone could kill unrelated processes with the same name.
+Original Linux implementation used `pkill -x` with `/proc/pid/exe` verification in a shell command. Windows used `taskkill /IM` (name-only) despite receiving `exePath` parameter. Both were replaced with a single Node.js-level `terminateByPath` that does path-aware matching on both platforms, avoiding the CMD escaping nightmare and the name-collision bug.

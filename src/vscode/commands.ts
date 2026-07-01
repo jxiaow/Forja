@@ -476,23 +476,30 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.stop — Qt: buildManager.stop(); SDK: not supported; Remote: executeRemotePlan
+    // forja.stop — unified: delegates to runStop (PID-based kill + run state cleanup)
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.stop', async () => {
+            const { runStop } = await import('../cli/commands/stop');
             const target = await resolveActiveTarget();
 
-            // Remote dispatch
+            // Remote dispatch with progress UI
             if (target?.runAt === 'remote') {
                 await executeRemoteActionWithProgress(workspace(), target.kind, 'stop', 'Stop');
                 return;
             }
 
-            if (target?.kind === 'sdk') {
-                vscode.window.showWarningMessage('SDK target does not support stop. SDK builds are not long-running.');
-                return;
+            const result = await runStop(workspace());
+            const msg = result.diagnostics?.[0]?.message;
+
+            if (result.state === 'stopped') {
+                vscode.window.showInformationMessage(msg ?? `Process stopped (PID: ${result.runtime?.pid ?? 'unknown'})`);
+            } else if (result.state === 'not-running') {
+                vscode.window.showInformationMessage(msg ?? 'No running process');
+            } else if (result.state === 'unsupported') {
+                vscode.window.showWarningMessage(msg ?? 'Stop not supported for this target');
+            } else if (result.state === 'running') {
+                vscode.window.showErrorMessage(msg ?? 'Failed to terminate process');
             }
-            const buildManager = await import('../qt/build/buildManager');
-            buildManager.stop();
         })
     );
 

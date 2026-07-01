@@ -11,7 +11,7 @@ import { runUseTarget, runUseExecution, runUseSync, runUseRemote, runUseRemoteWo
 import { runServerAdd, runServerUpdate, runServerRemove, formatServerText } from './server';
 import { runBuild, BuildAction, outputBuildResult } from './build';
 import { runRun, outputRunResult } from './run';
-import { runStop } from './stop';
+import { runStop, outputStopResult } from './stop';
 import { runClean, outputCleanResult } from './clean';
 import { runDoctor, formatDoctorText } from './doctor';
 import { runSyncPlan, runSyncExecute, runSyncReset, runSyncTransfer, runSyncStatus, SyncAction, formatSyncText } from './sync';
@@ -802,7 +802,7 @@ async function handleBuild(argv: string[], workspace: string, wantsJson: boolean
     }
 
     const result = await runBuild(workspace, buildAction, { plan: hasFlag(argv, '--plan'), json: wantsJson, project: extractFlag(argv, '--project') });
-    outputBuildResult(result, wantsJson, locale);
+    outputBuildResult(result, wantsJson);
     if (!result.ok) { process.exitCode = 1; }
 }
 
@@ -830,7 +830,7 @@ async function handleRun(argv: string[], workspace: string, wantsJson: boolean, 
             return;
         }
         const result = await runRun(workspace, { designer: uiFile, json: wantsJson });
-        outputRunResult(result, wantsJson, locale);
+        outputRunResult(result, wantsJson);
         if (!result.ok) { process.exitCode = 1; }
         return;
     }
@@ -856,7 +856,7 @@ async function handleRun(argv: string[], workspace: string, wantsJson: boolean, 
         plan: hasFlag(argv, '--plan'),
         json: wantsJson,
     });
-    outputRunResult(result, wantsJson, locale);
+    outputRunResult(result, wantsJson);
     if (!result.ok) { process.exitCode = 1; }
 }
 
@@ -875,8 +875,9 @@ async function handleStop(argv: string[], workspace: string, wantsJson: boolean,
         process.exitCode = 1;
         return;
     }
-    // runStop handles output directly via Qt pipeline
-    await runStop(workspace, { json: wantsJson, locale });
+    const result = await runStop(workspace, { json: wantsJson });
+    outputStopResult(result, wantsJson);
+    if (!result.ok) { process.exitCode = 1; }
 }
 
 // ── Clean ──
@@ -895,7 +896,7 @@ async function handleClean(argv: string[], workspace: string, wantsJson: boolean
         return;
     }
     const result = await runClean(workspace, { plan: hasFlag(argv, '--plan'), json: wantsJson });
-    outputCleanResult(result, wantsJson, locale);
+    outputCleanResult(result, wantsJson);
     if (!result.ok) { process.exitCode = 1; }
 }
 

@@ -258,9 +258,11 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
                 result.stages = stages;
                 result.diagnostics = diagnostics;
                 if (!release.ok) {
-                    result.ok = false;
-                    result.failedStage = result.failedStage || 'releaseLock';
-                    result.nextAction = '手动检查或 unlock 远端 lock';
+                    diagnostics.push({ level: 'warning', message: '锁释放失败，远端可能残留锁文件' });
+                    if (!result.ok) {
+                        result.failedStage = result.failedStage || 'releaseLock';
+                        result.nextAction = result.nextAction || '手动检查或 unlock 远端 lock';
+                    }
                 }
             }
         }
@@ -380,9 +382,11 @@ export async function executePreparedRemoteAction(options: ExecutePreparedRemote
             base.diagnostics.push(...release.diagnostics);
             base.stages.push({ stage: 'releaseLock', ok: release.ok, message: release.removed ? 'removed' : release.diagnostics[0]?.message });
             if (!release.ok) {
-                base.ok = false;
-                base.failedStage = base.failedStage || 'releaseLock';
-                base.nextAction = '手动检查或 unlock 远端 lock';
+                base.diagnostics.push({ level: 'warning', message: '锁释放失败，远端可能残留锁文件' });
+                if (!base.ok) {
+                    base.failedStage = base.failedStage || 'releaseLock';
+                    base.nextAction = base.nextAction || '手动检查或 unlock 远端 lock';
+                }
             }
         }
     }
