@@ -1,0 +1,117 @@
+---
+name: cli-command-review
+description: Systematic review checklist for CLI command implementations — spec alignment, diagnostic completeness, nextAction logic, text output, i18n, and edge cases
+source: auto-skill
+extracted_at: '2026-07-01T08:07:55.696Z'
+---
+
+# CLI Command Review
+
+When reviewing a CLI command implementation (especially one with a spec document), use this multi-pass checklist. Each pass catches a different category of issues that single-pass review misses.
+
+## When to Apply
+
+- Reviewing a command that has a spec document (e.g., `docs/operations/command-consolidation/v2/<cmd>.md`)
+- After implementing a new command or major refactor of an existing one
+- When the user says "review <command>"
+
+## Pass 1: Spec-vs-Implementation Alignment
+
+Read the spec document AND the implementation side by side. Check:
+
+### Diagnostic Messages
+- [ ] Every diagnostic message text matches the spec's diagnostic table exactly
+- [ ] `params` field keys match what the spec expects (e.g., `{file}`, `{detail}`, `{path}`)
+- [ ] `hint` fields exist where spec examples show hints
+- [ ] `fix` fields exist where spec examples show fix commands
+- [ ] No diagnostic uses string concatenation where the spec defines a single message (fragile for i18n)
+- [ ] **Dynamic value inclusion**: If the spec message includes `: {path}` or `: {name}`, verify the code actually appends the dynamic value — not just the base T() string. Common miss: `message: T('key')` when spec expects `T('key') + ': ' + value`
+
+### Interface / Type Alignment
+- [ ] TypeScript interfaces match the spec's Result type definition
+- [ ] All fields in spec JSON examples are present in the interface (check for fields in examples but missing from types)
+- [ ] Field types match (e.g., `version?: string` vs missing field)
+
+### Readiness / State Logic
+- [ ] Every readiness state value used in code exists in the spec's readiness table
+- [ ] All state transitions in the spec have corresponding code paths
+- [ ] Edge cases: what happens when a sub-system errors? Does readiness go to `'unknown'` or silently default to another state?
+
+### ok Judgment
+- [ ] `assessOk()` logic matches the spec's ok judgment rules
+- [ ] Check which states are excluded (e.g., `not-selected` for target → false, but for sync → true)
+
+### nextAction Derivation
+- [ ] Trace each spec scenario's expected `nextAction` — does the code produce it?
+- [ ] Check priority: does the code consider all factors (running process, diagnostic fix, default)?
+- [ ] Common bug: `nextAction` defaults to `'forja build'` when a process is running — should be `'forja stop'`
+
+### JSON Output Scenarios
+- [ ] For each spec scenario (normal + error), trace the code path — does it produce the same JSON structure?
+- [ ] Check conditional fields: are they shown/hidden at the right times?
+
+## Pass 2: Text Output Formatting
+
+Read `formatStatusText()` (or equivalent) carefully:
+
+- [ ] **Separator check**: Do label+value pairs have proper separators? (e.g., `pid 12345` not `pid12345`)
+- [ ] **Translation value check**: Do T() values include trailing colons/spaces where needed? (e.g., `'pid '` not `'pid'`)
+- [ ] **Conditional output**: Are optional sections (toolchain, remote, sync, runtime) shown/hidden correctly?
+- [ ] **Consistency**: Do all similar labels follow the same format pattern?
+
+## Pass 3: i18n Completeness
+
+- [ ] **All T() keys exist** in the translation table (run translation-key-audit)
+- [ ] **No hardcoded strings** in diagnostic `hint` fields — all hints go through T()
+- [ ] **No string concatenation** of multiple T() calls with hardcoded separators (e.g., `${T('a')}, ${T('b')}` — should be a single key)
+- [ ] **Placeholder pattern**: If T() values have `{0}`, `{1}` placeholders, the code uses `.replace()` correctly
+- [ ] **params key names**: If `params` uses named keys (`qtCount`) but T() uses numbered placeholders (`{0}`), document this mismatch
+
+## Pass 4: Logic Edge Cases
+
+- [ ] **Branch coverage**: Are all combinations of state covered? (e.g., `enabled=false + server=selected + runAt=remote`)
+- [ ] **Error → state mapping**: When a function throws, does the readiness state reflect the error (`'unknown'`) or silently default (`'not-selected'`)?
+- [ ] **Summary field completeness**: Are summary fields (e.g., `result.sync`) populated in ALL cases where they should be visible, not just the happy path?
+- [ ] **Early returns**: Do early return paths (workspace not found, config corrupted) include all required fields?
+- [ ] **Early return skips subsequent checks**: In validation functions, does `return 'missing'` after the first check prevent later checks from running? If the spec expects ALL issues reported at once, the function must NOT return early — collect all diagnostics, then return. Pattern: `let ok = true; if (!x) { ok = false; diag(...); } if (!y) { diag(...); } if (!ok) return 'missing';`
+- [ ] **Text output for degraded states**: Display conditions like `s.enabled && s.server` hide the section when server is deleted. Check: should the section still show partial info (e.g., "enabled (server not found)") in degraded states?
+
+## Pass 5: Cross-cutting Concerns
+
+- [ ] **fix field → nextAction**: If a diagnostic has `fix`, verify it actually influences `nextAction` correctly
+- [ ] **Parallel path consistency**: If the same check exists for Qt and SDK paths, do both have the same fields (fix, hint)?
+- [ ] **Platform branching**: Windows vs POSIX paths — do both have equivalent diagnostics and fix suggestions?
+
+## Common Bug Patterns Found
+
+| Pattern | Symptom | Fix |
+|---------|---------|-----|
+| nextAction ignores running process | `nextAction: "forja build"` when process running | Add `if (runtime?.running)` priority check |
+| Diagnostic missing `fix` field | User sees error but no suggested command | Add `fix` to diagnostic |
+| Readiness default on error | `readiness.runtime = 'not-selected'` when read failed | Set to `'unknown'` in catch block |
+| Summary field conditional too strict | `sync` section hidden when server deleted but enabled=true | Relax condition to just `enabled` |
+| Text output missing separator | `pid12345` instead of `pid 12345` | Add space to T() value or template |
+| Hardcoded hint string | English hint in Chinese locale | Create T() key for the hint |
+| String concatenation of T() calls | `${T('a')}, ${T('b')}` breaks i18n | Merge into single T() key |
+| Interface missing field from spec examples | `vs.version` in examples but not in type | Add field to interface |
+| Early return skips subsequent checks | Only Qt error shown; VS/jom errors missing | Replace `return` with flag; check all tools before returning |
+| Diagnostic message missing dynamic value | `"Qt not found"` instead of `"Qt not found: C:/Qt/old"` | Append `: ${value}` to message; add `params` |
+| Text output hides section in degraded state | Sync line disappears when server deleted | Relax condition; show partial info with degraded-state label |
+| Spec ok rules vs examples inconsistency | Rules say "any blocked → false" but sync excluded | Clarify rules to list which dimensions are checked; update examples |
+
+## Multi-pass Rationale
+
+Single-pass review tends to only find surface issues (typos, missing imports). Each pass targets a different category:
+- Pass 1 catches spec misalignment (most impactful)
+- Pass 2 catches text formatting (user-visible)
+- Pass 3 catches i18n gaps (locale-dependent)
+- Pass 4 catches logic edge cases (state-dependent)
+- Pass 5 catches consistency issues (maintenance burden)
+
+In practice, reviewing a single command across 4 rounds found 18 issues total:
+- Round 1 (Pass 1+2): 6 issues — major bugs, spec alignment, text formatting
+- Round 2 (Pass 3+4): 5 issues — i18n gaps, edge cases, missing fix fields
+- Round 3 (Pass 1 re-trace): 3 issues — diagnostic messages missing dynamic values, text display conditions
+- Round 4 (Pass 4 deep): 4 issues — early return control flow, spec rule/example inconsistencies
+
+Each round found issues the previous rounds missed. The later rounds required reading the code more carefully and tracing every spec scenario through the actual code path.

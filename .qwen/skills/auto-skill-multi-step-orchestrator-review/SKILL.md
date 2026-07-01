@@ -104,6 +104,63 @@ When a formatter uses `if/else if` for sections (e.g., show questions OR show re
 // Test: provide both status='needs-input' AND remote={...} → questions should win
 ```
 
+## 7. Validate Inputs Before Any State Mutation
+
+All input validation (flag parsing, project matching, option checking) must happen BEFORE any config writes. If validation fails after state has been mutated, the function returns `ok: false` but the side effects remain.
+
+**Bug pattern:**
+```typescript
+// Save toolchain defaults (state mutation)
+saveQtSettings(workspace, qt);
+
+// THEN validate project flag — too late, config already modified!
+if (options.project) {
+    const match = candidates.find(c => c.project === options.project);
+    if (!match) {
+        return { ok: false, ... };  // returns error but qt settings already saved
+    }
+}
+```
+
+**Fix:** Move all validation before any save calls.
+
+## 8. Error Results Must Preserve Context
+
+Error result builders (like `initWriteFailed`) should accept and preserve runtime context (detected counts, partial state) instead of zeroing everything out. A caller debugging a failure needs to know what was found, not just that it failed.
+
+**Bug pattern:**
+```typescript
+function initWriteFailed(e: unknown): InitResult {
+    return {
+        ok: false,
+        detected: { qtTargets: 0, sdkTargets: 0, toolchain: {} },  // zeros out real data!
+    };
+}
+```
+
+**Fix:**
+```typescript
+function initWriteFailed(e: unknown, detected?: InitResult['detected']): InitResult {
+    return {
+        ok: false,
+        detected: detected ?? { qtTargets: 0, sdkTargets: 0, toolchain: {} },
+    };
+}
+```
+
+## 9. Interactive Prompt Inputs Need Validation
+
+Interactive prompts that parse user input (parseInt, etc.) must validate the parsed result. Invalid input silently becoming NaN and propagating to config is worse than rejecting it immediately.
+
+```typescript
+const portStr = await prompt('Port', '22');
+const port = parseInt(portStr || '22', 10);
+if (isNaN(port)) {
+    diagnostics.push(diag('error', `Invalid port: ${portStr}`));
+    return null;
+}
+```
+
 ## Audit Checklist
 
 - [ ] All early-return paths use the same step initialization helper
@@ -112,3 +169,6 @@ When a formatter uses `if/else if` for sections (e.g., show questions OR show re
 - [ ] Duplicated filtering/validation logic is extracted to shared functions
 - [ ] Step keys use precise types (not `Record<string, ...>`)
 - [ ] Formatter `if/else if` chains have tests for mutually exclusive inputs
+- [ ] All input validation happens before any state mutation
+- [ ] Error result builders preserve runtime context (don't zero out useful data)
+- [ ] Interactive prompt inputs are validated after parsing

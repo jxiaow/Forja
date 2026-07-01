@@ -89,9 +89,9 @@ test('no stale `old_name` in user-facing strings', () => {
 });
 
 // Type structure matches docs
-test('Diagnostic type includes code field', () => {
+test('Diagnostic type includes fix field', () => {
     const src = source('src/cli/commands/types.ts');
-    assert.match(src, /interface Diagnostic \{[\s\S]*?code:\s*string/);
+    assert.match(src, /interface Diagnostic \{[\s\S]*?fix\?:\s*string/);
 });
 
 // Feature completeness

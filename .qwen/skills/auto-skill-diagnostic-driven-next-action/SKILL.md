@@ -43,15 +43,23 @@ diagnostics.push({
 });
 ```
 
-### 3. Derive nextAction inline — prioritize error/warning over info, never suggest build when errors exist
+### 3. Derive nextAction inline — check operational state first, then prioritize error/warning over info, never suggest build when errors exist
 
 ```typescript
-// Don't use a separate function — inline at the end of runStatus/runCommand
-const errorWarningFix = diagnostics.find(d => (d.level === 'error' || d.level === 'warning') && d.fix);
-const infoFix = diagnostics.find(d => d.level === 'info' && d.fix);
-const hasErrors = diagnostics.some(d => d.level === 'error');
-result.nextAction = errorWarningFix?.fix || infoFix?.fix || (hasErrors ? undefined : 'forja build');
+// Priority 1: Operational state overrides diagnostics
+// E.g., if a process is running, suggest stopping it before suggesting build
+if (result.runtime?.running) {
+    result.nextAction = 'forja stop';
+} else {
+    // Priority 2: Diagnostic fixes — error/warning > info
+    const errorWarningFix = diagnostics.find(d => (d.level === 'error' || d.level === 'warning') && d.fix);
+    const infoFix = diagnostics.find(d => d.level === 'info' && d.fix);
+    const hasErrors = diagnostics.some(d => d.level === 'error');
+    result.nextAction = errorWarningFix?.fix || infoFix?.fix || (hasErrors ? undefined : 'forja build');
+}
 ```
+
+**Why operational state comes first:** A running process is the most important contextual fact. If a process is running, suggesting `forja build` (the default "all good" action) could fail or conflict. The running state must be checked BEFORE falling through to diagnostic-based derivation. Other operational states that should take priority: locked resources, pending deployments, active remote sessions.
 
 **Why inline, not a separate function:** The logic is 3 lines. A separate `deriveNextAction` function adds indirection for no benefit. More importantly, the priority logic (error/warning > info) must be explicit — a simple "first with fix wins" loop would let an `info` diagnostic's fix override an `error` diagnostic's fix if the info was pushed first.
 
