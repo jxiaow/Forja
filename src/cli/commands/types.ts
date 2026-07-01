@@ -411,7 +411,9 @@ const UI: Record<string, { en: string; zh: string }> = {
     setupSkippedRemote:            { en: 'Remote setup skipped by user', zh: '用户跳过了远程配置' },
     setupRemoteTitle:              { en: 'Remote Setup', zh: '远程配置' },
     setupRemoteConfigured:         { en: 'Remote',                        zh: '远程' },
+    setupRemoteConfigFailed:       { en: 'Failed to configure remote',    zh: '配置远程失败' },
     setupSyncEnabled:              { en: 'Sync enabled',                  zh: '同步已启用' },
+    setupSyncConfigFailed:         { en: 'Failed to configure sync',      zh: '配置同步失败' },
     setupForjaAlreadyOnRemote:     { en: 'already on remote',             zh: '已在远程' },
     setupForjaDeployed:            { en: 'Forja deployed to remote',      zh: 'Forja 已部署到远程' },
     setupForjaNotFound:            { en: 'Could not find Forja CLI package to deploy', zh: '找不到可部署的 Forja CLI 包' },
@@ -420,6 +422,34 @@ const UI: Record<string, { en: string; zh: string }> = {
     setupSshError:                 { en: 'SSH error',                     zh: 'SSH 错误' },
     setupMultipleServers:          { en: 'servers found',                zh: '个服务器' },
     setupNoServer:                 { en: 'No server configured',          zh: '未配置服务器' },
+    setupSpecifyServer:            { en: 'run interactively or configure with forja use remote first', zh: '请在交互模式运行或先用 forja use remote 配置' },
+    setupSelectServer:             { en: 'Select a server:',                zh: '选择服务器：' },
+    setupNoServerSelected:         { en: 'No server selected',              zh: '未选择服务器' },
+    setupRemotePathPrompt:         { en: 'Remote path',                     zh: '远程路径' },
+    setupSshUnreachable:           { en: 'SSH connectivity check failed', zh: 'SSH 连通性检查失败' },
+    setupSshVerifyExisting:        { en: 'verifying existing setup', zh: '验证已有配置' },
+    setupDefault:                  { en: 'default',                  zh: '默认' },
+    setupRequired:                 { en: '(required)',               zh: '(必填)' },
+    setupSteps:                    { en: 'Steps:',                   zh: '步骤：' },
+    setupHostNeedsUsername:        { en: '--username is required when using --host', zh: '使用 --host 时必须指定 --username' },
+    setupServerCreated:            { en: 'Server created',                zh: '已创建服务器' },
+    setupServerCreateFailed:       { en: 'Failed to create server',       zh: '创建服务器失败' },
+    setupPromptHost:               { en: 'Host address',                  zh: '主机地址' },
+    setupPromptUsername:           { en: 'Username',                      zh: '用户名' },
+    setupPromptPort:               { en: 'Port',                          zh: '端口' },
+    setupPromptAuthMode:           { en: 'Auth mode',                     zh: '认证方式' },
+    setupAuthKey:                  { en: 'Key',                           zh: '密钥' },
+    setupAuthPassword:             { en: 'Password',                      zh: '密码' },
+    setupPromptPrivateKey:         { en: 'Private key path',              zh: '私钥路径' },
+    setupPromptPassword:           { en: 'Password',                      zh: '密码' },
+    setupPromptName:               { en: 'Server name',                   zh: '服务器名称' },
+    setupNeedsInput:               { en: 'Needs input — provide answers via --answers', zh: '需要输入 — 通过 --answers 提供答案' },
+    setupAnswersLoadFailed:        { en: 'Failed to load answers file', zh: '加载答案文件失败' },
+    setupQuestionTarget:           { en: 'Select target',                 zh: '选择目标' },
+    setupQuestionQtPath:           { en: 'Qt path',                       zh: 'Qt 路径' },
+    setupQuestionVsInstall:        { en: 'VS install',                    zh: 'VS 安装' },
+    setupQuestionMode:             { en: 'Build mode',                    zh: '构建模式' },
+    setupQuestionArch:             { en: 'Target arch',                   zh: '目标架构' },
     // sync extras
     serverLabel:                   { en: 'Server:',                      zh: '服务器：' },
     remotePathLabel:               { en: 'Remote path:',                 zh: '远程路径：' },
@@ -488,8 +518,70 @@ const UI: Record<string, { en: string; zh: string }> = {
         zh: '用法: forja status [--process] [--lang <locale>] [--json]',
     },
     'help.setup': {
-        en: 'Usage:\n  forja setup [--plan] [--json]           Local initialization\n  forja setup remote [--plan] [--json]  Remote initialization (server, sync, deploy, init)',
-        zh: '用法:\n  forja setup [--plan] [--json]           本地初始化\n  forja setup remote [--plan] [--json]  远程初始化（服务器、同步、部署、初始化）',
+        en: `Usage:
+  forja setup [options]              Local initialization
+  forja setup remote [options]       Remote initialization
+
+Options (local):
+  --json                  Output as JSON
+  --reset                 Force reconfiguration
+  --answers <path>        Load answers from JSON file
+  --project <path>        Select specific target
+  --qt-path <path>        Qt installation path
+  --vs-install <path>     Visual Studio installation path
+  --jom-path <path>       jom executable path
+  --mode <debug|release>  Build mode
+  --arch <x86|x64>        Target architecture
+
+Options (remote):
+  --json                  Output as JSON
+  --reset                 Force reconfiguration
+  --answers <path>        Load answers from JSON file
+  --project <path>        Select specific target
+  --qt-path <path>        Qt installation path
+  --vs-install <path>     Visual Studio installation path
+  --jom-path <path>       jom executable path
+  --host <hostname>       Remote server hostname
+  --username <user>       Remote username
+  --port <number>         SSH port (default: 22)
+  --auth-mode <key|password>  Authentication mode
+  --private-key-path <path>   Private key path
+  --name <name>           Server name
+  --remote-path <path>    Remote workspace path
+  --mode <debug|release>  Build mode
+  --arch <x86|x64>        Target architecture`,
+        zh: `用法:
+  forja setup [选项]              本地初始化
+  forja setup remote [选项]       远程初始化
+
+选项（本地）:
+  --json                  JSON 格式输出
+  --reset                 强制重新配置
+  --answers <路径>        从 JSON 文件加载答案
+  --project <路径>        选择指定目标
+  --qt-path <路径>        Qt 安装路径
+  --vs-install <路径>     Visual Studio 安装路径
+  --jom-path <路径>       jom 可执行文件路径
+  --mode <debug|release>  构建模式
+  --arch <x86|x64>        目标架构
+
+选项（远程）:
+  --json                  JSON 格式输出
+  --reset                 强制重新配置
+  --answers <路径>        从 JSON 文件加载答案
+  --project <路径>        选择指定目标
+  --qt-path <路径>        Qt 安装路径
+  --vs-install <路径>     Visual Studio 安装路径
+  --jom-path <路径>       jom 可执行文件路径
+  --host <主机名>         远程服务器主机名
+  --username <用户名>     远程用户名
+  --port <端口号>         SSH 端口（默认：22）
+  --auth-mode <key|password>  认证模式
+  --private-key-path <路径>   私钥路径
+  --name <名称>           服务器名称
+  --remote-path <路径>    远程工作区路径
+  --mode <debug|release>  构建模式
+  --arch <x86|x64>        目标架构`,
     },
     'help.list': {
         en: 'Usage: forja list <targets|servers|env|remote|config|lang> [--detail <id>] [--json]',
@@ -529,6 +621,9 @@ const UI: Record<string, { en: string; zh: string }> = {
     },
     // init diagnostics
     'init.workspaceNotFound':            { en: 'Workspace does not exist',            zh: '工作区不存在' },
+    'init.projectNotFound':              { en: 'Project not found in workspace',      zh: '工作区中未找到项目' },
+    'init.invalidMode':                  { en: 'Invalid build mode',                    zh: '无效的构建模式' },
+    'init.invalidArch':                  { en: 'Invalid target architecture',           zh: '无效的目标架构' },
     'init.foundQtSdkNotAutoSelecting':   { en: 'Found Qt and SDK targets, not auto-selecting', zh: '找到 Qt 和 SDK 目标，未自动选择' },
     'init.foundTargetsNotAutoSelecting': { en: 'Found targets, not auto-selecting',          zh: '找到多个目标，未自动选择' },
     'init.noTargetsToolchainOnly':       { en: 'No Qt or SDK targets found, only toolchain defaults saved', zh: '未找到 Qt 或 SDK 目标，仅保存了工具链默认值' },

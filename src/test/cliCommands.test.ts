@@ -90,15 +90,12 @@ test('run --plan 返回 plan 字段而不执行', () => {
     }
 });
 
-test('setup --plan 只返回本地计划', () => {
-    const j = json('setup --plan');
+test('setup --json 返回本地初始化结果', () => {
+    const j = json('setup');
     assert.ok(j, '必须返回有效 JSON');
     assert.equal(j.action, 'setup');
-    // setup --plan is local-only, no remote steps
-    if (j.steps) {
-        assert.ok(j.steps.localConfig, '必须有 localConfig 步骤');
-        assert.equal(j.steps.serverSetup, undefined, '不应有远程步骤');
-    }
+    assert.ok(j.steps, '必须有 steps');
+    assert.ok(j.steps.localConfig, '必须有 localConfig 步骤');
 });
 
 // ═══════════════════════════════════════════════════════════════

@@ -146,11 +146,12 @@ test('CLI entry point calls setGlobalLocale after resolving locale', () => {
 
 test('setup command has correct options interface', () => {
     const setupSrc = source('src/cli/commands/setup.ts');
-    assert.ok(setupSrc.includes('plan'), 'setup must support --plan');
     assert.ok(setupSrc.includes('json'), 'setup must support --json');
-    // Remote flags are in SetupRemoteOptions, not SetupOptions
+    assert.ok(setupSrc.includes('reset'), 'setup must support --reset');
+    assert.ok(setupSrc.includes('answers'), 'setup must support --answers');
     assert.ok(setupSrc.includes('SetupRemoteOptions'), 'setup must have SetupRemoteOptions interface');
     assert.ok(setupSrc.includes('runSetupRemote'), 'setup must export runSetupRemote');
+    assert.ok(setupSrc.includes('Question'), 'setup must have Question interface for needs-input protocol');
 });
 
 test('setup result has local structure', () => {

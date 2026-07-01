@@ -42,12 +42,12 @@ forja <subcommand> [action] [options]
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `--plan` | boolean | 预览，不写入配置 |
-| `--local-only` | boolean | 只做本地初始化 |
-| `--host <host>` | string | 远程主机地址 |
-| `--username <user>` | string | 远程用户名 |
-| `--port <port>` | number | SSH 端口 |
-| `--server <id>` | string | 指定已有 server |
-| `--remote-path <path>` | path | 远程工作根路径 |
+
+子命令：`forja setup remote`（远程初始化，自动探测服务器、部署、init）
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `--plan` | boolean | 预览，不执行 |
 
 ### `forja list`
 

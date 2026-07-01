@@ -76,6 +76,7 @@ interface StatusResult extends ForjaJsonResult {
 - **`fix` must point to the correct command for the specific problem** — don't reuse a generic fix across different diagnostics (e.g., remote path missing needs `forja list servers`, not `forja use sync`)
 - **`fix` must actually solve the problem, not just diagnose it** — `forja doctor` re-checks but doesn't fix. If the real solution is a system action (install package, edit config file), don't set `fix` at all; let `hint` carry the guidance. A `fix` that just re-runs diagnostics is misleading — the user expects the suggested command to resolve the issue.
 - **Early returns must set `nextAction` explicitly** — `deriveNextAction` only runs on the main path; early returns (workspace not found, config corrupted) bypass it and need their own `nextAction`
+- **nextAction should be the natural next step, not push optional features** — after local setup succeeds, `forja build` (verify it works) is correct; `forja setup remote` (optional remote config) is wrong. The user chose to do local setup; don't redirect them to a different workflow they didn't ask for
 
 ## Fix field mapping examples
 

@@ -92,6 +92,31 @@ After all 3 agents report, fix all findings, re-run tests, then declare complete
 | **Result state hardcoded** | `executionMode: 'remote'` set unconditionally even when the switch step failed or was skipped — result fields must reflect actual runtime outcomes, not assumed outcomes |
 | **Silent error swallowing** | `if (result.ok) { ... }` with no `else` branch — failure from sub-function call is silently dropped, user sees no diagnostic and no failed step |
 
+## Parallel-path consistency (apply DURING fixes, not just after)
+
+When you find a bug in one code path, immediately check all sibling/parallel paths for the same bug before moving on. This is not "proactive bug hunting" in general — it's specifically about mirroring fixes across structurally similar code.
+
+### Technique
+
+1. **Identify the pattern**: You found bug X in function/path A
+2. **Find siblings**: Grep for structurally similar functions/paths (e.g., `runSetup` vs `runSetupRemote`, or two branches of an if/else, or two handlers for similar commands)
+3. **Check each sibling**: Does the same bug exist there?
+4. **Fix all instances together**: Don't fix one and forget the others
+
+### Examples from this project
+
+| Bug found in | Sibling with same bug | What to check |
+|---|---|---|
+| `runSetup` passes `effectiveProject` to `runInit` | `runSetupRemote` only passed `answers?.target` | All flag→option forwarding in both functions |
+| `runSetup` has `!effectiveProject` guard on needs-input | `runSetupRemote` missing the same guard | All conditional guards in both paths |
+| Question filter checks `saved.toolchain` (wrong state) | Same filter in `runSetupRemote` | All question/config filtering in both functions |
+
+### When to apply
+
+- Fixing a bug in one of N similar functions/handlers/branches
+- Adding a flag/parameter to one command that similar commands also take
+- Changing filter/validation logic that appears in multiple places
+
 ## When to apply
 
 - After fixing 3+ bugs in one batch

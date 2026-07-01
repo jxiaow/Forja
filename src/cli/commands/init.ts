@@ -6,16 +6,12 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import { execSync } from 'child_process';
-import { ForjaJsonResult, Diagnostic, CommandPlan, ActiveTarget, Locale, T } from './types';
+import { ForjaJsonResult, Diagnostic, CommandPlan, ActiveTarget, T } from './types';
 import { collectTargetCandidates } from './candidates';
 import {
     loadQtSettings, saveQtSettings, loadSdkSettings, saveSdkSettings,
     loadActiveTarget, saveActiveTarget,
-    loadRemoteSettings, loadSyncSettings,
 } from '../../core/settingsIO';
-import { getServerById } from '../../core/serverStore';
-import { executeRemoteBridge, RemoteBridgeTarget } from '../../remote/core/bridge';
-import { createSshRunner } from '../../remote/core/shell';
 import { choose } from './prompt';
 
 export interface InitResult extends ForjaJsonResult {
@@ -31,7 +27,18 @@ export interface InitResult extends ForjaJsonResult {
     plan?: CommandPlan;
 }
 
-export async function runInit(workspace: string, options: { plan?: boolean; remote?: boolean; server?: string; interactive?: boolean } = {}): Promise<InitResult> {
+export interface InitOptions {
+    interactive?: boolean;
+    mode?: string;
+    arch?: string;
+    project?: string;
+    qtPath?: string;
+    vsInstall?: string;
+    jomPath?: string;
+    reset?: boolean;
+}
+
+export async function runInit(workspace: string, options: InitOptions = {}): Promise<InitResult> {
     const diagnostics: Diagnostic[] = [];
 
     // Check workspace
@@ -39,7 +46,7 @@ export async function runInit(workspace: string, options: { plan?: boolean; remo
         return {
             ok: false,
             action: 'init',
-            mode: options.remote ? 'remote' : 'local',
+            mode: 'local',
             detected: { qtTargets: 0, sdkTargets: 0, toolchain: {} },
             diagnostics: [{
                 level: 'error',
@@ -58,134 +65,107 @@ export async function runInit(workspace: string, options: { plan?: boolean; remo
     // Detect toolchain (lightweight — just check existing config or try platform detection)
     const toolchainDetected = detectToolchain(workspace);
 
-    // Determine default mode/arch
-    const defaultMode = 'release';
-    const defaultArch = os.platform() === 'win32' ? 'x86' : 'x64';
+    // Apply flag overrides for toolchain paths
+    if (options.qtPath) { toolchainDetected.qt = true; toolchainDetected.qtPath = options.qtPath; }
+    if (options.vsInstall) { toolchainDetected.vs = true; toolchainDetected.vsInstall = options.vsInstall; }
+    if (options.jomPath) { toolchainDetected.jom = true; toolchainDetected.jomPath = options.jomPath; }
 
-    // Plan mode
-    if (options.plan) {
-        const willWrite: string[] = [];
-        const willSave: Record<string, string> = {};
-        const existingForPlan = loadActiveTarget(workspace);
-        const existingQtForPlan = loadQtSettings(workspace);
-        const existingSdkForPlan = loadSdkSettings(workspace);
-        if (!existingForPlan) {
-            willSave.mode = defaultMode;
-            willSave.arch = defaultArch;
-        }
-
-        if (toolchainDetected.qt && !existingQtForPlan.qtPath) { willSave.qtPath = toolchainDetected.qtPath || ''; }
-        if (toolchainDetected.vs && !existingQtForPlan.vsInstall && !existingSdkForPlan.vsInstall) { willSave.vsInstall = toolchainDetected.vsInstall || ''; }
-        if (toolchainDetected.jom && !existingQtForPlan.jomPath) { willSave.jomPath = toolchainDetected.jomPath || ''; }
-
-        if (totalTargets === 1) {
-            const single = candidates[0];
-            if (!existingForPlan || existingForPlan.project !== single.project || existingForPlan.kind !== single.kind) {
-                willSave.activeTarget = single.project;
-                willWrite.push(`~/.forja/projects/<hash(workspace:activeTarget)>.json`);
-            }
-        }
-        if (qtCandidates.length > 0) {
-            willWrite.push(`~/.forja/projects/<hash(workspace:qt)>.json`);
-        }
-        if (sdkCandidates.length > 0) {
-            willWrite.push(`~/.forja/projects/<hash(workspace:sdk)>.json`);
-        }
-
-        const willRun: string[] = [];
-        if (options.remote) {
-            const remoteKinds: string[] = [];
-            if (qtCandidates.length > 0) { remoteKinds.push('qt'); }
-            if (sdkCandidates.length > 0) { remoteKinds.push('sdk'); }
-            if (remoteKinds.length === 0) {
-                // Consistent with execution: no targets → skip bridge
-            } else {
-                for (const kind of remoteKinds) {
-                    willRun.push(`<remoteForjaBin> ${kind} init --workspace <remotePath> --json`);
-                }
-            }
-        }
-
-        const planDiagnostics: Diagnostic[] = [];
-        if (totalTargets > 1) {
-            if (qtCandidates.length > 0 && sdkCandidates.length > 0) {
-                planDiagnostics.push({
-                    level: 'info',
-                    message: `${T('init.foundQtSdkNotAutoSelecting')}: ${qtCandidates.length} Qt, ${sdkCandidates.length} SDK`,
-                    params: { qtCount: String(qtCandidates.length), sdkCount: String(sdkCandidates.length) },
-                });
-            } else {
-                const names = candidates.map(c => c.label).join(', ');
-                planDiagnostics.push({
-                    level: 'info',
-                    message: `${T('init.foundTargetsNotAutoSelecting')}: ${totalTargets} (${names})`,
-                    params: { count: String(totalTargets) },
-                });
-            }
-        }
-        const alreadyInitForPlan = existingForPlan !== null || !!existingQtForPlan.qtPath || !!existingSdkForPlan.vsInstall;
-        if (alreadyInitForPlan && Object.keys(willSave).length === 0) {
-            planDiagnostics.push({ level: 'info', message: T('init.configAlreadyExists') });
-        }
-
+    // Determine default mode/arch (use options or platform defaults)
+    const validModes = ['debug', 'release'];
+    const validArches = ['x86', 'x64'];
+    if (options.mode && !validModes.includes(options.mode)) {
         return {
-            ok: true,
-            action: 'init',
-            mode: options.remote ? 'remote' : 'local',
+            ok: false, action: 'init', mode: 'local',
+            detected: { qtTargets: 0, sdkTargets: 0, toolchain: {} },
             workspace,
-            detected: {
-                qtTargets: qtCandidates.length,
-                sdkTargets: sdkCandidates.length,
-                toolchain: {
-                    qt: toolchainDetected.qt,
-                    vs: toolchainDetected.vs,
-                    jom: toolchainDetected.jom,
-                    make: toolchainDetected.make,
-                },
-            },
-            plan: {
-                mode: 'dryRun',
-                willWrite,
-                willRun,
-            },
-            diagnostics: planDiagnostics.length > 0 ? planDiagnostics : undefined,
+            diagnostics: [{ level: 'error', message: `${T('init.invalidMode')}: ${options.mode} (${validModes.join('|')})` }],
             nextAction: 'forja setup',
         };
     }
+    if (options.arch && !validArches.includes(options.arch)) {
+        return {
+            ok: false, action: 'init', mode: 'local',
+            detected: { qtTargets: 0, sdkTargets: 0, toolchain: {} },
+            workspace,
+            diagnostics: [{ level: 'error', message: `${T('init.invalidArch')}: ${options.arch} (${validArches.join('|')})` }],
+            nextAction: 'forja setup',
+        };
+    }
+    const defaultMode = (options.mode || 'release') as 'debug' | 'release';
+    const defaultArch = (options.arch || (os.platform() === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64';
 
-    // Check if already initialized
-    const existingActiveTarget = loadActiveTarget(workspace);
+    // Check if already initialized (reset bypasses this check)
+    const existingActiveTarget = options.reset ? null : loadActiveTarget(workspace);
     const existingQt = loadQtSettings(workspace);
     const existingSdk = loadSdkSettings(workspace);
-    const alreadyInitialized = existingActiveTarget !== null || !!existingQt.qtPath || !!existingSdk.vsInstall;
+    const alreadyInitialized = !options.reset && (existingActiveTarget !== null || !!existingQt.qtPath || !!existingSdk.vsInstall);
+
+    // Resolve target selection early — validate project flag BEFORE any state mutation
+    let effectiveCandidates = candidates;
+    if (options.project) {
+        const match = candidates.find(c => c.project === options.project)
+            || candidates.find(c => c.label === options.project);
+        if (match) {
+            effectiveCandidates = [match];
+        } else {
+            diagnostics.push({
+                level: 'error',
+                message: `${T('init.projectNotFound')}: ${options.project}`,
+                params: { project: options.project },
+            });
+            return {
+                ok: false,
+                action: 'init',
+                mode: 'local',
+                detected: { qtTargets: qtCandidates.length, sdkTargets: sdkCandidates.length, toolchain: { qt: toolchainDetected.qt, vs: toolchainDetected.vs, jom: toolchainDetected.jom, make: toolchainDetected.make } },
+                workspace,
+                diagnostics,
+                nextAction: 'forja list targets',
+            };
+        }
+    } else if (totalTargets > 1 && options.interactive) {
+        const chosen = await choose(
+            T('init.selectTarget'),
+            candidates,
+            c => `${c.label} (${c.kind}) — ${c.project}`,
+        );
+        if (chosen) {
+            effectiveCandidates = [chosen];
+        }
+    }
 
     // Save toolchain defaults (only fill missing)
     const savedToolchain: string[] = [];
+    const detected = {
+        qtTargets: qtCandidates.length,
+        sdkTargets: sdkCandidates.length,
+        toolchain: { qt: toolchainDetected.qt, vs: toolchainDetected.vs, jom: toolchainDetected.jom, make: toolchainDetected.make },
+    };
 
-    if (qtCandidates.length > 0 || existingQt.qtPath) {
+    if (qtCandidates.length > 0 || existingQt.qtPath || options.reset) {
         const qt = { ...existingQt };
         let changed = false;
-        if (!qt.qtPath && toolchainDetected.qtPath) { qt.qtPath = toolchainDetected.qtPath; savedToolchain.push('qtPath'); changed = true; }
-        if (!qt.vsInstall && toolchainDetected.vsInstall) { qt.vsInstall = toolchainDetected.vsInstall; savedToolchain.push('vsInstall'); changed = true; }
-        if (!qt.jomPath && toolchainDetected.jomPath) { qt.jomPath = toolchainDetected.jomPath; savedToolchain.push('jomPath'); changed = true; }
+        if ((options.reset || !qt.qtPath) && toolchainDetected.qtPath) { qt.qtPath = toolchainDetected.qtPath; savedToolchain.push('qtPath'); changed = true; }
+        if ((options.reset || !qt.vsInstall) && toolchainDetected.vsInstall) { qt.vsInstall = toolchainDetected.vsInstall; savedToolchain.push('vsInstall'); changed = true; }
+        if ((options.reset || !qt.jomPath) && toolchainDetected.jomPath) { qt.jomPath = toolchainDetected.jomPath; savedToolchain.push('jomPath'); changed = true; }
         if (!existingActiveTarget) {
-            if (!qt.mode) { qt.mode = defaultMode; savedToolchain.push('mode'); changed = true; }
-            if (!qt.arch) { qt.arch = defaultArch; savedToolchain.push('arch'); changed = true; }
+            if (options.reset || !qt.mode) { qt.mode = defaultMode; savedToolchain.push('mode'); changed = true; }
+            if (options.reset || !qt.arch) { qt.arch = defaultArch; savedToolchain.push('arch'); changed = true; }
         }
         if (changed) {
             try { saveQtSettings(workspace, qt); } catch (e) {
-                return initWriteFailed(e);
+                return initWriteFailed(e, detected);
             }
         }
     }
 
-    if (sdkCandidates.length > 0 || existingSdk.vsInstall) {
+    if (sdkCandidates.length > 0 || existingSdk.vsInstall || options.reset) {
         const sdk = { ...existingSdk };
         let changed = false;
-        if (!sdk.vsInstall && toolchainDetected.vsInstall) { sdk.vsInstall = toolchainDetected.vsInstall; savedToolchain.push('vsInstall'); changed = true; }
+        if ((options.reset || !sdk.vsInstall) && toolchainDetected.vsInstall) { sdk.vsInstall = toolchainDetected.vsInstall; savedToolchain.push('vsInstall'); changed = true; }
         if (changed) {
             try { saveSdkSettings(workspace, sdk); } catch (e) {
-                return initWriteFailed(e);
+                return initWriteFailed(e, detected);
             }
         }
     }
@@ -199,19 +179,6 @@ export async function runInit(workspace: string, options: { plan?: boolean; remo
     let activeTarget: ActiveTarget | undefined;
     let ambiguous = false;
 
-    // Interactive selection when multiple targets found
-    let effectiveCandidates = candidates;
-    if (totalTargets > 1 && options.interactive && !options.plan) {
-        const chosen = await choose(
-            T('init.selectTarget'),
-            candidates,
-            c => `${c.label} (${c.kind}) — ${c.project}`,
-        );
-        if (chosen) {
-            effectiveCandidates = [chosen];
-        }
-    }
-
     if (effectiveCandidates.length === 1) {
         const single = effectiveCandidates[0];
         // Preserve existing activeTarget settings if they exist
@@ -219,14 +186,14 @@ export async function runInit(workspace: string, options: { plan?: boolean; remo
         activeTarget = {
             kind: single.kind,
             project: single.project,
-            mode: existing?.mode || (defaultMode as 'debug' | 'release'),
-            arch: existing?.arch || (defaultArch as 'x86' | 'x64'),
+            mode: (options.reset ? defaultMode : existing?.mode) || defaultMode,
+            arch: (options.reset ? defaultArch : existing?.arch) || defaultArch,
             runAt: existing?.kind === single.kind ? (existing?.runAt || 'local') : 'local',
         };
         // Only save if not already initialized or target changed
         if (!existing || existing.project !== single.project || existing.kind !== single.kind) {
             try {
-                // Domain config first, activeTarget last — avoids partial-write state
+                // Domain config first, activeTarget last — reduces partial-write window (not fully atomic)
                 if (single.kind === 'qt') {
                     const qt = loadQtSettings(workspace);
                     qt.pinnedProject = { root: workspace, relative: single.project };
@@ -240,9 +207,9 @@ export async function runInit(workspace: string, options: { plan?: boolean; remo
                     if (!sdk.arch) { sdk.arch = defaultArch as 'x86' | 'x64'; }
                     saveSdkSettings(workspace, sdk);
                 }
-                saveActiveTarget(workspace, activeTarget);
+                saveActiveTarget(workspace, activeTarget!);
             } catch (e) {
-                return initWriteFailed(e);
+                return initWriteFailed(e, detected);
             }
         }
     } else if (effectiveCandidates.length > 1) {
@@ -303,126 +270,24 @@ export async function runInit(workspace: string, options: { plan?: boolean; remo
         });
     }
 
-    // Remote initialization — execute bridge init on remote
-    let initMode: 'local' | 'remote' = 'local';
-    if (options.remote) {
-        initMode = 'remote';
-        const remote = loadRemoteSettings(workspace);
-        const sync = loadSyncSettings(workspace);
-        const serverId = options.server || remote.selectedServer || sync.selectedServer;
-
-        if (!serverId) {
-            diagnostics.push({
-                level: 'error',
-                message: T('init.remoteNoServer'),
-                hint: 'Use `forja use remote --server <name>` first',
-            });
-        } else {
-            const server = getServerById(serverId);
-            if (!server) {
-                diagnostics.push({
-                    level: 'error',
-                    message: `${T('init.serverNotFound')}: ${serverId}`,
-                });
-            } else {
-                const remotePath = remote.remotePaths[serverId] || sync.remotePaths[serverId];
-                if (!remotePath) {
-                    diagnostics.push({
-                        level: 'error',
-                        message: `${T('init.remotePathMissing')}: ${serverId}`,
-                        hint: 'Use `forja use remote --server <name> --remote-path <path>`',
-                    });
-                } else {
-                    // Execute remote bridge init — determine target kinds
-                    const remoteForjaBin = remote.remoteForjaBin || undefined;
-                    const password = server.password || process.env.FORJA_SSH_PASSWORD || null;
-                    const runner = createSshRunner(server, password);
-
-                    const targetKinds = new Set<RemoteBridgeTarget>();
-                    if (activeTarget) {
-                        targetKinds.add(activeTarget.kind);
-                    } else {
-                        if (qtCandidates.length > 0) { targetKinds.add('qt'); }
-                        if (sdkCandidates.length > 0) { targetKinds.add('sdk'); }
-                    }
-
-                    if (targetKinds.size === 0) {
-                        diagnostics.push({
-                            level: 'info',
-                            message: T('init.noLocalTargetsSkipRemote'),
-                        });
-                    } else {
-                        let allBridgesOk = true;
-                        for (const kind of targetKinds) {
-                            const bridgeResult = await executeRemoteBridge({
-                                target: kind,
-                                action: 'init',
-                                args: [],
-                                json: true,
-                                remotePath,
-                                runner,
-                                remoteForjaBin,
-                            });
-                            if (!bridgeResult.ok) {
-                                allBridgesOk = false;
-                                const notFound = bridgeResult.exitCode === 127 || bridgeResult.exitCode === 126;
-                                diagnostics.push({
-                                    level: 'error',
-                                    message: `${T('init.remoteInitFailed')} ${kind}: ${bridgeResult.diagnostics.map(d => d.message).join('; ')}`,
-                                    hint: notFound
-                                        ? 'Remote Forja binary not found. Use `forja doctor fix --remote` to install.'
-                                        : undefined,
-                                });
-                            } else {
-                                diagnostics.push({
-                                    level: 'info',
-                                    message: `${T('init.remoteInitSucceeded')} ${kind} (server=${server.name || serverId}, path=${remotePath})`,
-                                });
-                            }
-                        }
-
-                        // Only switch activeTarget to remote after bridge succeeds
-                        if (allBridgesOk && activeTarget && activeTarget.runAt !== 'remote') {
-                            activeTarget = { ...activeTarget, runAt: 'remote' };
-                            try {
-                                saveActiveTarget(workspace, activeTarget);
-                            } catch (e) {
-                                return initWriteFailed(e);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     // Build next actions
     let nextAction: string | undefined = undefined;
     if (activeTarget) {
         nextAction = 'forja build';
     } else if (ambiguous) {
         nextAction = 'forja list targets';
+    } else if (totalTargets === 0) {
+        nextAction = undefined;
     } else {
         nextAction = 'forja list targets';
     }
 
-    const hasRemoteError = options.remote && diagnostics.some(d => d.level === 'error');
-
     return {
-        ok: !hasRemoteError,
+        ok: true,
         action: 'init',
-        mode: initMode,
+        mode: 'local',
         workspace,
-        detected: {
-            qtTargets: qtCandidates.length,
-            sdkTargets: sdkCandidates.length,
-            toolchain: {
-                qt: toolchainDetected.qt,
-                vs: toolchainDetected.vs,
-                jom: toolchainDetected.jom,
-                make: toolchainDetected.make,
-            },
-        },
+        detected,
         saved: Object.keys(saved).length > 0 ? saved : undefined,
         ambiguous: ambiguous || undefined,
         activeTarget,
@@ -476,12 +341,12 @@ function detectToolchain(workspace: string): ToolchainDetection {
     return result;
 }
 
-function initWriteFailed(e: unknown): InitResult {
+function initWriteFailed(e: unknown, detected?: InitResult['detected']): InitResult {
     return {
         ok: false,
         action: 'init',
         mode: 'local',
-        detected: { qtTargets: 0, sdkTargets: 0, toolchain: {} },
+        detected: detected ?? { qtTargets: 0, sdkTargets: 0, toolchain: {} },
         diagnostics: [{
             level: 'error',
             message: `${T('init.configWriteFailed')}: ${e instanceof Error ? e.message : String(e)}`,
@@ -490,70 +355,3 @@ function initWriteFailed(e: unknown): InitResult {
     };
 }
 
-// ── Text output ──
-
-export function formatInitText(result: InitResult, locale: Locale): string {
-    if (!result.ok) {
-        const lines = [T('initFailed')];
-        if (result.diagnostics) {
-            for (const d of result.diagnostics) {
-                lines.push(`${d.level === 'error' ? T('error') : T('warning')}: ${d.message}`);
-                if (d.hint) { lines.push(`  ${T('hint')}: ${d.hint}`); }
-            }
-        }
-        return lines.join('\n');
-    }
-
-    if (result.plan) {
-        const lines = [T('initPlan')];
-        if (result.workspace) { lines.push(`${T('workspace')} ${result.workspace}`); }
-        lines.push(T('initWillDetect'));
-        lines.push(T('next'));
-        if (result.nextAction) {
-            const a = result.nextAction; lines.push(`  ${a}`); }
-        return lines.join('\n');
-    }
-
-    const lines = [T('initSucceeded')];
-    if (result.workspace) { lines.push(`${T('workspace')} ${result.workspace}`); }
-
-    const d = result.detected;
-    const targetParts: string[] = [];
-    if (d.qtTargets > 0) { targetParts.push(`${d.qtTargets} ${d.qtTargets > 1 ? T('qtTargetPlural') : T('qtTargetSingular')}`); }
-    if (d.sdkTargets > 0) { targetParts.push(`${d.sdkTargets} ${d.sdkTargets > 1 ? T('sdkTargetPlural') : T('sdkTargetSingular')}`); }
-    const tcParts: string[] = [];
-    if (d.toolchain.qt) { tcParts.push('Qt'); }
-    if (d.toolchain.vs) { tcParts.push('VS'); }
-    if (d.toolchain.jom) { tcParts.push('jom'); }
-    if (d.toolchain.make) { tcParts.push('make'); }
-    lines.push(`${T('detected')} ${targetParts.length > 0 ? targetParts.join(', ') : T('zeroTargets')}, toolchain: ${tcParts.length > 0 ? tcParts.join('/') : T('toolchainNone')}`);
-
-    if (result.saved) {
-        const savedParts: string[] = [];
-        if (result.saved.mode) { savedParts.push(`mode=${result.saved.mode}`); }
-        if (result.saved.arch) { savedParts.push(`arch=${result.saved.arch}`); }
-        if (result.activeTarget) { savedParts.push(`activeTarget=${result.activeTarget.project}`); }
-        if (savedParts.length > 0) { lines.push(`${T('saved')} ${savedParts.join(' ')}`); }
-    }
-
-    if (result.ambiguous) {
-        lines.push(T('initNotAutoSelecting'));
-    }
-
-    if (result.activeTarget) {
-        const t = result.activeTarget;
-        lines.push(`${T('activeTarget')} ${t.kind} ${t.project} ${t.mode} ${t.arch} ${t.runAt}`);
-    }
-
-    if (result.diagnostics) {
-        for (const d of result.diagnostics) {
-            if (d.level === 'warning') { lines.push(`${T('warning')}: ${d.message}`); }
-        }
-    }
-
-    lines.push(T('next'));
-    if (result.nextAction) {
-            const a = result.nextAction; lines.push(`  ${a}`); }
-
-    return lines.join('\n');
-}

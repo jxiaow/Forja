@@ -328,42 +328,44 @@ forja status [--process] [--workspace <path>] [--json]
 
 ### 功能
 
-一站式初始化。替代旧 `forja init`，同时处理本地初始化和远程配置。
+一站式初始化。分为两个子命令：
+- `forja setup` — 本地初始化（扫描目标、检测工具链、保存配置）
+- `forja setup remote` — 远程初始化（自动探测服务器、部署 Forja、远程 init、切换执行模式）
 
 ### 语法
 
 ```bash
-forja setup [--local-only] [--host <host>] [--username <user>] [--port <port>] [--server <id>] [--remote-path <path>] [--plan] [--json]
+forja setup [--plan] [--json]
+forja setup remote [--plan] [--json]
 ```
 
 ### 输入
 
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `--local-only` | boolean | 否 | 只做本地初始化，跳过远程配置。 |
-| `--host <host>` | string | 否 | 远程主机地址（自动创建 server）。 |
-| `--username <user>` | string | 否 | 远程用户名。 |
-| `--port <port>` | number | 否 | SSH 端口（默认 22）。 |
-| `--server <id>` | string | 否 | 指定已有 server ID。 |
-| `--remote-path <path>` | path | 否 | 远程工作根路径。 |
 | `--plan` | boolean | 否 | 预览，不写入配置。 |
 | `--json` | boolean | 否 | 输出 JSON。 |
 
 ### 行为
 
-**Phase 1 — 本地初始化**：
+**`forja setup`（本地初始化）**：
 1. 扫描 Qt/SDK 目标。
 2. 检测工具链（Qt、VS、jom、make）。
-3. 保存无歧义的默认配置。
+3. 单目标自动选择，多目标交互选择。
+4. 保存无歧义的默认配置。
 
-**Phase 2 — 远程配置**（`--local-only` 时跳过）：
-1. 解析服务器（`--server` > `--host` 自动创建 > 已有单个 server）。
-2. 配置远程路径和同步。
-3. 部署 Forja 到远程。
-4. 远程初始化。
-5. 切换执行模式到 remote。
+**`forja setup remote`（远程初始化）**：
+1. 自动探测服务器（单个自动选，多个交互选，无则提示 `forja server add`）。
+2. 推导远程路径（已配置则复用，否则按 `/home/<username>/<项目名>` 推导，交互模式下可确认）。
+3. 配置远程执行和同步。
+4. 部署 Forja 到远程（已部署则跳过）。
+5. 远程初始化（bridge init）。
+6. 切换执行模式到 remote。
+7. 幂等：已配置时验证 SSH 连通性，跳过重复步骤。
 
 ### JSON 输出
+
+**`forja setup`**：
 
 ```json
 {
@@ -376,6 +378,20 @@ forja setup [--local-only] [--host <host>] [--username <user>] [--port <port>] [
     "toolchain": { "qt": true, "vs": true, "jom": true },
     "configured": true
   },
+  "steps": {
+    "localConfig": "done"
+  },
+  "nextAction": "forja build"
+}
+```
+
+**`forja setup remote`**：
+
+```json
+{
+  "ok": true,
+  "action": "setup-remote",
+  "workspace": "C:/repo",
   "remote": {
     "serverId": "abc-123",
     "serverName": "dev",
@@ -388,7 +404,6 @@ forja setup [--local-only] [--host <host>] [--username <user>] [--port <port>] [
     "configured": true
   },
   "steps": {
-    "localConfig": "done",
     "serverSetup": "done",
     "remoteConfig": "done",
     "syncSetup": "done",
@@ -396,7 +411,7 @@ forja setup [--local-only] [--host <host>] [--username <user>] [--port <port>] [
     "remoteInit": "done",
     "executionSwitch": "done"
   },
-  "nextActions": ["forja build", "forja status"]
+  "nextAction": "forja build"
 }
 ```
 

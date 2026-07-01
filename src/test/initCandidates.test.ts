@@ -123,17 +123,6 @@ test('runInit: nonexistent workspace returns error', async () => {
     assert.ok(result.diagnostics?.length > 0);
 });
 
-test('runInit: plan mode returns plan without writing', async () => {
-    const { runInit } = require('../cli/commands/init');
-    const workspace = path.join(TEST_DIR, 'init-plan');
-    fs.mkdirSync(workspace, { recursive: true });
-    fs.writeFileSync(path.join(workspace, 'app.pro'), 'QT += core\n');
-    const result = await runInit(workspace, { plan: true });
-    assert.equal(result.ok, true);
-    assert.ok(result.plan, 'plan mode should include plan field');
-    assert.equal(result.plan.mode, 'dryRun');
-});
-
 test('runInit: idempotent — second run preserves existing target', async () => {
     const { runInit } = require('../cli/commands/init');
     const workspace = path.join(TEST_DIR, 'init-idem');

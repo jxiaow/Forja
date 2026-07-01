@@ -266,9 +266,9 @@ export function stripJson(actions: string[] | undefined): string[] | undefined {
 }
 
 function outputResult(result: ForjaJsonResult, wantsJson: boolean, textFormatter?: (r: unknown) => string): void {
-    // When not in JSON mode, strip --json from nextActions for display
-    if (!wantsJson && result.nextActions) {
-        result = { ...result, nextActions: (result.nextAction?.replace(/\s+--json/g, '') || undefined) };
+    // When not in JSON mode, strip --json from nextAction for display
+    if (!wantsJson && result.nextAction) {
+        result = { ...result, nextAction: result.nextAction.replace(/\s+--json/g, '') };
     }
     if (wantsJson) {
         console.log(JSON.stringify(result, null, 2));
@@ -316,16 +316,39 @@ async function handleSetup(argv: string[], workspace: string, wantsJson: boolean
 
     if (subArg === 'remote') {
         // forja setup remote
-        const remoteUnknown = findUnknownFlags(argv, new Set(['--plan']), new Set());
+        const remoteKnown = new Set(['--json', '--reset', '--answers', '--project', '--qt-path', '--vs-install', '--jom-path', '--host', '--username', '--port', '--auth-mode', '--private-key-path', '--name', '--remote-path', '--mode', '--arch']);
+        const remoteWithValues = new Set(['--answers', '--project', '--qt-path', '--vs-install', '--jom-path', '--host', '--username', '--port', '--auth-mode', '--private-key-path', '--name', '--remote-path', '--mode', '--arch']);
+        const remoteUnknown = findUnknownFlags(argv, remoteKnown, remoteWithValues);
         if (remoteUnknown.length > 0) {
-            outputResult({ ok: false, action: 'setup-remote', diagnostics: [{ level: 'error', message: unknownFlagsMessage(remoteUnknown, new Set(['--plan'])) }], nextAction: 'forja setup remote' }, wantsJson);
+            outputResult({ ok: false, action: 'setup-remote', diagnostics: [{ level: 'error', message: unknownFlagsMessage(remoteUnknown, remoteKnown) }], nextAction: 'forja setup remote' }, wantsJson);
             process.exitCode = 1;
             return;
         }
         const { runSetupRemote, formatSetupRemoteText } = await import('./setup');
+        const portStr = extractFlag(argv, '--port');
+        const port = portStr ? parseInt(portStr, 10) : undefined;
+        if (portStr && (isNaN(port!) || port! < 1 || port! > 65535)) {
+            outputResult({ ok: false, action: 'setup-remote', diagnostics: [{ level: 'error', message: `${T('idx.invalidPort')}: ${portStr}` }], nextAction: 'forja setup remote' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
         const result = await runSetupRemote(workspace, {
-            plan: hasFlag(argv, '--plan'),
             json: wantsJson,
+            reset: hasFlag(argv, '--reset'),
+            answers: extractFlag(argv, '--answers'),
+            project: extractFlag(argv, '--project'),
+            qtPath: extractFlag(argv, '--qt-path'),
+            vsInstall: extractFlag(argv, '--vs-install'),
+            jomPath: extractFlag(argv, '--jom-path'),
+            host: extractFlag(argv, '--host'),
+            username: extractFlag(argv, '--username'),
+            port,
+            authMode: extractFlag(argv, '--auth-mode'),
+            privateKeyPath: extractFlag(argv, '--private-key-path'),
+            name: extractFlag(argv, '--name'),
+            remotePath: extractFlag(argv, '--remote-path'),
+            mode: extractFlag(argv, '--mode'),
+            arch: extractFlag(argv, '--arch'),
         });
         outputResult(result, wantsJson, (r) => formatSetupRemoteText(r as Parameters<typeof formatSetupRemoteText>[0]));
         if (!result.ok) { process.exitCode = 1; }
@@ -333,15 +356,24 @@ async function handleSetup(argv: string[], workspace: string, wantsJson: boolean
     }
 
     // forja setup (local only)
-    const setupUnknown = findUnknownFlags(argv, new Set(['--plan']), new Set());
+    const setupKnown = new Set(['--json', '--reset', '--answers', '--project', '--qt-path', '--vs-install', '--jom-path', '--mode', '--arch']);
+    const setupWithValues = new Set(['--answers', '--project', '--qt-path', '--vs-install', '--jom-path', '--mode', '--arch']);
+    const setupUnknown = findUnknownFlags(argv, setupKnown, setupWithValues);
     if (setupUnknown.length > 0) {
-        outputResult({ ok: false, action: 'setup', diagnostics: [{ level: 'error', message: unknownFlagsMessage(setupUnknown, new Set(['--plan'])) }], nextAction: 'forja setup' }, wantsJson);
+        outputResult({ ok: false, action: 'setup', diagnostics: [{ level: 'error', message: unknownFlagsMessage(setupUnknown, setupKnown) }], nextAction: 'forja setup' }, wantsJson);
         process.exitCode = 1;
         return;
     }
     const result = await runSetup(workspace, {
-        plan: hasFlag(argv, '--plan'),
         json: wantsJson,
+        reset: hasFlag(argv, '--reset'),
+        answers: extractFlag(argv, '--answers'),
+        project: extractFlag(argv, '--project'),
+        qtPath: extractFlag(argv, '--qt-path'),
+        vsInstall: extractFlag(argv, '--vs-install'),
+        jomPath: extractFlag(argv, '--jom-path'),
+        mode: extractFlag(argv, '--mode'),
+        arch: extractFlag(argv, '--arch'),
     });
     outputResult(result, wantsJson, (r) => formatSetupText(r as Parameters<typeof formatSetupText>[0]));
     if (!result.ok) { process.exitCode = 1; }
