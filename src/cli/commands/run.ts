@@ -11,7 +11,8 @@ import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
-import { loadQtSettings } from '../../core/settingsIO';
+import { loadQtSettings, loadRemoteSettings } from '../../core/settingsIO';
+import { getServerById } from '../../core/serverStore';
 import { launchDesigner } from '../../qt/build/designer';
 
 export type RunAction = 'default' | 'detach' | 'debug' | 'custom' | 'designer';
@@ -359,6 +360,16 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
     if (wantsJson) {
         console.log(JSON.stringify(result, null, 2));
     } else {
+        if (result.activeTarget) {
+            const t = result.activeTarget;
+            if (t.runAt === 'remote' && result.workspace) {
+                const remote = loadRemoteSettings(result.workspace);
+                const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
+                console.log(`→ remote:${server?.name || remote.selectedServer}`);
+            } else {
+                console.log('→ local');
+            }
+        }
         const status = result.ok ? T('runCompleted') : T('runFailed');
         console.log(`${T('run')} ${status}`);
         if (result.activeTarget) {

@@ -11,7 +11,8 @@ import { CliOptions } from '../../qt/cli/types';
 import { createSdkPlan } from '../../sdk/shared/plan';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, diag, T } from './types';
-import { loadSdkSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { loadSdkSettings, loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { getServerById } from '../../core/serverStore';
 
 export interface CleanResult {
     ok: boolean;
@@ -319,6 +320,16 @@ export function outputCleanResult(result: CleanResult, wantsJson: boolean): void
     if (wantsJson) {
         console.log(JSON.stringify(result, null, 2));
     } else {
+        if (result.activeTarget) {
+            const t = result.activeTarget;
+            if (t.runAt === 'remote' && result.workspace) {
+                const remote = loadRemoteSettings(result.workspace);
+                const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
+                console.log(`→ remote:${server?.name || remote.selectedServer}`);
+            } else {
+                console.log('→ local');
+            }
+        }
         const status = result.ok ? T('cleanSucceeded') : T('cleanFailed');
         console.log(`${T('clean')} ${status}`);
         if (result.activeTarget) {

@@ -6,6 +6,8 @@ import { requireActiveTarget } from './activeTarget';
 import { readRunState, clearRunState, resolveRunProcessStatus, isProcessRunning } from '../../qt/shared/localState';
 import { executeRemotePlan } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
+import { loadRemoteSettings } from '../../core/settingsIO';
+import { getServerById } from '../../core/serverStore';
 import * as cp from 'child_process';
 
 export interface StopResult {
@@ -157,6 +159,16 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
     if (wantsJson) {
         console.log(JSON.stringify(result, null, 2));
     } else {
+        if (result.activeTarget) {
+            const t = result.activeTarget;
+            if (t.runAt === 'remote' && result.workspace) {
+                const remote = loadRemoteSettings(result.workspace);
+                const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
+                console.log(`→ remote:${server?.name || remote.selectedServer}`);
+            } else {
+                console.log('→ local');
+            }
+        }
         if (result.state === 'stopped') {
             console.log(`${T('processStopped')} (${T('pidLabel')}: ${result.runtime?.pid ?? 'unknown'})`);
         } else if (result.state === 'not-running') {
