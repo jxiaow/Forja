@@ -89,28 +89,6 @@ export interface ServerDetail extends ServerSummary {
     strictHostKeyChecking?: boolean;
 }
 
-// ── Remote config summary ──
-
-export interface RemoteConfigSummary {
-    selectedServer?: string;
-    server?: ServerSummary;
-    remotePath?: string;
-    remoteWorkspace?: string;
-    remoteForjaBin?: string;
-    buildOrder?: string[];
-    transferConfigured?: boolean;
-}
-
-// ── Config summary (for `list config`) ──
-
-export interface ConfigSummary {
-    lang?: string;
-    qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qmakeTarget?: string };
-    sdk?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
-    sync?: { configured: boolean; enabled?: boolean; selectedServer?: string; remotePath?: string };
-    remote?: RemoteConfigSummary;
-}
-
 // ── JSON Envelope ──
 
 export interface ForjaJsonResult {
@@ -259,15 +237,11 @@ const UI: Record<string, { en: string; zh: string }> = {
     installBuildEssential:         { en: 'Install build-essential or equivalent', zh: '安装 build-essential 或同等工具' },
     deployRemote:                  { en: 'Run forja doctor fix --remote to deploy, or configure with forja use remote forja-bin set --path <path>', zh: '运行 forja doctor fix --remote 部署，或用 forja use remote forja-bin set --path <path> 配置' },
     langMissingValue:              { en: 'Language required: zh or en. View current: forja list lang', zh: '请指定语言: zh 或 en。查看当前语言: forja list lang' },
-    langSetPrefix:                 { en: 'Language set to:',            zh: '语言已设置为：' },
     // list
     targets:                       { en: 'Targets',                      zh: '目标' },
     servers:                       { en: 'Servers',                      zh: '服务器' },
     environment:                   { en: 'Environment',                  zh: '环境' },
-    envSubCategoryRequired:        { en: 'Sub-category required: qt or vs', zh: '需要指定子分类: qt 或 vs' },
-    configuration:                 { en: 'Configuration',                zh: '配置' },
     remoteConfiguration:           { en: 'Remote Configuration',         zh: '远程配置' },
-    remoteRepos:                   { en: 'Remote Repos',                 zh: '远程仓库' },
     workspaceMode:                 { en: 'Workspace mode:',              zh: '工作区模式：' },
     remoteWorkspace:               { en: 'Remote workspace:',            zh: '远程工作区：' },
     forjaBin:                      { en: 'Forja bin:',                   zh: 'Forja 二进制：' },
@@ -279,7 +253,6 @@ const UI: Record<string, { en: string; zh: string }> = {
     arch:                          { en: 'arch:',                       zh: '架构：' },
     enabled:                       { en: 'enabled=',                     zh: '已启用=' },
     server:                        { en: 'server=',                      zh: '服务器=' },
-    remotePath:                    { en: 'remotePath:',                  zh: '远程路径：' },
     path:                          { en: 'path:',                        zh: '路径：' },
     baseline:                      { en: 'baseline:',                    zh: '基线：' },
     artifacts:                     { en: 'artifacts:',                   zh: '制品：' },
@@ -307,34 +280,27 @@ const UI: Record<string, { en: string; zh: string }> = {
     commands:                      { en: 'Commands:',                    zh: '命令：' },
     // sync
     syncPlan:                      { en: 'Sync plan (dry run)',          zh: '同步计划（预演）' },
-    syncStatus:                    { en: 'Sync status',                 zh: '同步状态' },
-    syncReady:                     { en: 'Ready',                       zh: '就绪' },
-    syncNotReady:                  { en: 'Not ready',                   zh: '未就绪' },
-    syncEnabled:                   { en: 'Enabled:',                    zh: '已启用：' },
-    syncServer:                    { en: 'Server:',                     zh: '服务器：' },
-    syncRemotePath:                { en: 'Remote path:',                zh: '远程路径：' },
-    syncAuth:                      { en: 'Auth:',                       zh: '认证：' },
-    syncMissingEnabled:            { en: 'Sync is not enabled',         zh: '远程同步未启用' },
-    syncMissingServers:            { en: 'No sync servers configured',  zh: '未添加同步服务器' },
-    syncMissingSelectedServer:     { en: 'No sync server selected',     zh: '未选择同步服务器' },
-    syncMissingServer:             { en: 'Selected server not found',   zh: '所选服务器未找到' },
-    syncMissingRemotePath:         { en: 'Remote path not configured',  zh: '未配置远程路径' },
     'sync.notConfigured':          { en: 'No sync server configured',   zh: '未配置同步服务器' },
     'sync.serverNotFound':         { en: 'Server not found',            zh: '服务器未找到' },
-    'sync.remotePathMissing':      { en: 'Remote path not configured for selected server', zh: '所选服务器未配置远程路径' },
     'sync.planFailed':             { en: 'Plan failed',                 zh: '计划失败' },
     'sync.syncFailed':             { en: 'Sync failed',                 zh: '同步失败' },
-    'sync.transferNotConfigured':  { en: 'Remote transfer not configured', zh: '未配置远程传输' },
-    'sync.transferServerMissing':  { en: 'Deploy server not found',     zh: '部署服务器未找到' },
     'sync.remoteBlocked':          { en: 'Sync failed',                 zh: '同步失败' },
     'sync.unknownFlag':            { en: 'Unknown flag(s)',             zh: '未知参数' },
     'sync.unknownAction':          { en: 'Unknown sync action',         zh: '未知同步动作' },
+    'sync.notEnabled':             { en: 'Sync is not enabled',         zh: '远程同步未启用' },
+    'sync.noRemotePath':           { en: 'Remote path not configured',  zh: '未配置远程路径' },
+    'sync.noGitRepos':             { en: 'No git repositories found',   zh: '未找到 git 仓库' },
+    'sync.passwordRequired':       { en: 'Password not provided. Set FORJA_SSH_PASSWORD or enter interactively', zh: '未提供密码。可通过环境变量 FORJA_SSH_PASSWORD 设置，或在 TTY 中交互输入' },
+    'sync.passwordPrompt':         { en: 'Password for',                    zh: '输入' },
+    'sync.ambiguous':              { en: 'matched multiple servers, use id', zh: '匹配到多个服务器，请使用 id' },
+    'sync.createRemoteDirFailed':  { en: 'Create remote directory failed', zh: '创建远程目录失败' },
+    'sync.resetDone':              { en: 'Sync state cleared; next sync will recalculate', zh: '已清除同步状态；下次同步会重新计算待同步文件' },
+    'sync.resetConflict':          { en: 'cannot combine with',           zh: '不能与以下参数同时使用' },
     syncConfirm:                   { en: 'Proceed with sync?',          zh: '确认执行同步？' },
     syncCancelled:                 { en: 'Sync cancelled',              zh: '同步已取消' },
     syncNothing:                   { en: 'Nothing to sync',             zh: '没有需要同步的内容' },
     syncComplete:                  { en: 'Sync complete',                zh: '同步完成' },
     syncStateReset:                { en: 'Sync state reset',             zh: '同步状态已重置' },
-    transferComplete:              { en: 'Transfer complete',             zh: '传输完成' },
     pending:                       { en: 'Pending',                      zh: '待同步' },
     uploaded:                      { en: 'Uploaded',                     zh: '已上传' },
     deleted:                       { en: 'Deleted',                      zh: '已删除' },
@@ -381,18 +347,11 @@ const UI: Record<string, { en: string; zh: string }> = {
     serverPortLabel:               { en: 'Port:',                        zh: '端口：' },
     serverUsernameLabel:           { en: 'Username:',                    zh: '用户名：' },
     serverAuthLabel:               { en: 'Auth:',                        zh: '认证：' },
-    configWorkspace:               { en: 'workspace:',                   zh: '工作区：' },
-    configForjaBin:                { en: 'forjaBin:',                    zh: 'Forja 二进制：' },
-    configBuildOrder:              { en: 'buildOrder:',                  zh: '构建顺序：' },
-    configTransfer:                { en: 'transfer:',                    zh: '传输：' },
     // list env labels
     qtLabel:                       { en: 'Qt:',                          zh: 'Qt：' },
     vsLabel:                       { en: 'VS:',                          zh: 'VS：' },
     jomLabel:                      { en: 'jom:',                         zh: 'jom：' },
     makeLabel:                     { en: 'make:',                        zh: 'make：' },
-    qtPathLabel:                   { en: 'qtPath:',                      zh: 'Qt 路径：' },
-    vsInstallLabel:                { en: 'vsInstall:',                   zh: 'VS 路径：' },
-    sdkLabel:                      { en: 'SDK:',                         zh: 'SDK：' },
     roleLabel:                     { en: 'role:',                        zh: '角色：' },
     // setup labels
     setupTitle:                    { en: 'Forja Setup',                  zh: 'Forja 初始化' },
@@ -602,8 +561,8 @@ Options (remote):
   --arch <x86|x64>        目标架构`,
     },
     'help.list': {
-        en: 'Usage: forja list <targets|servers|env|remote|config|lang> [--detail <id>] [--json]',
-        zh: '用法: forja list <targets|servers|env|remote|config|lang> [--detail <id>] [--json]',
+        en: 'Usage: forja list <targets|env|remote|lang> [--json]',
+        zh: '用法: forja list <targets|env|remote|lang> [--json]',
     },
     'help.use': {
         en: 'Usage: forja use <subcommand> [options] [--json]\n\nSubcommands:\n  target [--project <path>] [--mode <debug|release>] [--arch <x86|x64>]\n  execution --local | --remote\n  sync --server <name> --remote-path <path> [--enable | --disable]\n  remote --server <name>\n  remote workspace --mode <staged|legacy> [--path <path>]\n  remote repo --local <name> --remote <name> --role <role>\n  remote build-order qt:build sdk:rebuild ...\n  remote transfer --server <name> --path <path> --artifact <path>\n  remote forja-bin --path <path> | --clear\n  qt [--qt-path <path>] [--vs-dev-shell <path>] [--qmake-target <name>]\n  sdk [--vs-dev-cmd <path>]\n  lang <zh|en>',
@@ -684,15 +643,15 @@ Options:
     'idx.noCommand':                    { en: 'No command specified. Run `forja --help` for usage.', zh: '未指定命令。运行 `forja --help` 查看用法。' },
     'idx.unknownCommand':               { en: 'Unknown command',                    zh: '未知命令' },
     'idx.unknownFlags':                 { en: 'Unknown flag(s)',                    zh: '未知参数' },
-    'idx.listCategoryRequired':         { en: 'Category required. Usage: forja list <targets|servers|env|remote|config|lang>', zh: '需要指定分类。用法: forja list <targets|servers|env|remote|config|lang>' },
+    'idx.listCategoryRequired':         { en: 'Category required. Usage: forja list <targets|env|remote|lang>', zh: '需要指定分类。用法: forja list <targets|env|remote|lang>' },
     'idx.unknownListCategory':          { en: 'Unknown list category',              zh: '未知列表分类' },
     'idx.validCategories':              { en: 'Valid categories',                   zh: '有效分类' },
+    'idx.unknownEnvSubcategory':        { en: 'Unknown env subcategory',           zh: '未知环境子分类' },
     'idx.unknownUseSubcommand':         { en: 'Unknown use subcommand',             zh: '未知 use 子命令' },
     'idx.useUsage':                     { en: 'Usage: forja use <target|execution|sync|remote|qt|sdk|lang> [options]', zh: '用法: forja use <target|execution|sync|remote|qt|sdk|lang> [选项]' },
     'idx.invalidPort':                  { en: 'Invalid port',                       zh: '无效端口' },
     'idx.invalidPortHint':              { en: 'Must be a number between 1 and 65535.', zh: '必须是 1 到 65535 之间的数字。' },
     'idx.unknownServerSubcommand':      { en: 'Unknown server subcommand',          zh: '未知 server 子命令' },
-    'idx.serverUsage':                  { en: 'Usage: forja server <add|update|remove> [options]', zh: '用法: forja server <add|update|remove> [选项]' },
     'idx.unknownBuildAction':           { en: 'Unknown build action',               zh: '未知构建动作' },
     'idx.validActions':                 { en: 'Valid actions: fresh, qmake, rcc',   zh: '有效动作: fresh, qmake, rcc' },
     'idx.runDesignerUsage':             { en: 'Usage: forja run designer <ui-file>', zh: '用法: forja run designer <ui文件>' },
@@ -726,7 +685,6 @@ Options:
     'lst.vsInstallNotConfigured':       { en: 'VS install not configured',          zh: 'VS 安装未配置' },
     'lst.serverNotFound':               { en: 'Server not found',                   zh: '服务器未找到' },
     // use diagnostics
-    'use.failedToSave':                  { en: 'Failed to save',                    zh: '保存失败' },
     'use.workspaceNotFound':             { en: 'Workspace does not exist',          zh: '工作区不存在' },
     'use.invalidMode':                   { en: 'Invalid mode',                      zh: '无效模式' },
     'use.invalidModeDetail':             { en: 'Must be debug or release',          zh: '必须为 debug 或 release' },
@@ -737,7 +695,6 @@ Options:
     'use.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
     'use.expectedExtensions':            { en: 'Expected .pro, .sln, Makefile, or CMakeLists.txt',  zh: '期望 .pro、.sln、Makefile 或 CMakeLists.txt' },
     'use.failedToSaveActiveTarget':      { en: 'Failed to save activeTarget',       zh: '保存活动目标失败' },
-    'use.noActiveTargetHint':            { en: 'No active target. Use --project to select one.', zh: '未选择活动目标。使用 --project 选择一个。' },
     'use.failedToSaveExecMode':          { en: 'Failed to save execution mode',     zh: '保存执行模式失败' },
     'use.cannotSpecifyBothLocalRemote':  { en: 'Cannot specify both --local and --remote', zh: '不能同时指定 --local 和 --remote' },
     'use.mustSpecifyLocalOrRemote':      { en: 'Must specify --local or --remote',  zh: '必须指定 --local 或 --remote' },

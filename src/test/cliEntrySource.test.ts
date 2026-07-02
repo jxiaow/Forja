@@ -78,43 +78,34 @@ test('forja skill documents current status init use flow', () => {
     assert.doesNotMatch(skill, /sdk build --mode/);
 });
 
-test('sync help and docs describe file-scoped sync', () => {
-    const cliSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sync', 'cli.ts'), 'utf8');
-    const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
-    const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
+test('sync command surface is minimal (plan subcommand + reset flag)', () => {
+    const syncSrc = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'sync.ts'), 'utf8');
+    const indexSrc = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'index.ts'), 'utf8');
 
-    assert.match(cliSource, /--file <path>/);
-    assert.match(cliSource, /forja sync --file src\/main\.cpp/);
-    assert.match(spec, /--file <path>/);
-    assert.match(skill, /--file <path>/);
-    assert.match(skill, /单文件同步/);
+    // SyncAction only has run/plan/reset
+    assert.match(syncSrc, /SyncAction\s*=\s*'run'\s*\|\s*'plan'\s*\|\s*'reset'/);
+    // No status/transfer subcommands in dispatcher
+    assert.doesNotMatch(indexSrc, /subArg === 'status'/);
+    assert.doesNotMatch(indexSrc, /subArg === 'transfer'/);
+    // --reset flag is supported
+    assert.match(indexSrc, /--reset/);
 });
 
-test('sync help and docs describe top-level sync status', () => {
-    const cliSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sync', 'cli.ts'), 'utf8');
-    const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
+test('sync help and docs describe sync command', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
     const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
 
-    assert.match(cliSource, /forja sync status --json/);
-    // In v2, sync command supports plan/reset/transfer actions with --server flag
-    assert.match(spec, /`plan` \\| `status` \\| `reset` \\| `transfer`/);
-    // In the new unified structure, sync status is accessed via list remote
-    assert.match(guide, /forja list remote --json/);
-    // In the new unified structure, sync is a top-level command in the command reference table
+    // sync is a top-level command in the command reference table
     assert.match(skill, /\| `sync` \|/);
     assert.match(skill, /forja list remote --json/);
+    assert.match(guide, /forja list remote --json/);
 });
 
 test('sync help and docs describe server management commands', () => {
-    const cliSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sync', 'cli.ts'), 'utf8');
     const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
     const skill = fs.readFileSync(path.join(process.cwd(), 'skills', 'forja', 'SKILL.md'), 'utf8');
 
-    // cliSource still uses old sync subcommands internally (hidden compatibility)
-    assert.match(cliSource, /forja sync servers --json/);
-    assert.match(cliSource, /forja sync add-server/);
     // In v2, spec uses the new server command
     assert.match(spec, /forja server/);
     assert.match(spec, /\| `add` \|/);

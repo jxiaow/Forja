@@ -211,7 +211,7 @@ test('server add → list servers 能看到', () => {
     const addResult = json(`server add --name ${name} --host 127.0.0.1 --username testuser`);
     assert.ok(addResult.ok, 'add 必须成功');
 
-    const listResult = json('list servers');
+    const listResult = json('server');
     const found = listResult.servers?.find((s: any) => s.name === name);
     assert.ok(found, `list servers 必须包含 ${name}`);
     assert.equal(found.host, '127.0.0.1');
@@ -228,7 +228,7 @@ test('server update 实际修改了数据', () => {
     const updateResult = json(`server update ${addResult.server.id} --host 2.2.2.2`);
     assert.ok(updateResult.ok);
 
-    const listResult = json('list servers');
+    const listResult = json('server');
     const found = listResult.servers?.find((s: any) => s.id === addResult.server.id);
     assert.equal(found?.host, '2.2.2.2', 'host 必须已更新');
 
@@ -258,7 +258,7 @@ test('status nextAction: 有 server 时显示实际名称', () => {
     const nextAction = statusResult.nextAction as string | undefined;
 
     if (nextAction && nextAction.includes('use remote')) {
-        const serverCount = json('list servers').servers?.length || 0;
+        const serverCount = json('server').servers?.length || 0;
         if (serverCount === 1) {
             assert.ok(nextAction.includes(name), `nextAction 必须包含 server 名 ${name}`);
             assert.ok(!nextAction.includes('<name>'), '单个 server 时不应显示 <name>');
@@ -268,8 +268,8 @@ test('status nextAction: 有 server 时显示实际名称', () => {
     run(`server remove ${addResult.server.id}`);
 });
 
-test('list servers nextActions: <=5 个显示名字列表', () => {
-    const beforeCount = json('list servers').servers?.length || 0;
+test('server nextActions: <=5 个显示名字列表', () => {
+    const beforeCount = json('server').servers?.length || 0;
     const names: string[] = [];
     const ids: string[] = [];
 
@@ -282,15 +282,15 @@ test('list servers nextActions: <=5 个显示名字列表', () => {
         }
     }
 
-    const listResult = json('list servers');
+    const listResult = json('server');
     const totalServers = listResult.servers?.length || 0;
-    const remoteAction = listResult.nextActions?.find((a: string) => a.includes('use remote'));
+    const remoteAction = listResult.nextAction;
 
-    if (remoteAction && totalServers <= 5 && names.length > 0) {
+    if (remoteAction && remoteAction.includes('use remote') && totalServers <= 5 && names.length > 0) {
         for (const name of names) {
             assert.ok(remoteAction.includes(name), `nextAction 必须包含 ${name}`);
         }
-    } else if (remoteAction && totalServers > 5) {
+    } else if (remoteAction && remoteAction.includes('use remote') && totalServers > 5) {
         assert.match(remoteAction, /--server <name>/, '超过 5 个应显示 <name>');
     }
 
@@ -339,7 +339,7 @@ test('status JSON 结构完整', () => {
 });
 
 test('所有 list 分类返回有效 JSON', () => {
-    const categories = ['targets', 'servers', 'env', 'config', 'lang', 'remote'];
+    const categories = ['targets', 'env', 'lang', 'remote'];
     for (const cat of categories) {
         const j = json(`list ${cat}`);
         assert.ok(j, `list ${cat} 必须返回有效 JSON`);
@@ -365,7 +365,7 @@ test('server 完整 CRUD 流程', () => {
     const serverId = addResult.server.id;
 
     // Read
-    const listResult = json('list servers');
+    const listResult = json('server');
     const found = listResult.servers.find((s: any) => s.id === serverId);
     assert.ok(found, 'list 必须包含新创建的 server');
     assert.equal(found.name, name);
@@ -376,7 +376,7 @@ test('server 完整 CRUD 流程', () => {
     assert.equal(updateResult.serverAction, 'update');
 
     // Verify update
-    const afterUpdate = json('list servers');
+    const afterUpdate = json('server');
     const updated = afterUpdate.servers.find((s: any) => s.id === serverId);
     assert.equal(updated.host, '192.168.1.1', 'host 必须已更新');
     assert.equal(updated.port, 3333, 'port 必须已更新');
@@ -387,7 +387,7 @@ test('server 完整 CRUD 流程', () => {
     assert.equal(removeResult.serverAction, 'remove');
 
     // Verify delete
-    const afterRemove = json('list servers');
+    const afterRemove = json('server');
     const stillThere = afterRemove.servers.find((s: any) => s.id === serverId);
     assert.ok(!stillThere, 'server 必须已删除');
 });
@@ -476,14 +476,14 @@ test('use remote 不存在的服务器报错', () => {
 // 11. List 详细功能测试
 // ═════════════════════════════════════════════════════════════
 
-test('list servers --detail 显示服务器详情', () => {
+test('server --detail 显示服务器详情', () => {
     // 创建服务器
     const name = `detail-test-${Date.now()}`;
     const addResult = json(`server add --name ${name} --host 5.6.7.8 --username detailuser`);
     assert.ok(addResult.ok);
 
     // 查看详情
-    const r = run(`list servers --detail ${addResult.server.id}`);
+    const r = run(`server --detail ${addResult.server.id}`);
     assert.equal(r.code, 0);
     assert.match(r.out, new RegExp(name), '必须包含服务器名');
     assert.match(r.out, /5\.6\.7\.8/, '必须包含 host');
@@ -517,13 +517,6 @@ test('list env 显示工具链信息', () => {
     // env 可能包含 qt, vs, jom, make 等
 });
 
-test('list config 显示配置信息', () => {
-    const r = json('list config');
-    assert.ok(r);
-    assert.equal(r.category, 'config');
-    assert.ok(r.config, '必须有 config 字段');
-});
-
 // ═══════════════════════════════════════════════════════════════
 // 12. 配置持久化测试
 // ═════════════════════════════════════════════════════════════
@@ -552,7 +545,7 @@ test('server add 后配置持久化', () => {
     assert.ok(addResult.ok);
 
     // 重新读取
-    const listResult = json('list servers');
+    const listResult = json('server');
     const found = listResult.servers.find((s: any) => s.name === name);
     assert.ok(found, 'server 必须持久化');
     assert.equal(found.host, '9.9.9.9');
@@ -578,7 +571,7 @@ test('空工作区 status 不崩溃', () => {
 });
 
 test('list 所有分类都不崩溃', () => {
-    const categories = ['targets', 'servers', 'env', 'config', 'lang', 'remote', 'remote-repos'];
+    const categories = ['targets', 'env', 'lang', 'remote'];
     for (const cat of categories) {
         const r = run(`list ${cat}`);
         assert.ok(r.code === 0 || r.code === 1, `list ${cat} 不应崩溃`);
@@ -587,8 +580,8 @@ test('list 所有分类都不崩溃', () => {
 
 test('JSON 输出必须可解析', () => {
     const cmds = [
-        'status', 'list targets', 'list servers', 'list env',
-        'list config', 'list lang', 'list remote',
+        'status', 'list targets', 'list env',
+        'list lang', 'list remote', 'server',
     ];
     for (const cmd of cmds) {
         const r = run(`${cmd} --json`);

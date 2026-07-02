@@ -102,9 +102,8 @@ forja doctor --remote
 
 ```bash
 forja use sync --server dev --remote-path /home/dev/workspace --enable
-forja sync --plan                             # 预览待同步文件
-forja sync                                    # 同步变更文件
-forja sync --file src/main.cpp                # 同步单个文件
+forja sync plan                           # 预览待同步文件
+forja sync                                # 同步变更文件
 ```
 
 ### 场景 5：多项目切换
@@ -144,7 +143,7 @@ VSCode 扩展和 CLI 共享同一套配置存储（`~/.forja/projects/<hash>.jso
 | `stop` | 停止进程 | `forja stop` |
 | `clean` | 清理产物 | `forja clean` |
 | `doctor` | 诊断修复 | `forja doctor`、`forja doctor fix --remote` |
-| `sync` | 文件同步 | `forja sync`、`forja sync --plan` |
+| `sync` | 文件同步 | `forja sync`、`forja sync plan` |
 
 ## 通用选项
 
@@ -153,7 +152,7 @@ VSCode 扩展和 CLI 共享同一套配置存储（`~/.forja/projects/<hash>.jso
 | `--help` | 显示帮助（支持 `forja --help` 和 `forja <command> --help`） |
 | `--json` | JSON 输出，适合 AI/脚本解析 |
 | `--workspace <dir>` | 操作根目录，默认当前目录 |
-| `--plan` | 仅显示计划，不执行（适用于 build/clean/sync/doctor） |
+| `--plan` | 仅显示计划，不执行（适用于 build/clean/doctor） |
 
 > **注意**：选项必须跟在命令后面。`forja status --json` ✓，`forja --json status` ✗。
 
@@ -294,20 +293,15 @@ forja doctor fix --remote   # 修复远程问题（部署 forja CLI）
 
 ```bash
 forja sync                              # 同步所有变更
-forja sync --plan                       # 预览待同步文件
-forja sync --file src/main.cpp          # 同步单个文件
-forja sync --server server-1            # 临时指定服务器
-forja sync --repo qt_client             # 同步指定仓库
-forja sync reset                        # 清除同步状态
-forja sync transfer                     # 执行部署传输
+forja sync --yes                        # 跳过确认直接同步
+forja sync --reset                      # 清除同步状态
+forja sync plan                         # 预览待同步文件
 ```
 
 | 选项 | 说明 |
 | --- | --- |
-| `--plan` | 预览待同步文件、目标服务器和路径，不执行上传 |
-| `--server <id>` | 临时指定服务器 ID；不写入配置 |
-| `--repo <name\|path>` | 多 git 仓库 workspace 时只同步指定仓库；单 git 仓库 workspace 时可传远程绝对仓库路径覆盖目标目录 |
-| `--file <path>` | 单文件同步；可重复，路径可相对 workspace、仓库根目录或使用绝对路径 |
+| `--yes` | 跳过确认直接执行同步 |
+| `--reset` | 清除同步状态 |
 
 服务器列表存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/projects/<hash>.json`。
 

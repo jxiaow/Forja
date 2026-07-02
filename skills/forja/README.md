@@ -70,7 +70,7 @@ cp -r skills/forja/ ~/.<tool-name>/skills/forja/
 - "看看编译日志"
 
 AI 会自动调用对应的 `forja` 命令。首次使用时让 AI "初始化构建环境"即可。
-Skill 会先执行 `forja status --json` 检查当前工作区，再根据状态提示运行 `init` 或 `use`。`init` 只做自动初始化；项目、target、mode、arch 和工具链路径的显式选择都通过 `use` 写入。需要同步时，Skill 会先检查 `forja sync status --json`，服务器管理使用 `server add/update/remove`。
+Skill 会先执行 `forja status --json` 检查当前工作区，再根据状态提示运行 `init` 或 `use`。`init` 只做自动初始化；项目、target、mode、arch 和工具链路径的显式选择都通过 `use` 写入。需要同步时，Skill 会先检查 `forja status --json`，服务器管理使用 `server add/update/remove`。
 
 ## 支持的项目类型
 

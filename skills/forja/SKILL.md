@@ -69,7 +69,7 @@ debug/release、x86/x64）且用户未设置过时，必须展示选项让用户
 | `stop` | 停止运行中的程序 | |
 | `clean` | 清理构建产物 | `--plan` |
 | `doctor` | 诊断和修复 | `--remote`, `fix` |
-| `sync` | 同步变更文件到服务器 | `--server`, `--file <path>`, `--plan` |
+| `sync` | 同步变更文件到服务器 | `--yes`, `--reset`, `plan` 子命令 |
 
 ### use 子命令
 
@@ -179,11 +179,10 @@ forja list remote --json
 forja list servers --json
 forja server add --name dev --host 127.0.0.1 --username dev --json
 forja use sync --server server-1 --remote-path /remote/app --enable --json
-forja sync reset --json
+forja sync --reset --json
 forja server update server-1 --host 10.0.0.2 --json
 forja server remove server-1 --json
-forja sync --plan --json
-forja sync --file src/main.cpp --json
+forja sync plan --json
 
 # SDK 编译：配置先用 use，build 只读保存配置
 forja status --json

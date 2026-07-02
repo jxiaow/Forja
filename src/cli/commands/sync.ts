@@ -1,18 +1,12 @@
 /**
  * `forja sync` — sync changed files to remote.
- * Each action is a standalone function; no monolithic dispatcher.
  */
-import { loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
-import { getServerById } from '../../core/serverStore';
-import { planSyncCli, executeSyncCli, resetSyncCli, statusSyncCli } from '../../sync/cli';
-import { executeRemoteTransfer } from '../../remote/core/transfer';
-import { resolveRemoteConfig, resolveRemotePrimaryActionPath } from '../../remote/core/config';
-import { createSshRunner } from '../../remote/core/shell';
+import { planSyncCli, executeSyncCli, resetSyncCli } from '../../sync/cli';
 import { Diagnostic, SyncPlan, diag, Locale, T } from './types';
 
 // ── Types ──
 
-export type SyncAction = 'run' | 'plan' | 'reset' | 'transfer' | 'status';
+export type SyncAction = 'run' | 'plan' | 'reset';
 
 export interface SyncResult {
     ok: boolean;
@@ -25,28 +19,9 @@ export interface SyncResult {
     uploaded?: string[];
     deleted?: string[];
     skipped?: string[];
-    transfer?: {
-        configured: boolean;
-        planned?: boolean;
-        executed?: boolean;
-        artifacts?: string[];
-    };
-    status?: {
-        ready: boolean;
-        enabled: boolean;
-        server: { id: string; name: string; host: string; port: number; username: string; authMode: string } | null;
-        remotePath: string;
-        missing: string[];
-    };
     diagnostics?: Diagnostic[];
     nextAction?: string;
     [key: string]: unknown;
-}
-
-interface SyncOptions {
-    file?: string[];
-    repo?: string;
-    server?: string;
 }
 
 // ── Formatter ──
@@ -110,43 +85,6 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
             lines.push(T('syncStateReset'));
             break;
         }
-        case 'transfer': {
-            lines.push(T('transferComplete'));
-            if (result.transfer?.artifacts?.length) {
-                lines.push(`  ${T('artifacts')} (${result.transfer.artifacts.length}):`);
-                for (const f of result.transfer.artifacts) { lines.push(`    ${f}`); }
-            }
-            break;
-        }
-        case 'status': {
-            lines.push(T('syncStatus'));
-            if (result.status) {
-                const s = result.status;
-                lines.push(`  ${T('syncEnabled')} ${s.enabled ? T('enabledStatus') : T('disabledStatus')}`);
-                if (s.server) {
-                    lines.push(`  ${T('syncServer')} ${s.server.name} (${s.server.username}@${s.server.host}:${s.server.port})`);
-                    lines.push(`  ${T('syncAuth')} ${s.server.authMode}`);
-                } else {
-                    lines.push(`  ${T('syncServer')} -`);
-                }
-                lines.push(`  ${T('syncRemotePath')} ${s.remotePath || '-'}`);
-                lines.push(`  ${s.ready ? T('syncReady') : T('syncNotReady')}`);
-                if (s.missing.length > 0) {
-                    const missingMsgs: Record<string, string> = {
-                        enabled: T('syncMissingEnabled'),
-                        servers: T('syncMissingServers'),
-                        selectedServer: T('syncMissingSelectedServer'),
-                        server: T('syncMissingServer'),
-                        remotePath: T('syncMissingRemotePath'),
-                    };
-                    for (const key of s.missing) {
-                        const msg = missingMsgs[key] || key;
-                        lines.push(`  ${msg}`);
-                    }
-                }
-            }
-            break;
-        }
     }
 
     if (result.nextAction) {
@@ -156,62 +94,11 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
     return lines.join('\n');
 }
 
-// ── Shared validation ──
-
-interface ResolvedServer {
-    serverId: string;
-    serverName: string;
-    remotePath: string;
-}
-
-function validateSyncConfig(workspace: string, options: SyncOptions): { resolved: ResolvedServer } | { error: SyncResult } {
-    const syncConfig = loadSyncSettings(workspace);
-    const serverId = options.server || syncConfig.selectedServer;
-
-    if (!serverId) {
-        return {
-            error: {
-                ok: false, action: 'sync', syncAction: 'run', workspace,
-                diagnostics: [diag('error', T('sync.notConfigured'))],
-                nextAction: 'forja list servers',
-            },
-        };
-    }
-    const server = getServerById(serverId);
-    if (!server) {
-        return {
-            error: {
-                ok: false, action: 'sync', syncAction: 'run', workspace,
-                diagnostics: [diag('error', `${T('sync.serverNotFound')}: ${serverId}`)],
-                nextAction: 'forja list servers',
-            },
-        };
-    }
-    const remotePath = syncConfig.remotePaths[serverId];
-    if (!remotePath) {
-        return {
-            error: {
-                ok: false, action: 'sync', syncAction: 'run', workspace,
-                diagnostics: [diag('error', T('sync.remotePathMissing'))],
-                nextAction: 'forja use sync --server <name> --remote-path <path>',
-            },
-        };
-    }
-    return { resolved: { serverId: server.id, serverName: server.name, remotePath } };
-}
-
 // ── Action functions ──
 
-export async function runSyncPlan(workspace: string, options: SyncOptions): Promise<SyncResult> {
-    const validation = validateSyncConfig(workspace, options);
-    if ('error' in validation) { return validation.error; }
-
-    const repoFilter = options.repo;
-    const fileFilters = options.file ?? [];
-    const resolvedServer = options.server || undefined;
-
+export async function runSyncPlan(workspace: string, fileFilters: string[] = []): Promise<SyncResult> {
     try {
-        const plan = await planSyncCli(workspace, resolvedServer, repoFilter, fileFilters);
+        const plan = await planSyncCli(workspace, fileFilters);
         return {
             ok: plan.ok,
             action: 'sync',
@@ -229,23 +116,16 @@ export async function runSyncPlan(workspace: string, options: SyncOptions): Prom
             server: plan.server,
             remotePath: plan.remotePath,
             diagnostics: plan.ok ? undefined : plan.failed.map(f => diag('error', `${T('sync.planFailed')}: ${f.error}`)),
-            nextAction: plan.ok ? 'forja sync' : 'forja doctor --remote',
+            nextAction: plan.ok ? 'forja sync' : (plan.nextAction || 'forja doctor --remote'),
         };
     } catch (e) {
         return syncCatchResult('plan', workspace, e);
     }
 }
 
-export async function runSyncExecute(workspace: string, options: SyncOptions): Promise<SyncResult> {
-    const validation = validateSyncConfig(workspace, options);
-    if ('error' in validation) { return validation.error; }
-
-    const repoFilter = options.repo;
-    const fileFilters = options.file ?? [];
-    const resolvedServer = options.server || undefined;
-
+export async function runSyncExecute(workspace: string, fileFilters: string[] = []): Promise<SyncResult> {
     try {
-        const result = await executeSyncCli(workspace, resolvedServer, repoFilter, fileFilters);
+        const result = await executeSyncCli(workspace, fileFilters);
         return {
             ok: result.ok,
             action: 'sync',
@@ -257,7 +137,7 @@ export async function runSyncExecute(workspace: string, options: SyncOptions): P
             deleted: result.deleted,
             skipped: result.skipped,
             diagnostics: result.ok ? undefined : result.failed.map(f => diag('error', `${T('sync.syncFailed')}: ${f.error}`)),
-            nextAction: result.ok ? 'forja status' : 'forja doctor --remote',
+            nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja doctor --remote'),
         };
     } catch (e) {
         return syncCatchResult('run', workspace, e);
@@ -273,74 +153,6 @@ export function runSyncReset(workspace: string): SyncResult {
         workspace,
         diagnostics: reset.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
         nextAction: reset.nextAction,
-    };
-}
-
-export async function runSyncTransfer(workspace: string): Promise<SyncResult> {
-    const remoteSettings = loadRemoteSettings(workspace);
-    const transfer = remoteSettings.transfer;
-    if (!transfer) {
-        return {
-            ok: false, action: 'sync', syncAction: 'transfer', workspace,
-            diagnostics: [diag('error', T('sync.transferNotConfigured'))],
-            nextAction: 'forja doctor --remote',
-        };
-    }
-    const resolved = resolveRemoteConfig(workspace);
-    if (!resolved.config) {
-        return {
-            ok: false, action: 'sync', syncAction: 'transfer', workspace,
-            diagnostics: resolved.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-            nextAction: resolved.nextAction,
-        };
-    }
-    const deployServer = getServerById(transfer.deployServer);
-    if (!deployServer) {
-        return {
-            ok: false, action: 'sync', syncAction: 'transfer', workspace,
-            diagnostics: [diag('error', `${T('sync.transferServerMissing')}: ${transfer.deployServer}`)],
-            nextAction: 'forja list servers',
-        };
-    }
-
-    try {
-        const password = resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null;
-        const runner = createSshRunner(resolved.config.server, password);
-        const actionRemotePath = resolveRemotePrimaryActionPath(resolved.config.workspace, resolved.config.remotePath);
-        const transferResult = await executeRemoteTransfer({ remotePath: actionRemotePath, transfer, deployServer, runner });
-        return {
-            ok: transferResult.ok,
-            action: 'sync',
-            syncAction: 'transfer',
-            workspace,
-            transfer: {
-                configured: true,
-                executed: transferResult.ok,
-                artifacts: transferResult.transferred?.map(t => t.source),
-            },
-            diagnostics: transferResult.ok ? undefined : transferResult.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-            nextAction: transferResult.ok ? 'forja status' : 'forja doctor --remote',
-        };
-    } catch (e) {
-        return syncCatchResult('transfer', workspace, e);
-    }
-}
-
-export function runSyncStatus(workspace: string, options: SyncOptions): SyncResult {
-    const st = statusSyncCli(workspace, options.server || undefined);
-    return {
-        ok: st.ok,
-        action: 'sync',
-        syncAction: 'status',
-        workspace,
-        status: {
-            ready: st.ready,
-            enabled: st.checks.enabled,
-            server: st.server ? { id: st.server.id, name: st.server.name, host: st.server.host, port: st.server.port, username: st.server.username, authMode: st.server.authMode } : null,
-            remotePath: st.remotePath,
-            missing: st.missing,
-        },
-        nextAction: st.nextAction,
     };
 }
 

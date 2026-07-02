@@ -14,7 +14,7 @@ import { runRun, outputRunResult } from './run';
 import { runStop, outputStopResult } from './stop';
 import { runClean, outputCleanResult } from './clean';
 import { runDoctor, formatDoctorText } from './doctor';
-import { runSyncPlan, runSyncExecute, runSyncReset, runSyncTransfer, runSyncStatus, SyncAction, formatSyncText } from './sync';
+import { runSyncPlan, runSyncExecute, runSyncReset, formatSyncText } from './sync';
 import { confirm } from './prompt';
 import { resolveLocale, Locale, T, setGlobalLocale } from './types';
 import { loadGlobalConfig } from '../../core/settingsIO';
@@ -112,7 +112,7 @@ export async function runCli(argv: string[]): Promise<void> {
         case 'use':
             return handleUse(argv, workspace, wantsJson, locale);
         case 'server':
-            return handleServer(argv, wantsJson, locale);
+            return handleServer(argv, workspace, wantsJson, locale);
         case 'build':
             return handleBuild(argv, workspace, wantsJson, locale);
         case 'run':
@@ -260,11 +260,6 @@ function extractAllFlags(argv: string[], flag: string): string[] {
     return values;
 }
 
-export function stripJson(actions: string[] | undefined): string[] | undefined {
-    if (!actions) { return actions; }
-    return actions.map(a => a.replace(/\s*--json\b/g, ''));
-}
-
 function outputResult(result: ForjaJsonResult, wantsJson: boolean, textFormatter?: (r: unknown) => string): void {
     // When not in JSON mode, strip --json from nextAction for display
     if (!wantsJson && result.nextAction) {
@@ -380,16 +375,17 @@ async function handleSetup(argv: string[], workspace: string, wantsJson: boolean
 // ── List ──
 
 async function handleList(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const listUnknown = findUnknownFlags(argv, new Set(['--detail']), new Set(['--detail']));
+    const listKnown = new Set<string>();
+    const listUnknown = findUnknownFlags(argv, listKnown, new Set<string>());
     if (listUnknown.length > 0) {
-        outputResult({ ok: false, action: 'list', diagnostics: [{ level: 'error', message: unknownFlagsMessage(listUnknown, new Set(['--detail'])) }], nextAction: 'forja list targets' }, wantsJson);
+        outputResult({ ok: false, action: 'list', diagnostics: [{ level: 'error', message: unknownFlagsMessage(listUnknown, listKnown) }], nextAction: 'forja list targets' }, wantsJson);
         process.exitCode = 1;
         return;
     }
 
     // Determine category from first positional arg after 'list'
     const categoryArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
-    const validCategories = ['targets', 'servers', 'env', 'remote', 'remote-repos', 'config', 'lang'];
+    const validCategories = ['targets', 'env', 'remote', 'lang'];
 
     // Require a category
     if (!categoryArg) {
@@ -428,26 +424,40 @@ async function handleList(argv: string[], workspace: string, wantsJson: boolean,
     }
 
     const category = categoryArg as ListCategory;
-    const detailId = extractFlag(argv, '--detail');
 
     // Parse env sub-category (e.g., `forja list env qt`)
     let envSubCategory: EnvSubCategory | undefined;
     if (category === 'env') {
         const subArg = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
-        if (subArg === 'qt' || subArg === 'vs') {
-            envSubCategory = subArg;
+        if (subArg) {
+            if (subArg === 'qt' || subArg === 'vs' || subArg === 'jom' || subArg === 'make') {
+                envSubCategory = subArg;
+            } else {
+                const validEnvSubs = ['qt', 'vs', 'jom', 'make'];
+                outputResult({
+                    ok: false,
+                    action: 'list',
+                    diagnostics: [{
+                        level: 'error',
+                        message: `${T('idx.unknownEnvSubcategory')}: ${subArg}. ${T('idx.validCategories')}: ${validEnvSubs.join(', ')}`,
+                    }],
+                    nextAction: 'forja list env',
+                }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
         }
     }
 
-    const result = await runList(workspace, category, { detailId, envSubCategory });
+    const result = await runList(workspace, category, { envSubCategory });
     outputResult(result, wantsJson, (r) => formatListText(r as Parameters<typeof formatListText>[0], locale));
 }
 
 // ── Use ──
 
 function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): void {
-    const useKnown = new Set(['--project','--mode','--arch','--local','--remote','--server','--remote-path','--enable','--disable','--detail','--qt-path','--vs-dev-shell','--qmake-target','--qmake-args','--vs-dev-cmd','--role','--path','--baseline','--overlay','--mount','--asset','--artifact','--profile','--clear','--remove']);
-    const useWithVal = new Set(['--project','--mode','--arch','--local','--remote','--server','--remote-path','--detail','--qt-path','--vs-dev-shell','--qmake-target','--qmake-args','--vs-dev-cmd','--role','--path','--baseline','--mount','--asset','--artifact','--profile']);
+    const useKnown = new Set(['--project','--mode','--arch','--local','--remote','--server','--remote-path','--enable','--disable','--qt-path','--vs-dev-shell','--qmake-target','--qmake-args','--vs-dev-cmd','--role','--path','--baseline','--overlay','--mount','--asset','--artifact','--profile','--clear','--remove']);
+    const useWithVal = new Set(['--project','--mode','--arch','--server','--remote-path','--qt-path','--vs-dev-shell','--qmake-target','--qmake-args','--vs-dev-cmd','--role','--path','--baseline','--mount','--asset','--artifact','--profile']);
     const useUnknown = findUnknownFlags(argv, useKnown, useWithVal);
     if (useUnknown.length > 0) {
         outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(useUnknown, useKnown) }], nextAction: 'forja use target' }, wantsJson);
@@ -532,16 +542,20 @@ function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale
             if (remoteSubCmd === 'build-order') {
                 // Parse positional args after 'build-order' as items
                 const items: Array<{ target: 'qt' | 'sdk'; action: string }> = [];
+                const invalidItems: string[] = [];
                 for (let i = 3; i < argv.length; i++) {
                     if (argv[i].startsWith('--')) { continue; }
                     const [target, action] = argv[i].split(':');
                     if (target === 'qt' || target === 'sdk') {
                         items.push({ target, action: action || 'build' });
+                    } else {
+                        invalidItems.push(argv[i]);
                     }
                 }
                 const result = runUseRemoteBuildOrder(workspace, {
                     action: hasFlag(argv, '--clear') ? 'clear' : 'set',
                     items: items.length > 0 ? items : undefined,
+                    invalidItems: invalidItems.length > 0 ? invalidItems : undefined,
                 });
                 outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
                 return;
@@ -588,7 +602,7 @@ function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale
                 outputResult({
                     ok: false,
                     action: 'use',
-                    useTarget: 'lang',
+                    useScope: 'lang',
                     changed: [],
                     diagnostics: [{ level: 'error', message: T('langMissingValue') }],
                     nextAction: 'forja use lang zh',
@@ -637,9 +651,9 @@ function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale
 
 // ── Server ──
 
-function handleServer(argv: string[], wantsJson: boolean, locale: Locale): void {
-    const srvKnown = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password','--strict-host-key-checking','--no-strict-host-key-checking']);
-    const srvWithVal = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password']);
+async function handleServer(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    const srvKnown = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password','--strict-host-key-checking','--no-strict-host-key-checking','--detail']);
+    const srvWithVal = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password','--detail']);
     const srvUnknown = findUnknownFlags(argv, srvKnown, srvWithVal);
     if (srvUnknown.length > 0) {
         outputResult({ ok: false, action: 'server', serverAction: 'add', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(srvUnknown, srvKnown) }], nextAction: 'forja server add' }, wantsJson);
@@ -689,7 +703,7 @@ function handleServer(argv: string[], wantsJson: boolean, locale: Locale): void 
                 outputResult({
                     ok: false, action: 'server', serverAction: 'update', changed: [],
                     diagnostics: [{ level: 'error', message:'Server ID required: forja server update <id>' }],
-                    nextAction: 'forja list servers',
+                    nextAction: 'forja server',
                 }, wantsJson);
                 process.exitCode = 1;
                 return;
@@ -733,7 +747,7 @@ function handleServer(argv: string[], wantsJson: boolean, locale: Locale): void 
                 outputResult({
                     ok: false, action: 'server', serverAction: 'remove', changed: [],
                     diagnostics: [{ level: 'error', message:'Server ID required: forja server remove <id>' }],
-                    nextAction: 'forja list servers',
+                    nextAction: 'forja server',
                 }, wantsJson);
                 process.exitCode = 1;
                 return;
@@ -753,17 +767,9 @@ function handleServer(argv: string[], wantsJson: boolean, locale: Locale): void 
                 process.exitCode = 1;
                 return;
             }
-            outputResult({
-                ok: true,
-                action: 'server',
-                serverAction: 'add',
-                changed: [],
-                diagnostics: [{ level: 'info', message: T('idx.serverUsage') }],
-                nextActions: [
-                    'forja server add --name <name> --host <host> --username <name>',
-                    'forja list servers',
-                ],
-            }, wantsJson);
+            const detailId = extractFlag(argv, '--detail');
+            const result = await runList(workspace, 'servers', { detailId });
+            outputResult(result, wantsJson, (r) => formatListText(r as Parameters<typeof formatListText>[0], locale));
         }
     }
 }
@@ -992,19 +998,37 @@ function collectPositionalPaths(argv: string[], startIdx: number): string[] {
 // ── Sync ──
 
 async function handleSync(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const syncUnknown = findUnknownFlags(argv, new Set(['--plan', '--yes', '--file', '--server', '--repo']), new Set(['--file', '--server', '--repo']));
+    const syncUnknown = findUnknownFlags(argv, new Set(['--yes', '--reset', '--file']), new Set(['--file']));
     if (syncUnknown.length > 0) {
         outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `${T('sync.unknownFlag')}: ${syncUnknown.join(', ')}` }], nextAction: 'forja sync' }, wantsJson);
         process.exitCode = 1;
         return;
     }
+
+    const fmt = (r: unknown) => formatSyncText(r as Parameters<typeof formatSyncText>[0], locale);
     const subArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
-    let syncAction: SyncAction = 'run';
-    if (subArg === 'plan' || hasFlag(argv, '--plan')) { syncAction = 'plan'; }
-    else if (subArg === 'status') { syncAction = 'status'; }
-    else if (subArg === 'reset') { syncAction = 'reset'; }
-    else if (subArg === 'transfer') { syncAction = 'transfer'; }
-    else if (subArg !== '') {
+    const files = extractAllFlags(argv, '--file');
+
+    // --reset: clear sync state and exit
+    if (hasFlag(argv, '--reset')) {
+        const extraPositional = argv.slice(1).filter(a => !a.startsWith('--'));
+        if (extraPositional.length > 0) {
+            outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `--reset ${T('sync.resetConflict')}: ${extraPositional.join(', ')}` }], nextAction: 'forja sync' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+        const result = runSyncReset(workspace);
+        outputResult(result, wantsJson, fmt);
+        return;
+    }
+
+    if (subArg === 'plan') {
+        const result = await runSyncPlan(workspace, files);
+        outputResult(result, wantsJson, fmt);
+        return;
+    }
+
+    if (subArg !== '') {
         outputResult({
             ok: false,
             action: 'sync',
@@ -1020,51 +1044,17 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
         return;
     }
 
-    const files = extractAllFlags(argv, '--file');
-    const syncOptions = {
-        server: extractFlag(argv, '--server'),
-        repo: extractFlag(argv, '--repo'),
-        file: files.length > 0 ? files : undefined,
-    };
-    const fmt = (r: unknown) => formatSyncText(r as Parameters<typeof formatSyncText>[0], locale);
-
-    // Dispatch to standalone action functions
-    switch (syncAction) {
-        case 'plan': {
-            const result = await runSyncPlan(workspace, syncOptions);
-            outputResult(result, wantsJson, fmt);
-            return;
-        }
-        case 'status': {
-            const result = runSyncStatus(workspace, syncOptions);
-            outputResult(result, wantsJson, fmt);
-            return;
-        }
-        case 'reset': {
-            const result = runSyncReset(workspace);
-            outputResult(result, wantsJson, fmt);
-            return;
-        }
-        case 'transfer': {
-            const result = await runSyncTransfer(workspace);
-            outputResult(result, wantsJson, fmt);
-            return;
-        }
-        case 'run': {
-            // Interactive: plan → confirm → execute (no double-plan)
-            if (!wantsJson && !hasFlag(argv, '--yes')) {
-                const plan = await runSyncPlan(workspace, syncOptions);
-                if (!plan.ok) { outputResult(plan, false, fmt); process.exitCode = 1; return; }
-                const pendingCount = (plan.plan?.pending?.length ?? 0) + (plan.plan?.deleted?.length ?? 0);
-                if (pendingCount === 0) { console.log(T('syncNothing')); return; }
-                console.log(formatSyncText(plan as Parameters<typeof formatSyncText>[0], locale));
-                console.log();
-                const yes = await confirm(T('syncConfirm'), false);
-                if (!yes) { console.log(T('syncCancelled')); process.exitCode = 1; return; }
-            }
-            const result = await runSyncExecute(workspace, syncOptions);
-            outputResult(result, wantsJson, fmt);
-            return;
-        }
+    // Default: interactive plan → confirm → execute
+    if (!wantsJson && !hasFlag(argv, '--yes')) {
+        const plan = await runSyncPlan(workspace, files);
+        if (!plan.ok) { outputResult(plan, false, fmt); process.exitCode = 1; return; }
+        const pendingCount = (plan.plan?.pending?.length ?? 0) + (plan.plan?.deleted?.length ?? 0);
+        if (pendingCount === 0) { console.log(T('syncNothing')); return; }
+        console.log(formatSyncText(plan as Parameters<typeof formatSyncText>[0], locale));
+        console.log();
+        const yes = await confirm(T('syncConfirm'), false);
+        if (!yes) { console.log(T('syncCancelled')); process.exitCode = 1; return; }
     }
+    const result = await runSyncExecute(workspace, files);
+    outputResult(result, wantsJson, fmt);
 }

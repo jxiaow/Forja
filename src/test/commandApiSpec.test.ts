@@ -168,9 +168,9 @@ test('setup remote result has remote structure', () => {
 
 // ── Sync command ──
 
-test('sync command supports transfer action', () => {
+test('sync command supports plan and reset actions', () => {
     const syncSrc = source('src/cli/commands/sync.ts');
-    assert.match(syncSrc, /SyncAction\s*=\s*'run'\s*\|\s*'plan'\s*\|\s*'reset'\s*\|\s*'transfer'\s*\|\s*'status'/, 'SyncAction must include transfer and status');
+    assert.match(syncSrc, /SyncAction\s*=\s*'run'\s*\|\s*'plan'\s*\|\s*'reset'/, 'SyncAction must include run, plan, and reset');
 });
 
 // ── Doctor command ──

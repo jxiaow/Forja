@@ -30,13 +30,16 @@ When one has a problem, the others almost certainly do too.
 
 ## Real Examples From This Project
 
-| Fix in build.ts | Found same issue in |
+| Fix in one command | Found same issue in siblings |
 |---|---|
 | Replaced `executeSdkAsync` → `runCliResult` | `clean.ts` still used `executeSdkAsync` |
 | Removed dead `qtResult` param from `outputBuildResult` | `outputCleanResult` and `outputRunResult` had same dead param |
 | Removed dead `locale` param from `outputBuildResult` | Same dead param in all three output functions + 4 call sites in `index.ts` |
 | Removed dead `stripJson` import | Also present in `run.ts` |
 | Added `fs.existsSync` for `--project` | Only build.ts supports `--project`, but verified clean/run don't need it |
+| `clean.ts`: hardcoded `ssh <server>` placeholder in `--plan` remote | `build.ts` and `run.ts` had same placeholder |
+| `clean.ts`: `--plan` showed non-existent `forja remote` command | `build.ts` and `run.ts` also showed `forja remote` (removed in consolidation) |
+| `clean.ts`: no project file existence check after `requireActiveTarget` | `build.ts` (normal path) and `run.ts` also missing the check |
 
 ## Process
 
@@ -62,6 +65,8 @@ For each sibling command, check:
 - **Same missing validation?** — If build.ts didn't validate `--project` file existence, do others that accept `--project`?
 - **Same execution engine?** — If build.ts switched to `runCliResult`, did all SDK execution paths?
 - **Same error handling?** — If build.ts got try/catch for SDK path, does clean.ts?
+- **Same `--plan` output quality?** — If one command's `--plan` shows hardcoded placeholders (`ssh <server>`) or references non-existent commands (`forja remote`), do siblings have the same? Plan output must show actual executable commands with real config values.
+- **Same post-resolution validation?** — If one command validates project file existence after `requireActiveTarget`, do all commands that use `requireActiveTarget`?
 
 ### 3. Fix All at Once
 
@@ -94,6 +99,9 @@ After fixing an issue in one CLI command:
 - [ ] Identified all sibling commands with the same structure
 - [ ] Checked each sibling for the same dead imports / params / branches
 - [ ] Checked each sibling for the same missing validation / error handling
+- [ ] Checked each sibling's `--plan` output for hardcoded placeholders or stale command references
+- [ ] Checked each sibling for same post-resolution validation (e.g., project file existence after `requireActiveTarget`)
 - [ ] Fixed all siblings (not just the one reported)
+- [ ] Extracted shared helpers to avoid duplication (e.g., `buildRemoteShellCommand` in `remote/core/plan.ts`)
 - [ ] Updated all call sites in index.ts
 - [ ] TypeScript compiles clean

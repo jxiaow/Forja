@@ -46,7 +46,7 @@ forja use remote transfer clear [--json]
 | 启用/禁用 sync | `forja use sync --enable` / `forja use sync --disable` |
 | 添加/修改/删除共享 server | `forja server add ...` / `forja server update <id> ...` / `forja server remove <id>` |
 | 配置远程 repo/workspace/bin/build-order/transfer | `forja use remote repo/workspace/forja-bin/build-order/transfer ...` |
-| 查看配置 | `forja list config` / `forja list remote` |
+| 查看配置 | `forja list remote` |
 
 ## 行为
 
@@ -107,32 +107,52 @@ forja use remote transfer clear [--json]
 
 ## Result
 
-`use --json` 在修改后回显 `activeTarget` 和受影响的 `config` 摘要；日常查看已保存配置摘要使用 `forja list config --json`。
+`use --json` 在修改后回显 `activeTarget` 和受影响的 `config` 摘要。
 
 ```ts
 interface UseResult extends ForjaJsonResult {
     action: 'use';
-    useScope: 'target' | 'execution' | 'qt' | 'sdk' | 'sync' | 'remote';
+    useScope: 'target' | 'execution' | 'qt' | 'sdk' | 'sync' | 'remote' | 'remote.workspace' | 'remote.repo' | 'remote.forjaBin' | 'remote.buildOrder' | 'remote.transfer' | 'lang';
     activeTarget?: ActiveTarget;
     config?: ConfigSummary;
     changed: string[];
+    remote?: { workspaceMode?: string; remoteWorkspace?: string; profile?: string; repos?: object[]; remoteForjaBin?: string; buildOrder?: object[]; transfer?: object | null };
 }
 ```
 
 ## 诊断码
 
-| code | level | 触发条件 | nextActions |
-|------|-------|----------|-------------|
+| code | level | 触发条件 | nextAction |
+|------|-------|----------|------------|
 | `use.workspaceNotFound` | error | workspace 不存在 | 无 |
-| `use.projectNotFound` | error | `--project` 指向不存在项目 | `forja list` |
-| `use.projectKindUnknown` | error | 无法由项目后缀推断 kind | `forja list` |
+| `use.projectNotFound` | error | `--project` 指向不存在项目 | `forja list targets` |
+| `use.cannotDetermineKind` | error | 无法由项目后缀推断 kind | `forja list targets` |
+| `use.projectOutsideWorkspace` | error | `--project` 路径逃逸工作区 | `forja list targets` |
 | `use.invalidMode` | error | mode 非 debug/release | `forja use target --mode debug` |
 | `use.invalidArch` | error | arch 非 x86/x64 | `forja use target --arch x64` |
-| `use.serverNotFound` | error | server id 不存在 | `forja list servers` |
-| `use.remotePathMissing` | error | 传 server 但缺 remote path | `forja use sync --server <id> --remote-path <path>` / `forja use remote --server <id> --remote-path <path>` |
-| `use.qmakeTargetInvalid` | error | `--qmake-target` 为空或非法 | `forja use qt --qmake-target <name>` |
-| `use.syncToggleInvalid` | error | sync 同时传 enable/disable 或未传动作 | `forja use sync --enable` |
-| `use.configWriteFailed` | error | 写配置失败 | 无 |
+| `use.noActiveTargetSelected` | error | 无 active target 时更新 mode/arch | `forja use target --project <path>` |
+| `use.cannotSpecifyBothLocalRemote` | error | execution 同时传 --local --remote | `forja use execution --local` |
+| `use.mustSpecifyLocalOrRemote` | error | execution 未传 --local 或 --remote | `forja use execution --local` |
+| `use.cannotSpecifyBothEnableDisable` | error | sync 同时传 --enable/--disable | `forja use sync --enable` |
+| `use.serverNotFound` | error | server id 不存在 | `forja server` |
+| `use.ambiguousServerName` | error | server 名称模糊匹配到多个 | `forja server` |
+| `use.remotePathRequired` | error | 传 server 但缺 remote path | `forja use sync --server <id> --remote-path <path>` |
+| `use.noServerConfigured` | error | 传 remote-path 但无 server | `forja use sync --server <name> --remote-path <path>` |
+| `use.qmakeTargetCannotBeEmpty` | error | `--qmake-target` 为空 | `forja use qt --qmake-target <name>` |
+| `use.workspaceSetRequiresMode` | error | workspace set 未传 --mode | `forja use remote workspace set --mode staged` |
+| `use.repoSetRequires` | error | repo set 缺必填参数 | `forja use remote repo set --local <n> --remote <n> --role primary` |
+| `use.invalidLocalRepoName` | error | repo local 名称非法 | `forja use remote repo set ...` |
+| `use.invalidRemoteRepoName` | error | repo remote 名称非法 | `forja use remote repo set ...` |
+| `use.repoRemoveRequiresLocal` | error | repo remove 缺 --local | `forja use remote repo remove --local <n>` |
+| `use.forjaBinSetRequiresPath` | error | forja-bin set 缺 --path | `forja use remote forja-bin set --path <path>` |
+| `use.buildOrderRequiresItem` | error | build-order set 无位置参数 | `forja use remote build-order set qt:build sdk:rebuild` |
+| `use.invalidActionFor` | error | build-order action 不合法 | `forja use remote build-order set qt:build sdk:rebuild` |
+| `use.transferSetRequiresServerPath` | error | transfer set 缺 server/path | `forja use remote transfer set --server <n> --path <p> --artifact <a>` |
+| `use.transferSetRequiresArtifact` | error | transfer set 缺 artifact | `forja use remote transfer set ...` |
+| `use.invalidLanguage` | error | lang 非 zh/en | `forja use lang zh` |
+| `use.failedToSaveActiveTarget` | error | 写 activeTarget 失败 | `forja doctor` |
+| `use.failedToSaveExecMode` | error | 写 execution mode 失败 | `forja use execution --local` |
+| `use.failedToSaveLanguage` | error | 写语言配置失败 | `forja use lang zh` |
 
 ## 正常场景
 
@@ -141,12 +161,12 @@ interface UseResult extends ForjaJsonResult {
     "ok": true,
     "action": "use",
     "useScope": "target",
-    "changed": ["activeTarget", "config.qt.project"],
+    "changed": ["qt.pinnedProject", "activeTarget"],
     "activeTarget": { "kind": "qt", "project": "app/app.pro", "mode": "release", "arch": "x64", "runAt": "local" },
     "config": {
         "qt": { "configured": true, "project": "app/app.pro", "mode": "release", "arch": "x64" }
     },
-    "nextActions": ["forja status"]
+    "nextAction": "forja status"
 }
 ```
 
@@ -155,12 +175,11 @@ interface UseResult extends ForjaJsonResult {
     "ok": true,
     "action": "use",
     "useScope": "sync",
-    "changed": ["config.sync.selectedServer", "config.sync.remotePath"],
-    "activeTarget": { "kind": "qt", "project": "app/app.pro", "mode": "release", "arch": "x64", "runAt": "local" },
+    "changed": ["sync.selectedServer", "sync.remotePath"],
     "config": {
-        "sync": { "configured": true, "enabled": true, "selectedServer": "dev", "remotePath": "/home/xw/workspace/app" }
+        "sync": { "configured": true, "enabled": false, "selectedServer": "dev", "remotePath": "/home/xw/workspace/app" }
     },
-    "nextActions": ["forja status"]
+    "nextAction": "forja status"
 }
 ```
 
@@ -169,15 +188,11 @@ interface UseResult extends ForjaJsonResult {
     "ok": true,
     "action": "use",
     "useScope": "remote",
-    "changed": ["config.remote.server", "config.remote.remotePath"],
-    "activeTarget": { "kind": "qt", "project": "app/app.pro", "mode": "release", "arch": "x64", "runAt": "local" },
+    "changed": ["remote.selectedServer", "remote.remotePath"],
     "config": {
-        "remote": {
-            "server": { "id": "dev", "name": "dev", "host": "192.168.1.10", "port": 22, "username": "xw", "authMode": "key" },
-            "remotePath": "/home/xw/workspace/app"
-        }
+        "remote": { "configured": true, "server": "dev", "remotePath": "/home/xw/workspace/app" }
     },
-    "nextActions": ["forja status"]
+    "nextAction": "forja status"
 }
 ```
 
@@ -187,21 +202,21 @@ interface UseResult extends ForjaJsonResult {
 {
     "ok": false,
     "action": "use",
+    "useScope": "target",
     "changed": [],
     "diagnostics": [
-        { "code": "use.projectKindUnknown", "level": "error", "message": "Cannot infer target kind from project path: thirdparty/project.txt" }
+        { "level": "error", "message": "Cannot determine project kind from: thirdparty/project.txt. Expected .pro, .sln, Makefile, or CMakeLists.txt" }
     ],
-    "nextActions": ["forja list"]
+    "nextAction": "forja list targets"
 }
 ```
 
 ## 文本输出
 
 ```
-Forja use succeeded
-Scope: target
-Changed: activeTarget, config.qt.project
-Target: qt app/app.pro release x64 local
+target updated
+  Target: qt app/app.pro release x64 local
+  Changed: qt.pinnedProject, activeTarget
 Next:
   forja status
 ```

@@ -121,7 +121,7 @@ test('SDK CLI accepts use config options', async () => {
         assert.equal(parsed.resolved.project, 'Makefile');
         assert.equal(parsed.resolved.mode, 'release');
         assert.equal(parsed.resolved.arch, 'x64');
-        assert.deepEqual(parsed.nextActions, ['forja status --json']);
+        assert.equal(parsed.nextAction, 'forja status --json');
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
         else { process.env.HOME = oldHome; }
@@ -155,7 +155,7 @@ test('SDK CLI build accepts --plan and routes missing config to status', async (
     assert.equal(process.exitCode, 1);
     assert.equal(parsed.ok, false);
     assert.equal(parsed.action, 'build');
-    assert.deepEqual(parsed.nextActions, ['forja status --json']);
+    assert.equal(parsed.nextAction, 'forja status --json');
 });
 
 test('SDK CLI rejects removed --dry-run alias', async () => {
@@ -597,7 +597,7 @@ test('SDK CLI build plan requires saved SDK config even when one candidate exist
 
         assert.equal(process.exitCode, 1);
         assert.equal(parsed.ok, false);
-        assert.deepEqual(parsed.nextActions, ['forja status --json']);
+        assert.equal(parsed.nextAction, 'forja status --json');
         assert.ok(parsed.diagnostics[0].message.includes('尚未初始化'));
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }

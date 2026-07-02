@@ -2,7 +2,7 @@
 name: doc-accuracy-audit
 description: Audit documentation against actual implementation, fix stale references, and create spec-compliance tests
 source: auto-skill
-extracted_at: '2026-06-26T08:34:27.287Z'
+extracted_at: '2026-07-01T14:00:00.000Z'
 ---
 
 # Documentation Accuracy Audit
@@ -39,6 +39,20 @@ Use grep to find all references to old/stale names across the codebase:
 ```
 grep -r "old_command_name" src/
 ```
+
+#### Field-by-field gap analysis
+
+For each field in the spec's result interface, verify the implementation actually sets it:
+```
+grep -r "fieldName" src/cli/commands/<command>.ts
+```
+Common gaps found this way:
+- **Fields defined but never assigned** (e.g., `state: 'already-clean'` in interface but code only ever sets `'cleaned'`)
+- **Fields in spec examples but never populated** (e.g., `changed: ["build/app"]` in spec but code never sets `changed`)
+- **Diagnostic codes in spec that don't appear in code** (code uses generic messages instead of structured codes)
+- **Hardcoded template strings** where actual config should be used (e.g., `ssh <server> "cd <remotePath>"` instead of reading real server host/path)
+- **Missing validation steps** described in spec but absent in code (e.g., spec says "check project file exists" but code skips this)
+- **Error messages that lose specificity** — generic `"X failed"` instead of propagating the underlying error details from `errors`/`stderr`
 
 ### 3. Fix Stale References in Code
 

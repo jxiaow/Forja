@@ -48,7 +48,7 @@ export interface RemoteStatusSummary {
 
 export interface SyncStatusSummary {
     enabled: boolean;
-    server?: { id: string; name: string; host: string };
+    server?: { id: string; name: string; host: string; username: string; port: number; authMode: string };
     remotePath?: string;
 }
 
@@ -283,7 +283,7 @@ export function runStatus(workspace: string): StatusResult {
     if (syncConfig.enabled) {
         result.sync = {
             enabled: true,
-            server: syncServer ? { id: syncServer.id, name: syncServer.name, host: syncServer.host } : undefined,
+            server: syncServer ? { id: syncServer.id, name: syncServer.name, host: syncServer.host, username: syncServer.username, port: syncServer.port, authMode: syncServer.authMode } : undefined,
             remotePath: syncConfig.selectedServer ? (syncConfig.remotePaths[syncConfig.selectedServer] || undefined) : undefined,
         };
     }
@@ -515,7 +515,7 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         const s = result.sync;
         if (s.enabled) {
             if (s.server) {
-                lines.push(`${T('syncLabel')}${T('enabledStatus')} → ${s.server.name}:${s.remotePath || ''}`);
+                lines.push(`${T('syncLabel')}${T('enabledStatus')} → ${s.server.username}@${s.server.host}:${s.server.port} → ${s.remotePath || ''} (${s.server.authMode})`);
             } else {
                 lines.push(`${T('syncLabel')}${T('enabledStatus')} (${T('sts.syncServerMissing')})`);
             }
