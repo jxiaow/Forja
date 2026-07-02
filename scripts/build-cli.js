@@ -17,7 +17,7 @@ const version = pkg.version;
 // Channel: --channel dev|stable (default: stable)
 const channelIdx = process.argv.indexOf('--channel');
 const channel = channelIdx >= 0 && process.argv[channelIdx + 1] ? process.argv[channelIdx + 1] : 'stable';
-const versionSuffix = channel === 'stable' ? '' : `-${channel}`;
+const versionSuffix = (channel === 'stable' || version.endsWith(`-${channel}`)) ? '' : `-${channel}`;
 const displayVersion = `${version}${versionSuffix}`;
 
 const distCli = path.join(root, 'dist', `forja-${version}`, 'cli');
