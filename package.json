@@ -1,6 +1,6 @@
 {
   "name": "forja",
-  "displayName": "Forja (Dev)",
+  "displayName": "Forja (Dev) (Dev)",
   "publisher": "forja",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
   "version": "0.7.55-dev",
@@ -182,7 +182,8 @@
   "scripts": {
     "copy-html": "node scripts/copy-html.js",
     "clean-out": "node scripts/clean-out.js",
-    "compile": "npm run clean-out && tsc -p ./ && npm run copy-html",
+    "sync-version": "node scripts/sync-version.js",
+    "compile": "npm run sync-version && npm run clean-out && tsc -p ./ && npm run copy-html",
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test --test-reporter=spec out/test",
     "lint": "eslint src/",

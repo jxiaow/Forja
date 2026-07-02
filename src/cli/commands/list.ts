@@ -5,15 +5,18 @@ import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSumma
 import { collectTargetCandidates } from './candidates';
 import { listServers, getServerDetail } from './server';
 import { loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings, loadGlobalConfig } from '../../core/settingsIO';
-import { detectMake, detectVsInstallations } from '../../sdk/cli/envDetector';
+import { detectMake } from '../../sdk/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
+import { setSilent } from '../../core/loggerBase';
 
-export type ListCategory = 'targets' | 'servers' | 'env' | 'remote' | 'lang';
+export type ListCategory = 'targets' | 'env' | 'remote' | 'lang';
+/** @internal 'servers' is accessed via `forja server`, not `forja list servers` */
+export type InternalListCategory = ListCategory | 'servers';
 export type EnvSubCategory = 'qt' | 'vs' | 'jom' | 'make';
 
 export interface ListResult extends ForjaJsonResult {
     action: 'list';
-    category: ListCategory;
+    category: InternalListCategory;
     targets?: TargetCandidate[];
     servers?: ServerSummary[] | ServerDetail;
     env?: EnvSummary;
@@ -151,16 +154,52 @@ export function formatListText(result: ListResult, locale: Locale): string {
             } else {
                 lines.push(T('environment'));
                 const env = result.env || {};
-                if (env.qt) {
-                    for (const q of env.qt) { lines.push(`  ${T('qtLabel')}${q.path}${q.version ? ` (${q.version})` : ''}`); }
+
+                // Qt
+                lines.push(`  ${T('qtLabel')}`);
+                if (env.qt && env.qt.length > 0) {
+                    lines.push(`    ${T('configured')}:`);
+                    for (const q of env.qt) { lines.push(`      ${q.path}${q.version ? ` (${q.version})` : ''}`); }
+                } else {
+                    lines.push(`    ${T('notConfigured')}`);
                 }
-                if (env.vs) {
-                    for (const v of env.vs) { lines.push(`  ${T('vsLabel')}${v.path}${v.version ? ` (${v.version})` : ''}`); }
+                const qtAvail = env.qtAvailable || [];
+                if (qtAvail.length > 0) {
+                    lines.push(`    ${T('available')}:`);
+                    for (const q of qtAvail) { lines.push(`      ${q.path}${q.version ? ` (${q.version})` : ''}`); }
+                } else {
+                    lines.push(`    ${T('noneFound')}`);
                 }
-                if (env.jom) { lines.push(`  ${T('jomLabel')}${env.jom}`); }
-                if (env.make) { lines.push(`  ${T('makeLabel')}${T('available')}`); }
-                if (!env.qt && !env.vs && !env.jom && !env.make) {
-                    lines.push(`  ${T('nothingDetected')}`);
+
+                // VS
+                lines.push(`  ${T('vsLabel')}`);
+                if (env.vs && env.vs.length > 0) {
+                    lines.push(`    ${T('configured')}:`);
+                    for (const v of env.vs) { lines.push(`      ${v.path}${v.version ? ` (${v.version})` : ''}`); }
+                } else {
+                    lines.push(`    ${T('notConfigured')}`);
+                }
+                const vsAvail = env.vsAvailable || [];
+                if (vsAvail.length > 0) {
+                    lines.push(`    ${T('available')}:`);
+                    for (const v of vsAvail) {
+                        const ed = v.edition ? ` [${v.edition}]` : '';
+                        lines.push(`      ${v.path}${v.version ? ` (${v.version})` : ''}${ed}`);
+                    }
+                } else {
+                    lines.push(`    ${T('noneFound')}`);
+                }
+
+                // jom / make
+                if (env.jom) {
+                    lines.push(`  ${T('jomLabel')}${env.jom}`);
+                } else {
+                    lines.push(`  ${T('jomLabel')}${T('nothingDetected')}`);
+                }
+                if (env.make) {
+                    lines.push(`  ${T('makeLabel')}${T('available')}`);
+                } else if (process.platform !== 'win32') {
+                    lines.push(`  ${T('makeLabel')}${T('nothingDetected')}`);
                 }
             }
             break;
@@ -214,7 +253,7 @@ export function formatListText(result: ListResult, locale: Locale): string {
     return lines.join('\n');
 }
 
-export async function runList(workspace: string, category: ListCategory, options: { detailId?: string; envSubCategory?: EnvSubCategory } = {}): Promise<ListResult> {
+export async function runList(workspace: string, category: InternalListCategory, options: { detailId?: string; envSubCategory?: EnvSubCategory } = {}): Promise<ListResult> {
     switch (category) {
         case 'targets':
         case undefined as unknown as ListCategory:
@@ -313,6 +352,7 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
 }
 
 async function listEnvAll(workspace: string): Promise<ListResult> {
+    setSilent(true);
     const qtConfig = loadQtSettings(workspace);
     const sdkConfig = loadSdkSettings(workspace);
     const env = await detectEnv();
@@ -325,11 +365,13 @@ async function listEnvAll(workspace: string): Promise<ListResult> {
     if (vsPath) {
         summary.vs = [{ path: vsPath }];
     }
-    if (env.jom) { summary.jom = env.jom; }
-    if (process.platform !== 'win32') {
-        const makePath = detectMake();
-        if (makePath) { summary.make = true; }
+    if (process.platform === 'win32') {
+        if (env.jom) { summary.jom = env.jom; }
+        summary.vsAvailable = env.vsCandidates.map(v => ({ path: v.installPath, version: v.version, edition: v.edition }));
+    } else {
+        if (env.jom) { summary.make = true; }
     }
+    summary.qtAvailable = env.qtCandidates.map(c => ({ path: c.path, version: c.version }));
 
     return {
         ok: true,
@@ -349,6 +391,7 @@ async function listEnvSub(workspace: string, sub: EnvSubCategory): Promise<ListR
 }
 
 async function listEnvQt(workspace: string): Promise<ListResult> {
+    setSilent(true);
     const qtConfig = loadQtSettings(workspace);
     const configured = qtConfig.qtPath
         ? { path: qtConfig.qtPath, version: (qtConfig.qtPath.match(/(\d+\.\d+\.\d+)/) || [])[1] }
@@ -366,21 +409,19 @@ async function listEnvQt(workspace: string): Promise<ListResult> {
     };
 }
 
-function listEnvVs(_workspace: string): ListResult {
+async function listEnvVs(_workspace: string): Promise<ListResult> {
     const qtConfig = loadQtSettings(_workspace);
     const sdkConfig = loadSdkSettings(_workspace);
     const configuredPath = qtConfig.vsInstall || sdkConfig.vsInstall;
     const configured = configuredPath ? { path: configuredPath } : undefined;
 
-    let available: Array<{ path: string; version?: string; edition?: string }> = [];
-    if (process.platform === 'win32') {
-        const installations = detectVsInstallations();
-        available = installations.map(v => ({
-            path: v.vsDevCmdPath,
-            version: v.version,
-            edition: v.edition,
-        }));
-    }
+    setSilent(true);
+    const env = await detectEnv();
+    const available = env.vsCandidates.map(v => ({
+        path: v.installPath,
+        version: v.version,
+        edition: v.edition,
+    }));
 
     return {
         ok: true,
@@ -393,6 +434,7 @@ function listEnvVs(_workspace: string): ListResult {
 }
 
 async function listEnvJom(): Promise<ListResult> {
+    setSilent(true);
     const summary: EnvSummary = {};
     if (process.platform === 'win32') {
         const env = await detectEnv();

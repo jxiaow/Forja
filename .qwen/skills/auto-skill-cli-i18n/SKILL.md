@@ -49,9 +49,16 @@ export function getGlobalLocale(): Locale {
 }
 
 // Translation function — uses global locale automatically
-export function T(key: string): string {
+// Supports positional params: T('key', ['val0', 'val1']) replaces {0}, {1} in the text
+export function T(key: string, params?: string[]): string {
     const entry = UI[key];
-    return entry ? entry[_globalLocale] : key;  // fallback: return key itself
+    let text = entry ? entry[_globalLocale] : key;  // fallback: return key itself
+    if (params) {
+        for (let i = 0; i < params.length; i++) {
+            text = text.replace(`{${i}}`, params[i]);
+        }
+    }
+    return text;
 }
 ```
 
@@ -83,6 +90,7 @@ const UI: Record<string, { en: string; zh: string }> = {
 5. **`--lang` is a GLOBAL_FLAG** — already in the global flags set, no per-command registration needed
 6. **New user-visible string → add to UI table** — both `en` and `zh` entries required
 7. **Interactive prompts use T()** — `prompt()`, `confirm()`, `choose()` all use T() for messages
+8. **Dynamic values use T() params** — `T('key', ['val0', 'val1'])` replaces `{0}`, `{1}` in text. Never use manual `.replace('{0}', ...)` — always go through T() params
 
 ## VSCode Commands Must Also Set Global Locale
 

@@ -4,7 +4,7 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { requireActiveTarget } from './activeTarget';
+import { requireActiveTarget, tryPinnedProjectFallback, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
@@ -57,7 +57,7 @@ function buildQtCliOptions(workspace: string, target: ActiveTarget, action: Buil
 }
 
 export async function runBuild(workspace: string, buildAction: BuildAction, options: { plan?: boolean; json?: boolean; project?: string } = {}): Promise<BuildResult> {
-    const wantsJson = options.json ?? process.argv.includes('--json');
+    const wantsJson = options.json ?? false;
     let targetResult: ReturnType<typeof requireActiveTarget>;
 
     // If --project is provided (e.g., from remote bridge), construct target directly
@@ -71,14 +71,14 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         else {
             return {
                 ok: false, action: 'build', buildAction, workspace,
-                diagnostics: [diag('error', `Cannot determine project kind from: ${projectPath}`)],
+                diagnostics: [diag('error', `${T('cmd.cannotDetermineKind')}: ${projectPath}`)],
                 nextAction: 'forja list targets',
             };
         }
         if (!fs.existsSync(projectPath)) {
             return {
                 ok: false, action: 'build', buildAction, workspace,
-                diagnostics: [diag('error', `Project file not found: ${projectPath}`)],
+                diagnostics: [diag('error', `${T('cmd.projectNotFound')}: ${projectPath}`)],
                 nextAction: 'forja list targets',
             };
         }
@@ -99,23 +99,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
 
     // Fallback: if no activeTarget but SDK has pinnedProject, synthesize target from SDK config
     if ('error' in targetResult) {
-        const sdkSettings = loadSdkSettings(workspace);
-        if (sdkSettings.pinnedProject) {
-            const projectPath = path.isAbsolute(sdkSettings.pinnedProject)
-                ? sdkSettings.pinnedProject
-                : path.join(workspace, sdkSettings.pinnedProject);
-            if (fs.existsSync(projectPath)) {
-                targetResult = {
-                    target: {
-                        kind: 'sdk',
-                        project: sdkSettings.pinnedProject,
-                        mode: sdkSettings.mode || 'debug',
-                        arch: sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
-                        runAt: 'local',
-                    },
-                };
-            }
-        }
+        targetResult = tryPinnedProjectFallback(workspace, targetResult);
     }
 
     if ('error' in targetResult) {
@@ -141,7 +125,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             buildAction,
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', `Target project missing: ${target.project}`)],
+            diagnostics: [diag('error', `${T('cmd.targetProjectMissing')}: ${target.project}`)],
             nextAction: 'forja list targets',
         };
     }
@@ -153,7 +137,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             buildAction,
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', `SDK target does not support '${buildAction}'`)],
+            diagnostics: [diag('error', `${T('cmd.sdkNoQmakeRcc')} '${buildAction}'`)],
             nextAction: 'forja build',
         };
     }
@@ -166,7 +150,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             buildAction,
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', 'RCC is not supported on remote targets')],
+            diagnostics: [diag('error', T('cmd.rccNotRemote'))],
             nextAction: 'forja build rcc',
         };
     }
@@ -252,7 +236,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 errors: executed.errors?.length > 0 ? executed.errors : undefined,
                 warningSummary: executed.warningSummary,
                 logFile: executed.logFile ?? undefined,
-                diagnostics: ok ? undefined : [diag('error', executed.errors?.length > 0 ? `SDK build failed (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : 'SDK build failed')],
+                diagnostics: ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.sdkBuildFailed')} (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : T('cmd.sdkBuildFailed'))],
                 nextAction: ok ? undefined : 'forja doctor',
             };
         } catch (e) {
@@ -292,7 +276,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 workspace,
                 activeTarget: target,
                 diagnostics: planned.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-                nextAction: planned.nextAction?.replace(/\s+--json/g, ''),
+                nextAction: stripJsonFlag(planned.nextAction),
             };
         }
 
@@ -333,7 +317,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             errors: executed.errors?.length > 0 ? executed.errors : undefined,
             warningSummary: executed.warningSummary,
             logFile: executed.logFile ?? undefined,
-            diagnostics: executed.ok ? undefined : [diag('error', executed.errors?.length > 0 ? `Qt build failed (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : 'Qt build failed')],
+            diagnostics: executed.ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.qtBuildFailed')} (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : T('cmd.qtBuildFailed'))],
             nextAction: executed.ok ? 'forja run' : 'forja doctor',
         };
     } catch (e) {

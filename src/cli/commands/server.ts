@@ -19,8 +19,7 @@ export function formatServerText(result: ServerResult, locale: Locale): string {
         }
         if (result.nextAction) {
             lines.push(T('next'));
-            if (result.nextAction) {
-            const a = result.nextAction; lines.push(`  ${a}`); }
+            lines.push(`  ${result.nextAction}`);
         }
         return lines.join('\n');
     }
@@ -53,8 +52,7 @@ export function formatServerText(result: ServerResult, locale: Locale): string {
 
     if (result.nextAction) {
         lines.push(T('next'));
-        if (result.nextAction) {
-            const a = result.nextAction; lines.push(`  ${a}`); }
+        lines.push(`  ${result.nextAction}`);
     }
     return lines.join('\n');
 }
@@ -146,10 +144,7 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
             serverAction: 'add',
             server: toServerDetail(created),
             changed: [`servers.${created.id}`],
-            nextActions: [
-                `forja use remote --server ${created.id} --remote-path <path>`,
-                `forja use sync --server ${created.id} --remote-path <path>`,
-            ],
+            nextAction: `forja use remote --server ${created.id} --remote-path <path>`,
         };
     } catch (e) {
         return {

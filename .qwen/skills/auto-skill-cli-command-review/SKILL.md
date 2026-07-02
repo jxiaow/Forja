@@ -63,8 +63,9 @@ Read `formatStatusText()` (or equivalent) carefully:
 
 - [ ] **All T() keys exist** in the translation table (run translation-key-audit)
 - [ ] **No hardcoded strings** in diagnostic `hint` fields — all hints go through T()
+- [ ] **No hardcoded diagnostic messages** — `diag('error', 'Some English string')` must use T() keys
 - [ ] **No string concatenation** of multiple T() calls with hardcoded separators (e.g., `${T('a')}, ${T('b')}` — should be a single key)
-- [ ] **Placeholder pattern**: If T() values have `{0}`, `{1}` placeholders, the code uses `.replace()` correctly
+- [ ] **Placeholder pattern**: If T() values have `{0}`, `{1}` placeholders, use `T('key', ['val0', 'val1'])` — never manual `.replace('{0}', ...)`
 - [ ] **params key names**: If `params` uses named keys (`qtCount`) but T() uses numbered placeholders (`{0}`), document this mismatch
 
 ## Pass 4: Logic Edge Cases
@@ -84,6 +85,15 @@ Read `formatStatusText()` (or equivalent) carefully:
 - [ ] **Parallel path consistency**: If the same check exists for Qt and SDK paths, do both have the same fields (fix, hint)?
 - [ ] **Platform branching**: Windows vs POSIX paths — do both have equivalent diagnostics and fix suggestions?
 
+## Pass 6: Help Text & Interface Consistency
+
+- [ ] **Help text matches implementation**: Every subcommand, flag, and option listed in help text must actually be handled by the dispatcher. Check: does `forja sync --server <id>` work, or is it listed in help but not in `knownFlags`?
+- [ ] **No phantom subcommands**: Help text must not list subcommands that don't exist in the handler (e.g., help lists `status`/`transfer` but handler only handles `plan`/`reset`)
+- [ ] **nextAction type consistency**: `ForjaJsonResult.nextAction` is `string` (singular). Never set `nextActions` (array) — it gets silently ignored by `outputResult`. Pick the single best suggestion.
+- [ ] **No duplicate null checks**: Avoid `if (result.nextAction) { if (result.nextAction) { ... } }` — the inner check is always true and indicates a copy-paste error.
+- [ ] **Dead code / redundant arrays**: If `IMPLEMENTED_COMMANDS` equals `COMMANDS`, or `isImplementedCommand()` returns the same as `isCommand()`, one is dead code.
+- [ ] **Shared code extraction**: If the same logic (e.g., pinnedProject fallback, --json stripping) appears in 2+ files, extract to a shared helper.
+
 ## Common Bug Patterns Found
 
 | Pattern | Symptom | Fix |
@@ -100,6 +110,12 @@ Read `formatStatusText()` (or equivalent) carefully:
 | Diagnostic message missing dynamic value | `"Qt not found"` instead of `"Qt not found: C:/Qt/old"` | Append `: ${value}` to message; add `params` |
 | Text output hides section in degraded state | Sync line disappears when server deleted | Relax condition; show partial info with degraded-state label |
 | Spec ok rules vs examples inconsistency | Rules say "any blocked → false" but sync excluded | Clarify rules to list which dimensions are checked; update examples |
+| Help text lists phantom subcommands/flags | `forja sync status` errors with "unknown action" | Help text must match actual handler implementation exactly |
+| `nextActions` array silently ignored | JSON output has `nextActions` but text mode shows nothing | Use `nextAction` (singular string), pick best suggestion |
+| `flagsWithValues` swallows positional args | `doctor --unlock` consumes next token as value | Only list flags that actually consume a value argument |
+| Duplicate toolchain checks when no target | `toolchain-vs` appears twice in doctor output | Track checked items in a Set to deduplicate |
+| Hardcoded diagnostic messages in English | Chinese locale shows English error messages | All `diag()` messages must use T() translation keys |
+| `wantsJson` fallback to `process.argv` | Inconsistent JSON detection across commands | Always use `options.json ?? false`, dispatcher passes the value |
 
 ## Multi-pass Rationale
 

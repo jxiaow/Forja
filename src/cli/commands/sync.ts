@@ -1,27 +1,27 @@
 /**
  * `forja sync` — sync changed files to remote.
  */
-import { planSyncCli, executeSyncCli, resetSyncCli } from '../../sync/cli';
-import { Diagnostic, SyncPlan, diag, Locale, T } from './types';
+import { planSyncCli, executeSyncCli, resetSyncCli, ClassifiedChanges } from '../../sync/cli';
+import { readProjectSyncConfig, getServerById } from '../../core/serverStore';
+import { Diagnostic, SyncPlan, ForjaJsonResult, diag, Locale, T } from './types';
 
 // ── Types ──
 
-export type SyncAction = 'run' | 'plan' | 'reset';
+export type SyncAction = 'run' | 'plan' | 'reset' | 'status';
 
-export interface SyncResult {
-    ok: boolean;
+export interface SyncResult extends ForjaJsonResult {
     action: 'sync';
     syncAction: SyncAction;
-    workspace?: string;
     plan?: SyncPlan;
     server?: string;
     remotePath?: string;
     uploaded?: string[];
     deleted?: string[];
     skipped?: string[];
-    diagnostics?: Diagnostic[];
-    nextAction?: string;
-    [key: string]: unknown;
+    // status fields
+    enabled?: boolean;
+    serverDetail?: { name: string; host: string; username: string; port: number };
+    ignore?: string[];
 }
 
 // ── Formatter ──
@@ -85,6 +85,21 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
             lines.push(T('syncStateReset'));
             break;
         }
+        case 'status': {
+            lines.push(T('syncLabel'));
+            lines.push(`  ${result.enabled ? T('enabledStatus') : T('disabledStatus')}`);
+            if (result.serverDetail) {
+                const s = result.serverDetail;
+                lines.push(`  ${T('serverLabel')} ${s.name} (${s.username}@${s.host}:${s.port})`);
+            }
+            if (result.remotePath) {
+                lines.push(`  ${T('remotePathLabel')} ${result.remotePath}`);
+            }
+            if (result.ignore?.length) {
+                lines.push(`  ${T('syncIgnore')}: ${result.ignore.join(', ')}`);
+            }
+            break;
+        }
     }
 
     if (result.nextAction) {
@@ -123,9 +138,9 @@ export async function runSyncPlan(workspace: string, fileFilters: string[] = [])
     }
 }
 
-export async function runSyncExecute(workspace: string, fileFilters: string[] = []): Promise<SyncResult> {
+export async function runSyncExecute(workspace: string, fileFilters: string[] = [], classified?: ClassifiedChanges): Promise<SyncResult> {
     try {
-        const result = await executeSyncCli(workspace, fileFilters);
+        const result = await executeSyncCli(workspace, fileFilters, classified);
         return {
             ok: result.ok,
             action: 'sync',
@@ -153,6 +168,33 @@ export function runSyncReset(workspace: string): SyncResult {
         workspace,
         diagnostics: reset.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
         nextAction: reset.nextAction,
+    };
+}
+
+export function runSyncStatus(workspace: string): SyncResult {
+    const sync = readProjectSyncConfig(workspace);
+    const server = sync.selectedServer ? getServerById(sync.selectedServer) : null;
+    const remotePath = server ? (sync.remotePaths[server.id] || '') : '';
+
+    let nextAction: string;
+    if (!sync.enabled || !server) {
+        nextAction = 'forja sync --server <name> --remote-path <path>';
+    } else if (!remotePath) {
+        nextAction = `forja sync --server ${server.name} --remote-path <path>`;
+    } else {
+        nextAction = 'forja build';
+    }
+
+    return {
+        ok: true,
+        action: 'sync',
+        syncAction: 'status',
+        workspace,
+        enabled: sync.enabled,
+        serverDetail: server ? { name: server.name, host: server.host, username: server.username, port: server.port } : undefined,
+        remotePath: remotePath || undefined,
+        ignore: sync.ignore,
+        nextAction,
     };
 }
 

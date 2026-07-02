@@ -5,14 +5,14 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { clearSyncState, filterNeedsDelete, filterNeedsSync, markDeletedBatch, markSyncedBatch, SyncTargetContext } from '../core/syncState';
-import { readProjectSyncConfig, resolveServerSelector, ServerConfig } from '../core/serverStore';
+import { readProjectSyncConfig, writeProjectSyncConfig, resolveServerSelector, ServerConfig } from '../core/serverStore';
 import { deleteRemoteFile, ensureRemoteDir, scpUpload } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
 import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
 import { getGitChangedEntries, GitChangedFile, isIgnored } from '../core/gitChangedFiles';
 import { T } from '../cli/commands/types';
 
-export interface SyncResult {
+export interface SyncEngineResult {
     ok: boolean;
     uploaded: string[];
     deleted: string[];
@@ -91,32 +91,140 @@ interface ResolvedSyncConfig {
 
 function resolveSyncConfig(workspaceRoot: string): { ok: true; config: ResolvedSyncConfig } | { ok: false; error: string; nextAction: string } {
     const project = readProjectSyncConfig(workspaceRoot);
+
     if (!project.enabled) {
-        return { ok: false, error: T('sync.notEnabled'), nextAction: 'forja use sync --enable --json' };
+        return { ok: false, error: T('sync.notConfigured'), nextAction: 'forja sync' };
     }
 
     const targetId = project.selectedServer;
     if (!targetId) {
-        return { ok: false, error: T('sync.notConfigured'), nextAction: 'forja server --json' };
+        return { ok: false, error: T('sync.notConfigured'), nextAction: 'forja sync' };
     }
 
     const resolvedServer = resolveCliServer(targetId);
     const server = resolvedServer.server;
     if (!server) {
-        return { ok: false, error: resolvedServer.error || `${T('sync.serverNotFound')}: "${targetId}"`, nextAction: 'forja server --json' };
+        return { ok: false, error: resolvedServer.error || `${T('sync.serverNotFound')}: "${targetId}"`, nextAction: 'forja sync' };
     }
 
     const remotePath = project.remotePaths[server.id] || '';
     if (!remotePath) {
-        return { ok: false, error: T('sync.noRemotePath'), nextAction: 'forja use sync --server <id> --remote-path <path> --json' };
+        return { ok: false, error: T('sync.noRemotePath'), nextAction: `forja sync --server ${server.name} --remote-path <path>` };
     }
 
     return { ok: true, config: { server, remotePath, ignore: project.ignore } };
 }
 
+// ── 共享文件分类（plan 和 execute 共用） ──
+
+export interface ClassifiedChanges {
+    pending: string[];
+    deleted: string[];
+    skipped: string[];
+    skippedDetails: { file: string; reason: string }[];
+    gitRoots: GitRoot[];
+    requestedFilesNotFound: boolean;
+}
+
+async function classifyAllGitRoots(
+    workspaceRoot: string,
+    fileFilters: string[],
+    server: ServerConfig,
+    remotePath: string,
+    ignore: string[],
+): Promise<ClassifiedChanges> {
+    const gitRoots = resolveGitRoots(workspaceRoot);
+    const result: ClassifiedChanges = {
+        pending: [], deleted: [], skipped: [], skippedDetails: [],
+        gitRoots, requestedFilesNotFound: false,
+    };
+
+    for (const gitRoot of gitRoots) {
+        const { dir: gitDir, name: gitName } = gitRoot;
+        const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
+        const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
+
+        const changedEntries: GitChangedFile[] = fileFilters.length > 0
+            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters).map(file => {
+                const fullPath = path.join(gitDir, file);
+                const exists = fs.existsSync(fullPath);
+                return { path: file, kind: exists ? 'upload' as const : 'delete' as const, status: exists ? '??' : 'D' };
+            })
+            : await getGitChangedEntries(gitDir);
+
+        if (changedEntries.length === 0) { continue; }
+
+        const uploadCandidates: string[] = [];
+        const deleteCandidates: string[] = [];
+        for (const change of changedEntries) {
+            if (isIgnored(change.path, ignore)) {
+                const file = `${gitName}/${change.path}`;
+                result.skipped.push(file);
+                result.skippedDetails.push({ file, reason: 'ignored' });
+            }
+            else if (change.kind === 'delete') { deleteCandidates.push(change.path); }
+            else { uploadCandidates.push(change.path); }
+        }
+
+        const needSync = filterNeedsSync(gitDir, uploadCandidates, syncTarget);
+        const needDelete = filterNeedsDelete(gitDir, deleteCandidates, syncTarget);
+        for (const f of uploadCandidates.filter(f => !needSync.includes(f))) {
+            const file = `${gitName}/${f}`;
+            result.skipped.push(file);
+            result.skippedDetails.push({ file, reason: 'alreadySynced' });
+        }
+        for (const f of deleteCandidates.filter(f => !needDelete.includes(f))) {
+            const file = `${gitName}/${f}`;
+            result.skipped.push(file);
+            result.skippedDetails.push({ file, reason: 'alreadyDeleted' });
+        }
+        result.pending.push(...needSync.map(f => `${gitName}/${f}`));
+        result.deleted.push(...needDelete.map(f => `${gitName}/${f}`));
+    }
+
+    if (fileFilters.length > 0) {
+        const allResolved = new Set<string>([...result.pending, ...result.deleted,
+            ...result.skipped.filter(s => result.skippedDetails.find(d => d.file === s)?.reason !== 'ignored')]);
+        if (allResolved.size === 0) {
+            result.requestedFilesNotFound = true;
+        }
+    }
+
+    return result;
+}
+
+// ── 配置保存（供 handleSync 调用） ──
+
+export interface ConfigureSyncOptions {
+    serverId: string;
+    remotePath?: string;
+    enable?: boolean;
+}
+
+export function configureSyncSettings(workspaceRoot: string, options: ConfigureSyncOptions): { ok: true } | { ok: false; error: string } {
+    const sync = readProjectSyncConfig(workspaceRoot);
+    sync.selectedServer = options.serverId;
+    if (options.remotePath) {
+        sync.remotePaths[options.serverId] = options.remotePath;
+    }
+    if (options.enable !== false) {
+        sync.enabled = true;
+    }
+    try {
+        writeProjectSyncConfig(workspaceRoot, {
+            enabled: sync.enabled,
+            selectedServer: sync.selectedServer,
+            remotePaths: sync.remotePaths,
+        });
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+}
+
 // ── 主入口 ──
 
-export async function executeSyncCli(workspaceRoot: string, fileFilters: string[] = []): Promise<SyncResult> {
+export async function executeSyncCli(workspaceRoot: string, fileFilters: string[] = [], preComputed?: ClassifiedChanges): Promise<SyncEngineResult> {
     const resolved = resolveSyncConfig(workspaceRoot);
     if (!resolved.ok) {
         return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: resolved.error }], server: '', remotePath: '', nextAction: resolved.nextAction };
@@ -132,51 +240,25 @@ export async function executeSyncCli(workspaceRoot: string, fileFilters: string[
         }
     }
 
-    const gitRoots = resolveGitRoots(workspaceRoot);
-    if (gitRoots.length === 0) {
+    const classified = preComputed ?? await classifyAllGitRoots(workspaceRoot, fileFilters, server, remotePath, ignore);
+
+    if (classified.gitRoots.length === 0) {
         return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: `${T('sync.noGitRepos')}: ${workspaceRoot}` }], server: server.name, remotePath, nextAction: 'forja status --json' };
     }
 
-    const result: SyncResult = { ok: true, uploaded: [], deleted: [], skipped: [], skippedDetails: [], failed: [], server: server.name, remotePath };
+    if (classified.requestedFilesNotFound) {
+        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: `${T('sync.filesNotFound')}: ${fileFilters.join(', ')}` }], server: server.name, remotePath, nextAction: 'forja sync --file <path>' };
+    }
 
-    for (const gitRoot of gitRoots) {
+    const result: SyncEngineResult = { ok: true, uploaded: [], deleted: [], skipped: classified.skipped, skippedDetails: classified.skippedDetails, failed: [], server: server.name, remotePath };
+
+    for (const gitRoot of classified.gitRoots) {
         const { dir: gitDir, name: gitName } = gitRoot;
         const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
         const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
 
-        const changedEntries: GitChangedFile[] = fileFilters.length > 0
-            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters).map(file => {
-                const fullPath = path.join(gitDir, file);
-                const exists = fs.existsSync(fullPath);
-                return { path: file, kind: exists ? 'upload' as const : 'delete' as const, status: exists ? '??' : 'D' };
-            })
-            : await getGitChangedEntries(gitDir);
-        if (changedEntries.length === 0) { continue; }
-
-        const uploadCandidates: string[] = [];
-        const deleteCandidates: string[] = [];
-        for (const change of changedEntries) {
-            if (isIgnored(change.path, ignore)) {
-                const file = `${gitName}/${change.path}`;
-                result.skipped.push(file);
-                result.skippedDetails?.push({ file, reason: 'ignored' });
-            }
-            else if (change.kind === 'delete') { deleteCandidates.push(change.path); }
-            else { uploadCandidates.push(change.path); }
-        }
-
-        const needSync = filterNeedsSync(gitDir, uploadCandidates, syncTarget);
-        const needDelete = filterNeedsDelete(gitDir, deleteCandidates, syncTarget);
-        for (const f of uploadCandidates.filter(f => !needSync.includes(f))) {
-            const file = `${gitName}/${f}`;
-            result.skipped.push(file);
-            result.skippedDetails?.push({ file, reason: 'alreadySynced' });
-        }
-        for (const f of deleteCandidates.filter(f => !needDelete.includes(f))) {
-            const file = `${gitName}/${f}`;
-            result.skipped.push(file);
-            result.skippedDetails?.push({ file, reason: 'alreadyDeleted' });
-        }
+        const needSync = classified.pending.filter(f => f.startsWith(`${gitName}/`)).map(f => f.slice(gitName.length + 1));
+        const needDelete = classified.deleted.filter(f => f.startsWith(`${gitName}/`)).map(f => f.slice(gitName.length + 1));
 
         if (needSync.length === 0 && needDelete.length === 0) { continue; }
 
@@ -257,68 +339,30 @@ export async function planSyncCli(workspaceRoot: string, fileFilters: string[] =
 
     const { server, remotePath, ignore } = resolved.config;
 
-    const gitRoots = resolveGitRoots(workspaceRoot);
-    if (gitRoots.length === 0) {
+    const classified = await classifyAllGitRoots(workspaceRoot, fileFilters, server, remotePath, ignore);
+
+    if (classified.gitRoots.length === 0) {
         return empty(`${T('sync.noGitRepos')}: ${workspaceRoot}`, 'forja status --json', server.name, remotePath);
     }
 
-    const plan: SyncPlanResult = {
+    if (classified.requestedFilesNotFound) {
+        return empty(`${T('sync.filesNotFound')}: ${fileFilters.join(', ')}`, 'forja sync --file <path>', server.name, remotePath);
+    }
+
+    return {
         ok: true,
         action: 'sync',
         mode: 'dryRun',
-        pending: [],
-        deleted: [],
-        skipped: [],
-        skippedDetails: [],
+        pending: classified.pending,
+        deleted: classified.deleted,
+        skipped: classified.skipped,
+        skippedDetails: classified.skippedDetails,
         failed: [],
         server: server.name,
         remotePath,
-        repos: gitRoots.map(r => r.name),
-        nextAction: 'forja sync --json'
+        repos: classified.gitRoots.map(r => r.name),
+        nextAction: 'forja sync --json',
     };
-
-    for (const gitRoot of gitRoots) {
-        const { dir: gitDir, name: gitName } = gitRoot;
-        const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
-        const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
-        const changedEntries: GitChangedFile[] = fileFilters.length > 0
-            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters).map(file => {
-                const fullPath = path.join(gitDir, file);
-                const exists = fs.existsSync(fullPath);
-                return { path: file, kind: exists ? 'upload' as const : 'delete' as const, status: exists ? '??' : 'D' };
-            })
-            : await getGitChangedEntries(gitDir);
-        if (changedEntries.length === 0) { continue; }
-
-        const uploadCandidates: string[] = [];
-        const deleteCandidates: string[] = [];
-        for (const change of changedEntries) {
-            if (isIgnored(change.path, ignore)) {
-                const file = `${gitName}/${change.path}`;
-                plan.skipped.push(file);
-                plan.skippedDetails.push({ file, reason: 'ignored' });
-            }
-            else if (change.kind === 'delete') { deleteCandidates.push(change.path); }
-            else { uploadCandidates.push(change.path); }
-        }
-
-        const needSync = filterNeedsSync(gitDir, uploadCandidates, syncTarget);
-        const needDelete = filterNeedsDelete(gitDir, deleteCandidates, syncTarget);
-        for (const f of uploadCandidates.filter(f => !needSync.includes(f))) {
-            const file = `${gitName}/${f}`;
-            plan.skipped.push(file);
-            plan.skippedDetails.push({ file, reason: 'alreadySynced' });
-        }
-        for (const f of deleteCandidates.filter(f => !needDelete.includes(f))) {
-            const file = `${gitName}/${f}`;
-            plan.skipped.push(file);
-            plan.skippedDetails.push({ file, reason: 'alreadyDeleted' });
-        }
-        plan.pending.push(...needSync.map(f => `${gitName}/${f}`));
-        plan.deleted.push(...needDelete.map(f => `${gitName}/${f}`));
-    }
-
-    return plan;
 }
 
 export function resetSyncCli(workspaceRoot: string): { ok: boolean; diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[]; nextAction?: string } {

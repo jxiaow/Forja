@@ -24,7 +24,7 @@ function safeSave(fn: () => void, configName: string): { ok: true } | { ok: fals
         fn();
         return { ok: true };
     } catch (e) {
-        return { ok: false, error: `Failed to save ${configName}: ${e instanceof Error ? e.message : String(e)}` };
+        return { ok: false, error: `${T('cmd.failedToSave')} ${configName}: ${e instanceof Error ? e.message : String(e)}` };
     }
 }
 
@@ -440,7 +440,7 @@ export function runUseSync(workspace: string, args: UseSyncArgs): UseResult {
         return {
             ok: false, action: 'use', useScope: 'sync', changed: [],
             diagnostics: [{ level: 'error', message: T('use.cannotSpecifyBothEnableDisable') }],
-            nextAction: 'forja use sync --enable',
+            nextAction: 'forja sync --server <name> --remote-path <path>',
         };
     }
 
@@ -454,22 +454,29 @@ export function runUseSync(workspace: string, args: UseSyncArgs): UseResult {
     }
 
     if (args.server) {
-        const server = getServerById(args.server);
-        if (!server) {
+        const resolved = resolveServerSelector(args.server);
+        if (resolved.ambiguous) {
+            return {
+                ok: false, action: 'use', useScope: 'sync', changed: [],
+                diagnostics: [{ level: 'error', message: `${T('use.ambiguousServerName')}: ${args.server}. ${T('use.useServerIdInstead')}` }],
+                nextAction: 'forja list servers',
+            };
+        }
+        if (!resolved.server) {
             return {
                 ok: false, action: 'use', useScope: 'sync', changed: [],
                 diagnostics: [{ level: 'error', message: `${T('use.serverNotFound')}: ${args.server}` }],
                 nextAction: 'forja server',
             };
         }
-        sync.selectedServer = server.id;
+        sync.selectedServer = resolved.server.id;
         changed.push('sync.selectedServer');
 
         if (!args.remotePath) {
             return {
                 ok: false, action: 'use', useScope: 'sync', changed: [],
                 diagnostics: [{ level: 'error', message: T('use.remotePathRequired') }],
-                nextAction: 'forja use sync --server <name> --remote-path <path>',
+                nextAction: 'forja sync --server <name> --remote-path <path>',
             };
         }
     }
@@ -481,7 +488,7 @@ export function runUseSync(workspace: string, args: UseSyncArgs): UseResult {
         return {
             ok: false, action: 'use', useScope: 'sync', changed: [],
             diagnostics: [{ level: 'error', message: T('use.noServerConfigured') }],
-            nextAction: 'forja use sync --server <name> --remote-path <path>',
+            nextAction: 'forja sync --server <name> --remote-path <path>',
         };
     }
 

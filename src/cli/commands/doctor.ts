@@ -18,6 +18,11 @@ import { executeRemoteBootstrap, findBootstrapArtifact, findPackageRoot } from '
 import { executeRemoteReleaseLock } from '../../remote/core/lock';
 import { buildRemoteRepoDirSetup } from '../../remote/core/repoPath';
 import { detectMake } from '../../sdk/cli/envDetector';
+import { ServerConfig } from '../../core/serverStore';
+
+function resolveSshPassword(server: ServerConfig): string | null {
+    return server.password || process.env.FORJA_SSH_PASSWORD || null;
+}
 
 export function formatDoctorText(result: DoctorResult, locale: Locale): string {
     const lines: string[] = [];
@@ -176,6 +181,7 @@ export async function runDoctor(workspace: string, options: {
     }
 
     // ── Toolchain checks ──
+    const checkedToolchain = new Set<string>();
     if (activeTarget?.kind === 'qt' || !activeTarget) {
         const qt = loadQtSettings(workspace);
         if (qt.qtPath && fs.existsSync(qt.qtPath)) {
@@ -193,6 +199,7 @@ export async function runDoctor(workspace: string, options: {
 
         // Platform-specific toolchain checks
         if (process.platform === 'win32') {
+            checkedToolchain.add('toolchain-vs');
             // Windows: check VS and jom
             if (qt.vsInstall && fs.existsSync(qt.vsInstall)) {
                 checks.push(check('toolchain-vs', 'ready', `VS: ${qt.vsInstall}`));
@@ -213,6 +220,7 @@ export async function runDoctor(workspace: string, options: {
                 }
             }
         } else {
+            checkedToolchain.add('toolchain-make');
             // POSIX: check make
             const makePath = detectMake();
             if (makePath) {
@@ -227,24 +235,28 @@ export async function runDoctor(workspace: string, options: {
 
     if (activeTarget?.kind === 'sdk' || !activeTarget) {
         const sdk = loadSdkSettings(workspace);
-        // Platform-specific toolchain checks for SDK
+        // Platform-specific toolchain checks for SDK (skip if already checked for Qt)
         if (process.platform === 'win32') {
-            // Windows: check VS
-            if (sdk.vsInstall && fs.existsSync(sdk.vsInstall)) {
-                checks.push(check('toolchain-vs', 'ready', `VS: ${sdk.vsInstall}`));
-            } else if (sdk.vsInstall) {
-                checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${sdk.vsInstall}`,
-                    [diag('error', `VS dev environment not found: ${sdk.vsInstall}`)]));
+            if (!checkedToolchain.has('toolchain-vs')) {
+                // Windows: check VS
+                if (sdk.vsInstall && fs.existsSync(sdk.vsInstall)) {
+                    checks.push(check('toolchain-vs', 'ready', `VS: ${sdk.vsInstall}`));
+                } else if (sdk.vsInstall) {
+                    checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${sdk.vsInstall}`,
+                        [diag('error', `VS dev environment not found: ${sdk.vsInstall}`)]));
+                }
             }
         } else {
-            // POSIX: check make
-            const makePath = detectMake();
-            if (makePath) {
-                checks.push(check('toolchain-make', 'ready', `make: ${makePath}`));
-            } else {
-                checks.push(check('toolchain-make', 'blocked', T('doctorMakeNotFound'),
-                    [diag('error', T('doctorMakeNotFound'))]));
-                diagnostics.push(diag('error', T('doctorMakeNotFound')));
+            if (!checkedToolchain.has('toolchain-make')) {
+                // POSIX: check make
+                const makePath = detectMake();
+                if (makePath) {
+                    checks.push(check('toolchain-make', 'ready', `make: ${makePath}`));
+                } else {
+                    checks.push(check('toolchain-make', 'blocked', T('doctorMakeNotFound'),
+                        [diag('error', T('doctorMakeNotFound'))]));
+                    diagnostics.push(diag('error', T('doctorMakeNotFound')));
+                }
             }
         }
     }
@@ -260,7 +272,7 @@ export async function runDoctor(workspace: string, options: {
             } else {
                 checks.push(check('sync', 'blocked', T('doctorSyncRemote'),
                     [diag('warning', T('doctorSyncRemote'))],
-                    'forja use sync --server <name> --remote-path <path>'));
+                    'forja sync --server <name> --remote-path <path>'));
             }
         } else {
             checks.push(check('sync', 'blocked', `${T('doctorSyncDeleted')}: ${sync.selectedServer}`,
@@ -360,7 +372,7 @@ export async function runDoctor(workspace: string, options: {
                 }
                 checks.push(check('remote', 'blocked', T('doctorRemoteNotConfigured')));
             } else {
-                const password = resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null;
+                const password = resolveSshPassword(resolved.config.server);
                 const runner = createSshRunner(resolved.config.server, password);
                 const uploader = createScpUploader(resolved.config.server, password);
 
@@ -403,7 +415,7 @@ export async function runDoctor(workspace: string, options: {
             diagnostics.push(diag('error', T('doctorRemoteNotConfigured')));
             checks.push(check('unlock', 'blocked', T('doctorRemoteNotConfigured')));
         } else {
-            const password = resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null;
+            const password = resolveSshPassword(resolved.config.server);
             const runner = createSshRunner(resolved.config.server, password);
             const remotePath = resolveRemoteActionPath(workspace, resolved.config.remotePath);
             const releaseResult = await executeRemoteReleaseLock({
@@ -428,7 +440,7 @@ export async function runDoctor(workspace: string, options: {
             diagnostics.push(diag('error', T('doctorRemoteNotConfigured')));
             checks.push(check('remote', 'blocked', T('doctorRemoteNotConfigured')));
         } else {
-            const password = resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null;
+            const password = resolveSshPassword(resolved.config.server);
             const runner = createSshRunner(resolved.config.server, password);
             const remotePath = resolveRemoteActionPath(workspace, resolved.config.remotePath);
             if (doctorAction === 'restore' && options.restore) {

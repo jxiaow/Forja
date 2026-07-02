@@ -5,7 +5,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
-import { requireActiveTarget } from './activeTarget';
+import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
@@ -87,7 +87,7 @@ export async function runRun(workspace: string, options: {
             runAction: 'default',
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', `Target project missing: ${target.project}`)],
+            diagnostics: [diag('error', `${T('cmd.targetProjectMissing')}: ${target.project}`)],
             nextAction: 'forja list targets',
         };
     }
@@ -100,7 +100,7 @@ export async function runRun(workspace: string, options: {
             runAction: 'debug',
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', 'Debug is only available in VSCode. Use the "Forja: Debug" command from the Command Palette, or click the debug button in the status bar.')],
+            diagnostics: [diag('error', T('cmd.debugVscodeOnly'))],
             nextAction: 'Open VSCode Command Palette → "Forja: Debug"',
         };
     }
@@ -120,7 +120,7 @@ export async function runRun(workspace: string, options: {
             runAction,
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', 'SDK target does not support run. Build first.')],
+            diagnostics: [diag('error', T('cmd.sdkRunUnsupported'))],
             nextAction: 'forja build',
         };
     }
@@ -179,7 +179,7 @@ export async function runRun(workspace: string, options: {
                 workspace,
                 activeTarget: target,
                 diagnostics: planned.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-                nextAction: planned.nextAction?.replace(/\s+--json/g, ''),
+                nextAction: stripJsonFlag(planned.nextAction),
             };
         }
 
@@ -212,7 +212,7 @@ export async function runRun(workspace: string, options: {
             runtime,
             exitCode: executed.runtimeExitCode ?? executed.exitCode ?? undefined,
             logFile: executed.logFile ?? undefined,
-            diagnostics: executed.ok ? undefined : [diag('error', 'Qt run failed')],
+            diagnostics: executed.ok ? undefined : [diag('error', T('cmd.qtRunFailed'))],
             nextAction: executed.ok
                 ? (executed.runtimeExitCode !== undefined
                     ? undefined
@@ -240,14 +240,14 @@ async function handleDesigner(workspace: string, uiFile: string): Promise<RunRes
     const designerResult = await launchDesigner(resolvedPath, qtConfig.designerPath, qtConfig.qtPath);
 
     if (!designerResult.ok) {
-        const code = designerResult.error?.includes('.ui') ? 'run.designerFileInvalid' : 'run.designerMissing';
+        const isUiFileError = designerResult.error?.endsWith('.ui') || designerResult.error?.includes('.ui ');
         return {
             ok: false,
             action: 'run',
             runAction: 'designer',
             workspace,
             diagnostics: [diag('error', designerResult.error!)],
-            nextAction: code === 'run.designerMissing' ? 'forja doctor' : undefined,
+            nextAction: isUiFileError ? undefined : 'forja doctor',
         };
     }
 
@@ -268,7 +268,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
             runAction: 'custom',
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', 'SDK target does not support custom commands')],
+            diagnostics: [diag('error', T('cmd.sdkCustomUnsupported'))],
             nextAction: 'forja build',
         };
     }
@@ -283,7 +283,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
             runAction: 'custom',
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', `Custom command not found: ${customName}. Available: ${available}`)],
+            diagnostics: [diag('error', `${T('cmd.customNotFound')}: ${customName}. Available: ${available}`)],
             nextAction: 'forja list targets',
         };
     }
@@ -316,7 +316,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
                 runAction: 'custom',
                 workspace,
                 activeTarget: target,
-                diagnostics: [diag('error', `Custom command "${customName}" failed: ${result.error.message}`)],
+                diagnostics: [diag('error', `${T('cmd.customFailed')}: "${customName}" — ${result.error.message}`)],
                 nextAction: 'forja doctor',
             };
         }
@@ -339,7 +339,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
             workspace,
             activeTarget: target,
             exitCode,
-            diagnostics: [diag('error', `Custom command "${customName}" failed with exit code ${exitCode}`)],
+            diagnostics: [diag('error', `${T('cmd.customFailed')}: "${customName}" exit code ${exitCode}`)],
             nextAction: 'forja doctor',
         };
     } catch (e) {

@@ -108,6 +108,8 @@ export interface EnvSummary {
     vs?: Array<{ path: string; version?: string }>;
     jom?: string;
     make?: boolean;
+    qtAvailable?: Array<{ path: string; version?: string }>;
+    vsAvailable?: Array<{ path: string; version?: string; edition?: string }>;
 }
 
 // ── Sync types ──
@@ -219,7 +221,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     noActiveTarget:                { en: 'No active target selected',    zh: '未选择活动目标' },
     notInitialized:                { en: 'Not initialized, no config found', zh: '未初始化，未找到配置' },
     noSyncServer:                  { en: 'No sync server added',         zh: '未添加同步服务器' },
-    noSyncServerHint:              { en: 'Add a sync server with forja use sync', zh: '使用 forja use sync 添加同步服务器' },
+    noSyncServerHint:              { en: 'Configure sync server with forja sync', zh: '使用 forja sync 配置同步服务器' },
     remotePathNotConfigured:       { en: 'Remote path not configured',   zh: '远程路径未配置' },
     remoteNoServer:                { en: 'runAt=remote but no server configured', zh: '执行位置=远程但未配置服务器' },
     remoteForjaBinDefault:         { en: 'Remote Forja bin not configured, will use default: $HOME/.forja/bin/forja', zh: '远程 Forja 二进制未配置，将使用默认值：$HOME/.forja/bin/forja' },
@@ -290,6 +292,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     'sync.notEnabled':             { en: 'Sync is not enabled',         zh: '远程同步未启用' },
     'sync.noRemotePath':           { en: 'Remote path not configured',  zh: '未配置远程路径' },
     'sync.noGitRepos':             { en: 'No git repositories found',   zh: '未找到 git 仓库' },
+    'sync.filesNotFound':          { en: 'Specified files not found in any git root', zh: '指定文件在任何 git 仓库中均未找到' },
     'sync.passwordRequired':       { en: 'Password not provided. Set FORJA_SSH_PASSWORD or enter interactively', zh: '未提供密码。可通过环境变量 FORJA_SSH_PASSWORD 设置，或在 TTY 中交互输入' },
     'sync.passwordPrompt':         { en: 'Password for',                    zh: '输入' },
     'sync.ambiguous':              { en: 'matched multiple servers, use id', zh: '匹配到多个服务器，请使用 id' },
@@ -301,6 +304,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     syncNothing:                   { en: 'Nothing to sync',             zh: '没有需要同步的内容' },
     syncComplete:                  { en: 'Sync complete',                zh: '同步完成' },
     syncStateReset:                { en: 'Sync state reset',             zh: '同步状态已重置' },
+    syncIgnore:                    { en: 'Ignore',                        zh: '忽略' },
     pending:                       { en: 'Pending',                      zh: '待同步' },
     uploaded:                      { en: 'Uploaded',                     zh: '已上传' },
     deleted:                       { en: 'Deleted',                      zh: '已删除' },
@@ -561,8 +565,24 @@ Options (remote):
   --arch <x86|x64>        目标架构`,
     },
     'help.list': {
-        en: 'Usage: forja list <targets|env|remote|lang> [--json]',
-        zh: '用法: forja list <targets|env|remote|lang> [--json]',
+        en: `Usage:
+  forja list targets               List project targets
+  forja list env                   List all environment tools
+  forja list env <qt|vs|jom|make>  List specific environment tool
+  forja list remote                List remote configuration
+  forja list lang                  List current language
+
+Options:
+  --json                  Output as JSON`,
+        zh: `用法:
+  forja list targets               列出项目目标
+  forja list env                   列出所有环境工具
+  forja list env <qt|vs|jom|make>  列出指定环境工具
+  forja list remote                列出远程配置
+  forja list lang                  列出当前语言
+
+选项:
+  --json                  JSON 格式输出`,
     },
     'help.use': {
         en: 'Usage: forja use <subcommand> [options] [--json]\n\nSubcommands:\n  target [--project <path>] [--mode <debug|release>] [--arch <x86|x64>]\n  execution --local | --remote\n  sync --server <name> --remote-path <path> [--enable | --disable]\n  remote --server <name>\n  remote workspace --mode <staged|legacy> [--path <path>]\n  remote repo --local <name> --remote <name> --role <role>\n  remote build-order qt:build sdk:rebuild ...\n  remote transfer --server <name> --path <path> --artifact <path>\n  remote forja-bin --path <path> | --clear\n  qt [--qt-path <path>] [--vs-dev-shell <path>] [--qmake-target <name>]\n  sdk [--vs-dev-cmd <path>]\n  lang <zh|en>',
@@ -615,8 +635,28 @@ Options:
         zh: '用法: forja doctor [check|fix|unlock|restore|reset|clean-untracked] [--remote] [--force] [--json]',
     },
     'help.sync': {
-        en: 'Usage: forja sync [plan|status|reset|transfer] [options] [--json]\n\n  forja sync                    Sync changed files (interactive confirm)\n  forja sync plan               Preview pending changes\n  forja sync status             Show sync configuration\n  forja sync reset              Clear sync state\n  forja sync transfer           Execute deploy transfer\n  forja sync --file <path>      Sync specific file (repeatable)\n  forja sync --repo <name>      Sync specific repo only\n  forja sync --server <id>      Override server temporarily\n  forja sync --yes              Skip confirmation (interactive mode)',
-        zh: '用法: forja sync [plan|status|reset|transfer] [选项] [--json]\n\n  forja sync                    同步变更文件（交互确认）\n  forja sync plan               预览待同步文件\n  forja sync status             查看同步配置\n  forja sync reset              清除同步状态\n  forja sync transfer           执行部署传输\n  forja sync --file <路径>      同步指定文件（可重复）\n  forja sync --repo <名称>      只同步指定仓库\n  forja sync --server <id>      临时覆盖服务器\n  forja sync --yes              跳过确认（交互模式）',
+        en: `Usage:
+  forja sync                                        Sync changed files (interactive confirm)
+  forja sync --server <name> --remote-path <path>   Configure server and sync
+  forja sync --yes                                  Skip confirmation
+  forja sync plan                                   Preview pending changes
+  forja sync status                                 Show sync configuration
+  forja sync reset                                  Clear sync state
+  forja sync --file <path>                          Sync specific file (repeatable)
+
+Options:
+  --json                                  JSON output`,
+        zh: `用法:
+  forja sync                                        同步变更文件（交互确认）
+  forja sync --server <名称> --remote-path <路径>   配置服务器并同步
+  forja sync --yes                                  跳过确认
+  forja sync plan                                   预览待同步文件
+  forja sync status                                 查看同步配置
+  forja sync reset                                  清除同步状态
+  forja sync --file <路径>                          同步指定文件（可重复）
+
+选项:
+  --json                                  JSON 格式输出`,
     },
     // init diagnostics
     'init.workspaceNotFound':            { en: 'Workspace does not exist',            zh: '工作区不存在' },
@@ -679,7 +719,7 @@ Options:
     'sts.targetsFound':                 { en: 'Found {0} Qt and {1} SDK targets, none selected', zh: '找到 {0} 个 Qt 和 {1} 个 SDK 目标，未选择' },
     'sts.syncServerNotFound':           { en: 'Sync server "{0}" does not exist', zh: '同步服务器 "{0}" 不存在' },
     'sts.syncServerMissing':            { en: 'server not found',                  zh: '服务器未找到' },
-    'sts.syncNotEnabled':               { en: 'Sync not configured; use forja use sync for remote builds', zh: '同步未配置，远程构建可用 forja use sync 配置' },
+    'sts.syncNotEnabled':               { en: 'Sync not configured; use forja sync --server for remote builds', zh: '同步未配置，远程构建可用 forja sync --server 配置' },
     // list diagnostics
     'lst.qtPathNotConfigured':          { en: 'Qt path not configured',             zh: 'Qt 路径未配置' },
     'lst.vsInstallNotConfigured':       { en: 'VS install not configured',          zh: 'VS 安装未配置' },
@@ -720,6 +760,58 @@ Options:
     'use.invalidLanguage':               { en: 'Invalid language',                   zh: '无效语言' },
     'use.useZhOrEn':                     { en: 'Use zh or en',                       zh: '请使用 zh 或 en' },
     'use.failedToSaveLanguage':          { en: 'Failed to save language',             zh: '保存语言失败' },
+    // build/run/clean/stop shared diagnostics
+    'cmd.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
+    'cmd.projectNotFound':               { en: 'Project file not found',             zh: '项目文件未找到' },
+    'cmd.targetProjectMissing':          { en: 'Target project missing',             zh: '目标项目缺失' },
+    'cmd.sdkNoQmakeRcc':                 { en: 'SDK target does not support',        zh: 'SDK 目标不支持' },
+    'cmd.rccNotRemote':                  { en: 'RCC is not supported on remote targets', zh: 'RCC 不支持远程目标' },
+    'cmd.sdkBuildFailed':                { en: 'SDK build failed',                   zh: 'SDK 构建失败' },
+    'cmd.qtBuildFailed':                 { en: 'Qt build failed',                    zh: 'Qt 构建失败' },
+    'cmd.sdkRunUnsupported':             { en: 'SDK target does not support run. Build first.', zh: 'SDK 目标不支持运行。请先构建。' },
+    'cmd.debugVscodeOnly':               { en: 'Debug is only available in VSCode. Use the "Forja: Debug" command from the Command Palette, or click the debug button in the status bar.', zh: '调试仅在 VSCode 中可用。使用命令面板中的 "Forja: Debug" 命令，或点击状态栏中的调试按钮。' },
+    'cmd.sdkCustomUnsupported':          { en: 'SDK target does not support custom commands', zh: 'SDK 目标不支持自定义命令' },
+    'cmd.customNotFound':                { en: 'Custom command not found',           zh: '自定义命令未找到' },
+    'cmd.customFailed':                  { en: 'Custom command failed',              zh: '自定义命令失败' },
+    'cmd.qtRunFailed':                   { en: 'Qt run failed',                      zh: 'Qt 运行失败' },
+    'cmd.targetNotSelected':             { en: 'Target not selected',                zh: '目标未选择' },
+    'cmd.sdkCleanFailed':                { en: 'SDK clean failed',                   zh: 'SDK 清理失败' },
+    'cmd.qtCleanFailed':                 { en: 'Qt clean failed',                    zh: 'Qt 清理失败' },
+    'cmd.stopFailedDetail':              { en: 'Failed to terminate process',        zh: '终止进程失败' },
+    'cmd.stopStillRunningDetail':        { en: 'Process still running',              zh: '进程仍在运行' },
+    'cmd.noActiveTarget':                { en: 'No active target. Run `forja setup` or `forja use target --project <path>`.', zh: '未选择活动目标。运行 `forja setup` 或 `forja use target --project <path>`。' },
+    'cmd.failedToSave':                  { en: 'Failed to save',                     zh: '保存失败' },
+    'cmd.choosePrompt':                  { en: 'Select',                             zh: '请选择' },
+    // sync help fix — actual supported usage
+    'help.sync.actual': {
+        en: `Usage:
+  forja sync                                        Sync changed files (interactive confirm)
+  forja sync --server <name> --remote-path <path>   Configure server and sync
+  forja sync --yes                                  Skip confirmation
+  forja sync plan                                   Preview pending changes
+  forja sync status                                 Show sync configuration
+  forja sync reset                                  Clear sync state
+  forja sync --file <path>                          Sync specific file (repeatable)
+
+Options:
+  --json                                  JSON output`,
+        zh: `用法:
+  forja sync                                        同步变更文件（交互确认）
+  forja sync --server <名称> --remote-path <路径>   配置服务器并同步
+  forja sync --yes                                  跳过确认
+  forja sync plan                                   预览待同步文件
+  forja sync status                                 查看同步配置
+  forja sync reset                                  清除同步状态
+  forja sync --file <路径>                          同步指定文件（可重复）
+
+选项:
+  --json                                  JSON 格式输出`,
+    },
+    // server help — document no-arg list behavior
+    'help.server.full': {
+        en: 'Usage: forja server [<add|update|remove>] [options] [--json]\n\n  forja server                  List all servers\n  forja server add              Add a new server\n  forja server update <id>      Update an existing server\n  forja server remove <id>      Remove a server',
+        zh: '用法: forja server [<add|update|remove>] [选项] [--json]\n\n  forja server                  列出所有服务器\n  forja server add              添加新服务器\n  forja server update <id>      更新已有服务器\n  forja server remove <id>      删除服务器',
+    },
 };
 
 // Global locale state
@@ -733,7 +825,13 @@ export function getGlobalLocale(): Locale {
     return _globalLocale;
 }
 
-export function T(key: string): string {
+export function T(key: string, params?: string[]): string {
     const entry = UI[key];
-    return entry ? entry[_globalLocale] : key;
+    let text = entry ? entry[_globalLocale] : key;
+    if (params) {
+        for (let i = 0; i < params.length; i++) {
+            text = text.replace(`{${i}}`, params[i]);
+        }
+    }
+    return text;
 }

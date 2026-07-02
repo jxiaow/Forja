@@ -4,7 +4,7 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { requireActiveTarget } from './activeTarget';
+import { requireActiveTarget, tryPinnedProjectFallback, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
@@ -104,28 +104,12 @@ function extractCleanError(executed: { errors?: string[]; stderr?: string }): st
 // ── Main ──
 
 export async function runClean(workspace: string, options: { plan?: boolean; json?: boolean } = {}): Promise<CleanResult> {
-    const wantsJson = options.json ?? process.argv.includes('--json');
+    const wantsJson = options.json ?? false;
     let targetResult = requireActiveTarget(workspace);
 
     // Fallback: if no activeTarget but SDK has pinnedProject, synthesize target from SDK config
     if ('error' in targetResult) {
-        const sdkSettings = loadSdkSettings(workspace);
-        if (sdkSettings.pinnedProject) {
-            const projectPath = path.isAbsolute(sdkSettings.pinnedProject)
-                ? sdkSettings.pinnedProject
-                : path.join(workspace, sdkSettings.pinnedProject);
-            if (fs.existsSync(projectPath)) {
-                targetResult = {
-                    target: {
-                        kind: 'sdk',
-                        project: sdkSettings.pinnedProject,
-                        mode: sdkSettings.mode || 'debug',
-                        arch: sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
-                        runAt: 'local',
-                    },
-                };
-            }
-        }
+        targetResult = tryPinnedProjectFallback(workspace, targetResult);
     }
 
     if ('error' in targetResult) {
@@ -133,7 +117,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             ok: false,
             action: 'clean',
             workspace,
-            diagnostics: [diag('error', `Target not selected: ${targetResult.error}`)],
+            diagnostics: [diag('error', `${T('cmd.targetNotSelected')}: ${targetResult.error}`)],
             nextAction: targetResult.nextAction,
         };
     }
@@ -149,7 +133,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             action: 'clean',
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', `Target project missing: ${target.project}`)],
+            diagnostics: [diag('error', `${T('cmd.targetProjectMissing')}: ${target.project}`)],
             nextAction: 'forja list targets',
         };
     }
@@ -243,7 +227,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             exitCode: executed.exitCode ?? undefined,
             durationMs: executed.durationMs > 0 ? executed.durationMs : durationMs,
             changed,
-            diagnostics: ok ? undefined : [diag('error', `SDK clean failed: ${extractCleanError(executed) || 'unknown error'}`)],
+            diagnostics: ok ? undefined : [diag('error', `${T('cmd.sdkCleanFailed')}: ${extractCleanError(executed) || 'unknown error'}`)],
             nextAction: ok ? 'forja build' : 'forja doctor',
         };
     }
@@ -263,7 +247,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
                 diagnostics: planned.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
                 nextAction: isTargetMissing
                     ? 'forja list targets'
-                    : planned.nextAction?.replace(/\s+--json/g, ''),
+                    : stripJsonFlag(planned.nextAction),
             };
         }
 
@@ -300,7 +284,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             exitCode: executed.exitCode ?? undefined,
             durationMs: executed.durationMs > 0 ? executed.durationMs : undefined,
             changed,
-            diagnostics: ok ? undefined : [diag('error', `Qt clean failed: ${extractCleanError(executed) || 'unknown error'}`)],
+            diagnostics: ok ? undefined : [diag('error', `${T('cmd.qtCleanFailed')}: ${extractCleanError(executed) || 'unknown error'}`)],
             nextAction: ok ? 'forja build' : 'forja doctor',
         };
     } catch (e) {

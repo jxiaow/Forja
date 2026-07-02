@@ -7,31 +7,27 @@ import { ForjaJsonResult } from './types';
 import { runStatus, formatStatusText } from './status';
 import { runSetup, formatSetupText } from './setup';
 import { runList, ListCategory, EnvSubCategory, formatListText } from './list';
-import { runUseTarget, runUseExecution, runUseSync, runUseRemote, runUseRemoteWorkspace, runUseRemoteRepo, runUseRemoteForjaBin, runUseRemoteBuildOrder, runUseRemoteTransfer, runUseQt, runUseSdk, runUseLang, formatUseText } from './use';
+import { runUseTarget, runUseExecution, runUseRemote, runUseRemoteWorkspace, runUseRemoteRepo, runUseRemoteForjaBin, runUseRemoteBuildOrder, runUseRemoteTransfer, runUseQt, runUseSdk, runUseLang, formatUseText } from './use';
 import { runServerAdd, runServerUpdate, runServerRemove, formatServerText } from './server';
 import { runBuild, BuildAction, outputBuildResult } from './build';
 import { runRun, outputRunResult } from './run';
 import { runStop, outputStopResult } from './stop';
 import { runClean, outputCleanResult } from './clean';
 import { runDoctor, formatDoctorText } from './doctor';
-import { runSyncPlan, runSyncExecute, runSyncReset, formatSyncText } from './sync';
-import { confirm } from './prompt';
+import { runSyncPlan, runSyncExecute, runSyncReset, runSyncStatus, formatSyncText } from './sync';
+import { confirm, prompt, choose } from './prompt';
 import { resolveLocale, Locale, T, setGlobalLocale } from './types';
 import { loadGlobalConfig } from '../../core/settingsIO';
+import { readServers, addServer, resolveServerSelector, readProjectSyncConfig } from '../../core/serverStore';
+import { resolveGitRoots } from '../../core/gitRepoResolver';
+import { configureSyncSettings, ClassifiedChanges } from '../../sync/cli';
 
 type Command = 'status' | 'setup' | 'list' | 'use' | 'server' | 'build' | 'run' | 'stop' | 'clean' | 'doctor' | 'sync';
 
 const COMMANDS: Command[] = ['status', 'setup', 'list', 'use', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
 
-// Commands implemented in this module (Stage 2-4)
-const IMPLEMENTED_COMMANDS: Command[] = ['status', 'setup', 'list', 'use', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
-
 export function isCommand(cmd: string): cmd is Command {
     return COMMANDS.includes(cmd as Command);
-}
-
-export function isImplementedCommand(cmd: string): boolean {
-    return IMPLEMENTED_COMMANDS.includes(cmd as Command);
 }
 
 // Track --workspace value errors
@@ -45,13 +41,13 @@ function getCommandHelp(cmd: string): string {
         setup: T('help.setup'),
         list: T('help.list'),
         use: T('help.use'),
-        server: T('help.server'),
+        server: T('help.server.full'),
         build: T('help.build'),
         run: T('help.run'),
         stop: T('help.stop'),
         clean: T('help.clean'),
         doctor: T('help.doctor'),
-        sync: T('help.sync'),
+        sync: T('help.sync.actual'),
     };
     return map[cmd] || '';
 }
@@ -132,7 +128,7 @@ export async function runCli(argv: string[]): Promise<void> {
                 ? `${T('idx.unknownCommand')}: ${command}. ${T('idx.didYouMean')}: forja ${suggestion}?`
                 : `${T('idx.unknownCommand')}: ${command}`;
             if (wantsJson) {
-                outputResult({ ok: false, action: command, diagnostics: [{ level: 'error', message: msg }], nextActions: suggestion ? [`forja ${suggestion}`] : ['forja --help'] }, wantsJson);
+                outputResult({ ok: false, action: command, diagnostics: [{ level: 'error', message: msg }], nextAction: suggestion ? `forja ${suggestion}` : 'forja --help' }, wantsJson);
             } else {
                 console.error(msg);
             }
@@ -203,7 +199,7 @@ const KEYWORD_SUGGESTIONS: Record<string, Record<string, { hint: string; params:
         'execution': { hint: 'forja use execution', params: ['--local', '--remote'],                                                                 next: 'forja use execution --local' },
         'local':     { hint: 'forja use execution', params: ['--local'],                                                                             next: 'forja use execution --local' },
         'remote':    { hint: 'forja use remote', params: ['--server <name>'],                                                                        next: 'forja use remote --server <name>' },
-        'sync':      { hint: 'forja use sync',   params: ['--server <name>', '--remote-path <path>'],                                                next: 'forja use sync --server <name> --remote-path <path>' },
+        'sync':      { hint: 'forja sync',      params: ['--server <name>', '--remote-path <path>'],                                                next: 'forja sync --server <name> --remote-path <path>' },
     },
 };
 
@@ -281,8 +277,7 @@ function outputResult(result: ForjaJsonResult, wantsJson: boolean, textFormatter
         }
         if (result.nextAction) {
             lines.push('Next:');
-            if (result.nextAction) {
-            const a = result.nextAction; lines.push(`  ${a}`); }
+            const a = result.nextAction; lines.push(`  ${a}`);
         }
         console.log(lines.length > 0 ? lines.join('\n') : JSON.stringify(result, null, 2));
     }
@@ -481,16 +476,6 @@ function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale
             outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
             return;
         }
-        case 'sync': {
-            const result = runUseSync(workspace, {
-                server: extractFlag(argv, '--server'),
-                remotePath: extractFlag(argv, '--remote-path'),
-                enable: hasFlag(argv, '--enable') ? true : undefined,
-                disable: hasFlag(argv, '--disable') ? true : undefined,
-            });
-            outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
-            return;
-        }
         case 'remote': {
             const remoteSubCmd = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
 
@@ -616,7 +601,7 @@ function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale
         }
         default: {
             if (subCmd !== '') {
-                const USE_SUBCOMMANDS = ['target', 'execution', 'sync', 'remote', 'qt', 'sdk', 'lang'];
+                const USE_SUBCOMMANDS = ['target', 'execution', 'remote', 'qt', 'sdk', 'lang'];
                 const keywordEntry = KEYWORD_SUGGESTIONS['use']?.[subCmd];
                 const keywordHint = keywordEntry ? `${keywordEntry.hint} ${keywordEntry.params.map(p => `[${p}]`).join(' ')}` : undefined;
                 const substringHint = suggestCorrection(subCmd, USE_SUBCOMMANDS);
@@ -625,8 +610,8 @@ function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale
                 const msg = hint
                     ? `${T('idx.unknownUseSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: ${hint}?`
                     : `${T('idx.unknownUseSubcommand')}: ${subCmd}`;
-                const nextActions = keywordEntry ? [keywordEntry.next] : (hint ? [hint] : ['forja use target', 'forja use execution', 'forja use remote']);
-                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: msg }], nextActions }, wantsJson);
+                const nextAction = keywordEntry ? keywordEntry.next : (hint || 'forja use target');
+                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: msg }], nextAction }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
@@ -635,14 +620,7 @@ function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale
                 ok: true,
                 action: 'use',
                 diagnostics: [{ level: 'info', message: T('idx.useUsage') }],
-                nextActions: [
-                    'forja use target --project <path>',
-                    'forja use target --mode <mode> --arch <arch>',
-                    'forja use execution --local|--remote',
-                    'forja use sync --server <name> --remote-path <path>',
-                    'forja use remote --server <name>',
-                    'forja use lang zh|en',
-                ],
+                nextAction: 'forja use target --project <path>',
             };
             outputResult(result, wantsJson);
         }
@@ -763,7 +741,7 @@ async function handleServer(argv: string[], workspace: string, wantsJson: boolea
                 const msg = hint
                     ? `${T('idx.unknownServerSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: ${hint}?`
                     : `${T('idx.unknownServerSubcommand')}: ${subCmd}`;
-                outputResult({ ok: false, action: 'server', serverAction: 'add', changed: [], diagnostics: [{ level: 'error', message: msg }], nextActions: hint ? [`forja server ${hint}`] : ['forja server add', 'forja server update', 'forja server remove'] }, wantsJson);
+                outputResult({ ok: false, action: 'server', serverAction: 'add', changed: [], diagnostics: [{ level: 'error', message: msg }], nextAction: hint ? `forja server ${hint}` : 'forja server add' }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
@@ -801,7 +779,7 @@ async function handleBuild(argv: string[], workspace: string, wantsJson: boolean
             buildAction: 'default',
             workspace,
             diagnostics: [{ level: 'error', message: buildMsg }],
-            nextActions: buildHint ? [`forja build ${buildHint}`] : ['forja build', 'forja build fresh', 'forja build qmake', 'forja build rcc'],
+            nextAction: buildHint ? `forja build ${buildHint}` : 'forja build',
         }, wantsJson);
         process.exitCode = 1;
         return;
@@ -911,7 +889,7 @@ async function handleClean(argv: string[], workspace: string, wantsJson: boolean
 async function handleDoctor(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
     // Check for unknown flags
     const doctorKnownFlags = new Set(['--fix', '--unlock', '--restore', '--reset', '--clean-untracked', '--remote', '--server', '--force', '--recursive', '--plan']);
-    const doctorFlagsWithValues = new Set(['--server', '--unlock']);
+    const doctorFlagsWithValues = new Set(['--server']);
     const unknownFlags = findUnknownFlags(argv, doctorKnownFlags, doctorFlagsWithValues);
     if (unknownFlags.length > 0) {
         outputResult({
@@ -998,7 +976,7 @@ function collectPositionalPaths(argv: string[], startIdx: number): string[] {
 // ── Sync ──
 
 async function handleSync(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const syncUnknown = findUnknownFlags(argv, new Set(['--yes', '--reset', '--file']), new Set(['--file']));
+    const syncUnknown = findUnknownFlags(argv, new Set(['--yes', '--reset', '--file', '--server', '--remote-path']), new Set(['--file', '--server', '--remote-path']));
     if (syncUnknown.length > 0) {
         outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `${T('sync.unknownFlag')}: ${syncUnknown.join(', ')}` }], nextAction: 'forja sync' }, wantsJson);
         process.exitCode = 1;
@@ -1012,8 +990,9 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
     // --reset: clear sync state and exit
     if (hasFlag(argv, '--reset')) {
         const extraPositional = argv.slice(1).filter(a => !a.startsWith('--'));
-        if (extraPositional.length > 0) {
-            outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `--reset ${T('sync.resetConflict')}: ${extraPositional.join(', ')}` }], nextAction: 'forja sync' }, wantsJson);
+        if (extraPositional.length > 0 || subArg === 'plan') {
+            const conflicts = [...extraPositional, ...(subArg === 'plan' ? ['plan'] : [])];
+            outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `--reset ${T('sync.resetConflict')}: ${conflicts.join(', ')}` }], nextAction: 'forja sync' }, wantsJson);
             process.exitCode = 1;
             return;
         }
@@ -1022,13 +1001,8 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
         return;
     }
 
-    if (subArg === 'plan') {
-        const result = await runSyncPlan(workspace, files);
-        outputResult(result, wantsJson, fmt);
-        return;
-    }
-
-    if (subArg !== '') {
+    // ── 子命令校验（在配置处理之前） ──
+    if (subArg !== '' && subArg !== 'plan' && subArg !== 'status') {
         outputResult({
             ok: false,
             action: 'sync',
@@ -1044,17 +1018,166 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
         return;
     }
 
+    // status: 显示配置，不需要 sync 前置配置
+    if (subArg === 'status') {
+        const result = runSyncStatus(workspace);
+        outputResult(result, wantsJson, fmt);
+        return;
+    }
+
+    // ── 配置处理：--server / --remote-path / 交互式引导 ──
+    const serverFlag = extractFlag(argv, '--server');
+    const remotePathFlag = extractFlag(argv, '--remote-path');
+
+    if (serverFlag || remotePathFlag) {
+        // 显式指定服务器和/或远程路径
+        let serverId: string | undefined;
+        if (serverFlag) {
+            const resolved = resolveServerSelector(serverFlag);
+            if (resolved.ambiguous) {
+                outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `${T('sync.serverNotFound')}: "${serverFlag}" (${T('sync.ambiguous')})` }], nextAction: 'forja list servers' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            if (!resolved.server) {
+                outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `${T('sync.serverNotFound')}: "${serverFlag}"` }], nextAction: 'forja server' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            serverId = resolved.server.id;
+        }
+
+        if (!serverId) {
+            // --remote-path only: use existing selectedServer
+            const project = readProjectSyncConfig(workspace);
+            if (!project.selectedServer) {
+                outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: T('sync.notConfigured') }], nextAction: 'forja sync --server <name> --remote-path <path>' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            serverId = project.selectedServer;
+        }
+
+        const cfg = configureSyncSettings(workspace, { serverId, remotePath: remotePathFlag, enable: true });
+        if (!cfg.ok) {
+            outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: cfg.error }], nextAction: 'forja doctor' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+    } else if (!wantsJson) {
+        // 无 flag，检查配置是否完整（轻量检查，不跑 plan）
+        const syncCfg = readProjectSyncConfig(workspace);
+        const serverExists = syncCfg.selectedServer ? readServers().some(s => s.id === syncCfg.selectedServer) : false;
+        const needsSetup = !syncCfg.enabled || !syncCfg.selectedServer || !serverExists || !syncCfg.remotePaths[syncCfg.selectedServer];
+        if (needsSetup) {
+            const guided = await interactiveSyncSetup(workspace);
+            if (!guided) {
+                process.exitCode = 1;
+                return;
+            }
+        }
+    } else {
+        // JSON mode, no flags — let the sync itself report the error with nextAction
+    }
+
+    if (subArg === 'plan') {
+        const result = await runSyncPlan(workspace, files);
+        outputResult(result, wantsJson, fmt);
+        return;
+    }
+
     // Default: interactive plan → confirm → execute
     if (!wantsJson && !hasFlag(argv, '--yes')) {
         const plan = await runSyncPlan(workspace, files);
         if (!plan.ok) { outputResult(plan, false, fmt); process.exitCode = 1; return; }
         const pendingCount = (plan.plan?.pending?.length ?? 0) + (plan.plan?.deleted?.length ?? 0);
         if (pendingCount === 0) { console.log(T('syncNothing')); return; }
+        // 交互确认中的 plan 只是中间步骤，不显示 nextAction（用户已在 forja sync 流程中）
+        (plan as any).nextAction = undefined;
         console.log(formatSyncText(plan as Parameters<typeof formatSyncText>[0], locale));
         console.log();
         const yes = await confirm(T('syncConfirm'), false);
         if (!yes) { console.log(T('syncCancelled')); process.exitCode = 1; return; }
+
+        // Reuse plan data to avoid re-running git status
+        const gitRoots = resolveGitRoots(workspace);
+        const classified: ClassifiedChanges = {
+            pending: plan.plan?.pending ?? [],
+            deleted: plan.plan?.deleted ?? [],
+            skipped: plan.plan?.skipped ?? [],
+            skippedDetails: plan.plan?.skippedDetails ?? [],
+            gitRoots: (plan.plan?.repos ?? []).map(name => gitRoots.find(g => g.name === name)).filter(Boolean) as ReturnType<typeof resolveGitRoots>,
+            requestedFilesNotFound: false,
+        };
+        const result = await runSyncExecute(workspace, files, classified);
+        outputResult(result, wantsJson, fmt);
+        return;
     }
     const result = await runSyncExecute(workspace, files);
     outputResult(result, wantsJson, fmt);
+}
+
+/**
+ * 交互式引导用户完成 sync 配置（选择/创建服务器 + 输入远程路径）。
+ * 返回 true 表示配置完成，false 表示失败或用户取消。
+ */
+async function interactiveSyncSetup(workspace: string): Promise<boolean> {
+    const existingServers = readServers();
+    let serverId: string | undefined;
+    let selectedServer: { username: string } | undefined;
+
+    if (existingServers.length === 0) {
+        // 零服务器 — 引导创建
+        console.log(T('sync.notConfigured'));
+        const host = await prompt(T('setupPromptHost'));
+        if (!host) return false;
+        const username = await prompt(T('setupPromptUsername'));
+        if (!username) return false;
+        const portStr = await prompt(T('setupPromptPort'), '22');
+        const port = parseInt(portStr || '22', 10);
+        if (isNaN(port) || port < 1 || port > 65535) return false;
+        const authChoice = await choose(T('setupPromptAuthMode'), ['key', 'password'] as const, m => m === 'key' ? T('setupAuthKey') : T('setupAuthPassword'));
+        const authMode = authChoice || 'key';
+        let privateKeyPath = '';
+        let password = '';
+        if (authMode === 'key') {
+            privateKeyPath = await prompt(T('setupPromptPrivateKey'), '') || '';
+        } else {
+            password = await prompt(T('setupPromptPassword')) || '';
+        }
+        const name = await prompt(T('setupPromptName'), host) || host;
+        try {
+            const created = addServer({ name, host, username, port, authMode, privateKeyPath, password });
+            serverId = created.id;
+            selectedServer = created;
+            console.log(`${T('setupServerCreated')}: ${created.name} (${created.host})`);
+        } catch {
+            return false;
+        }
+    } else if (existingServers.length === 1) {
+        // 单服务器 — 自动选择
+        serverId = existingServers[0].id;
+        selectedServer = existingServers[0];
+    } else {
+        // 多服务器 — 交互选择
+        const server = await choose(T('setupSelectServer'), existingServers, s => `${s.name} (${s.username}@${s.host})`);
+        if (!server) return false;
+        serverId = server.id;
+        selectedServer = server;
+    }
+
+    // 远程路径：已有则复用，否则提示输入
+    const syncCfg = readProjectSyncConfig(workspace);
+    let remotePath = syncCfg.remotePaths[serverId || ''] || '';
+    if (!remotePath) {
+        const defaultPath = `/home/${selectedServer?.username || 'user'}/${path.basename(workspace)}`;
+        remotePath = await prompt(T('setupRemotePathPrompt'), defaultPath);
+        if (!remotePath) return false;
+    }
+
+    const cfg = configureSyncSettings(workspace, { serverId: serverId!, remotePath, enable: true });
+    if (!cfg.ok) return false;
+
+    console.log();
+    return true;
 }

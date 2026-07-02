@@ -112,7 +112,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
             workspace,
             activeTarget: target,
             state: 'running',
-            diagnostics: [diag('error', `${T('stopTerminateFailed')} (pid ${pid}): ${result.error}`)],
+            diagnostics: [diag('error', `${T('cmd.stopFailedDetail')} (pid ${pid}): ${result.error}`)],
             nextAction: 'forja doctor',
         };
     }
@@ -131,7 +131,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
                 workspace,
                 activeTarget: target,
                 state: 'running',
-                diagnostics: [diag('warning', `${T('stopStillRunning')} (pid ${pid}), SIGTERM ${T('stopTerminateFailed')}`)],
+                diagnostics: [diag('warning', `${T('cmd.stopStillRunningDetail')} (pid ${pid}), SIGTERM ${T('stopTerminateFailed')}`)],
                 nextAction: 'forja doctor',
             };
         }

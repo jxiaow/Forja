@@ -2,6 +2,7 @@
  * Interactive prompt utilities for CLI commands.
  */
 import * as readline from 'readline';
+import { T } from './types';
 
 export async function prompt(message: string, defaultValue?: string): Promise<string> {
     const rl = readline.createInterface({
@@ -35,7 +36,7 @@ export async function choose<T>(message: string, choices: T[], format: (item: T)
         console.log(`  [${index + 1}] ${format(choice)}`);
     });
 
-    const answer = await prompt('请选择', '1');
+    const answer = await prompt(T('cmd.choosePrompt'), '1');
     const index = parseInt(answer) - 1;
     
     if (index >= 0 && index < choices.length) {

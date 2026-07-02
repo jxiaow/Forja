@@ -6,8 +6,9 @@
 
 **语法**：
 ```
-forja sync [--yes] [--reset] [--file <path>] [--json]
+forja sync [--yes] [--reset] [--file <path>] [--server <name>] [--remote-path <path>] [--json]
 forja sync plan [--file <path>] [--json]
+forja sync status [--json]
 ```
 
 ## 命令边界
@@ -17,34 +18,35 @@ forja sync plan [--file <path>] [--json]
 | 上传变更文件 | `forja sync` |
 | 预览上传计划 | `forja sync plan` |
 | 清除同步状态 | `forja sync --reset` |
-| 查看 sync 状态 | `forja status`（sync 区块包含 server/port/auth 详情） |
+| 查看 sync 配置状态 | `forja sync status` |
+| 快速配置 sync server/path | `forja sync --server <name> --remote-path <path>`（配置+同步一步完成） |
+| 查看 sync 完整状态 | `forja status`（sync 区块包含 server/port/auth 详情） |
 | 查看 servers | `forja server` |
-| 配置 sync server/path | `forja use sync --server <id> --remote-path <path>` |
-| 启用/禁用 sync | `forja use sync --enable` / `forja use sync --disable` |
 | 测试 SSH | `forja doctor --remote` |
 | 共享 server CRUD | `forja server add ...` / `forja server update <id> ...` / `forja server remove <id>` |
 
 ## 行为
 
 1. 读取 sync 配置。
-2. 缺少 sync server/remote path 时失败，返回 `forja server` + `forja use sync --server <id> --remote-path <path>`。
+2. 缺少 sync server/remote path 时，文本模式进入交互式引导（选/创建服务器 + 输入远程路径）；JSON 模式返回错误 + nextAction。
 3. `plan` 只输出计划，不上传、不删除远端文件。
-4. `--reset` 只清同步状态，不上传。
+4. `--reset` 只清同步状态，不上传。不能与 `plan` 子命令或其他位置参数同时使用。
 5. `--yes` 跳过交互确认直接执行（脚本/自动化场景）。
-6. `--file <path>` 同步指定文件（可重复）。本地存在则上传，不存在则删除远端副本。
-7. 默认交互流程：plan → 显示摘要 → 确认 [y/N] → execute。
+6. `--file <path>` 同步指定文件（可重复）。本地存在则上传，不存在则删除远端副本。指定的文件在所有 git root 中均未找到时报错。
+7. 默认交互流程：plan → 显示摘要 → 确认 [y/N] → execute。确认后的执行复用 plan 阶段的分类结果，不重复调用 git status。
 8. `--json` 模式直接执行，不弹确认。
 9. 同步失败不自动修改 server/path 配置。
+10. `--server <name>` / `--remote-path <path>` 快速配置并同步：配置服务器和/或远程路径后直接执行同步。只传 `--remote-path` 时复用已选服务器。
+11. `status` 显示当前 sync 配置状态（enabled、server 详情、remotePath、ignore 列表）。
 
 ## 已移除的功能
 
 | 移除项 | 替代方案 |
 |--------|----------|
-| `forja sync status` | `forja status`（sync 区块已包含完整信息） |
-| `forja sync reset` | `forja sync --reset` |
+| `forja sync reset`（子命令形式） | `forja sync --reset` |
 | `forja sync transfer` | 概念不属于文件同步，核心函数保留在 `remote/core/transfer.ts` |
 | `--repo <name>` | 自动处理所有 git 仓库 |
-| `--server <id>` | `forja use sync --server <id>` 持久化选择 |
+| `forja use sync` CLI 入口 | `forja sync --server <name> --remote-path <path>` 一步完成配置 |
 
 ## 吸收的旧命令
 
@@ -78,13 +80,17 @@ forja sync plan [--file <path>] [--json]
 ```ts
 interface SyncResult extends ForjaJsonResult {
     action: 'sync';
-    syncAction: 'run' | 'plan' | 'reset';
+    syncAction: 'run' | 'plan' | 'reset' | 'status';
     plan?: SyncPlan;
     server?: string;
     remotePath?: string;
     uploaded?: string[];
     deleted?: string[];
     skipped?: string[];
+    // status fields
+    enabled?: boolean;
+    serverDetail?: { name: string; host: string; username: string; port: number };
+    ignore?: string[];
 }
 
 interface SyncPlan {
@@ -103,12 +109,13 @@ interface SyncPlan {
 
 | code | level | 触发条件 | nextAction |
 |------|-------|----------|------------|
-| `sync.notEnabled` | error | 同步未启用 | `forja use sync --enable` |
-| `sync.notConfigured` | error | 未配置 sync server | `forja server` |
-| `sync.serverNotFound` | error | 配置的 server 不存在 | `forja server` |
-| `sync.noRemotePath` | error | 未配置远程路径 | `forja use sync --server <id> --remote-path <path>` |
+| `sync.notEnabled` | error | 同步未启用 | `forja sync` |
+| `sync.notConfigured` | error | 未配置 sync server | `forja sync` |
+| `sync.serverNotFound` | error | 配置的 server 不存在 | `forja sync` |
+| `sync.noRemotePath` | error | 未配置远程路径 | `forja sync --server <name> --remote-path <path>` |
 | `sync.passwordRequired` | error | 密码模式未提供密码 | `FORJA_SSH_PASSWORD=<password> forja sync` |
 | `sync.noGitRepos` | error | 工作区无 git 仓库 | `forja status` |
+| `sync.filesNotFound` | error | `--file` 指定的文件在所有 git root 中均未找到 | `forja sync --file <path>` |
 | `sync.remoteBlocked` | error | SSH/路径/权限失败 | `forja doctor --remote` |
 
 ## 正常场景
@@ -188,7 +195,8 @@ Next:
 - `forja sync plan --json` 不上传文件。
 - `forja sync --reset --json` 清除同步状态。
 - `forja sync --yes --json` 跳过确认直接执行。
-- `forja sync status` 返回 unknown action 错误。
-- `forja sync --file foo` 返回 unknown flag 错误。
+- `forja sync status` 返回当前 sync 配置状态。
+- `forja sync plan --reset` 返回 reset 冲突错误。
+- `forja sync --file <不存在的文件>` 返回 filesNotFound 错误。
 - `forja status` 的 sync 区块显示 username@host:port 和 authMode。
 - 缺 server/path 时不尝试 SSH。

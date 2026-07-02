@@ -106,7 +106,7 @@ export function runStatus(workspace: string): StatusResult {
         if (qtCount > 0 || sdkCount > 0) {
             diagnostics.push({
                 level: 'info',
-                message: T('sts.targetsFound').replace('{0}', String(qtCount)).replace('{1}', String(sdkCount)),
+                message: T('sts.targetsFound', [String(qtCount), String(sdkCount)]),
                 fix: 'forja list targets',
                 params: { qtCount: String(qtCount), sdkCount: String(sdkCount) },
             });
@@ -190,13 +190,13 @@ export function runStatus(workspace: string): StatusResult {
                 level: 'warning',
                 message: T('sts.syncNotEnabled'),
                 hint: T('noSyncServerHint'),
-                fix: 'forja use sync',
+                fix: 'forja sync --server <name> --remote-path <path>',
             });
         } else if (activeTarget?.runAt === 'local' && !syncConfig.selectedServer) {
             diagnostics.push({
                 level: 'info',
                 message: T('sts.syncNotEnabled'),
-                fix: 'forja use sync',
+                fix: 'forja sync --server <name> --remote-path <path>',
             });
         }
     } else {
@@ -204,9 +204,9 @@ export function runStatus(workspace: string): StatusResult {
             readiness.sync = 'blocked';
             diagnostics.push({
                 level: 'error',
-                message: T('sts.syncServerNotFound').replace('{0}', syncConfig.selectedServer),
+                message: T('sts.syncServerNotFound', [syncConfig.selectedServer]),
                 hint: T('serverDeleted'),
-                fix: 'forja server',
+                fix: 'forja sync',
                 params: { server: syncConfig.selectedServer },
             });
         } else {
@@ -216,7 +216,7 @@ export function runStatus(workspace: string): StatusResult {
                 diagnostics.push({
                     level: 'error',
                     message: `${T('remotePathNotConfigured')}: ${syncConfig.selectedServer}`,
-                    fix: 'forja use sync',
+                    fix: 'forja sync --server <name> --remote-path <path>',
                     params: { server: syncConfig.selectedServer },
                 });
             } else {
