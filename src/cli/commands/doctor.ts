@@ -265,7 +265,7 @@ export async function runDoctor(workspace: string, options: {
         } else {
             checks.push(check('sync', 'blocked', `${T('doctorSyncDeleted')}: ${sync.selectedServer}`,
                 [diag('error', `Sync server "${sync.selectedServer}" does not exist`)],
-                'forja list servers'));
+                'forja server'));
         }
     } else {
         checks.push(check('sync', 'skipped', T('doctorSyncNotConfigured')));
@@ -281,7 +281,7 @@ export async function runDoctor(workspace: string, options: {
         if (!server) {
             checks.push(check('remote', 'blocked', T('doctorNoServer'),
                 [diag('error', T('doctorNoServer'))],
-                'forja list servers'));
+                'forja server'));
             diagnostics.push(diag('error', T('doctorNoServer')));
         } else {
             checks.push(check('remote', 'ready', `Server: ${server.name} (${server.host})`));

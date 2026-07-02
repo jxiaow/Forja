@@ -113,7 +113,7 @@ test('sync help and docs describe server management commands', () => {
     assert.match(spec, /\| `remove <id>` \|/);
     // In v2, guide and skill use the new server command
     for (const source of [guide, skill]) {
-        assert.match(source, /forja list servers --json/);
+        assert.match(source, /forja server --json/);
         assert.match(source, /forja server add/);
         assert.match(source, /forja server update/);
         assert.match(source, /forja server remove/);

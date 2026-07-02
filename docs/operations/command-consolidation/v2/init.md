@@ -282,7 +282,7 @@ _`--remote` 未配置 server_：
     "diagnostics": [
         { "code": "init.remoteNoServer", "level": "error", "message": "No server configured for remote init", "hint": "Add a shared server first, then bind remote execution with forja use remote --server <id>" }
     ],
-    "nextActions": ["forja list servers", "forja server add --name <name> --host <host> --username <name>", "forja use remote --server <id> --remote-path <path>"]
+    "nextActions": ["forja server", "forja server add --name <name> --host <host> --username <name>", "forja use remote --server <id> --remote-path <path>"]
 }
 ```
 
@@ -424,7 +424,7 @@ Forja init failed (remote)
 Error: No server configured for remote init
   hint: Add a shared server first, then bind remote execution with forja use remote --server <id>
 Next:
-  forja list servers
+  forja server
   forja use remote --server <id> --remote-path <path>
 ```
 

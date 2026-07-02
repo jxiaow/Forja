@@ -6,8 +6,9 @@
 
 **语法**：
 ```
-forja list [targets|servers|remote-repos|env|remote|config] [--workspace <path>] [--json]
-forja list servers --detail <id> [--json]
+forja list [targets|servers|env|remote|config|lang] [--workspace <path>] [--json]
+forja server --detail <id> [--json]
+forja list env <qt|vs|jom|make> [--json]
 forja list remote [--detail] [--workspace <path>] [--json]
 ```
 
@@ -19,8 +20,7 @@ forja list remote [--detail] [--workspace <path>] [--json]
 | 当前目标是否可用 | `forja status` |
 | 工具链路径有哪些 | `forja list env` |
 | 工具链能不能用 | `forja doctor` |
-| 配了哪些服务器 | `forja list servers` |
-| Qt/SDK/Sync/Remote 保存了什么配置摘要 | `forja list config` |
+| 配了哪些服务器 | `forja server` |
 | SSH 能不能连 | `forja doctor --remote` |
 | 远程 workspace/bin/build-order/transfer 配了什么 | `forja list remote` |
 | 远程配置是否完整可用 | `forja status` / `forja doctor --remote` |
@@ -29,14 +29,14 @@ forja list remote [--detail] [--workspace <path>] [--json]
 
 | Category | 默认输入 | 数据来源 | 行为 |
 |----------|----------|----------|------|
-| `targets` | `forja list` | workspace 文件扫描 + activeTarget | 列出 Qt `.pro`、SDK `.sln`/`Makefile`，标记 current/configured |
-| `servers` | `forja list servers` | serverStore | 列出 ServerSummary，不输出密码 |
+| `targets` | `forja list` | workspace 文件扫描 + activeTarget | 列出 Qt `.pro`、SDK `.sln`/`Makefile`/`CMakeLists.txt`，标记 current/configured |
+| `servers` | `forja server` | serverStore | 列出 ServerSummary，不输出密码 |
 | `servers --detail <id>` | - | serverStore | 输出 ServerDetail，不输出密码 |
-| `remote-repos` | `forja list remote-repos` | remote repo settings | 列出 repo mapping |
 | `env` | `forja list env` | 本地发现逻辑 | 列出 Qt/VS/jom/make 路径，只做发现 |
+| `env <qt\|vs\|jom\|make>` | - | 本地发现逻辑 | 列出指定子分类的已配置/可用项 |
 | `remote` | `forja list remote` | remote settings | 列出 workspace/bin/build-order/transfer/repos |
 | `remote --detail` | - | remote settings | 展开 buildOrder 和 artifacts 明细 |
-| `config` | `forja list config` | Qt/SDK/Sync/Remote settings | 列出已保存配置摘要，不做健康验证 |
+| `lang` | `forja list lang` | global config | 列出当前语言设置 |
 
 ## 吸收的旧命令
 
@@ -46,9 +46,9 @@ forja list remote [--detail] [--workspace <path>] [--json]
 | `forja sdk projects` | `forja list` / `forja list targets` |
 | `forja qt env` | `forja list env` |
 | `forja sdk env` | `forja list env` |
-| `forja sync servers` | `forja list servers` |
-| `forja sync server` | `forja list servers --detail <id>` |
-| `forja remote repo list` | `forja list remote-repos` |
+| `forja sync servers` | `forja server` |
+| `forja sync server` | `forja server --detail <id>` |
+| `forja remote repo list` | `forja list remote`（repos 段） |
 | `forja remote workspace status` | `forja list remote` |
 | `forja remote forja-bin status` | `forja list remote` |
 | `forja remote build-order status` | `forja list remote` |
@@ -63,13 +63,13 @@ forja list remote [--detail] [--workspace <path>] [--json]
 ```ts
 interface ListResult extends ForjaJsonResult {
     action: 'list';
-    category: 'targets' | 'servers' | 'remote-repos' | 'env' | 'remote' | 'config';
+    category: 'targets' | 'servers' | 'env' | 'remote' | 'config' | 'lang';
     targets?: TargetCandidate[];
     servers?: ServerSummary[] | ServerDetail;
-    remoteRepos?: RemoteRepoSettings[];
     env?: EnvSummary;
     remote?: RemoteConfigDetail;
     config?: ConfigSummary;
+    lang?: string;
 }
 
 interface EnvSummary {
@@ -100,7 +100,7 @@ interface RemoteConfigDetail {
 |------|-------|----------|-------------|
 | `list.workspaceNotFound` | error | workspace 不存在 | 无 |
 | `list.categoryUnknown` | error | category 不在允许列表 | `forja list` |
-| `list.serverNotFound` | error | `servers --detail` 指向不存在 server | `forja list servers` |
+| `list.serverNotFound` | error | `servers --detail` 指向不存在 server | `forja server` |
 | `list.configCorrupt` | error | 配置文件无法解析 | `forja doctor fix` |
 | `list.noTargets` | info | 没有 Qt/SDK target | `forja init` |
 | `list.noServers` | info | 没有 server 配置 | `forja server add --name <name> --host <host> --username <name>` |
@@ -164,7 +164,6 @@ Next:
 ## 验证点
 
 - `forja list --json` 同时列出 Qt 和 SDK 候选。
-- `forja list config --json` 返回 Qt/SDK/Sync/Remote 已保存配置摘要，不做健康验证。
-- `forja list servers --detail <id> --json` 不输出密码。
+- `forja server --detail <id> --json` 不输出密码。
 - `forja list env --json` 只列路径，不做 qmake/MSBuild/make 健康验证。
 - `forja list remote --detail --json` 覆盖 workspace/bin/build-order/transfer/repos。

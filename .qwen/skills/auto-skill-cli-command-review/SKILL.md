@@ -75,6 +75,8 @@ Read `formatStatusText()` (or equivalent) carefully:
 - [ ] **Early returns**: Do early return paths (workspace not found, config corrupted) include all required fields?
 - [ ] **Early return skips subsequent checks**: In validation functions, does `return 'missing'` after the first check prevent later checks from running? If the spec expects ALL issues reported at once, the function must NOT return early — collect all diagnostics, then return. Pattern: `let ok = true; if (!x) { ok = false; diag(...); } if (!y) { diag(...); } if (!ok) return 'missing';`
 - [ ] **Text output for degraded states**: Display conditions like `s.enabled && s.server` hide the section when server is deleted. Check: should the section still show partial info (e.g., "enabled (server not found)") in degraded states?
+- [ ] **Invalid positional sub-arg silent fallback**: When a command accepts positional sub-arguments (e.g., `forja list env qt`), invalid values (e.g., `forja list env foo`) must error — not silently fall back to the default/no-sub-arg behavior. Check: is there an `else` branch that rejects unrecognized positional values?
+- [ ] **Hardcoded nextAction**: nextAction that doesn't adapt to current state (e.g., always suggesting `'forja use lang zh'` even when lang is already `zh`). Check: does nextAction consider the current state to suggest the opposite/complementary action?
 
 ## Pass 5: Cross-cutting Concerns
 

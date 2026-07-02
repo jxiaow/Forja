@@ -183,7 +183,7 @@ export function runStatus(workspace: string): StatusResult {
                 level: 'warning',
                 message: T('noSyncServer'),
                 hint: T('noSyncServerHint'),
-                fix: 'forja list servers',
+                fix: 'forja server',
             });
         } else if (activeTarget?.runAt === 'remote' && syncConfig.selectedServer) {
             diagnostics.push({
@@ -206,7 +206,7 @@ export function runStatus(workspace: string): StatusResult {
                 level: 'error',
                 message: T('sts.syncServerNotFound').replace('{0}', syncConfig.selectedServer),
                 hint: T('serverDeleted'),
-                fix: 'forja list servers',
+                fix: 'forja server',
                 params: { server: syncConfig.selectedServer },
             });
         } else {
@@ -236,7 +236,7 @@ export function runStatus(workspace: string): StatusResult {
             diagnostics.push({
                 level: 'error',
                 message: T('remoteNoServer'),
-                fix: 'forja list servers',
+                fix: 'forja server',
             });
         } else {
             // Check remote Forja bin - not an error since it defaults to $HOME/.forja/bin/forja
@@ -253,7 +253,7 @@ export function runStatus(workspace: string): StatusResult {
                 diagnostics.push({
                     level: 'error',
                     message: serverId ? `${T('remotePathNotConfigured')}: ${serverId}` : T('remotePathNotConfigured'),
-                    fix: 'forja list servers',
+                    fix: 'forja server',
                     params: serverId ? { server: serverId } : undefined,
                 });
                 readiness.remote = 'missing';

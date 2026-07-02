@@ -116,10 +116,10 @@ interface CheckResult {
 | `doctor.vsMissing` | error | VS/MSBuild/vcvars 不可用 | `forja list env` |
 | `doctor.jomMissing` | warning | jom 不可用 | `forja list env` |
 | `doctor.makeMissing` | error | make 不可用 | `forja list env` |
-| `doctor.syncNotConfigured` | warning | sync server/path 缺失 | `forja list servers`, `forja use sync --server <id> --remote-path <path>` |
+| `doctor.syncNotConfigured` | warning | sync server/path 缺失 | `forja server`, `forja use sync --server <id> --remote-path <path>` |
 | `doctor.remoteNoServer` | error | remote 检查缺 server/path | `forja list remote`, `forja use remote --server <id> --remote-path <path>` |
-| `doctor.serverNotFound` | error | `--server` 指向不存在 server | `forja list servers` |
-| `doctor.remoteSshFailed` | error | SSH 失败 | `forja list servers` |
+| `doctor.serverNotFound` | error | `--server` 指向不存在 server | `forja server` |
+| `doctor.remoteSshFailed` | error | SSH 失败 | `forja server` |
 | `doctor.remoteForjaMissing` | error | 远端 Forja bin 不存在 | `forja doctor fix --remote` |
 | `doctor.remoteForjaIncompatible` | error | 远端版本不兼容 | `forja doctor fix --remote` |
 | `doctor.remoteLocked` | warning | 远端 lock 存在 | `forja doctor unlock <lock-id>` |

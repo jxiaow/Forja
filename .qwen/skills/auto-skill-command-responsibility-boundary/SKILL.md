@@ -100,3 +100,29 @@ Before adding a new flag, ask:
 - Adding flags to an existing command
 - Reviewing whether a command's scope is too broad
 - When a user says "this overlaps with X command" or "this should point to X instead"
+
+## Clear/Reset Operations Must Stay in Their Lane
+
+A `clear` or `reset` subcommand must only clear the data it owns. It must NOT cascade-clear data managed by sibling subcommands.
+
+**Bug example:** `forja use remote workspace clear` was clearing `remote.repos = []` alongside workspace settings. But repos are managed by `forja use remote repo clear` — a separate subcommand. Users who ran `workspace clear` lost their repo mappings unexpectedly.
+
+**Rule:** When implementing a clear operation, list exactly which fields it should reset. Cross-reference against sibling subcommands — if another subcommand owns a field, don't touch it.
+
+```typescript
+// WRONG: workspace clear nukes repos too
+if (action === 'clear') {
+    remote.workspaceMode = 'legacy';
+    remote.remoteWorkspace = '';
+    remote.profile = '';
+    remote.repos = [];  // ← belongs to `repo clear`, not `workspace clear`
+}
+
+// CORRECT: only clear workspace-owned fields
+if (action === 'clear') {
+    remote.workspaceMode = 'legacy';
+    remote.remoteWorkspace = '';
+    remote.profile = '';
+    // repos are cleared by `forja use remote repo clear`
+}
+```

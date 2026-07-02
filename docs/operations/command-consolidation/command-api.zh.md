@@ -39,7 +39,7 @@ forja sync test-connection
 | --- | --- | --- |
 | `forja status` | （无） | 查看当前状态和下一步。 |
 | `forja setup` | `--local-only` | 一站式初始化（本地 + 远程）。 |
-| `forja list` | `targets`、`env`、`servers`、`remote-repos`、`remote`、`config`、`lang` | 只读列举可选项和配置。默认 `targets`。 |
+| `forja list` | `targets`、`env`、`servers`、`remote`、`config`、`lang` | 只读列举可选项和配置。默认 `targets`。 |
 | `forja use` | `target`、`execution`、`sync`、`remote`、`qt`、`sdk`、`lang` | 选择目标、构建配置、执行端和远程配置。 |
 | `forja server` | `add`、`update`、`remove` | 管理共享 SSH server。 |
 | `forja build` | `fresh`、`qmake`、`rcc` | 构建相关动作。 |
@@ -426,7 +426,7 @@ forja setup remote [--plan] [--json]
 
 ```bash
 forja list <category> [--workspace <path>] [--json]
-forja list servers --detail <id> [--json]
+forja server --detail <id> [--json]
 ```
 
 **必须指定分类参数**，不支持裸 `forja list`。
@@ -435,10 +435,9 @@ forja list servers --detail <id> [--json]
 
 | 分类 | 说明 |
 | --- | --- |
-| `targets` | 列出 Qt `.pro` 和 SDK `.sln`/`Makefile` 候选目标。 |
-| `env` | 列出 Qt/VS/jom/make 候选路径。 |
+| `targets` | 列出 Qt `.pro` 和 SDK `.sln`/`Makefile`/`CMakeLists.txt` 候选目标。 |
+| `env` | 列出 Qt/VS/jom/make 候选路径。子分类 `qt`/`vs`/`jom`/`make` 查看单项详情。 |
 | `servers` | 列出 SSH server。`--detail <id>` 查看单个详情。 |
-| `remote-repos` | 列出远程 repo 映射。 |
 | `remote` | 列出远程配置（workspace/bin/build-order/transfer/repos）。 |
 | `config` | 列出 Qt/SDK/Sync/Remote 已保存配置摘要。 |
 | `lang` | 显示当前语言设置。 |

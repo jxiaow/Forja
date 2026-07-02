@@ -15,8 +15,8 @@ forja server remove <id> [--json]
 
 | 问题 | 归属 |
 |------|------|
-| 查看 server 列表 | `forja list servers` |
-| 查看 server 详情 | `forja list servers --detail <id>` |
+| 查看 server 列表 | `forja server` |
+| 查看 server 详情 | `forja server --detail <id>` |
 | 添加/修改/删除共享 server | `forja server add/update/remove` |
 | 配置 sync 使用哪个 server/path | `forja use sync --server <id> --remote-path <path>` |
 | 配置 remote execution 使用哪个 server/path | `forja use remote --server <id> --remote-path <path>` |
@@ -65,7 +65,7 @@ interface ServerResult extends ForjaJsonResult {
 | `server.nameMissing` | error | add 缺 name | `forja server add --name <name> --host <host> --username <name>` |
 | `server.hostMissing` | error | add 缺 host | `forja server add --name <name> --host <host> --username <name>` |
 | `server.usernameMissing` | error | add 缺 username | `forja server add --name <name> --host <host> --username <name>` |
-| `server.notFound` | error | update/remove 指向不存在 server | `forja list servers` |
+| `server.notFound` | error | update/remove 指向不存在 server | `forja server` |
 | `server.authInvalid` | error | auth-mode 与 key/password 字段不匹配 | `forja server update <id> ...` |
 | `server.writeFailed` | error | 写 server store 失败 | 无 |
 
@@ -89,7 +89,7 @@ interface ServerResult extends ForjaJsonResult {
     "serverAction": "remove",
     "removed": "dev",
     "changed": ["servers.dev"],
-    "nextActions": ["forja list servers"]
+    "nextActions": ["forja server"]
 }
 ```
 
@@ -104,7 +104,7 @@ interface ServerResult extends ForjaJsonResult {
     "diagnostics": [
         { "code": "server.notFound", "level": "error", "message": "Server does not exist: dev" }
     ],
-    "nextActions": ["forja list servers"]
+    "nextActions": ["forja server"]
 }
 ```
 
@@ -123,5 +123,5 @@ Next:
 - `forja server add --json` 写入共享 server store。
 - `forja server update <id> --json` 只更新显式字段。
 - `forja server remove <id> --json` 不自动修改 sync/remote 配置。
-- `forja list servers --detail <id> --json` 可查看详情但不输出密码。
+- `forja server --detail <id> --json` 可查看详情但不输出密码。
 - 新 help、nextActions、Command Palette 不推荐旧 `sync add-server/update-server/remove-server`。

@@ -525,7 +525,7 @@ export async function runSetupRemote(workspace: string, options: SetupRemoteOpti
             result.nextAction = 'forja setup remote --json --answers <answers.json>';
         } else {
             const existingServers = readServers();
-            result.nextAction = existingServers.length > 0 ? 'forja list servers' : 'forja server add';
+            result.nextAction = existingServers.length > 0 ? 'forja server' : 'forja server add';
         }
         return result;
     }

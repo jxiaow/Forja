@@ -135,7 +135,7 @@ VSCode 扩展和 CLI 共享同一套配置存储（`~/.forja/projects/<hash>.jso
 |------|------|----------|
 | `status` | 查看就绪状态 | `forja status` |
 | `init` | 首次初始化 | `forja init`、`forja init --remote` |
-| `list` | 列出候选项 | `forja list targets`、`forja list env`、`forja list servers` |
+| `list` | 列出候选项 | `forja list targets`、`forja list env`、`forja list remote` |
 | `use` | 写入配置 | `forja use target --project`、`forja use execution --remote` |
 | `server` | 管理服务器 | `forja server add`、`forja server remove` |
 | `build` | 编译 | `forja build`、`forja build fresh`、`forja build qmake` |
@@ -184,12 +184,11 @@ forja init --json
 列出各类配置和候选项。
 
 ```bash
-forja list targets --json     # 列出可用项目（.pro/.sln/Makefile）
-forja list servers --json     # 列出同步服务器
+forja list targets --json     # 列出可用项目（.pro/.sln/Makefile/CMakeLists.txt）
 forja list env --json         # 列出检测到的工具链环境
-forja list remote --json      # 列出远程执行配置
-forja list remote-repos --json # 列出远程仓库映射
-forja list config --json      # 列出当前配置摘要
+forja list env qt --json      # 列出 Qt 环境详情
+forja list remote --json      # 列出远程执行配置（含 repos）
+forja list lang --json        # 列出当前语言设置
 ```
 
 ### `forja use`
@@ -229,6 +228,9 @@ forja use sdk --vs-dev-cmd "C:/Program Files/Microsoft Visual Studio/2022/Commun
 管理同步服务器。
 
 ```bash
+forja server                    # 列出所有服务器
+forja server --detail <id>      # 查看服务器详情
+forja server --json             # JSON 输出
 forja server add --name dev --host 127.0.0.1 --username dev --json
 forja server update server-1 --host 10.0.0.2 --json
 forja server remove server-1 --json

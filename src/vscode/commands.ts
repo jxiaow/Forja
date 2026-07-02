@@ -122,21 +122,18 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.list — requires a category: targets|servers|env|config|remote|lang
+    // forja.list — requires a category: targets|env|remote|lang
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.list', async (category?: string) => {
             try {
                 const { resolveLocale } = await import('../cli/commands/types');
                 const locale = resolveLocale(undefined, loadGlobalConfig().lang);
-                const validCategories = ['targets', 'servers', 'env', 'config', 'remote', 'remote-repos', 'lang'];
+                const validCategories = ['targets', 'env', 'remote', 'lang'];
                 if (!category || !validCategories.includes(category)) {
                     const descMap: Record<string, [string, string]> = {
                         targets: ['Qt/SDK projects', 'Qt/SDK 项目'],
-                        servers: ['SSH servers', 'SSH 服务器'],
                         env: ['Toolchain environment', '工具链环境'],
-                        config: ['Current configuration', '当前配置'],
                         remote: ['Remote settings', '远程设置'],
-                        'remote-repos': ['Remote repos', '远程仓库'],
                         lang: ['Language', '语言设置'],
                     };
                     const picked = await vscode.window.showQuickPick(validCategories.map(c => ({

@@ -142,7 +142,7 @@ forja setup remote [--json] [--reset] [--answers <path>]
 |------|-----------|
 | 全部成功 | `forja build` |
 | 无服务器（非交互） | `forja server add` |
-| 多服务器未选（非交互） | `forja list servers` |
+| 多服务器未选（非交互） | `forja server` |
 
 ---
 

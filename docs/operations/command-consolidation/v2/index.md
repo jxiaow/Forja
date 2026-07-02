@@ -40,7 +40,7 @@ v2 下每个公开命令都必须独立落盘，包含：职责边界、语法�
 ```
 forja status      — 当前状态和下一步建议
 forja setup       — 一站式初始化（本地 + 远程）
-forja list        — 列举可选项和配置摘要（targets/servers/remote-repos/env/remote/config/lang）
+forja list        — 列举可选项和配置摘要（targets/servers/env/remote/config/lang）
 forja use         — 选择目标、构建配置、执行端和高级配置
 forja server      — 管理共享 SSH server
 forja build       — 构建当前目标
@@ -152,7 +152,6 @@ interface ForjaJsonResult {
 - 文本输出和 JSON 都不推荐旧用户命令。
 - 退出码：成功 `0`，失败 `1`，用户取消 `0`。
 - `activeTarget` 只表示当前执行目标；已保存配置不放进通用 envelope。
-- 查看 Qt/SDK/Sync/Remote 的已保存配置摘要使用 `forja list config --json`。
 
 ```ts
 interface ConfigSummary {
@@ -225,7 +224,7 @@ interface ServerDetail extends ServerSummary {
 }
 ```
 
-`ServerDetail` 用于 `forja list servers --detail <id>`。不输出密码。
+`ServerDetail` 用于 `forja server --detail <id>`。不输出密码。
 
 ### 2.9 RemoteConfigSummary
 
@@ -247,12 +246,11 @@ interface RemoteConfigSummary {
 | 问题 | 命令 | 理由 |
 |------|------|------|
 | "有哪些项目？" | `forja list` | 文件扫描，纯枚举 |
-| "有哪些服务器？" | `forja list servers` | 读配置，纯枚举 |
+| "有哪些服务器？" | `forja server` | 读配置，纯枚举 |
 | "添加/修改/删除服务器？" | `forja server add/update/remove` | 修改共享 server 池 |
-| "有哪些远程 repo？" | `forja list remote-repos` | 读配置，纯枚举 |
+| "有哪些远程 repo？" | `forja list remote` | 读配置，repos 段 |
 | "Qt/VS/jom 路径在哪？" | `forja list env` | 路径枚举，纯发现 |
 | "远程配了什么？" | `forja list remote` | 配置列举（workspace/bin/build-order/transfer/repos） |
-| "当前 Qt/SDK/Sync/Remote 配置摘要是什么？" | `forja list config` | 只读列举已保存配置摘要 |
 | "Qt/VS/jom 能用吗？" | `forja doctor` | 健康验证，属诊断 |
 | "SSH 能连上吗？" | `forja doctor` | 连接验证，属诊断 |
 | "sync 配置完整吗？" | `forja doctor` | 配置校验，属诊断 |
@@ -342,7 +340,7 @@ FORJA_LANG=zh forja status --json    # 中文
 | `forja remote workspace status` | `forja list remote` | 纯配置列举，归入 list remote |
 | `forja remote workspace use` | `forja use remote workspace set` | 高级配置 |
 | `forja remote workspace clear` | `forja use remote workspace clear` | 高级配置 |
-| `forja remote repo list` | `forja list remote-repos` | list 子分类 |
+| `forja remote repo list` | `forja list remote`（repos 段） | list 子分类 |
 | `forja remote repo set/remove/clear` | `forja use remote repo set/remove/clear` | 高级配置 |
 | `forja remote forja-bin status` | `forja list remote` | 纯配置列举，归入 list remote |
 | `forja remote forja-bin use/clear` | `forja use remote forja-bin set/clear` | 高级配置 |
@@ -381,8 +379,8 @@ FORJA_LANG=zh forja status --json    # 中文
 | `forja sync use` | `forja use sync --server ... --remote-path ...` / `forja use sync --enable|--disable` | sync server/path 与启停都吸收进 use |
 | `forja sync test-connection` | `forja doctor --remote [--server <id>]` | 连接检测归 remote doctor |
 | `forja sync reset` | `forja sync reset` | 同名新子动作 |
-| `forja sync servers` | `forja list servers` | list 子分类 |
-| `forja sync server` | `forja list servers --detail <id>` | list 子分类 |
+| `forja sync servers` | `forja server` | list 子分类 |
+| `forja sync server` | `forja server --detail <id>` | list 子分类 |
 | `forja sync add-server` | `forja server add` | 共享 server CRUD |
 | `forja sync update-server --server <id>` | `forja server update <id>` | 共享 server CRUD |
 | `forja sync remove-server --server <id>` | `forja server remove <id>` | 共享 server CRUD |
@@ -647,7 +645,6 @@ src/test/unifiedCliSync.test.ts
 **验证**：
 - `forja status --json` 在无 active target 时不猜测。
 - `forja list --json` 列出 Qt + SDK 候选。
-- `forja list config --json` 返回 Qt/SDK/Sync/Remote 配置摘要。
 - `forja use target --project <path> --json` 保存 active target。
 - `forja setup --json` 在混合 workspace 不选择。
 
@@ -687,7 +684,7 @@ src/test/unifiedCliSync.test.ts
 - `forja doctor fix --plan --json` 预览 cleanup/remote fix，不写配置、不上传文件。
 - `forja sync plan --json` 保留现有行为。
 - `forja sync --server <id> --json` 临时覆盖本次同步 server，不修改配置。
-- sync 缺配置时指向 `forja list servers` + `forja use sync --server`。
+- sync 缺配置时指向 `forja server` + `forja use sync --server`。
 
 ### Stage 5: Replace Old User Surface
 
@@ -744,7 +741,6 @@ Stage 2 和 Stage 3 可在 Stage 1 完成后并行推进。Stage 4 依赖 Stage 
 | setup --local-only | `forja setup --local-only --json` | 只做本地初始化，跳过远程配置 |
 | setup 指定 server | `forja setup --server dev --json` | 使用指定共享 server 进行远程配置 |
 | 多个 Qt targets | `forja list --json` | 列出所有 .pro，标记 current |
-| 查看配置摘要 | `forja list config --json` | 返回 Qt/SDK/Sync/Remote 已保存配置摘要，不做健康验证 |
 | 选择 Qt | `forja use target --project app.pro --json` | kind=qt |
 | 选择 SDK | `forja use target --project sdk.sln --json` | kind=sdk |
 | Qt TARGET 覆盖 | `forja use qt --qmake-target MyApp --json` | 保存 QMake TARGET override |

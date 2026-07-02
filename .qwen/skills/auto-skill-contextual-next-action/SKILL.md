@@ -64,6 +64,16 @@ if (initResult.ambiguous) {
 
 5. **The "retry" pattern** — when the user was in interactive mode and didn't complete (cancelled a prompt, didn't choose), the nextAction should be the same command they just ran, so they can try again.
 
+6. **The "toggle" pattern for list/view commands** — when showing a current setting value, nextAction should suggest the opposite/alternative, not a hardcoded value. Example: `listLang()` showing current language `zh` should suggest `forja use lang en` (switch to the other option), not always `forja use lang zh` regardless of current state.
+
+```typescript
+// BUG: always suggests zh regardless of current lang
+nextAction: 'forja use lang zh'
+
+// CORRECT: suggest the toggle
+nextAction: lang === 'zh' ? 'forja use lang en' : 'forja use lang zh'
+```
+
 ## Anti-Patterns
 
 | Anti-pattern | Why it's wrong | Correct approach |
@@ -72,6 +82,41 @@ if (initResult.ambiguous) {
 | `forja build` when there are errors | Misleads user into running a command that will fail | No nextAction, or the fix command |
 | `forja setup remote` after local setup succeeds | Pushes optional features the user didn't ask for | `forja build` (verify local works first) |
 | Generic `forja status` for all failures | Doesn't tell the user what to FIX | Use diagnostic `fix` field or specific command |
+| Hardcoded nextAction in list/view commands | Suggests same action regardless of current state | Toggle: suggest the alternative to current value |
+| Same nextAction for "nothing exists" and "already done" | User who already configured gets "run setup" | State-aware: nothing→setup, in-progress→configure, done→status |
+
+## State-Aware nextAction on Success Paths
+
+nextAction should also adapt to current state on **success** paths, not just failure paths.
+
+```typescript
+// BUG: always suggests 'use target' even when target is already selected
+nextAction: targets.length === 0 ? 'forja setup' : 'forja use target --project <path>'
+
+// CORRECT: three-state awareness
+if (targets.length === 0) {
+    nextAction = 'forja setup';           // Nothing to work with
+} else if (targets.some(t => t.current)) {
+    nextAction = 'forja status';          // Already selected, check readiness
+} else {
+    nextAction = 'forja use target --project <path>';  // Need to select
+}
+```
+
+### Success-Path Decision Matrix
+
+| Command | State | Correct nextAction | Why |
+|---------|-------|--------------------|-----|
+| `list targets` | No targets exist | `forja setup` | Need to initialize |
+| `list targets` | Targets exist, none selected | `forja use target --project <path>` | Need to choose |
+| `list targets` | Target already selected | `forja status` | Already chosen, verify readiness |
+| `list config` | Nothing configured | `forja setup` | Need to initialize |
+| `list config` | Only sync/remote, no target | `forja use target --project <path>` | Need to select target |
+| `list config` | Target configured | `forja status` | Already configured, verify readiness |
+
+### Rule
+
+When a list/config command succeeds, the nextAction should answer: **"Given what the user just saw, what's the most useful next step?"** — not a hardcoded suggestion.
 
 ## Audit Checklist
 
@@ -82,3 +127,5 @@ When reviewing nextAction assignments:
 - [ ] Is there a case where `list` is suggested but the user already saw the list?
 - [ ] Is there a case where the same generic nextAction is used for different failure types?
 - [ ] Are nextActions from sub-functions propagated (not overridden)?
+- [ ] For list/view commands showing current state: does nextAction suggest the toggle/alternative, not a hardcoded value?
+- [ ] For success paths: does nextAction adapt to current state (nothing→setup, partial→configure, done→status)?

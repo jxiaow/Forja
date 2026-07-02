@@ -97,13 +97,13 @@ function resolveSyncConfig(workspaceRoot: string): { ok: true; config: ResolvedS
 
     const targetId = project.selectedServer;
     if (!targetId) {
-        return { ok: false, error: T('sync.notConfigured'), nextAction: 'forja list servers --json' };
+        return { ok: false, error: T('sync.notConfigured'), nextAction: 'forja server --json' };
     }
 
     const resolvedServer = resolveCliServer(targetId);
     const server = resolvedServer.server;
     if (!server) {
-        return { ok: false, error: resolvedServer.error || `${T('sync.serverNotFound')}: "${targetId}"`, nextAction: 'forja list servers --json' };
+        return { ok: false, error: resolvedServer.error || `${T('sync.serverNotFound')}: "${targetId}"`, nextAction: 'forja server --json' };
     }
 
     const remotePath = project.remotePaths[server.id] || '';

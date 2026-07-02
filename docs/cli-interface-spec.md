@@ -54,10 +54,9 @@ forja <subcommand> [action] [options]
 | 分类 | 说明 |
 |------|------|
 | `targets` | Qt/SDK 候选目标 |
-| `env` | 工具链路径 |
+| `env` | 工具链路径（子分类 qt/vs/jom/make） |
 | `servers` | SSH server 列表 |
-| `remote-repos` | 远程 repo 映射 |
-| `remote` | 远程配置详情 |
+| `remote` | 远程配置详情（含 repos） |
 | `config` | 已保存配置摘要 |
 | `lang` | 当前语言设置 |
 
@@ -226,7 +225,7 @@ interface SetupResult extends ForjaJsonResult {
 
 interface ListResult extends ForjaJsonResult {
   action: 'list';
-  category: 'targets' | 'env' | 'servers' | 'remote-repos' | 'remote' | 'config' | 'lang';
+  category: 'targets' | 'env' | 'servers' | 'remote' | 'config' | 'lang';
   targets?: TargetCandidate[];
   servers?: ServerSummary[] | ServerDetail;
   env?: EnvSummary;

@@ -61,7 +61,7 @@ test('aggregateCandidates: detects CMakeLists.txt as sdk candidate', () => {
     const result = aggregateCandidates(workspace, null, {}, {});
     assert.equal(result.length, 1);
     assert.equal(result[0].kind, 'sdk');
-    assert.equal(result[0].label, 'CMakeLists');
+    assert.equal(result[0].label, 'cmake-ws');
 });
 
 test('aggregateCandidates: marks current and configured flags', () => {

@@ -69,7 +69,7 @@ forja init --json
 forja list targets --json
 
 # 列出服务器
-forja list servers --json
+forja server --json
 
 # 列出环境
 forja list env --json
@@ -77,11 +77,6 @@ forja list env --json
 # 列出远程配置
 forja list remote --json
 
-# 列出远程仓库映射
-forja list remote-repos --json
-
-# 列出配置摘要
-forja list config --json
 ```
 
 ### 4. 使用命令
@@ -179,8 +174,8 @@ forja use remote repo set \
   --mount symlink \
   --json
 
-# 验证仓库映射
-forja list remote-repos --json
+# 验证仓库映射（在 list remote 输出的 repos 段中）
+forja list remote --json
 
 # 预期输出：包含 baseline, overlay, mount 等高级字段
 ```
@@ -276,10 +271,10 @@ forja doctor fix --remote --json
 
 ```bash
 # 列出所有服务器
-forja list servers --json
+forja server --json
 
 # 查看服务器详情
-forja list servers --detail <server-id> --json
+forja server --detail <server-id> --json
 
 # 更新服务器
 forja server update <server-id> --host 192.168.1.101 --json
@@ -407,8 +402,6 @@ node out/cli/index.js status --json
 
 **解决**：
 ```bash
-# 查看当前配置
-forja list config --json
 
 # 清除配置重新初始化
 rm -rf .forja
@@ -422,7 +415,7 @@ forja init --json
 **解决**：
 ```bash
 # 检查服务器配置
-forja list servers --json
+forja server --json
 
 # 检查远程配置
 forja list remote --json
@@ -440,12 +433,12 @@ forja use remote --server <id> --remote-path <path> --json
 - 是否使用了最新编译的代码
 - 错误是否来自 qtCore.ts 内部（部分内部错误仍可能显示旧命令）
 
-### 5. list remote-repos 缺少字段
+### 5. list remote repos 段字段完整性
 
-**问题**：`forja list remote-repos` 输出缺少 baseline/overlay/mount 等字段
+**问题**：`forja list remote` 的 repos 段需包含 baseline/overlay/mount 等字段
 
 **解决**：
-已修复。确保使用最新代码，`ListResult` 接口已添加 `remoteRepos` 字段定义。
+已修复。`RemoteConfigDetail.repos` 字段包含完整的 `RemoteRepoSettings` 定义。
 
 ---
 
@@ -457,11 +450,9 @@ forja use remote --server <id> --remote-path <path> --json
 - [ ] `forja status --json`
 - [ ] `forja init --json`
 - [ ] `forja list targets --json`
-- [ ] `forja list servers --json`
+- [ ] `forja server --json`
 - [ ] `forja list env --json`
 - [ ] `forja list remote --json`
-- [ ] `forja list remote-repos --json`
-- [ ] `forja list config --json`
 - [ ] `forja use target --project <path> --json`
 - [ ] `forja use execution --remote --json`
 - [ ] `forja build --json`
@@ -508,7 +499,7 @@ echo "=== Forja v2 自动化测试 ==="
 echo "测试基础命令..."
 forja status --json > /dev/null
 forja list targets --json > /dev/null
-forja list servers --json > /dev/null
+forja server --json > /dev/null
 forja list env --json > /dev/null
 echo "✓ 基础命令通过"
 

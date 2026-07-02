@@ -18,7 +18,7 @@ forja sync plan [--file <path>] [--json]
 | 预览上传计划 | `forja sync plan` |
 | 清除同步状态 | `forja sync --reset` |
 | 查看 sync 状态 | `forja status`（sync 区块包含 server/port/auth 详情） |
-| 查看 servers | `forja list servers` |
+| 查看 servers | `forja server` |
 | 配置 sync server/path | `forja use sync --server <id> --remote-path <path>` |
 | 启用/禁用 sync | `forja use sync --enable` / `forja use sync --disable` |
 | 测试 SSH | `forja doctor --remote` |
@@ -27,7 +27,7 @@ forja sync plan [--file <path>] [--json]
 ## 行为
 
 1. 读取 sync 配置。
-2. 缺少 sync server/remote path 时失败，返回 `forja list servers` + `forja use sync --server <id> --remote-path <path>`。
+2. 缺少 sync server/remote path 时失败，返回 `forja server` + `forja use sync --server <id> --remote-path <path>`。
 3. `plan` 只输出计划，不上传、不删除远端文件。
 4. `--reset` 只清同步状态，不上传。
 5. `--yes` 跳过交互确认直接执行（脚本/自动化场景）。
@@ -59,7 +59,7 @@ forja sync plan [--file <path>] [--json]
 | `forja sync use --enable` | `forja use sync --enable` | 启用 sync |
 | `forja sync use --disable` | `forja use sync --disable` | 禁用 sync |
 | `forja sync test-connection` | `forja doctor --remote [--server <id>]` | 诊断归 doctor |
-| `forja sync servers` | `forja list servers` | 枚举归 list |
+| `forja sync servers` | `forja server` | 枚举归 list |
 | `forja sync add-server` | `forja server add` | 共享 server CRUD |
 | `forja sync update-server --server <id>` | `forja server update <id>` | 共享 server CRUD |
 | `forja sync remove-server --server <id>` | `forja server remove <id>` | 共享 server CRUD |
@@ -104,8 +104,8 @@ interface SyncPlan {
 | code | level | 触发条件 | nextAction |
 |------|-------|----------|------------|
 | `sync.notEnabled` | error | 同步未启用 | `forja use sync --enable` |
-| `sync.notConfigured` | error | 未配置 sync server | `forja list servers` |
-| `sync.serverNotFound` | error | 配置的 server 不存在 | `forja list servers` |
+| `sync.notConfigured` | error | 未配置 sync server | `forja server` |
+| `sync.serverNotFound` | error | 配置的 server 不存在 | `forja server` |
 | `sync.noRemotePath` | error | 未配置远程路径 | `forja use sync --server <id> --remote-path <path>` |
 | `sync.passwordRequired` | error | 密码模式未提供密码 | `FORJA_SSH_PASSWORD=<password> forja sync` |
 | `sync.noGitRepos` | error | 工作区无 git 仓库 | `forja status` |

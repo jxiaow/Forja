@@ -161,8 +161,8 @@ Rules:
 | `forja sdk projects` | `forja list` / `forja list targets` | Targets include SDK projects. |
 | `forja qt env` | `forja list env` / `forja doctor` | Candidate list in list; deep validation in doctor. |
 | `forja sdk env` | `forja list env` / `forja doctor` | Candidate list in list; deep validation in doctor. |
-| `forja sync servers` | `forja list servers` | Server list becomes a list category. |
-| `forja sync server` | `forja list servers --detail <id>` | Detail remains read-only. |
+| `forja sync servers` | `forja server` | Server list becomes a list category. |
+| `forja sync server` | `forja server --detail <id>` | Detail remains read-only. |
 | `forja remote repo list` | `forja list remote-repos` or remote section in `forja list` | Only needed when remote workspace mapping is configured. |
 | `forja qt use` | `forja use` | Target, mode, arch, and Qt toolchain selection. |
 | `forja sdk use` | `forja use` | Target, mode, arch, and SDK toolchain selection. |
@@ -280,7 +280,7 @@ Important edge cases:
 - Mixed Qt and SDK workspace with no active target: do not choose; return `forja list` and `forja use`.
 - Active Qt target missing `.pro`: return missing target diagnostic and `forja list`.
 - Active SDK target missing `.sln`/`Makefile`: return missing target diagnostic and `forja list`.
-- Remote selected but server missing: return `forja list servers` and `forja use --server <id> --remote-path <path>`.
+- Remote selected but server missing: return `forja server` and `forja use --server <id> --remote-path <path>`.
 
 VSCode behavior:
 
@@ -376,7 +376,7 @@ Important edge cases:
 - Exactly one SDK target and no Qt target: save SDK target.
 - One Qt and one SDK target: do not choose.
 - Multiple Qt targets: do not choose.
-- `--remote` without server: do not prompt in non-interactive mode; return `forja list servers` and `forja use --server`.
+- `--remote` without server: do not prompt in non-interactive mode; return `forja server` and `forja use --server`.
 
 VSCode behavior:
 
@@ -436,9 +436,9 @@ Supported flags:
 forja list
 forja list targets
 forja list env
-forja list servers
+forja server
 forja list remote-repos
-forja list servers --detail <id>
+forja server --detail <id>
 forja list --workspace <path>
 forja list --json
 ```
@@ -587,7 +587,7 @@ JSON output shape:
 
 Important edge cases:
 
-- `--remote` with no selected server: save execution location only when remote settings already exist; otherwise return diagnostic and next action `forja list servers`.
+- `--remote` with no selected server: save execution location only when remote settings already exist; otherwise return diagnostic and next action `forja server`.
 - `--target` outside workspace: reject.
 - `--kind qt` in workspace with multiple Qt targets: reject with `forja list`.
 - `--arch x86` on non-Windows: reject.
@@ -1075,7 +1075,7 @@ Old capabilities retained or absorbed:
 - `sync --file`
 - `sync reset`
 - server selection from `sync use` moves to `forja use`
-- server listing from `sync servers` moves to `forja list servers`
+- server listing from `sync servers` moves to `forja server`
 - connection testing from `sync test-connection` moves to `forja doctor`
 
 CLI flow:
@@ -1083,7 +1083,7 @@ CLI flow:
 1. Resolve workspace.
 2. Load sync settings.
 3. If server or remote path is missing:
-   - return `forja list servers`.
+   - return `forja server`.
    - return `forja use --server <id> --remote-path <path>`.
 4. If `plan`, compute changed files and print planned operations only.
 5. If `--file` is supplied, sync only specified files.
@@ -1302,7 +1302,7 @@ Acceptance:
 - `forja doctor --json` reports local target checks.
 - `forja doctor --remote --json` reports remote checks without changing target.
 - `forja sync plan --json` retains existing behavior.
-- Missing sync configuration points to `forja list servers` and `forja use --server`.
+- Missing sync configuration points to `forja server` and `forja use --server`.
 
 ### Stage 5: Hide Compatibility Surface
 
@@ -1382,7 +1382,7 @@ forja build fresh
 Remote example:
 
 ```bash
-forja list servers
+forja server
 forja use --server dev --remote-path /home/dev/workspace
 forja use --remote
 forja doctor --remote

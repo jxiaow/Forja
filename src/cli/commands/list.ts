@@ -1,15 +1,15 @@
 /**
- * `forja list` — read-only enumeration of targets, servers, env, remote, config.
+ * `forja list` — read-only enumeration of targets, env, remote, lang.
  */
-import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSummary, ConfigSummary, Locale, T, resolveLocale } from './types';
+import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSummary, Diagnostic, Locale, T, resolveLocale } from './types';
 import { collectTargetCandidates } from './candidates';
 import { listServers, getServerDetail } from './server';
 import { loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings, loadGlobalConfig } from '../../core/settingsIO';
-import { detectMake, detectVsInstallations, VsInstallation } from '../../sdk/cli/envDetector';
+import { detectMake, detectVsInstallations } from '../../sdk/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 
-export type ListCategory = 'targets' | 'servers' | 'remote-repos' | 'env' | 'remote' | 'config' | 'lang';
-export type EnvSubCategory = 'qt' | 'vs';
+export type ListCategory = 'targets' | 'servers' | 'env' | 'remote' | 'lang';
+export type EnvSubCategory = 'qt' | 'vs' | 'jom' | 'make';
 
 export interface ListResult extends ForjaJsonResult {
     action: 'list';
@@ -19,9 +19,7 @@ export interface ListResult extends ForjaJsonResult {
     env?: EnvSummary;
     envSubCategory?: EnvSubCategory;
     envAvailable?: Array<{ path: string; version?: string; edition?: string }>;
-    config?: ConfigSummary;
     remote?: RemoteConfigDetail;
-    remoteRepos?: import('../../core/settingsIO').RemoteRepoSettings[];
     lang?: string;
 }
 
@@ -42,7 +40,7 @@ function listLang(): ListResult {
         action: 'list',
         category: 'lang',
         lang,
-        nextAction: 'forja use lang zh',
+        nextAction: lang === 'zh' ? 'forja use lang en' : 'forja use lang zh',
     };
 }
 
@@ -115,26 +113,40 @@ export function formatListText(result: ListResult, locale: Locale): string {
                 const label = result.envSubCategory.toUpperCase();
                 lines.push(`${T('environment')} — ${label}`);
                 const env = result.env || {};
-                const configured = result.envSubCategory === 'qt' ? env.qt : env.vs;
-                if (configured && configured.length > 0) {
-                    lines.push(`  ${T('configured')}:`);
-                    for (const c of configured) {
-                        const ver = c.version ? ` (${c.version})` : '';
-                        lines.push(`    ${c.path}${ver}`);
+                if (result.envSubCategory === 'jom') {
+                    if (env.jom) {
+                        lines.push(`  ${T('jomLabel')}${env.jom}`);
+                    } else {
+                        lines.push(`  ${T('nothingDetected')}`);
+                    }
+                } else if (result.envSubCategory === 'make') {
+                    if (env.make) {
+                        lines.push(`  ${T('makeLabel')}${T('available')}`);
+                    } else {
+                        lines.push(`  ${T('nothingDetected')}`);
                     }
                 } else {
-                    lines.push(`  ${T('notConfigured')}`);
-                }
-                const available = result.envAvailable || [];
-                if (available.length > 0) {
-                    lines.push(`  ${T('available')}:`);
-                    for (const a of available) {
-                        const ver = a.version ? ` (${a.version})` : '';
-                        const ed = a.edition ? ` [${a.edition}]` : '';
-                        lines.push(`    ${a.path}${ver}${ed}`);
+                    const configured = result.envSubCategory === 'qt' ? env.qt : env.vs;
+                    if (configured && configured.length > 0) {
+                        lines.push(`  ${T('configured')}:`);
+                        for (const c of configured) {
+                            const ver = c.version ? ` (${c.version})` : '';
+                            lines.push(`    ${c.path}${ver}`);
+                        }
+                    } else {
+                        lines.push(`  ${T('notConfigured')}`);
                     }
-                } else {
-                    lines.push(`  ${T('noneFound')}`);
+                    const available = result.envAvailable || [];
+                    if (available.length > 0) {
+                        lines.push(`  ${T('available')}:`);
+                        for (const a of available) {
+                            const ver = a.version ? ` (${a.version})` : '';
+                            const ed = a.edition ? ` [${a.edition}]` : '';
+                            lines.push(`    ${a.path}${ver}${ed}`);
+                        }
+                    } else {
+                        lines.push(`  ${T('noneFound')}`);
+                    }
                 }
             } else {
                 lines.push(T('environment'));
@@ -153,65 +165,26 @@ export function formatListText(result: ListResult, locale: Locale): string {
             }
             break;
         }
-        case 'config': {
-            lines.push(T('configuration'));
-            if (result.workspace) { lines.push(`${T('workspace')}${result.workspace}`); }
-            const cfg = result.config || {};
-            if (cfg.lang) {
-                lines.push(`  ${T('language')}${cfg.lang}`);
-            }
-            if (cfg.qt) {
-                if (cfg.qt.configured) {
-                    lines.push(`  ${T('qtLabel')}${T('configured')}`);
-                    if (cfg.qt.project) { lines.push(`    ${T('project')}${cfg.qt.project}`); }
-                    if (cfg.qt.mode) { lines.push(`    ${T('mode')}${cfg.qt.mode}`); }
-                    if (cfg.qt.arch) { lines.push(`    ${T('arch')}${cfg.qt.arch}`); }
-                    if (cfg.qt.qtPath) { lines.push(`    ${T('qtPathLabel')}${cfg.qt.qtPath}`); }
-                    if (cfg.qt.vsInstall) { lines.push(`    ${T('vsInstallLabel')}${cfg.qt.vsInstall}`); }
-                } else {
-                    lines.push(`  ${T('qtLabel')}${T('notConfigured')}`);
-                }
-            }
-            if (cfg.sdk) {
-                if (cfg.sdk.configured) {
-                    lines.push(`  ${T('sdkLabel')}${T('configured')}`);
-                    if (cfg.sdk.project) { lines.push(`    ${T('project')}${cfg.sdk.project}`); }
-                    if (cfg.sdk.mode) { lines.push(`    ${T('mode')}${cfg.sdk.mode}`); }
-                    if (cfg.sdk.arch) { lines.push(`    ${T('arch')}${cfg.sdk.arch}`); }
-                    if (cfg.sdk.vsInstall) { lines.push(`    ${T('vsInstallLabel')}${cfg.sdk.vsInstall}`); }
-                } else {
-                    lines.push(`  ${T('sdkLabel')}${T('notConfigured')}`);
-                }
-            }
-            if (cfg.sync) {
-                if (cfg.sync.configured) {
-                    lines.push(`  ${T('syncLabel')}${T('enabled')}${cfg.sync.enabled}  ${T('server')}${cfg.sync.selectedServer}`);
-                    if (cfg.sync.remotePath) { lines.push(`    ${T('remotePath')}${cfg.sync.remotePath}`); }
-                } else {
-                    lines.push(`  ${T('syncLabel')}${T('notConfigured')}`);
-                }
-            }
-            if (cfg.remote) {
-                lines.push(`  ${T('remoteLabel')}`);
-                if (cfg.remote.selectedServer) { lines.push(`    ${T('server')}${cfg.remote.selectedServer}`); }
-                if (cfg.remote.remoteWorkspace) { lines.push(`    ${T('configWorkspace')}${cfg.remote.remoteWorkspace}`); }
-                if (cfg.remote.remoteForjaBin) { lines.push(`    ${T('configForjaBin')}${cfg.remote.remoteForjaBin}`); }
-                if (cfg.remote.buildOrder) { lines.push(`    ${T('configBuildOrder')}${cfg.remote.buildOrder.join(', ')}`); }
-                if (cfg.remote.transferConfigured) { lines.push(`    ${T('configTransfer')}${T('configured')}`); }
-            }
-            break;
-        }
         case 'remote': {
             lines.push(T('remoteConfiguration'));
             if (result.workspace) { lines.push(`${T('workspace')}${result.workspace}`); }
             const rem = result.remote;
             if (rem) {
-                lines.push(`  ${T('workspaceMode')}${rem.workspaceMode}`);
+                const hasRealConfig = rem.remoteWorkspace || rem.remoteForjaBin
+                    || (rem.buildOrder && rem.buildOrder.length > 0)
+                    || rem.transfer?.configured
+                    || (rem.repos && rem.repos.length > 0);
+                if (hasRealConfig) {
+                    lines.push(`  ${T('workspaceMode')}${rem.workspaceMode}`);
+                }
                 if (rem.remoteWorkspace) { lines.push(`  ${T('remoteWorkspace')}${rem.remoteWorkspace}`); }
                 if (rem.remoteForjaBin) { lines.push(`  ${T('forjaBin')}${rem.remoteForjaBin}`); }
                 if (rem.buildOrder && rem.buildOrder.length > 0) {
                     lines.push(`  ${T('buildOrder')}`);
-                    for (const b of rem.buildOrder) { lines.push(`    ${b.target}:${b.action}`); }
+                    for (const b of rem.buildOrder) {
+                        const args = b.args?.length ? ` ${b.args.join(' ')}` : '';
+                        lines.push(`    ${b.target}:${b.action}${args}`);
+                    }
                 }
                 if (rem.transfer) {
                     lines.push(`  ${T('transfer')}${rem.transfer.configured ? T('configured') : T('notConfigured')}`);
@@ -224,21 +197,6 @@ export function formatListText(result: ListResult, locale: Locale): string {
                 if (rem.repos && rem.repos.length > 0) {
                     lines.push(`  ${T('repos')}`);
                     for (const r of rem.repos) { lines.push(`    ${r.localName} → ${r.remoteName}  ${T('roleLabel')}${r.role}`); }
-                }
-            }
-            break;
-        }
-        case 'remote-repos': {
-            lines.push(T('remoteRepos'));
-            if (result.workspace) { lines.push(`${T('workspace')}${result.workspace}`); }
-            const repos = result.remoteRepos || [];
-            if (repos.length === 0) {
-                lines.push(`  ${T('none')}`);
-            } else {
-                for (const r of repos) {
-                    lines.push(`  ${r.localName} → ${r.remoteName}  ${T('roleLabel')}${r.role}`);
-                    if (r.remotePath) { lines.push(`    ${T('path')}${r.remotePath}`); }
-                    if (r.baseline) { lines.push(`    ${T('baseline')}${r.baseline}`); }
                 }
             }
             break;
@@ -268,12 +226,8 @@ export async function runList(workspace: string, category: ListCategory, options
                 return listEnvAll(workspace);
             }
             return listEnvSub(workspace, options.envSubCategory);
-        case 'config':
-            return listConfig(workspace);
         case 'remote':
             return listRemote(workspace);
-        case 'remote-repos':
-            return listRemoteRepos(workspace);
         case 'lang':
             return listLang();
     }
@@ -283,7 +237,7 @@ export async function runList(workspace: string, category: ListCategory, options
 
 function listTargets(workspace: string): ListResult {
     const targets = collectTargetCandidates(workspace);
-    const diagnostics: import('./types').Diagnostic[] = [];
+    const diagnostics: Diagnostic[] = [];
 
     const qt = loadQtSettings(workspace);
     const sdk = loadSdkSettings(workspace);
@@ -294,6 +248,16 @@ function listTargets(workspace: string): ListResult {
         diagnostics.push({ level: 'warning', message: T('lst.vsInstallNotConfigured') });
     }
 
+    const hasCurrent = targets.some(t => t.current);
+    let nextAction: string;
+    if (targets.length === 0) {
+        nextAction = 'forja setup';
+    } else if (hasCurrent) {
+        nextAction = 'forja status';
+    } else {
+        nextAction = 'forja use target --project <path>';
+    }
+
     return {
         ok: true,
         action: 'list',
@@ -301,7 +265,7 @@ function listTargets(workspace: string): ListResult {
         workspace,
         targets,
         diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
-        nextAction: targets.length === 0 ? 'forja setup' : 'forja use target --project <path>',
+        nextAction,
     };
 }
 
@@ -314,7 +278,7 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
                 action: 'list',
                 category: 'servers',
                 diagnostics: [{ level: 'error', message: `${T('lst.serverNotFound')}: ${detailId}` }],
-                nextAction: 'forja list servers',
+                nextAction: 'forja server',
             };
         }
         return {
@@ -353,7 +317,7 @@ async function listEnvAll(workspace: string): Promise<ListResult> {
     const sdkConfig = loadSdkSettings(workspace);
     const env = await detectEnv();
 
-    const summary: import('./types').EnvSummary = {};
+    const summary: EnvSummary = {};
     if (qtConfig.qtPath) {
         summary.qt = [{ path: qtConfig.qtPath, version: (qtConfig.qtPath.match(/(\d+\.\d+\.\d+)/) || [])[1] }];
     }
@@ -363,7 +327,8 @@ async function listEnvAll(workspace: string): Promise<ListResult> {
     }
     if (env.jom) { summary.jom = env.jom; }
     if (process.platform !== 'win32') {
-        try { require('child_process').execSync('which make', { stdio: 'ignore', timeout: 5000 }); summary.make = true; } catch { /* no make */ }
+        const makePath = detectMake();
+        if (makePath) { summary.make = true; }
     }
 
     return {
@@ -375,8 +340,12 @@ async function listEnvAll(workspace: string): Promise<ListResult> {
 }
 
 async function listEnvSub(workspace: string, sub: EnvSubCategory): Promise<ListResult> {
-    if (sub === 'qt') { return listEnvQt(workspace); }
-    return listEnvVs(workspace);
+    switch (sub) {
+        case 'qt': return listEnvQt(workspace);
+        case 'vs': return listEnvVs(workspace);
+        case 'jom': return listEnvJom();
+        case 'make': return listEnvMake();
+    }
 }
 
 async function listEnvQt(workspace: string): Promise<ListResult> {
@@ -423,78 +392,33 @@ function listEnvVs(_workspace: string): ListResult {
     };
 }
 
-function listConfig(workspace: string): ListResult {
-    const qt = loadQtSettings(workspace);
-    const sdk = loadSdkSettings(workspace);
-    const sync = loadSyncSettings(workspace);
-    const remote = loadRemoteSettings(workspace);
-    const globalCfg = loadGlobalConfig();
-
-    const config: ConfigSummary = {};
-
-    // Lang
-    if (globalCfg.lang) {
-        config.lang = globalCfg.lang;
+async function listEnvJom(): Promise<ListResult> {
+    const summary: EnvSummary = {};
+    if (process.platform === 'win32') {
+        const env = await detectEnv();
+        if (env.jom) { summary.jom = env.jom; }
     }
-
-    // Qt
-    if (qt.pinnedProject || qt.qtPath) {
-        config.qt = {
-            configured: true,
-            project: qt.pinnedProject?.relative || undefined,
-            mode: qt.mode || undefined,
-            arch: qt.arch || undefined,
-            qtPath: qt.qtPath || undefined,
-            vsInstall: qt.vsInstall || undefined,
-            qmakeTarget: qt.target || undefined,
-        };
-    } else {
-        config.qt = { configured: false };
-    }
-
-    // SDK
-    if (sdk.pinnedProject || sdk.vsInstall) {
-        config.sdk = {
-            configured: true,
-            project: sdk.pinnedProject || undefined,
-            mode: sdk.mode,
-            arch: sdk.arch,
-            vsInstall: sdk.vsInstall || undefined,
-        };
-    } else {
-        config.sdk = { configured: false };
-    }
-
-    // Sync
-    if (sync.selectedServer) {
-        config.sync = {
-            configured: true,
-            enabled: sync.enabled,
-            selectedServer: sync.selectedServer,
-            remotePath: sync.remotePaths[sync.selectedServer] || undefined,
-        };
-    } else {
-        config.sync = { configured: false };
-    }
-
-    // Remote
-    if (remote.selectedServer || remote.remoteWorkspace || remote.remoteForjaBin || remote.repos.length > 0) {
-        config.remote = {
-            selectedServer: remote.selectedServer || undefined,
-            remoteWorkspace: remote.remoteWorkspace || undefined,
-            remoteForjaBin: remote.remoteForjaBin || undefined,
-            buildOrder: remote.buildOrder.length > 0 ? remote.buildOrder.map(b => `${b.target}:${b.action}`) : undefined,
-            transferConfigured: remote.transfer !== null,
-        };
-    }
-
     return {
         ok: true,
         action: 'list',
-        category: 'config',
-        workspace,
-        config,
-        nextAction: 'forja use target --project <path>',
+        category: 'env',
+        envSubCategory: 'jom',
+        env: summary,
+    };
+}
+
+async function listEnvMake(): Promise<ListResult> {
+    const summary: EnvSummary = {};
+    if (process.platform !== 'win32') {
+        const makePath = detectMake();
+        if (makePath) { summary.make = true; }
+    }
+    return {
+        ok: true,
+        action: 'list',
+        category: 'env',
+        envSubCategory: 'make',
+        env: summary,
     };
 }
 
@@ -520,16 +444,5 @@ function listRemote(workspace: string): ListResult {
         category: 'remote',
         workspace,
         remote: detail,
-    };
-}
-
-function listRemoteRepos(workspace: string): ListResult {
-    const remote = loadRemoteSettings(workspace);
-    return {
-        ok: true,
-        action: 'list',
-        category: 'remote-repos',
-        workspace,
-        remoteRepos: remote.repos,
     };
 }

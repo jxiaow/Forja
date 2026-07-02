@@ -271,6 +271,26 @@ When creating a new command with custom output logic:
    ```
 3. If you're wrapping another result (like `qtResult`), also strip its nextActions for text mode
 
+### JSON-Text Field Parity
+
+Every data field in the JSON result **must** have a corresponding display in the text formatter. Silent data loss between modes is a bug.
+
+**Bug pattern**: A field like `buildOrder[].args` is included in the JSON result interface and populated by the data function, but the text formatter only shows `target:action` and silently drops `args`.
+
+**Fix**: In the text formatter, explicitly render every field:
+```typescript
+for (const b of rem.buildOrder) {
+    const args = b.args?.length ? ` ${b.args.join(' ')}` : '';
+    lines.push(`    ${b.target}:${b.action}${args}`);
+}
+```
+
+**Audit checklist**:
+- [ ] For each field in the JSON result interface, verify the text formatter displays it
+- [ ] Nested objects/arrays — check that sub-fields are not silently dropped
+- [ ] Optional fields — verify the text formatter handles both present and absent cases
+- [ ] Array items — check that all properties of each item are displayed, not just the first one
+
 ### Audit Checklist Addition
 
 - [ ] Do nextActions include `--json` when the command was called with `--json`?

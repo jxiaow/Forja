@@ -65,7 +65,7 @@ export async function executeRemotePlan(options: RemotePlanOptions): Promise<Rem
             mode: 'remote',
             stages: [],
             diagnostics: [{ level: 'error', message: `Server not found: ${serverId}` }],
-            nextAction: 'forja list servers',
+            nextAction: 'forja server',
         };
     }
 

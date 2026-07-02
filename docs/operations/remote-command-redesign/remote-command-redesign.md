@@ -75,7 +75,7 @@ forja server add/remove/update
 ### 查看
 ```
 forja list remote                        # 合并了 remote + remote-repos
-forja list servers
+forja server
 ```
 
 ### 诊断
@@ -123,7 +123,7 @@ Next:
 如果有多个服务器，提示选择：
 ```
 Next:
-  forja list servers
+  forja server
 ```
 
 ### Phase 3: 执行

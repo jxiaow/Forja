@@ -16,7 +16,7 @@ forja status [--workspace <path>] [--json] [--lang <locale>]
 4. 无 active target 时：扫描候选数量，不猜测，返回 `forja list` + `forja use target --project <path>`。
 5. 有 active target 时：验证项目存在、mode/arch 有效、runAt 配置完整。
 6. `runtime` 字段始终返回，读取本地 runState 文件（轻量操作）。
-7. `nextAction` 可提示 `forja list config` 查看配置、`forja use target --project <path>` 切换目标、`forja use qt|sdk ...` 修改配置。
+7. `nextAction` 可提示 `forja use target --project <path>` 切换目标、`forja use qt|sdk ...` 修改配置。
 8. status 只使用本地可读配置、缓存的 remote metadata、已有 lock/runState 摘要；不会为了判断状态主动发起 SSH、上传、bootstrap 或远程命令。需要实时 SSH/版本/路径可达性验证时指向 `forja doctor --remote`。
 
 **吸收的旧命令**：
@@ -348,7 +348,7 @@ _runAt=remote 但未配置服务器_：
     "diagnostics": [
         { "level": "error", "message": "runAt=remote but no server configured" }
     ],
-    "nextAction": "forja list servers"
+    "nextAction": "forja server"
 }
 ```
 
@@ -373,9 +373,9 @@ _Sync 配置的服务器被删除_：
     },
     "sync": { "enabled": true },
     "diagnostics": [
-        { "level": "error", "message": "Sync server \"old-server\" does not exist", "hint": "Server was deleted, please re-select", "fix": "forja list servers", "params": { "server": "old-server" } }
+        { "level": "error", "message": "Sync server \"old-server\" does not exist", "hint": "Server was deleted, please re-select", "fix": "forja server", "params": { "server": "old-server" } }
     ],
-    "nextAction": "forja list servers"
+    "nextAction": "forja server"
 }
 ```
 
@@ -592,7 +592,7 @@ Target: qt app/app.pro release x86 remote
 Readiness: target=ready toolchain=ready sync=not-selected remote=missing
 Error: runAt=remote but no server configured
 Next:
-  forja list servers
+  forja server
 ```
 
 _Sync 配置的服务器被删除_：
@@ -604,7 +604,7 @@ Readiness: target=ready toolchain=ready sync=blocked remote=not-selected
 Error: Sync server "old-server" does not exist
   hint: Server was deleted, please re-select
 Next:
-  forja list servers
+  forja server
 ```
 
 _混合 workspace 未选择_：
@@ -674,6 +674,6 @@ Next:
 - `forja status --json` 在无 active target 时不猜测目标。
 - `forja status --json` 始终返回 runtime 字段，且 runtime 不影响 `ok`。
 - `forja status --json --lang zh` 只本地化 message/hint，不改变 readiness 枚举值和 fix 命令。
-- runAt=remote 缺 server/path 时返回 `remote=missing` 并指向 `forja list servers` + `forja use remote --server`。
+- runAt=remote 缺 server/path 时返回 `remote=missing` 并指向 `forja server` + `forja use remote --server`。
 - `forja status --json` 不主动 SSH；远程深度检查（SSH 连通性、版本兼容、锁状态）由 `forja doctor --remote` 负责。
 - 纯远程配置详情不从 status 展开，指向 `forja list remote`。

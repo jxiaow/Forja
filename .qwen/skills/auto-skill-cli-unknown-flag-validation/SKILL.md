@@ -49,9 +49,20 @@ When building the known-flags set, you MUST read the entire handler function bod
 
 A flag used with `extractFlag(argv, '--foo')` to read a string value MUST be in **both** the known-flags set **and** the value-flags set. If it's only in the known set (treated as boolean), `findUnknownFlags()` won't consume the next token, causing the value to leak as a positional argument.
 
-**Bug example:** `--local` and `--remote` were in `useKnown` but not `useWithVal`. The handler called `extractFlag(argv, '--local')` to read a repo name, but the validator treated them as boolean flags. The value (`myrepo`) became an unvalidated positional arg.
+**Bug example (missing from value set):** `--local` and `--remote` were in `useKnown` but not `useWithVal`. The handler called `extractFlag(argv, '--local')` to read a repo name, but the validator treated them as boolean flags. The value (`myrepo`) became an unvalidated positional arg.
 
 **Rule:** When adding a flag that takes a value, add it to BOTH `useKnown` AND `useWithVal`. When auditing, check every `extractFlag()` call and verify the flag is in the value set.
+
+## Critical: boolean flags must NOT be in the value set
+
+A flag used with `hasFlag(argv, '--foo')` (boolean, no value) must be in the known set but **NOT** in the value-flags set. If a boolean flag is in `useWithVal`, `findUnknownFlags()` expects the next token to be its value. When the next token is another `--` flag, it reports `"<flag> requires a value"` — a completely wrong error message.
+
+**Bug example (boolean flag in value set):** `--local` and `--remote` were boolean flags (used with `hasFlag()`) but were listed in `useWithVal`. Running `forja use execution --local --remote` produced `"--local requires a value"` instead of the correct "Cannot specify both --local and --remote" error from the handler.
+
+**Rule:** When auditing, check every `hasFlag()` call and verify the flag is NOT in the value set. Cross-reference:
+- `extractFlag(argv, '--foo')` → must be in BOTH known AND value sets
+- `hasFlag(argv, '--foo')` → must be in known set ONLY, NOT in value set
+- `extractAllFlags(argv, '--foo')` → must be in BOTH known AND value sets
 
 ## Critical: value flag missing value
 

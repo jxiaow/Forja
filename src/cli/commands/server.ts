@@ -166,7 +166,7 @@ export function runServerUpdate(id: string, updates: Partial<ServerAddArgs>): Se
         return {
             ok: false, action: 'server', serverAction: 'update', changed: [],
             diagnostics: [{ level: 'error', message: `${T('srv.serverNotFound')}: ${id}` }],
-            nextAction: 'forja list servers',
+            nextAction: 'forja server',
         };
     }
     const patch: Partial<Omit<ServerConfig, 'id'>> = {};
@@ -185,7 +185,7 @@ export function runServerUpdate(id: string, updates: Partial<ServerAddArgs>): Se
             return {
                 ok: false, action: 'server', serverAction: 'update', changed: [],
                 diagnostics: [{ level: 'error', message: `${T('srv.serverNotFound')}: ${id}` }],
-                nextAction: 'forja list servers',
+                nextAction: 'forja server',
             };
         }
         const updated = getServerById(id);
@@ -210,7 +210,7 @@ export function runServerRemove(id: string): ServerResult {
         return {
             ok: false, action: 'server', serverAction: 'remove', changed: [],
             diagnostics: [{ level: 'error', message: `${T('srv.serverNotFound')}: ${id}` }],
-            nextAction: 'forja list servers',
+            nextAction: 'forja server',
         };
     }
     try {
@@ -219,7 +219,7 @@ export function runServerRemove(id: string): ServerResult {
             ok: true, action: 'server', serverAction: 'remove',
             removed: id,
             changed: [`servers.${id}`],
-            nextAction: 'forja list servers',
+            nextAction: 'forja server',
         };
     } catch (e) {
         return {

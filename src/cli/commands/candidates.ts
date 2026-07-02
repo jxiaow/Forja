@@ -53,11 +53,17 @@ export function aggregateCandidates(
             && activeTarget.kind === 'sdk'
             && normalizePath(activeTarget.project) === normalizePath(sln);
         const isConfigured = normalizePath(sln) === normalizePath(sdkPinned);
+        const fileName = path.basename(sln).toLowerCase();
+        const dirName = path.basename(path.dirname(sln));
+        const isConventionName = fileName === 'cmakelists.txt' || fileName === 'makefile';
+        const label = isConventionName
+            ? (dirName && dirName !== '.' ? dirName : path.basename(workspace))
+            : path.basename(sln, path.extname(sln));
 
         candidates.push({
             kind: 'sdk',
             project: sln,
-            label: path.basename(sln, path.extname(sln)),
+            label,
             current: isCurrent,
             configured: isConfigured,
             diagnostics: [],

@@ -61,9 +61,9 @@ test('qtCore.ts nextActions reference `forja setup` not `forja init`', () => {
 
 // ── List categories ──
 
-test('list command supports all 7 categories', () => {
+test('list command supports all categories', () => {
     const listSrc = source('src/cli/commands/list.ts');
-    const expectedCategories = ['targets', 'servers', 'env', 'remote-repos', 'remote', 'config', 'lang'];
+    const expectedCategories = ['targets', 'servers', 'env', 'remote', 'lang'];
     for (const cat of expectedCategories) {
         assert.ok(listSrc.includes(`'${cat}'`), `List category '${cat}' must be supported`);
     }
