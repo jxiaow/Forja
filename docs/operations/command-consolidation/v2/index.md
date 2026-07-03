@@ -1,9 +1,9 @@
 # Forja 命令收敛迁移方案 v2
 
-> 目标：将 ~107 个分散的 Qt/SDK/Remote/Sync 命令收敛为 11 个意图驱动的顶层命令。旧能力必须全部有新命令归宿，不再依赖旧用户命令兼容层作为产品设计的一部分。
+> 目标：将 ~107 个分散的 Qt/SDK/Remote/Sync 命令收敛为 12 个意图驱动的顶层命令。旧能力必须全部有新命令归宿，不再依赖旧用户命令兼容层作为产品设计的一部分。
 
 **命令规格（各文件）**：
-[status](status.md) · [init](init.md) · [list](list.md) · [use](use.md) · [server](server.md) · [build](build.md) · [run](run.md) · [stop](stop.md) · [clean](clean.md) · [doctor](doctor.md) · [sync](sync.md)
+[status](status.md) · [init](init.md) · [list](list.md) · [use](use.md) · [remote](remote.md) · [server](server.md) · [build](build.md) · [run](run.md) · [stop](stop.md) · [clean](clean.md) · [doctor](doctor.md) · [sync](sync.md)
 
 ## 0. 目录对比与 v2 落盘状态
 
@@ -12,7 +12,7 @@
 | 文件 | 作用 | v2 使用方式 |
 |------|------|-------------|
 | `command-inventory.md` | 全量盘点现有 CLI/VSCode 命令，约 107 个输入面 | 作为旧命令覆盖基准 |
-| `current-command-consolidation.md` | 定义命令收敛目标、旧→新映射、阶段计划 | 拆分为 v2 总览 + 11 个命令规格页 |
+| `current-command-consolidation.md` | 定义命令收敛目标、旧→新映射、阶段计划 | 拆分为 v2 总览 + 12 个命令规格页 |
 | `command-api.zh.md` | API/输出协议补充 | 合并到 v2 的 Result、Diagnostic、Readiness 结构 |
 | `command-consolidation*.html` | 展示产物 | 不作为源文档修改 |
 | `v2-en/`、`v2-zh/` | 由 v2 Markdown 生成的 HTML 产物 | 修改 Markdown 后再生成 |
@@ -25,6 +25,7 @@ v2 下每个公开命令都必须独立落盘，包含：职责边界、语法�
 | [init](init.md) | `qt init`、`sdk init`、`remote qt/sdk init` | 已落盘 |
 | [list](list.md) | `qt/sdk projects`、`qt/sdk env`、server/remote 配置枚举 | 已落盘 |
 | [use](use.md) | `qt/sdk use`、`sync use`、remote execution/workspace/bin 选择 | 已落盘 |
+| [remote](remote.md) | 远程配置（workspace/repo/forja-bin/build-order/transfer）和仓库操作（restore/reset） | 已落盘 |
 | [server](server.md) | 共享 server add/update/remove | 已落盘 |
 | [build](build.md) | Qt/SDK/Remote build、rebuild、qmake、rcc | 已落盘 |
 | [run](run.md) | Qt local/remote run、detach、debug、custom | 已落盘 |
@@ -42,6 +43,7 @@ forja status      — 当前状态和下一步建议
 forja setup       — 一站式初始化（本地 + 远程）
 forja list        — 列举可选项和配置摘要（targets/servers/env/remote/config/lang）
 forja use         — 选择目标、构建配置、执行端和高级配置
+forja remote      — 远程配置和仓库操作
 forja server      — 管理共享 SSH server
 forja build       — 构建当前目标
 forja run         — 运行当前目标
@@ -51,7 +53,7 @@ forja doctor      — 深度诊断和恢复
 forja sync        — 同步变更文件到远程
 ```
 
-不引入 `forja remote`、`forja qt`、`forja sdk` 作为用户命令。它们的能力由下面 11 个顶层命令及其子动作承接。
+不引入 `forja qt`、`forja sdk` 作为用户命令。它们的能力由上面 12 个顶层命令及其子动作承接。
 
 ---
 
@@ -358,16 +360,16 @@ FORJA_LANG=zh forja status --json    # 中文
 | `forja remote qt run` | `forja run` | 统一 run |
 | `forja remote qt stop` | `forja stop` | 统一 stop |
 | `forja remote qt ps` | `forja status` | runtime 归 status |
-| `forja remote qt restore` | `forja doctor restore [--force]` | 隐藏破坏性操作 |
-| `forja remote qt reset` | `forja doctor reset [--force]` | 隐藏破坏性操作 |
-| `forja remote qt clean-untracked` | `forja doctor clean-untracked [--recursive] [--force]` | 隐藏破坏性操作 |
+| `forja remote qt restore` | `forja remote restore <repo> <paths...>` | 隐藏破坏性操作 |
+| `forja remote qt reset` | `forja remote reset <repo> <paths...>` | 隐藏破坏性操作 |
+| `forja remote qt clean-untracked` | `forja remote reset <repo> <paths...> --all` | 隐藏破坏性操作 |
 | `forja remote sdk status` | `forja status` | 统一 status |
 | `forja remote sdk init` | `forja setup --server <id>` | 通过 bridge 执行远端初始化 |
 | `forja remote sdk use` | `forja use target ...` / `forja use execution --remote` / `forja use remote --server ...` | 目标、执行端、remote 绑定分别配置 |
 | `forja remote sdk build` | `forja build` | 统一 build |
 | `forja remote sdk rebuild` | `forja build fresh` | 统一 build fresh |
 | `forja remote sdk clean` | `forja clean` | 统一 clean |
-| `forja remote sdk restore/reset/clean-untracked` | `forja doctor restore/reset/clean-untracked [--force]` | 隐藏破坏性操作 |
+| `forja remote sdk restore/reset/clean-untracked` | `forja remote restore/reset <repo> <paths...>` | 隐藏破坏性操作 |
 
 ### 4.4 Sync CLI 映射
 
@@ -469,6 +471,7 @@ FORJA_LANG=zh forja status --json    # 中文
 | `forja.setup` | Forja: Setup | `forja setup` |
 | `forja.list` | Forja: List | `forja list` |
 | `forja.use` | Forja: Use | `forja use` |
+| `forja.remote` | Forja: Remote | `forja remote` |
 | `forja.server` | Forja: Server | `forja server` |
 | `forja.build` | Forja: Build | `forja build` |
 | `forja.run` | Forja: Run | `forja run` |

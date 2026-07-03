@@ -94,6 +94,38 @@ Read `formatStatusText()` (or equivalent) carefully:
 - [ ] **Dead code / redundant arrays**: If `IMPLEMENTED_COMMANDS` equals `COMMANDS`, or `isImplementedCommand()` returns the same as `isCommand()`, one is dead code.
 - [ ] **Shared code extraction**: If the same logic (e.g., pinnedProject fallback, --json stripping) appears in 2+ files, extract to a shared helper.
 
+## Pass 7: Sequential Operation Error Propagation
+
+When a command performs multiple sequential operations (e.g., clean → build, detect → configure → deploy), check that errors in early steps are NOT silently swallowed.
+
+- [ ] **Every awaited result is checked**: After `await runSomething()`, is the return value's `ok` field checked? Or is the result discarded?
+- [ ] **Multi-step commands fail atomically**: If step 1 of 3 fails, does the command return failure? Or does it continue to step 2?
+- [ ] **Preparatory steps propagate errors**: "fresh" = clean + build. If clean fails, the whole command must fail — not silently proceed to build with stale artifacts.
+
+**Bug example:** `build fresh` ran clean first but discarded the result: `await runCliResult(cleanPlan, ...)`. The clean failure was silently swallowed and build proceeded with stale objects. Fix: capture the result, check `ok`, return error if clean failed.
+
+## Pass 8: Result Status Consistency
+
+When a command sets individual step statuses (e.g., `steps.forjaDeploy = 'failed'`), verify the overall `result.ok` reflects those failures.
+
+- [ ] **Any step failed → ok = false**: If any step is marked `'failed'`, the overall result must be `ok: false`.
+- [ ] **Error diagnostics match step status**: Steps marked `'failed'` must have corresponding error-level diagnostics.
+- [ ] **Early return on critical failure**: When a step fails and subsequent steps depend on it, return immediately with `ok: false` — don't just mark the step and continue.
+- [ ] **nextAction is set on failure**: When `ok: false`, `nextAction` must point to a recovery command.
+
+**Bug example:** `setup remote` when SSH unreachable: marked `steps.forjaDeploy = 'failed'` but left `result.ok = true`. Scripts/AI checking `ok` would think setup succeeded when it didn't. Fix: set `result.ok = false`, populate `result.remote` with partial state, set `nextAction: 'forja doctor --remote'`, and return early.
+
+## Pass 9: Cross-Command Consistency
+
+When multiple commands share a pattern (e.g., all execution commands accept `--project`), verify they all implement it consistently.
+
+- [ ] **Same flags across similar commands**: If `build` accepts `--project`, do `run`, `stop`, `clean` also accept it?
+- [ ] **Same error behavior**: If `build` returns `forja list targets` when project is missing, does `run` do the same?
+- [ ] **Same fallback logic**: If `build` has `tryPinnedProjectFallback()`, does `clean` have it too?
+- [ ] **Parity between Qt and SDK paths**: If the Qt code path checks VS and reports missing, does the SDK code path do the same?
+
+**Bug example:** `doctor` checked VS toolchain for Qt targets on Windows but had no `else` branch for SDK targets when `vsInstall` was not configured. SDK targets silently passed the VS check → user saw `toolchain-vs: ready` when VS wasn't configured at all.
+
 ## Common Bug Patterns Found
 
 | Pattern | Symptom | Fix |
@@ -116,6 +148,10 @@ Read `formatStatusText()` (or equivalent) carefully:
 | Duplicate toolchain checks when no target | `toolchain-vs` appears twice in doctor output | Track checked items in a Set to deduplicate |
 | Hardcoded diagnostic messages in English | Chinese locale shows English error messages | All `diag()` messages must use T() translation keys |
 | `wantsJson` fallback to `process.argv` | Inconsistent JSON detection across commands | Always use `options.json ?? false`, dispatcher passes the value |
+| Dead flags in knownFlags | `forja doctor --fix` accepted but does nothing | Remove flags from knownFlags that no code path reads |
+| Sequential error silently swallowed | `build fresh` clean fails but build proceeds | Check return value of every awaited step; return error on failure |
+| Step failed but ok=true | `setup remote` SSH unreachable, steps=failed, ok=true | Set `ok=false` when any step fails; return early with nextAction |
+| Asymmetric toolchain checks | SDK target on Windows doesn't check VS | Ensure Qt and SDK paths have equivalent validation branches |
 
 ## Multi-pass Rationale
 

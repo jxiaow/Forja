@@ -8,14 +8,13 @@
 ```
 forja doctor [--remote] [--server <id>] [--workspace <path>] [--json]
 forja doctor fix [--remote] [--server <id>] [--plan] [--workspace <path>] [--json]
-forja doctor unlock <lock-id> [--force] [--workspace <path>] [--json]
+forja doctor unlock <lock-id> [--workspace <path>] [--json]
 ```
 
-**隐藏语法**（破坏性操作，不进入主帮助）：
+**隐藏语法**（破坏性操作，不进入主帮助，实际由 `forja remote` 承接）：
 ```
-forja doctor restore <repo> <paths...> [--force] [--workspace <path>] [--json]
-forja doctor reset <repo> <paths...> [--force] [--workspace <path>] [--json]
-forja doctor clean-untracked <repo> <paths...> [--recursive] [--force] [--workspace <path>] [--json]
+forja remote restore <repo> <paths...> [--workspace <path>] [--json]
+forja remote reset <repo> <paths...> [--all] [--workspace <path>] [--json]
 ```
 
 ## 命令边界
@@ -68,12 +67,12 @@ forja doctor clean-untracked <repo> <paths...> [--recursive] [--force] [--worksp
 | `forja remote doctor --bootstrap` | `forja doctor fix --remote [--server <id>]` |
 | `forja remote bootstrap` | `forja doctor fix --remote [--server <id>]` |
 | `forja remote unlock` | `forja doctor unlock <lock-id>` |
-| `forja remote qt restore` | `forja doctor restore <repo> <paths...>`（隐藏） |
-| `forja remote qt reset` | `forja doctor reset <repo> <paths...>`（隐藏） |
-| `forja remote qt clean-untracked` | `forja doctor clean-untracked <repo> <paths...>`（隐藏） |
-| `forja remote sdk restore` | `forja doctor restore <repo> <paths...>`（隐藏） |
-| `forja remote sdk reset` | `forja doctor reset <repo> <paths...>`（隐藏） |
-| `forja remote sdk clean-untracked` | `forja doctor clean-untracked <repo> <paths...>`（隐藏） |
+| `forja remote qt restore` | `forja remote restore <repo> <paths...>`（隐藏） |
+| `forja remote qt reset` | `forja remote reset <repo> <paths...>`（隐藏） |
+| `forja remote qt clean-untracked` | `forja remote reset <repo> <paths...> --all`（隐藏） |
+| `forja remote sdk restore` | `forja remote restore <repo> <paths...>`（隐藏） |
+| `forja remote sdk reset` | `forja remote reset <repo> <paths...>`（隐藏） |
+| `forja remote sdk clean-untracked` | `forja remote reset <repo> <paths...> --all`（隐藏） |
 | `forja cleanup` | `forja doctor fix` |
 | `forja cleanup --plan` | `forja doctor fix --plan` |
 
@@ -233,5 +232,5 @@ Next:
 - `forja doctor fix --json` 可执行 cleanup，但不执行 restore/reset/clean-untracked。
 - `forja doctor fix --plan --json` 预览 cleanup/remote fix，不写配置、不上传文件。
 - `forja doctor unlock <id> --json` 只释放指定 lock。
-- `forja doctor restore/reset/clean-untracked ... --force --json` 覆盖旧 remote 破坏性恢复动作的 force 语义。
+- `forja remote restore/reset ... --json` 覆盖旧 remote 破坏性恢复动作。
 - 隐藏破坏性子动作不出现在主帮助、nextAction 和 Command Palette。

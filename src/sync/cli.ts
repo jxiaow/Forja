@@ -89,27 +89,27 @@ interface ResolvedSyncConfig {
     ignore: string[];
 }
 
-function resolveSyncConfig(workspaceRoot: string): { ok: true; config: ResolvedSyncConfig } | { ok: false; error: string; nextAction: string } {
+function resolveSyncConfig(workspaceRoot: string): { ok: true; config: ResolvedSyncConfig } | { ok: false; error: string; nextAction?: string } {
     const project = readProjectSyncConfig(workspaceRoot);
 
     if (!project.enabled) {
-        return { ok: false, error: T('sync.notConfigured'), nextAction: 'forja sync' };
+        return { ok: false, error: T('sync.notConfigured') };
     }
 
     const targetId = project.selectedServer;
     if (!targetId) {
-        return { ok: false, error: T('sync.notConfigured'), nextAction: 'forja sync' };
+        return { ok: false, error: T('sync.notConfigured') };
     }
 
     const resolvedServer = resolveCliServer(targetId);
     const server = resolvedServer.server;
     if (!server) {
-        return { ok: false, error: resolvedServer.error || `${T('sync.serverNotFound')}: "${targetId}"`, nextAction: 'forja sync' };
+        return { ok: false, error: resolvedServer.error || `${T('sync.serverNotFound')}: "${targetId}"` };
     }
 
     const remotePath = project.remotePaths[server.id] || '';
     if (!remotePath) {
-        return { ok: false, error: T('sync.noRemotePath'), nextAction: `forja sync --server ${server.name} --remote-path <path>` };
+        return { ok: false, error: T('sync.noRemotePath'), nextAction: `forja setup remote` };
     }
 
     return { ok: true, config: { server, remotePath, ignore: project.ignore } };
@@ -318,7 +318,7 @@ export async function executeSyncCli(workspaceRoot: string, fileFilters: string[
 
 export async function planSyncCli(workspaceRoot: string, fileFilters: string[] = []): Promise<SyncPlanResult> {
     const resolved = resolveSyncConfig(workspaceRoot);
-    const empty = (error: string, nextAction: string, server = '', remotePath = ''): SyncPlanResult => ({
+    const empty = (error: string, nextAction?: string, server = '', remotePath = ''): SyncPlanResult => ({
         ok: false,
         action: 'sync',
         mode: 'dryRun',

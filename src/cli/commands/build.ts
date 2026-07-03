@@ -263,7 +263,19 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             cleanOpts.action = 'clean';
             const cleanPlan = await createActionPlan(cleanOpts);
             if (cleanPlan.ok && cleanPlan.commands.length > 0) {
-                await runCliResult(cleanPlan, { streaming: false, detach: false });
+                const cleanResult = await runCliResult(cleanPlan, { streaming: false, detach: false });
+                if (!cleanResult.ok) {
+                    return {
+                        ok: false,
+                        action: 'build',
+                        buildAction,
+                        workspace,
+                        activeTarget: target,
+                        exitCode: cleanResult.exitCode ?? undefined,
+                        diagnostics: [diag('error', T('cmd.freshCleanFailed'))],
+                        nextAction: 'forja doctor',
+                    };
+                }
             }
         }
 
@@ -352,7 +364,7 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
         console.log(`${T('build')} ${status}`);
         if (result.activeTarget) {
             const t = result.activeTarget;
-            console.log(`${T('target')}${t.kind} · ${t.project} · ${t.mode}/${t.arch} · ${t.runAt}`);
+            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}`);
         }
         if (result.durationMs) {
             console.log(`${T('duration')}${result.durationMs}ms`);

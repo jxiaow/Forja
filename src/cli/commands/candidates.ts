@@ -1,5 +1,5 @@
 /**
- * Candidate aggregation — scans workspace for Qt (.pro) and SDK (.sln/Makefile) projects.
+ * Candidate aggregation — scans workspace for project files and auto-detects type.
  * No vscode dependency.
  */
 import * as path from 'path';
@@ -7,6 +7,7 @@ import { scanProFiles } from '../../qt/shared/projectScanner';
 import { scanSdkProjects } from '../../core/sdkProjectScanner';
 import { loadActiveTarget, loadQtSettings, loadSdkSettings, QtSettings, SdkSettings } from '../../core/settingsIO';
 import { ActiveTarget, TargetCandidate } from './types';
+import { detectProjectType } from '../../core/projectTypeDetector';
 
 function normalizePath(p: string): string {
     return p.replace(/\\/g, '/');
@@ -24,13 +25,12 @@ export function aggregateCandidates(
 ): TargetCandidate[] {
     const candidates: TargetCandidate[] = [];
 
-    // Qt candidates
+    // Qt candidates (.pro files)
     const proFiles = scanProFiles(workspace);
     const qtPinned = qtConfig.pinnedProject?.relative || '';
 
     for (const pro of proFiles) {
         const isCurrent = activeTarget !== null
-            && activeTarget.kind === 'qt'
             && normalizePath(activeTarget.project) === normalizePath(pro);
         const isConfigured = normalizePath(pro) === normalizePath(qtPinned);
 
@@ -44,25 +44,31 @@ export function aggregateCandidates(
         });
     }
 
-    // SDK candidates — uses shared scanner (same rules as SDK module's ProjectScanner)
+    // SDK candidates — uses shared scanner, then auto-detect type
     const sdkFiles = scanSdkProjects({ workspace });
     const sdkPinned = sdkConfig.pinnedProject || '';
 
-    for (const sln of sdkFiles) {
+    for (const sdkFile of sdkFiles) {
+        const fullPath = path.join(workspace, sdkFile);
+        const typeInfo = detectProjectType(fullPath);
+        
+        // Determine kind based on Qt dependency
+        const kind = typeInfo.usesQt ? 'qt' : 'sdk';
+        
         const isCurrent = activeTarget !== null
-            && activeTarget.kind === 'sdk'
-            && normalizePath(activeTarget.project) === normalizePath(sln);
-        const isConfigured = normalizePath(sln) === normalizePath(sdkPinned);
-        const fileName = path.basename(sln).toLowerCase();
-        const dirName = path.basename(path.dirname(sln));
+            && normalizePath(activeTarget.project) === normalizePath(sdkFile);
+        const isConfigured = normalizePath(sdkFile) === normalizePath(sdkPinned);
+        
+        const fileName = path.basename(sdkFile).toLowerCase();
+        const dirName = path.basename(path.dirname(sdkFile));
         const isConventionName = fileName === 'cmakelists.txt' || fileName === 'makefile';
         const label = isConventionName
             ? (dirName && dirName !== '.' ? dirName : path.basename(workspace))
-            : path.basename(sln, path.extname(sln));
+            : path.basename(sdkFile, path.extname(sdkFile));
 
         candidates.push({
-            kind: 'sdk',
-            project: sln,
+            kind,
+            project: sdkFile,
             label,
             current: isCurrent,
             configured: isConfigured,

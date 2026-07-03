@@ -82,7 +82,7 @@ Forja 支持通过 SSH 在远程服务器上构建和运行：
 forja server add --name dev --host 192.168.1.10 --username dev
 
 # 2. 配置远程执行目标
-forja use remote --server dev --remote-path /home/dev/workspace
+forja remote --server dev --remote-path /home/dev/workspace
 
 # 3. 远程初始化
 forja init --remote
@@ -93,7 +93,7 @@ forja use execution --remote
 
 切换后，状态栏 Build/Run 自动走远程路径。远程诊断：`forja doctor --remote`。
 
-远程 Forja 二进制默认安装在 `$HOME/.forja/bin/forja`，可通过 `forja use remote forja-bin set --path <path>` 覆盖。
+远程 Forja 二进制默认安装在 `$HOME/.forja/bin/forja`，可通过 `forja remote forja-bin set --path <path>` 覆盖。
 
 ## 同步
 

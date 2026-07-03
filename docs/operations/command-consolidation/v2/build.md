@@ -39,6 +39,7 @@ forja build [fresh|qmake|rcc] [--workspace <path>] [--plan] [--json]
 5. `qmake`/`rcc` 只适用于 Qt target；SDK 下必须失败并给出 `build.actionUnsupported`。
 6. `--plan` 不执行外部命令，只输出 `CommandPlan`；远程模式下也不建立 SSH mutation。
 7. 构建失败保留后端退出码和关键错误摘要；不在 build 内自动执行 doctor/fix。
+8. `fresh` 先执行 clean 再 build；若 clean 步骤失败，整体返回失败，不继续 build（避免陈旧产物残留）。
 
 ## 吸收的旧命令
 

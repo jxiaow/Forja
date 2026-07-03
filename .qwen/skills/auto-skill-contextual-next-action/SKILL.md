@@ -129,3 +129,59 @@ When reviewing nextAction assignments:
 - [ ] Are nextActions from sub-functions propagated (not overridden)?
 - [ ] For list/view commands showing current state: does nextAction suggest the toggle/alternative, not a hardcoded value?
 - [ ] For success paths: does nextAction adapt to current state (nothing→setup, partial→configure, done→status)?
+- [ ] **No self-referencing**: nextAction never points to the command the user is already running
+- [ ] **No circular loops**: A→B→A chains are eliminated
+- [ ] **Most helpful command**: fix/nextAction points to the command that solves the problem most completely (e.g., `forja setup remote` over `forja server` when server needs to be created)
+- [ ] **JSON mode choices**: when config is missing in JSON mode, return `choices` array instead of pointing to a command that requires interactive input
+- [ ] **Context-aware diagnostics**: diagnostics only appear when relevant to the user's mode (e.g., no sync hints for local-only users)
+
+## The `choices` Pattern for AI-Guided Multi-Option Scenarios
+
+When a command cannot determine a single correct nextAction because the user must choose between fundamentally different paths, return a `choices` array instead of a single `nextAction`. This lets the AI agent present options to the user rather than guessing.
+
+### When to Use `choices`
+
+Use `choices` when:
+- The workspace is completely uninitialized (could be local or remote setup)
+- Sync config is missing (could configure independently or via full remote setup)
+- Any scenario where there are 2+ fundamentally different paths forward, and the right choice depends on user intent
+
+### Implementation
+
+```typescript
+// StatusResult interface
+choices?: Array<{ label: string; command: string; description: string }>;
+
+// When no single nextAction is correct
+if (!activeTarget && readiness.toolchain === 'unknown') {
+    result.nextAction = undefined;  // No single action
+    result.choices = [
+        { label: 'forja setup', command: 'forja setup', description: T('statusSetupLocal') },
+        { label: 'forja setup remote', command: 'forja setup remote', description: T('statusSetupRemote') },
+    ];
+}
+```
+
+### Text Mode Rendering
+
+When `nextAction` is undefined but `choices` is present, show all options:
+
+```typescript
+if (result.nextAction) {
+    lines.push(T('next'));
+    lines.push(`  ${result.nextAction}`);
+} else if (result.choices) {
+    lines.push(T('next'));
+    for (const c of result.choices) {
+        lines.push(`  ${c.label}  (${c.description})`);
+    }
+}
+```
+
+### Rules
+
+1. **`choices` replaces `nextAction`, not supplements it** — when `choices` is present, `nextAction` should be `undefined`
+2. **Each choice must be a complete, runnable command** — the AI or user can execute it directly
+3. **Descriptions should be concise** — one phrase explaining what this path does
+4. **Limit to 2-4 choices** — more options become overwhelming
+5. **Text mode must also show choices** — human users need the same information as AI

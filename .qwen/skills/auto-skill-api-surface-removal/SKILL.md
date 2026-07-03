@@ -54,3 +54,30 @@ The most commonly missed locations are:
 - **Help text in translation tables**: The `help.*` entries in `types.ts` are easy to forget
 - **Flag validation sets**: The `findUnknownFlags` call in the dispatcher's handler function has a `Set` of known flags
 - **Readiness/diagnostic tables**: Per-command docs have tables mapping field values to states — remove the relevant row
+
+## Stale Command String References (When Renaming/Moving Commands)
+
+When a command is **renamed, moved, or restructured** (not just removed), the biggest source of bugs is **stale string literals** that reference old command names. These are invisible to the compiler because they're just strings, not code references.
+
+### Where Stale Strings Hide
+
+| Location | Example | How to Find |
+|---|---|---|
+| `nextAction` fields | `nextAction: 'forja use remote --server ...'` | `grep -r "forja use remote" src/` |
+| `diagnostic.hint` fields | `hint: 'configure with forja use qt'` | Same grep |
+| `KEYWORD_SUGGESTIONS` table | `'remote': { hint: 'forja use remote', ... }` | Same grep |
+| Translation keys in `types.ts` | `'forja use remote'` in en/zh values | Same grep |
+| Help text in `types.ts` | `help.use`, `help.list`, `help.doctor` | Read all `help.*` entries |
+| Error messages in other modules | `'forja use remote transfer set ...'` in remote/core/ | Same grep across all src/ |
+| Qt/SDK module diagnostics | `'forja use qt --qt-path ...'` in qt/ | Same grep |
+
+### Checklist for Command Renames
+
+After renaming/moving a command (e.g., `forja use remote` → `forja remote`):
+
+1. **Grep the ENTIRE `src/` tree** for the old command string — not just the command files
+2. **Grep `types.ts`** for all translation values containing the old command name
+3. **Update ALL help text entries** (`help.toplevel`, `help.<command>`, `idx.useUsage`, etc.)
+4. **Update `KEYWORD_SUGGESTIONS`** in the dispatcher
+5. **Rebuild CLI and reinstall** (`npm run package:cli && npm install -g dist/.../forja-cli-*.tgz`) before running integration tests — integration tests spawn the installed CLI binary, not freshly compiled code
+6. **Run integration tests** — they catch stale nextAction strings when the test asserts on command output

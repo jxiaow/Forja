@@ -122,18 +122,17 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.list — requires a category: targets|env|remote|lang
+    // forja.list — requires a category: targets|env|lang
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.list', async (category?: string) => {
             try {
                 const { resolveLocale } = await import('../cli/commands/types');
                 const locale = resolveLocale(undefined, loadGlobalConfig().lang);
-                const validCategories = ['targets', 'env', 'remote', 'lang'];
+                const validCategories = ['targets', 'env', 'lang'];
                 if (!category || !validCategories.includes(category)) {
                     const descMap: Record<string, [string, string]> = {
                         targets: ['Qt/SDK projects', 'Qt/SDK 项目'],
                         env: ['Toolchain environment', '工具链环境'],
-                        remote: ['Remote settings', '远程设置'],
                         lang: ['Language', '语言设置'],
                     };
                     const picked = await vscode.window.showQuickPick(validCategories.map(c => ({
@@ -192,15 +191,15 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 if (ch) { allTargets.forEach((t, i) => { ch.appendLine(`[DEBUG]   [${i}] ${t.kind}: ${t.project}`); }); }
                 if (allTargets.length > 0) {
                     const items = allTargets.map(t => ({
-                        label: `${t.kind}: ${t.project}`,
+                        label: t.project,
                         description: t.current ? '(current)' : '',
                         detail: t.configured ? 'Configured' : 'Not configured',
                     }));
                     const picked = await vscode.window.showQuickPick(items, {
-                        placeHolder: kindFilter === 'sdk' ? 'Select SDK target' : kindFilter === 'qt' ? 'Select Qt target' : 'Select a target',
+                        placeHolder: 'Select a target',
                     });
                     if (picked) {
-                        const target = allTargets.find(t => `${t.kind}: ${t.project}` === picked.label);
+                        const target = allTargets.find(t => t.project === picked.label);
                         if (target) {
                             const { runUseTarget } = await import('../cli/commands/use');
                             const targetWs = target.kind === 'sdk' ? sdkWs : qtWs;
@@ -262,6 +261,113 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('forja.use', async () => {
             // Open config panel as the primary "use" entry point
             vscode.commands.executeCommand('forja.config.openPage');
+        })
+    );
+
+    // forja.remote — QuickPick menu for remote configuration
+    context.subscriptions.push(
+        vscode.commands.registerCommand('forja.remote', async () => {
+            try {
+                const { runRemoteShow } = await import('../cli/commands/remote');
+                const { resolveLocale } = await import('../cli/commands/types');
+                const { formatRemoteText } = await import('../cli/commands/remote');
+                const locale = resolveLocale(undefined, loadGlobalConfig().lang);
+                const ws = workspace();
+                const result = runRemoteShow(ws);
+                const remote = result.remote;
+
+                type RemoteItem = vscode.QuickPickItem & { command?: string };
+                const sep = (label: string): RemoteItem => ({ label, kind: vscode.QuickPickItemKind.Separator });
+                const serverLabel = remote?.selectedServer || '(none)';
+                const pathLabel = remote?.remotePath || '(none)';
+                const items: RemoteItem[] = [
+                    {
+                        label: '$(info) Current Settings',
+                        description: `Server: ${serverLabel}, Path: ${pathLabel}`,
+                        command: '__show__',
+                    },
+                    sep('Configuration'),
+                    { label: '$(server) Set Server', description: 'Select remote server', command: '__set_server__' },
+                    { label: '$(folder) Set Remote Path', description: 'Set remote workspace path', command: '__set_path__' },
+                    { label: '$(repo) Workspace', description: 'Configure remote workspace mode', command: '__workspace__' },
+                    { label: '$(git-merge) Repo', description: 'Manage remote repo mappings', command: '__repo__' },
+                    { label: '$(file-binary) Forja Bin', description: 'Set remote forja binary path', command: '__forja_bin__' },
+                    { label: '$(list-ordered) Build Order', description: 'Configure remote build order', command: '__build_order__' },
+                    { label: '$(cloud-upload) Transfer', description: 'Configure deploy transfer settings', command: '__transfer__' },
+                ];
+
+                const selected = await vscode.window.showQuickPick(items, {
+                    placeHolder: `Remote — ${serverLabel}`,
+                });
+                if (!selected?.command) { return; }
+
+                const ch = getOutputChannel();
+                const showResult = (r: any) => {
+                    const text = formatRemoteText(r, locale);
+                    if (ch) { ch.clear(); ch.appendLine(text); ch.show(true); }
+                };
+
+                switch (selected.command) {
+                    case '__show__': {
+                        showResult(result);
+                        break;
+                    }
+                    case '__set_server__': {
+                        const { listServers } = await import('../cli/commands/server');
+                        const servers = listServers();
+                        if (servers.length === 0) {
+                            vscode.window.showInformationMessage('No servers configured. Use "forja server add" in terminal.');
+                            return;
+                        }
+                        const serverItems = servers.map(s => ({
+                            label: s.name,
+                            description: `${s.username}@${s.host}:${s.port}`,
+                            detail: s.id === remote?.selectedServer ? '(current)' : '',
+                        }));
+                        const picked = await vscode.window.showQuickPick(serverItems, { placeHolder: 'Select server' });
+                        if (picked) {
+                            const { runRemoteSet } = await import('../cli/commands/remote');
+                            const r = runRemoteSet(ws, { server: picked.label });
+                            showResult(r);
+                        }
+                        break;
+                    }
+                    case '__set_path__': {
+                        const pathVal = await vscode.window.showInputBox({
+                            prompt: 'Remote workspace path',
+                            value: remote?.remotePath || '',
+                        });
+                        if (pathVal !== undefined) {
+                            const { runRemoteSet } = await import('../cli/commands/remote');
+                            const r = runRemoteSet(ws, { remotePath: pathVal });
+                            showResult(r);
+                        }
+                        break;
+                    }
+                    case '__workspace__': {
+                        vscode.window.showInformationMessage('Use "forja setup remote --workspace-mode staged|legacy" in terminal to configure workspace mode.');
+                        break;
+                    }
+                    case '__repo__': {
+                        vscode.window.showInformationMessage('Use "forja setup remote --repo <local:remote:role>" in terminal to manage repo mappings.');
+                        break;
+                    }
+                    case '__forja_bin__': {
+                        vscode.window.showInformationMessage('Use "forja setup remote --forja-bin <path>" in terminal to configure remote Forja binary.');
+                        break;
+                    }
+                    case '__build_order__': {
+                        vscode.window.showInformationMessage('Use "forja setup remote --build-order qt:build sdk:build" in terminal to configure build order.');
+                        break;
+                    }
+                    case '__transfer__': {
+                        vscode.window.showInformationMessage('Use "forja setup remote --transfer-server/--transfer-path/--transfer-artifact" in terminal to configure transfer.');
+                        break;
+                    }
+                }
+            } catch (e: any) {
+                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            }
         })
     );
 

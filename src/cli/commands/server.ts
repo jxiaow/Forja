@@ -144,7 +144,7 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
             serverAction: 'add',
             server: toServerDetail(created),
             changed: [`servers.${created.id}`],
-            nextAction: `forja use remote --server ${created.id} --remote-path <path>`,
+            nextAction: `forja remote --server ${created.id} --remote-path <path>`,
         };
     } catch (e) {
         return {

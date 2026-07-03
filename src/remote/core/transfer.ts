@@ -54,7 +54,7 @@ export function buildRemoteTransferStatus(options: {
             artifacts: [],
             plan: [],
             diagnostics: [{ level: 'warning', message: 'remote transfer 尚未配置' }],
-            nextAction: 'forja use remote transfer set --server <name> --path <deployPath> --artifact <path>'
+            nextAction: 'forja remote transfer --server <name> --path <deployPath> --artifact <path>'
         };
     }
 

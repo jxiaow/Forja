@@ -318,7 +318,7 @@ export function outputCleanResult(result: CleanResult, wantsJson: boolean): void
         console.log(`${T('clean')} ${status}`);
         if (result.activeTarget) {
             const t = result.activeTarget;
-            console.log(`${T('target')}${t.kind} · ${t.project} · ${t.mode}/${t.arch} · ${t.runAt}`);
+            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}`);
         }
         if (result.state) {
             console.log(`${T('state')}${result.state}`);

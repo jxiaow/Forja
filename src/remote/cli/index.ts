@@ -202,7 +202,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 const transfer = settings.transfer;
                 if (!transfer) {
                     process.exitCode = 1;
-                    writeOutput({ ok: false, action: 'transfer', mode: 'remote', diagnostics: [{ level: 'error', message: 'remote transfer 尚未配置' }], nextAction: 'forja use remote transfer set --server <id> --path <deployPath> --artifact <path>' }, options.json);
+                    writeOutput({ ok: false, action: 'transfer', mode: 'remote', diagnostics: [{ level: 'error', message: 'remote transfer 尚未配置' }], nextAction: 'forja remote transfer --server <id> --path <deployPath> --artifact <path>' }, options.json);
                     return;
                 }
                 const resolved = resolveRemoteConfig(options.workspace);

@@ -23,8 +23,8 @@ test('cli interface spec lists only implemented subcommands as available', () =>
 
 test('cli user guide documents remote commands as implemented', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
-    // In v2, remote status is accessed via list remote
-    assert.match(guide, /forja list remote --json/);
+    // In v2, remote config is accessed via `forja remote`
+    assert.match(guide, /forja remote --json/);
     assert.doesNotMatch(guide, /\uFFFD/);
 });
 
@@ -97,8 +97,8 @@ test('sync help and docs describe sync command', () => {
 
     // sync is a top-level command in the command reference table
     assert.match(skill, /\| `sync` \|/);
-    assert.match(skill, /forja list remote --json/);
-    assert.match(guide, /forja list remote --json/);
+    assert.match(skill, /forja remote --json/);
+    assert.match(guide, /forja remote --json/);
 });
 
 test('sync help and docs describe server management commands', () => {

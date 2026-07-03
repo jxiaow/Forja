@@ -257,7 +257,7 @@ test('status nextAction: 有 server 时显示实际名称', () => {
     const statusResult = json('status');
     const nextAction = statusResult.nextAction as string | undefined;
 
-    if (nextAction && nextAction.includes('use remote')) {
+    if (nextAction && nextAction.includes('forja remote')) {
         const serverCount = json('server').servers?.length || 0;
         if (serverCount === 1) {
             assert.ok(nextAction.includes(name), `nextAction 必须包含 server 名 ${name}`);
@@ -286,11 +286,11 @@ test('server nextActions: <=5 个显示名字列表', () => {
     const totalServers = listResult.servers?.length || 0;
     const remoteAction = listResult.nextAction;
 
-    if (remoteAction && remoteAction.includes('use remote') && totalServers <= 5 && names.length > 0) {
+    if (remoteAction && remoteAction.includes('forja remote') && totalServers <= 5 && names.length > 0) {
         for (const name of names) {
             assert.ok(remoteAction.includes(name), `nextAction 必须包含 ${name}`);
         }
-    } else if (remoteAction && remoteAction.includes('use remote') && totalServers > 5) {
+    } else if (remoteAction && remoteAction.includes('forja remote') && totalServers > 5) {
         assert.match(remoteAction, /--server <name>/, '超过 5 个应显示 <name>');
     }
 
@@ -339,7 +339,7 @@ test('status JSON 结构完整', () => {
 });
 
 test('所有 list 分类返回有效 JSON', () => {
-    const categories = ['targets', 'env', 'lang', 'remote'];
+    const categories = ['targets', 'env', 'lang'];
     for (const cat of categories) {
         const j = json(`list ${cat}`);
         assert.ok(j, `list ${cat} 必须返回有效 JSON`);
@@ -451,14 +451,14 @@ test('use lang 无参数报错', () => {
     assert.equal(r.ok, false);
 });
 
-test('use remote 设置服务器', () => {
+test('remote --server 设置服务器', () => {
     // 先创建服务器
     const name = `remote-test-${Date.now()}`;
     const addResult = json(`server add --name ${name} --host 1.2.3.4 --username u`);
     assert.ok(addResult.ok);
 
     // 设置远程
-    const r = json(`use remote --server ${name}`);
+    const r = json(`remote --server ${name}`);
     assert.ok(r);
     assert.equal(r.ok, true);
 
@@ -466,8 +466,8 @@ test('use remote 设置服务器', () => {
     run(`server remove ${addResult.server.id}`);
 });
 
-test('use remote 不存在的服务器报错', () => {
-    const r = json('use remote --server nonexistent-server');
+test('remote --server 不存在的服务器报错', () => {
+    const r = json('remote --server nonexistent-server');
     assert.ok(r);
     assert.equal(r.ok, false);
 });
@@ -571,7 +571,7 @@ test('空工作区 status 不崩溃', () => {
 });
 
 test('list 所有分类都不崩溃', () => {
-    const categories = ['targets', 'env', 'lang', 'remote'];
+    const categories = ['targets', 'env', 'lang'];
     for (const cat of categories) {
         const r = run(`list ${cat}`);
         assert.ok(r.code === 0 || r.code === 1, `list ${cat} 不应崩溃`);
@@ -581,7 +581,7 @@ test('list 所有分类都不崩溃', () => {
 test('JSON 输出必须可解析', () => {
     const cmds = [
         'status', 'list targets', 'list env',
-        'list lang', 'list remote', 'server',
+        'list lang', 'remote', 'server',
     ];
     for (const cmd of cmds) {
         const r = run(`${cmd} --json`);

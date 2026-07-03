@@ -1,5 +1,5 @@
 /**
- * CLI entry — dispatches to 11 top-level commands.
+ * CLI entry — dispatches to 12 top-level commands.
  * Called by src/cli/index.ts.
  */
 import * as path from 'path';
@@ -7,7 +7,8 @@ import { ForjaJsonResult } from './types';
 import { runStatus, formatStatusText } from './status';
 import { runSetup, formatSetupText } from './setup';
 import { runList, ListCategory, EnvSubCategory, formatListText } from './list';
-import { runUseTarget, runUseExecution, runUseRemote, runUseRemoteWorkspace, runUseRemoteRepo, runUseRemoteForjaBin, runUseRemoteBuildOrder, runUseRemoteTransfer, runUseQt, runUseSdk, runUseLang, formatUseText } from './use';
+import { runUseTarget, runUseExecution, runUseLang, formatUseText } from './use';
+import { runRemoteShow, runRemoteSet, runRemoteRestore, runRemoteReset, formatRemoteText } from './remote';
 import { runServerAdd, runServerUpdate, runServerRemove, formatServerText } from './server';
 import { runBuild, BuildAction, outputBuildResult } from './build';
 import { runRun, outputRunResult } from './run';
@@ -18,13 +19,13 @@ import { runSyncPlan, runSyncExecute, runSyncReset, runSyncStatus, formatSyncTex
 import { confirm, prompt, choose } from './prompt';
 import { resolveLocale, Locale, T, setGlobalLocale } from './types';
 import { loadGlobalConfig } from '../../core/settingsIO';
-import { readServers, addServer, resolveServerSelector, readProjectSyncConfig } from '../../core/serverStore';
+import { readServers, addServer, getServerById, readProjectSyncConfig } from '../../core/serverStore';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
-import { configureSyncSettings, ClassifiedChanges } from '../../sync/cli';
+import { ClassifiedChanges, configureSyncSettings } from '../../sync/cli';
 
-type Command = 'status' | 'setup' | 'list' | 'use' | 'server' | 'build' | 'run' | 'stop' | 'clean' | 'doctor' | 'sync';
+type Command = 'status' | 'setup' | 'list' | 'use' | 'remote' | 'server' | 'build' | 'run' | 'stop' | 'clean' | 'doctor' | 'sync';
 
-const COMMANDS: Command[] = ['status', 'setup', 'list', 'use', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+const COMMANDS: Command[] = ['status', 'setup', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
 
 export function isCommand(cmd: string): cmd is Command {
     return COMMANDS.includes(cmd as Command);
@@ -41,6 +42,7 @@ function getCommandHelp(cmd: string): string {
         setup: T('help.setup'),
         list: T('help.list'),
         use: T('help.use'),
+        remote: T('help.remote'),
         server: T('help.server.full'),
         build: T('help.build'),
         run: T('help.run'),
@@ -107,6 +109,8 @@ export async function runCli(argv: string[]): Promise<void> {
             return handleList(argv, workspace, wantsJson, locale);
         case 'use':
             return handleUse(argv, workspace, wantsJson, locale);
+        case 'remote':
+            return handleRemote(argv, workspace, wantsJson, locale);
         case 'server':
             return handleServer(argv, workspace, wantsJson, locale);
         case 'build':
@@ -122,7 +126,7 @@ export async function runCli(argv: string[]): Promise<void> {
         case 'sync':
             return handleSync(argv, workspace, wantsJson, locale);
         default: {
-            const KNOWN_COMMANDS = ['status', 'setup', 'list', 'use', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+            const KNOWN_COMMANDS = ['status', 'setup', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
             const suggestion = suggestCorrection(command, KNOWN_COMMANDS);
             const msg = suggestion
                 ? `${T('idx.unknownCommand')}: ${command}. ${T('idx.didYouMean')}: forja ${suggestion}?`
@@ -193,13 +197,13 @@ const KEYWORD_SUGGESTIONS: Record<string, Record<string, { hint: string; params:
         'mode':      { hint: 'forja use target', params: ['--mode <debug|release>', '--arch <x86|x64>', '--project <path>'],                         next: 'forja use target --mode <debug|release>' },
         'arch':      { hint: 'forja use target', params: ['--arch <x86|x64>', '--mode <debug|release>', '--project <path>'],                         next: 'forja use target --arch <x86|x64>' },
         'project':   { hint: 'forja use target', params: ['--project <path>', '--mode <debug|release>', '--arch <x86|x64>'],                         next: 'forja use target --project <path>' },
-        'qt-path':   { hint: 'forja use qt',     params: ['--qt-path <path>'],                                                                       next: 'forja use qt --qt-path <path>' },
-        'server':    { hint: 'forja use remote', params: ['--server <name>'],                                                                        next: 'forja use remote --server <name>' },
+        'qt-path':   { hint: 'forja setup',      params: ['--qt-path <path>'],                                                                       next: 'forja setup --qt-path <path>' },
+        'server':    { hint: 'forja remote',     params: ['--server <name>'],                                                                        next: 'forja remote --server <name>' },
         'lang':      { hint: 'forja use lang',   params: ['<zh|en>'],                                                                                next: 'forja use lang <zh|en>' },
         'execution': { hint: 'forja use execution', params: ['--local', '--remote'],                                                                 next: 'forja use execution --local' },
         'local':     { hint: 'forja use execution', params: ['--local'],                                                                             next: 'forja use execution --local' },
-        'remote':    { hint: 'forja use remote', params: ['--server <name>'],                                                                        next: 'forja use remote --server <name>' },
-        'sync':      { hint: 'forja sync',      params: ['--server <name>', '--remote-path <path>'],                                                next: 'forja sync --server <name> --remote-path <path>' },
+        'remote':    { hint: 'forja remote',     params: ['--server <name>'],                                                                        next: 'forja remote --server <name>' },
+        'sync':      { hint: 'forja setup remote', params: ['--server <name>', '--remote-path <path>'],                                          next: 'forja setup remote' },
     },
 };
 
@@ -304,8 +308,8 @@ async function handleSetup(argv: string[], workspace: string, wantsJson: boolean
 
     if (subArg === 'remote') {
         // forja setup remote
-        const remoteKnown = new Set(['--json', '--reset', '--answers', '--project', '--qt-path', '--vs-install', '--jom-path', '--host', '--username', '--port', '--auth-mode', '--private-key-path', '--name', '--remote-path', '--mode', '--arch']);
-        const remoteWithValues = new Set(['--answers', '--project', '--qt-path', '--vs-install', '--jom-path', '--host', '--username', '--port', '--auth-mode', '--private-key-path', '--name', '--remote-path', '--mode', '--arch']);
+        const remoteKnown = new Set(['--json', '--reset', '--answers', '--project', '--qt-path', '--vs-install', '--jom-path', '--host', '--username', '--port', '--auth-mode', '--private-key-path', '--name', '--remote-path', '--mode', '--arch', '--workspace-mode', '--workspace-path', '--repo', '--forja-bin', '--build-order', '--transfer-server', '--transfer-path', '--transfer-artifact']);
+        const remoteWithValues = new Set(['--answers', '--project', '--qt-path', '--vs-install', '--jom-path', '--host', '--username', '--port', '--auth-mode', '--private-key-path', '--name', '--remote-path', '--mode', '--arch', '--workspace-mode', '--workspace-path', '--repo', '--forja-bin', '--build-order', '--transfer-server', '--transfer-path', '--transfer-artifact']);
         const remoteUnknown = findUnknownFlags(argv, remoteKnown, remoteWithValues);
         if (remoteUnknown.length > 0) {
             outputResult({ ok: false, action: 'setup-remote', diagnostics: [{ level: 'error', message: unknownFlagsMessage(remoteUnknown, remoteKnown) }], nextAction: 'forja setup remote' }, wantsJson);
@@ -337,6 +341,14 @@ async function handleSetup(argv: string[], workspace: string, wantsJson: boolean
             remotePath: extractFlag(argv, '--remote-path'),
             mode: extractFlag(argv, '--mode'),
             arch: extractFlag(argv, '--arch'),
+            workspaceMode: extractFlag(argv, '--workspace-mode') as 'staged' | 'legacy' | undefined,
+            workspacePath: extractFlag(argv, '--workspace-path'),
+            repos: extractAllFlags(argv, '--repo'),
+            forjaBin: extractFlag(argv, '--forja-bin'),
+            buildOrder: extractAllFlags(argv, '--build-order'),
+            transferServer: extractFlag(argv, '--transfer-server'),
+            transferPath: extractFlag(argv, '--transfer-path'),
+            transferArtifacts: extractAllFlags(argv, '--transfer-artifact'),
         });
         outputResult(result, wantsJson, (r) => formatSetupRemoteText(r as Parameters<typeof formatSetupRemoteText>[0]));
         if (!result.ok) { process.exitCode = 1; }
@@ -380,7 +392,7 @@ async function handleList(argv: string[], workspace: string, wantsJson: boolean,
 
     // Determine category from first positional arg after 'list'
     const categoryArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
-    const validCategories = ['targets', 'env', 'remote', 'lang'];
+    const validCategories = ['targets', 'env', 'lang'];
 
     // Require a category
     if (!categoryArg) {
@@ -451,8 +463,8 @@ async function handleList(argv: string[], workspace: string, wantsJson: boolean,
 // ── Use ──
 
 function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): void {
-    const useKnown = new Set(['--project','--mode','--arch','--local','--remote','--server','--remote-path','--enable','--disable','--qt-path','--vs-dev-shell','--qmake-target','--qmake-args','--vs-dev-cmd','--role','--path','--baseline','--overlay','--mount','--asset','--artifact','--profile','--clear','--remove']);
-    const useWithVal = new Set(['--project','--mode','--arch','--server','--remote-path','--qt-path','--vs-dev-shell','--qmake-target','--qmake-args','--vs-dev-cmd','--role','--path','--baseline','--mount','--asset','--artifact','--profile']);
+    const useKnown = new Set(['--project','--mode','--arch','--local','--remote']);
+    const useWithVal = new Set(['--project','--mode','--arch']);
     const useUnknown = findUnknownFlags(argv, useKnown, useWithVal);
     if (useUnknown.length > 0) {
         outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(useUnknown, useKnown) }], nextAction: 'forja use target' }, wantsJson);
@@ -476,111 +488,6 @@ function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale
             outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
             return;
         }
-        case 'remote': {
-            const remoteSubCmd = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
-
-            // Simplified 2-level: no set/clear action layer
-            // Pattern: no args = show current, with args = set, --clear = clear
-            if (remoteSubCmd === 'workspace') {
-                const result = runUseRemoteWorkspace(workspace, {
-                    action: hasFlag(argv, '--clear') ? 'clear' : 'set',
-                    mode: extractFlag(argv, '--mode') as 'legacy' | 'staged' | undefined,
-                    path: extractFlag(argv, '--path'),
-                    profile: extractFlag(argv, '--profile'),
-                });
-                outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
-                return;
-            }
-            if (remoteSubCmd === 'repo') {
-                const repoAction = hasFlag(argv, '--clear') ? 'clear'
-                    : hasFlag(argv, '--remove') ? 'remove' : 'set';
-                const assetRaw = extractAllFlags(argv, '--asset');
-                const assets = assetRaw.length > 0 ? assetRaw.map(a => {
-                    const eq = a.indexOf('=');
-                    return eq >= 0
-                        ? { localPath: a.slice(0, eq), remotePath: a.slice(eq + 1) }
-                        : { localPath: a };
-                }) : undefined;
-                const overlayRaw = extractFlag(argv, '--overlay');
-                const result = runUseRemoteRepo(workspace, {
-                    action: repoAction as 'set' | 'remove' | 'clear',
-                    localName: extractFlag(argv, '--local'),
-                    remoteName: extractFlag(argv, '--remote'),
-                    role: extractFlag(argv, '--role') as 'primary' | 'mapped' | 'remote-only' | 'existing-remote' | 'skip' | undefined,
-                    remotePath: extractFlag(argv, '--path'),
-                    baseline: extractFlag(argv, '--baseline') as 'auto' | 'status-only' | undefined,
-                    overlay: overlayRaw !== undefined ? overlayRaw === 'true' : undefined,
-                    mount: extractFlag(argv, '--mount') as 'symlink' | undefined,
-                    assets,
-                });
-                outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
-                return;
-            }
-            if (remoteSubCmd === 'forja-bin') {
-                const result = runUseRemoteForjaBin(workspace, {
-                    action: hasFlag(argv, '--clear') ? 'clear' : 'set',
-                    path: extractFlag(argv, '--path'),
-                });
-                outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
-                return;
-            }
-            if (remoteSubCmd === 'build-order') {
-                // Parse positional args after 'build-order' as items
-                const items: Array<{ target: 'qt' | 'sdk'; action: string }> = [];
-                const invalidItems: string[] = [];
-                for (let i = 3; i < argv.length; i++) {
-                    if (argv[i].startsWith('--')) { continue; }
-                    const [target, action] = argv[i].split(':');
-                    if (target === 'qt' || target === 'sdk') {
-                        items.push({ target, action: action || 'build' });
-                    } else {
-                        invalidItems.push(argv[i]);
-                    }
-                }
-                const result = runUseRemoteBuildOrder(workspace, {
-                    action: hasFlag(argv, '--clear') ? 'clear' : 'set',
-                    items: items.length > 0 ? items : undefined,
-                    invalidItems: invalidItems.length > 0 ? invalidItems : undefined,
-                });
-                outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
-                return;
-            }
-            if (remoteSubCmd === 'transfer') {
-                const result = runUseRemoteTransfer(workspace, {
-                    action: hasFlag(argv, '--clear') ? 'clear' : 'set',
-                    deployServer: extractFlag(argv, '--server'),
-                    deployPath: extractFlag(argv, '--path'),
-                    artifacts: extractAllFlags(argv, '--artifact'),
-                });
-                outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
-                return;
-            }
-
-            // Default: set server and remote-path
-            const result = runUseRemote(workspace, {
-                server: extractFlag(argv, '--server'),
-                remotePath: extractFlag(argv, '--remote-path'),
-            });
-            outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
-            return;
-        }
-        case 'qt': {
-            const result = runUseQt(workspace, {
-                qtPath: extractFlag(argv, '--qt-path'),
-                vsDevShell: extractFlag(argv, '--vs-dev-shell'),
-                qmakeTarget: extractFlag(argv, '--qmake-target'),
-                qmakeArgs: extractFlag(argv, '--qmake-args'),
-            });
-            outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
-            return;
-        }
-        case 'sdk': {
-            const result = runUseSdk(workspace, {
-                vsDevCmd: extractFlag(argv, '--vs-dev-cmd'),
-            });
-            outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
-            return;
-        }
         case 'lang': {
             const langValue = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
             if (!langValue) {
@@ -601,7 +508,7 @@ function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale
         }
         default: {
             if (subCmd !== '') {
-                const USE_SUBCOMMANDS = ['target', 'execution', 'remote', 'qt', 'sdk', 'lang'];
+                const USE_SUBCOMMANDS = ['target', 'execution', 'lang'];
                 const keywordEntry = KEYWORD_SUGGESTIONS['use']?.[subCmd];
                 const keywordHint = keywordEntry ? `${keywordEntry.hint} ${keywordEntry.params.map(p => `[${p}]`).join(' ')}` : undefined;
                 const substringHint = suggestCorrection(subCmd, USE_SUBCOMMANDS);
@@ -623,6 +530,87 @@ function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale
                 nextAction: 'forja use target --project <path>',
             };
             outputResult(result, wantsJson);
+        }
+    }
+}
+
+// ── Remote ──
+
+async function handleRemote(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    const remoteKnown = new Set(['--server', '--remote-path', '--all']);
+    const remoteWithVal = new Set(['--server', '--remote-path']);
+    const remoteUnknown = findUnknownFlags(argv, remoteKnown, remoteWithVal);
+    if (remoteUnknown.length > 0) {
+        outputResult({ ok: false, action: 'remote', diagnostics: [{ level: 'error', message: unknownFlagsMessage(remoteUnknown, remoteKnown) }], nextAction: 'forja remote' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    const fmt = (r: unknown) => formatRemoteText(r as Parameters<typeof formatRemoteText>[0], locale);
+    const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+
+    switch (subCmd) {
+        case 'restore': {
+            const repo = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
+            const paths: string[] = [];
+            for (let i = 3; i < argv.length; i++) {
+                if (!argv[i].startsWith('--')) { paths.push(argv[i]); }
+            }
+            if (!repo || paths.length === 0) {
+                outputResult({
+                    ok: false, action: 'remote', remoteAction: 'restore', changed: [],
+                    diagnostics: [{ level: 'error', message: 'forja remote restore requires <repo> and at least one <path>' }],
+                    nextAction: 'forja remote restore <repo> <paths...>',
+                }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const result = await runRemoteRestore(workspace, { repo, paths, server: extractFlag(argv, '--server') });
+            outputResult(result, wantsJson, fmt);
+            return;
+        }
+        case 'reset': {
+            const repo = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
+            const paths: string[] = [];
+            for (let i = 3; i < argv.length; i++) {
+                if (!argv[i].startsWith('--')) { paths.push(argv[i]); }
+            }
+            if (!repo || paths.length === 0) {
+                outputResult({
+                    ok: false, action: 'remote', remoteAction: 'reset', changed: [],
+                    diagnostics: [{ level: 'error', message: 'forja remote reset requires <repo> and at least one <path>' }],
+                    nextAction: 'forja remote reset <repo> <paths...>',
+                }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const result = await runRemoteReset(workspace, { repo, paths, all: hasFlag(argv, '--all'), server: extractFlag(argv, '--server') });
+            outputResult(result, wantsJson, fmt);
+            return;
+        }
+        default: {
+            if (subCmd !== '') {
+                const REMOTE_SUBCOMMANDS = ['restore', 'reset'];
+                const hint = suggestCorrection(subCmd, REMOTE_SUBCOMMANDS);
+                const msg = hint
+                    ? `${T('idx.unknownRemoteSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: ${hint}?`
+                    : `${T('idx.unknownRemoteSubcommand')}: ${subCmd}`;
+                outputResult({ ok: false, action: 'remote', remoteAction: 'show', changed: [], diagnostics: [{ level: 'error', message: msg }], nextAction: hint ? `forja remote ${hint}` : 'forja remote' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            // No subcommand: --server/--remote-path → set, otherwise → show
+            if (extractFlag(argv, '--server') !== undefined || extractFlag(argv, '--remote-path') !== undefined) {
+                const result = runRemoteSet(workspace, {
+                    server: extractFlag(argv, '--server'),
+                    remotePath: extractFlag(argv, '--remote-path'),
+                });
+                outputResult(result, wantsJson, fmt);
+                return;
+            }
+            const result = runRemoteShow(workspace);
+            outputResult(result, wantsJson, fmt);
+            return;
         }
     }
 }
@@ -888,7 +876,7 @@ async function handleClean(argv: string[], workspace: string, wantsJson: boolean
 
 async function handleDoctor(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
     // Check for unknown flags
-    const doctorKnownFlags = new Set(['--fix', '--unlock', '--restore', '--reset', '--clean-untracked', '--remote', '--server', '--force', '--recursive', '--plan']);
+    const doctorKnownFlags = new Set(['--remote', '--server', '--plan']);
     const doctorFlagsWithValues = new Set(['--server']);
     const unknownFlags = findUnknownFlags(argv, doctorKnownFlags, doctorFlagsWithValues);
     if (unknownFlags.length > 0) {
@@ -904,44 +892,10 @@ async function handleDoctor(argv: string[], workspace: string, wantsJson: boolea
     const subArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
     let unlockId: string | undefined;
     let fix = false;
-    let restore: { repo: string; paths: string[] } | undefined;
-    let reset: { repo: string; paths: string[] } | undefined;
-    let cleanUntracked: { repo: string; paths: string[]; recursive?: boolean } | undefined;
 
     if (subArg === 'fix') { fix = true; }
     else if (subArg === 'unlock') {
         unlockId = argv[2] && !argv[2].startsWith('--') ? argv[2] : undefined;
-    }
-    else if (subArg === 'restore' || subArg === 'reset') {
-        // Spec: forja doctor restore <repo> <paths...> [--force] [--workspace <path>] [--json]
-        const repo = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
-        const paths = collectPositionalPaths(argv, 3);
-        if (!repo || paths.length === 0) {
-            outputResult({
-                ok: false, action: 'doctor', doctorAction: subArg, changed: [],
-                diagnostics: [{ level: 'error', message:`forja doctor ${subArg} requires <repo> and at least one <path>` }],
-                nextAction: `forja doctor ${subArg} <repo> <paths...>`,
-            }, wantsJson);
-            process.exitCode = 1;
-            return;
-        }
-        const param = { repo, paths };
-        if (subArg === 'restore') { restore = param; } else { reset = param; }
-    }
-    else if (subArg === 'clean-untracked') {
-        // Spec: forja doctor clean-untracked <repo> <paths...> [--recursive] [--force] [--workspace <path>] [--json]
-        const repo = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
-        const paths = collectPositionalPaths(argv, 3);
-        if (!repo || paths.length === 0) {
-            outputResult({
-                ok: false, action: 'doctor', doctorAction: 'clean-untracked', changed: [],
-                diagnostics: [{ level: 'error', message:'forja doctor clean-untracked requires <repo> and at least one <path>' }],
-                nextAction: 'forja doctor clean-untracked <repo> <paths...>',
-            }, wantsJson);
-            process.exitCode = 1;
-            return;
-        }
-        cleanUntracked = { repo, paths, recursive: hasFlag(argv, '--recursive') };
     }
 
     const result = await runDoctor(workspace, {
@@ -949,34 +903,80 @@ async function handleDoctor(argv: string[], workspace: string, wantsJson: boolea
         server: extractFlag(argv, '--server'),
         fix,
         unlock: unlockId,
-        force: hasFlag(argv, '--force'),
         plan: hasFlag(argv, '--plan'),
-        restore,
-        reset,
-        cleanUntracked,
     });
     outputResult(result, wantsJson, (r) => formatDoctorText(r as Parameters<typeof formatDoctorText>[0], locale));
 }
 
-function collectPositionalPaths(argv: string[], startIdx: number): string[] {
-    // Flags that consume a following value argument
-    const VALUE_FLAGS = new Set(['--workspace', '--server', '--config']);
-    const paths: string[] = [];
-    for (let i = startIdx; i < argv.length; i++) {
-        if (argv[i].startsWith('--')) {
-            // Skip the next token if this flag takes a value
-            if (VALUE_FLAGS.has(argv[i]) && i + 1 < argv.length) { i++; }
-            continue;
+/**
+ * Interactive sync setup — guides user to select/create server and input remote path.
+ * Returns true if configuration was completed successfully.
+ */
+async function interactiveSyncSetup(workspace: string): Promise<boolean> {
+    const existingServers = readServers();
+    let serverId: string | undefined;
+    let selectedServer: { username: string } | undefined;
+
+    if (existingServers.length === 0) {
+        // No servers — guide creation
+        console.log(T('sync.notConfigured'));
+        const host = await prompt(T('setupPromptHost'));
+        if (!host) return false;
+        const username = await prompt(T('setupPromptUsername'));
+        if (!username) return false;
+        const portStr = await prompt(T('setupPromptPort'), '22');
+        const port = parseInt(portStr || '22', 10);
+        if (isNaN(port) || port < 1 || port > 65535) return false;
+        const authChoice = await choose(T('setupPromptAuthMode'), ['key', 'password'] as const, m => m === 'key' ? T('setupAuthKey') : T('setupAuthPassword'));
+        const authMode = authChoice || 'key';
+        let privateKeyPath = '';
+        let password = '';
+        if (authMode === 'key') {
+            privateKeyPath = await prompt(T('setupPromptPrivateKey'), '') || '';
+        } else {
+            password = await prompt(T('setupPromptPassword')) || '';
         }
-        paths.push(argv[i]);
+        const name = await prompt(T('setupPromptName'), host) || host;
+        try {
+            const created = addServer({ name, host, username, port, authMode, privateKeyPath, password });
+            serverId = created.id;
+            selectedServer = created;
+            console.log(`${T('setupServerCreated')}: ${created.name} (${created.host})`);
+        } catch {
+            return false;
+        }
+    } else if (existingServers.length === 1) {
+        // Single server — auto-select
+        serverId = existingServers[0].id;
+        selectedServer = existingServers[0];
+    } else {
+        // Multiple servers — interactive selection
+        const server = await choose(T('setupSelectServer'), existingServers, s => `${s.name} (${s.username}@${s.host})`);
+        if (!server) return false;
+        serverId = server.id;
+        selectedServer = server;
     }
-    return paths;
+
+    // Remote path: reuse existing or prompt
+    const syncCfg = readProjectSyncConfig(workspace);
+    let remotePath = syncCfg.remotePaths[serverId || ''] || '';
+    if (!remotePath) {
+        const defaultPath = `/home/${selectedServer?.username || 'user'}/${path.basename(workspace)}`;
+        remotePath = await prompt(T('setupRemotePathPrompt'), defaultPath);
+        if (!remotePath) return false;
+    }
+
+    const cfg = configureSyncSettings(workspace, { serverId: serverId!, remotePath, enable: true });
+    if (!cfg.ok) return false;
+
+    console.log();
+    return true;
 }
 
 // ── Sync ──
 
 async function handleSync(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const syncUnknown = findUnknownFlags(argv, new Set(['--yes', '--reset', '--file', '--server', '--remote-path']), new Set(['--file', '--server', '--remote-path']));
+    const syncUnknown = findUnknownFlags(argv, new Set(['--yes', '--reset', '--file']), new Set(['--file']));
     if (syncUnknown.length > 0) {
         outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `${T('sync.unknownFlag')}: ${syncUnknown.join(', ')}` }], nextAction: 'forja sync' }, wantsJson);
         process.exitCode = 1;
@@ -1001,7 +1001,7 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
         return;
     }
 
-    // ── 子命令校验（在配置处理之前） ──
+    // ── 子命令校验 ──
     if (subArg !== '' && subArg !== 'plan' && subArg !== 'status') {
         outputResult({
             ok: false,
@@ -1025,59 +1025,34 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
         return;
     }
 
-    // ── 配置处理：--server / --remote-path / 交互式引导 ──
-    const serverFlag = extractFlag(argv, '--server');
-    const remotePathFlag = extractFlag(argv, '--remote-path');
-
-    if (serverFlag || remotePathFlag) {
-        // 显式指定服务器和/或远程路径
-        let serverId: string | undefined;
-        if (serverFlag) {
-            const resolved = resolveServerSelector(serverFlag);
-            if (resolved.ambiguous) {
-                outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `${T('sync.serverNotFound')}: "${serverFlag}" (${T('sync.ambiguous')})` }], nextAction: 'forja list servers' }, wantsJson);
-                process.exitCode = 1;
-                return;
-            }
-            if (!resolved.server) {
-                outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `${T('sync.serverNotFound')}: "${serverFlag}"` }], nextAction: 'forja server' }, wantsJson);
-                process.exitCode = 1;
-                return;
-            }
-            serverId = resolved.server.id;
-        }
-
-        if (!serverId) {
-            // --remote-path only: use existing selectedServer
-            const project = readProjectSyncConfig(workspace);
-            if (!project.selectedServer) {
-                outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: T('sync.notConfigured') }], nextAction: 'forja sync --server <name> --remote-path <path>' }, wantsJson);
-                process.exitCode = 1;
-                return;
-            }
-            serverId = project.selectedServer;
-        }
-
-        const cfg = configureSyncSettings(workspace, { serverId, remotePath: remotePathFlag, enable: true });
-        if (!cfg.ok) {
-            outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: cfg.error }], nextAction: 'forja doctor' }, wantsJson);
-            process.exitCode = 1;
-            return;
-        }
-    } else if (!wantsJson) {
-        // 无 flag，检查配置是否完整（轻量检查，不跑 plan）
-        const syncCfg = readProjectSyncConfig(workspace);
-        const serverExists = syncCfg.selectedServer ? readServers().some(s => s.id === syncCfg.selectedServer) : false;
-        const needsSetup = !syncCfg.enabled || !syncCfg.selectedServer || !serverExists || !syncCfg.remotePaths[syncCfg.selectedServer];
-        if (needsSetup) {
+    // ── 检查配置是否完整 ──
+    const syncCfg = readProjectSyncConfig(workspace);
+    const serverExists = syncCfg.selectedServer ? readServers().some(s => s.id === syncCfg.selectedServer) : false;
+    const needsSetup = !syncCfg.enabled || !syncCfg.selectedServer || !serverExists || !syncCfg.remotePaths[syncCfg.selectedServer];
+    if (needsSetup) {
+        if (wantsJson) {
+            // JSON mode: return choices for AI to guide user
+            outputResult({
+                ok: false, action: 'sync',
+                diagnostics: [{ level: 'error', message: T('sync.notConfigured') }],
+                choices: [
+                    { label: 'forja sync', command: 'forja sync', description: T('syncInteractiveSetup') },
+                    { label: 'forja setup remote', command: 'forja setup remote', description: T('statusSetupRemote') },
+                ],
+            }, wantsJson);
+        } else {
+            // Text mode: interactive setup
             const guided = await interactiveSyncSetup(workspace);
             if (!guided) {
                 process.exitCode = 1;
                 return;
             }
+            // Config is now complete, fall through to sync execution
         }
-    } else {
-        // JSON mode, no flags — let the sync itself report the error with nextAction
+        if (wantsJson) {
+            process.exitCode = 1;
+            return;
+        }
     }
 
     if (subArg === 'plan') {
@@ -1115,69 +1090,4 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
     }
     const result = await runSyncExecute(workspace, files);
     outputResult(result, wantsJson, fmt);
-}
-
-/**
- * 交互式引导用户完成 sync 配置（选择/创建服务器 + 输入远程路径）。
- * 返回 true 表示配置完成，false 表示失败或用户取消。
- */
-async function interactiveSyncSetup(workspace: string): Promise<boolean> {
-    const existingServers = readServers();
-    let serverId: string | undefined;
-    let selectedServer: { username: string } | undefined;
-
-    if (existingServers.length === 0) {
-        // 零服务器 — 引导创建
-        console.log(T('sync.notConfigured'));
-        const host = await prompt(T('setupPromptHost'));
-        if (!host) return false;
-        const username = await prompt(T('setupPromptUsername'));
-        if (!username) return false;
-        const portStr = await prompt(T('setupPromptPort'), '22');
-        const port = parseInt(portStr || '22', 10);
-        if (isNaN(port) || port < 1 || port > 65535) return false;
-        const authChoice = await choose(T('setupPromptAuthMode'), ['key', 'password'] as const, m => m === 'key' ? T('setupAuthKey') : T('setupAuthPassword'));
-        const authMode = authChoice || 'key';
-        let privateKeyPath = '';
-        let password = '';
-        if (authMode === 'key') {
-            privateKeyPath = await prompt(T('setupPromptPrivateKey'), '') || '';
-        } else {
-            password = await prompt(T('setupPromptPassword')) || '';
-        }
-        const name = await prompt(T('setupPromptName'), host) || host;
-        try {
-            const created = addServer({ name, host, username, port, authMode, privateKeyPath, password });
-            serverId = created.id;
-            selectedServer = created;
-            console.log(`${T('setupServerCreated')}: ${created.name} (${created.host})`);
-        } catch {
-            return false;
-        }
-    } else if (existingServers.length === 1) {
-        // 单服务器 — 自动选择
-        serverId = existingServers[0].id;
-        selectedServer = existingServers[0];
-    } else {
-        // 多服务器 — 交互选择
-        const server = await choose(T('setupSelectServer'), existingServers, s => `${s.name} (${s.username}@${s.host})`);
-        if (!server) return false;
-        serverId = server.id;
-        selectedServer = server;
-    }
-
-    // 远程路径：已有则复用，否则提示输入
-    const syncCfg = readProjectSyncConfig(workspace);
-    let remotePath = syncCfg.remotePaths[serverId || ''] || '';
-    if (!remotePath) {
-        const defaultPath = `/home/${selectedServer?.username || 'user'}/${path.basename(workspace)}`;
-        remotePath = await prompt(T('setupRemotePathPrompt'), defaultPath);
-        if (!remotePath) return false;
-    }
-
-    const cfg = configureSyncSettings(workspace, { serverId: serverId!, remotePath, enable: true });
-    if (!cfg.ok) return false;
-
-    console.log();
-    return true;
 }

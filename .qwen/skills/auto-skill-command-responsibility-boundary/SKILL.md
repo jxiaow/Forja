@@ -101,6 +101,31 @@ Before adding a new flag, ask:
 - Reviewing whether a command's scope is too broad
 - When a user says "this overlaps with X command" or "this should point to X instead"
 
+## Execution Commands Must Not Write Config
+
+An execution command (sync, build, run, stop, clean) must **read** configuration but never **write** it. Configuration changes belong in setup/use/server commands.
+
+**Bug pattern:** `forja sync --server <name> --remote-path <path>` permanently wrote sync settings. The flag names suggested temporary override, but the behavior was persistent config mutation. This violated the principle and created confusion.
+
+**Fix:** Remove config-writing flags from execution commands. When config is missing, return an error pointing to the setup command:
+
+```typescript
+// WRONG: sync command writes config
+if (serverFlag || remotePathFlag) {
+    configureSyncSettings(workspace, { serverId, remotePath, enable: true });
+}
+
+// CORRECT: sync command checks config, redirects if missing
+if (needsSetup) {
+    return { ok: false, diagnostics: [diag('error', 'not configured')], nextAction: 'forja setup remote' };
+}
+```
+
+**Checklist when adding flags to execution commands:**
+- Does this flag permanently modify settings? → Move to `setup`/`use`
+- Does the flag name suggest "override" but actually persist? → Remove or rename
+- Is there a dedicated config command for this setting? → Point to it via nextAction
+
 ## Clear/Reset Operations Must Stay in Their Lane
 
 A `clear` or `reset` subcommand must only clear the data it owns. It must NOT cascade-clear data managed by sibling subcommands.

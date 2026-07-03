@@ -38,10 +38,10 @@ export async function choose<T>(message: string, choices: T[], format: (item: T)
 
     const answer = await prompt(T('cmd.choosePrompt'), '1');
     const index = parseInt(answer) - 1;
-    
+
     if (index >= 0 && index < choices.length) {
         return choices[index];
     }
-    
+
     return null;
 }

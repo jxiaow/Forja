@@ -4,13 +4,14 @@
 
 ## 公开命令集
 
-对外暴露以下 11 个顶层命令：
+对外暴露以下 12 个顶层命令：
 
 ```bash
 forja status
 forja setup
 forja list
 forja use
+forja remote
 forja server
 forja build
 forja run
@@ -25,10 +26,14 @@ forja sync
 ```bash
 forja qt ...
 forja sdk ...
-forja remote ...
 forja sync use
 forja sync servers
 forja sync test-connection
+forja use remote
+forja use qt
+forja use sdk
+forja use sync
+forja list remote
 ```
 
 旧入口在迁移期可以继续存在，但属于隐藏兼容入口，不进入主帮助、Command Palette、QuickPick、`nextActions` 或 AI 工具推荐路径。
@@ -38,16 +43,17 @@ forja sync test-connection
 | 主命令 | 可见动作 | 说明 |
 | --- | --- | --- |
 | `forja status` | （无） | 查看当前状态和下一步。 |
-| `forja setup` | `--local-only` | 一站式初始化（本地 + 远程）。 |
-| `forja list` | `targets`、`env`、`servers`、`remote`、`config`、`lang` | 只读列举可选项和配置。默认 `targets`。 |
-| `forja use` | `target`、`execution`、`sync`、`remote`、`qt`、`sdk`、`lang` | 选择目标、构建配置、执行端和远程配置。 |
+| `forja setup` | `remote` | 一站式初始化（本地 + 远程）。 |
+| `forja list` | `targets`、`env`、`lang` | 只读列举可选项和配置。默认 `targets`。 |
+| `forja use` | `target`、`execution`、`lang` | 选择目标、构建配置和执行端。 |
+| `forja remote` | `--server/--remote-path`、`restore`、`reset` | 远程配置和仓库操作。 |
 | `forja server` | `add`、`update`、`remove` | 管理共享 SSH server。 |
 | `forja build` | `fresh`、`qmake`、`rcc` | 构建相关动作。 |
 | `forja run` | `designer <ui-file>`、`--custom <name>`、`--detach` | 运行当前目标。 |
 | `forja stop` | 无 | 停止当前运行目标。 |
 | `forja clean` | 无 | 清理构建产物。 |
-| `forja doctor` | `fix`、`unlock`、`restore`、`reset`、`clean-untracked` | 诊断和恢复动作。 |
-| `forja sync` | `plan`、`reset`、`transfer` | 同步和同步预览。 |
+| `forja doctor` | `fix`、`unlock` | 诊断和恢复动作。 |
+| `forja sync` | `plan`、`status`、`--reset` | 同步和同步预览。 |
 
 ## 通用概念
 
@@ -334,15 +340,48 @@ forja status [--workspace <path>] [--json]
 ### 语法
 
 ```bash
-forja setup [--plan] [--json]
-forja setup remote [--plan] [--json]
+forja setup [--json] [--reset] [--answers <path>]
+    [--project <path>] [--qt-path <path>] [--vs-install <path>] [--jom-path <path>]
+    [--mode <debug|release>] [--arch <x86|x64>]
+forja setup remote [--json] [--reset] [--answers <path>]
+    [--project <path>] [--qt-path <path>] [--vs-install <path>] [--jom-path <path>]
+    [--host <host>] [--username <user>] [--port <port>]
+    [--auth-mode key|password] [--private-key-path <path>]
+    [--name <name>] [--remote-path <path>]
+    [--workspace-mode staged|legacy] [--workspace-path <path>]
+    [--repo <local:remote:role>] [--forja-bin <path>]
+    [--build-order qt:build sdk:build]
+    [--transfer-server <id>] [--transfer-path <path>] [--transfer-artifact <path>]
+    [--mode <debug|release>] [--arch <x86|x64>]
 ```
 
 ### 输入
 
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `--plan` | boolean | 否 | 预览，不写入配置。 |
+| `--qt-path <path>` | path | 否 | Qt 工具链路径。 |
+| `--vs-install <path>` | path | 否 | VS 安装路径。 |
+| `--jom-path <path>` | path | 否 | jom 路径。 |
+| `--project <path>` | path | 否 | 指定目标项目。 |
+| `--mode <mode>` | enum | 否 | 构建模式（`debug`/`release`）。 |
+| `--arch <arch>` | enum | 否 | 目标架构（`x86`/`x64`）。 |
+| `--reset` | boolean | 否 | 强制重新配置，忽略已有设置。 |
+| `--answers <path>` | path | 否 | JSON 答案文件路径（AI agent 模式）。 |
+| `--host <host>` | string | 否 | 服务器主机地址。仅 `setup remote`。 |
+| `--username <user>` | string | 否 | 服务器用户名。仅 `setup remote`。 |
+| `--port <port>` | number | 否 | SSH 端口。仅 `setup remote`。 |
+| `--auth-mode <mode>` | enum | 否 | 认证模式（`key`/`password`）。仅 `setup remote`。 |
+| `--private-key-path <path>` | path | 否 | 私钥路径。仅 `setup remote`。 |
+| `--name <name>` | string | 否 | 服务器名称。仅 `setup remote`。 |
+| `--remote-path <path>` | path | 否 | 远程路径。仅 `setup remote`。 |
+| `--workspace-mode <mode>` | enum | 否 | 远程 workspace 模式（`staged`/`legacy`）。仅 `setup remote`。 |
+| `--workspace-path <path>` | path | 否 | 远程 workspace 路径。仅 `setup remote`。 |
+| `--repo <spec>` | string | 否 | 仓库映射（`local:remote:role`），可重复。仅 `setup remote`。 |
+| `--forja-bin <path>` | path | 否 | 远端 Forja 可执行文件路径。仅 `setup remote`。 |
+| `--build-order <spec>` | string | 否 | 构建顺序（`target:action`），可重复。仅 `setup remote`。 |
+| `--transfer-server <id>` | string | 否 | Transfer 部署服务器。仅 `setup remote`。 |
+| `--transfer-path <path>` | path | 否 | Transfer 部署路径。仅 `setup remote`。 |
+| `--transfer-artifact <path>` | path | 否 | Transfer 产物路径，可重复。仅 `setup remote`。 |
 | `--json` | boolean | 否 | 输出 JSON。 |
 
 ### 行为
@@ -437,9 +476,6 @@ forja server --detail <id> [--json]
 | --- | --- |
 | `targets` | 列出 Qt `.pro` 和 SDK `.sln`/`Makefile`/`CMakeLists.txt` 候选目标。 |
 | `env` | 列出 Qt/VS/jom/make 候选路径。子分类 `qt`/`vs`/`jom`/`make` 查看单项详情。 |
-| `servers` | 列出 SSH server。`--detail <id>` 查看单个详情。 |
-| `remote` | 列出远程配置（workspace/bin/build-order/transfer/repos）。 |
-| `config` | 列出 Qt/SDK/Sync/Remote 已保存配置摘要。 |
 | `lang` | 显示当前语言设置。 |
 
 ### 输入
@@ -476,22 +512,13 @@ forja server --detail <id> [--json]
 
 ### 功能
 
-选择当前 Forja 使用的目标、构建配置、执行端和远程配置。
+选择当前 Forja 使用的目标、构建配置和执行端。
 
 ### 语法
 
 ```bash
 forja use target [--project <path>] [--mode debug|release] [--arch x86|x64] [--json]
 forja use execution --local|--remote [--json]
-forja use sync --server <id> --remote-path <path> [--enable|--disable] [--json]
-forja use remote --server <id> --remote-path <path> [--json]
-forja use remote workspace --mode legacy|staged --path <path> [--clear] [--json]
-forja use remote repo --local <name> --remote <name> --role <role> --path <path> [--json]
-forja use remote forja-bin --path <path> [--clear] [--json]
-forja use remote build-order <qt:build> <sdk:build> ... [--clear] [--json]
-forja use remote transfer --server <id> --path <path> --artifact <path> [--clear] [--json]
-forja use qt --qt-path <path> [--vs-dev-shell <path>] [--qmake-target <name>] [--qmake-args <args>] [--json]
-forja use sdk --vs-dev-cmd <path> [--json]
 forja use lang <zh|en> [--json]
 ```
 
@@ -501,15 +528,6 @@ forja use lang <zh|en> [--json]
 | --- | --- |
 | `target` | 选择项目、设置 mode/arch。 |
 | `execution` | 切换执行端（local/remote）。 |
-| `sync` | 配置同步 server/path、启用/禁用。 |
-| `remote` | 快捷设置 server + remote-path。 |
-| `remote workspace` | 设置远程 workspace 路径和模式。 |
-| `remote repo` | 配置远程 repo 映射。 |
-| `remote forja-bin` | 设置远端 Forja 可执行文件路径。 |
-| `remote build-order` | 设置远程构建顺序。 |
-| `remote transfer` | 配置 artifact transfer。 |
-| `qt` | 设置 Qt 工具链路径。 |
-| `sdk` | 设置 SDK 工具链路径。 |
 | `lang` | 设置界面语言。 |
 
 ### JSON 输出
@@ -528,6 +546,34 @@ forja use lang <zh|en> [--json]
     "runAt": "local"
   },
   "nextActions": ["forja status"]
+}
+```
+
+---
+
+## `forja remote`
+
+### 功能
+
+远程配置和仓库操作。管理远程服务器/路径配置，以及远端仓库的恢复和重置。
+
+### 语法
+
+```bash
+forja remote                                    # 显示当前远程配置
+forja remote --server <id> --remote-path <path> # 设置服务器和路径
+forja remote restore <repo> <paths...> [--server <id>]
+forja remote reset <repo> <paths...> [--all] [--server <id>]
+```
+
+### JSON 输出
+
+```json
+{
+  "ok": true,
+  "action": "remote",
+  "remoteAction": "show",
+  "remote": { ... }
 }
 ```
 
@@ -755,22 +801,19 @@ forja clean [--workspace <path>] [--plan] [--json]
 ```bash
 forja doctor [--remote] [--server <id>] [--workspace <path>] [--json]
 forja doctor fix [--remote] [--server <id>] [--plan] [--workspace <path>] [--json]
-forja doctor unlock <lock-id> [--force] [--workspace <path>] [--json]
-forja doctor restore <repo> <paths...> [--workspace <path>] [--json]
-forja doctor reset <repo> <paths...> [--workspace <path>] [--json]
-forja doctor clean-untracked <repo> <paths...> [--recursive] [--workspace <path>] [--json]
+forja doctor unlock <lock-id> [--workspace <path>] [--json]
 ```
 
 ### 输入
 
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `action` | enum | 否 | 为空、`fix`、`unlock`、`restore`、`reset`、`clean-untracked`。 |
+| `action` | enum | 否 | 为空、`fix`、`unlock`。 |
 | `--remote` | boolean | 否 | 即使 `runAt=local`，也检查远程。 |
 | `--server <id>` | string | 否 | 指定服务器。 |
-| `--force` | boolean | 否 | 强制执行恢复动作。 |
-| `--recursive` | boolean | 否 | 递归清理未跟踪文件。 |
-| `--plan` | boolean | 否 | 只预览修复计划。 |
+| `--plan` | boolean | 否 | 只预览修复计划。仅 `fix`。 |
+
+> **隐藏破坏性操作**：`restore`、`reset`、`clean-untracked` 由 `forja remote restore`/`forja remote reset` 承接，不进入主帮助。
 
 ### JSON 输出
 
@@ -798,22 +841,24 @@ forja doctor clean-untracked <repo> <paths...> [--recursive] [--workspace <path>
 ### 语法
 
 ```bash
-forja sync [--workspace <path>] [--file <path>] [--repo <name>] [--server <id>] [--json]
-forja sync plan [--workspace <path>] [--file <path>] [--repo <name>] [--server <id>] [--json]
-forja sync reset [--workspace <path>] [--json]
-forja sync transfer [--workspace <path>] [--json]
+forja sync [--workspace <path>] [--file <path>] [--yes] [--json]
+forja sync plan [--workspace <path>] [--file <path>] [--json]
+forja sync status [--workspace <path>] [--json]
+forja sync --reset [--workspace <path>] [--json]
 ```
 
 ### 输入
 
 | 输入 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `action` | enum | 否 | 为空、`plan`、`reset`、`transfer`。 |
+| `action` | enum | 否 | 为空（执行同步）、`plan`、`status`。 |
 | `--file <path>` | path | 否 | 指定文件，可重复。 |
-| `--repo <name>` | string | 否 | 指定 repo。 |
-| `--server <id>` | string | 否 | 临时覆盖服务器。 |
+| `--reset` | boolean | 否 | 清除同步状态。不能与 `plan` 或其他位置参数同时使用。 |
+| `--yes` | boolean | 否 | 跳过交互确认直接执行。 |
 | `--workspace` | path | 否 | 工作区路径。 |
 | `--json` | boolean | 否 | 输出 JSON。 |
+
+> **配置缺失时**：`forja sync` 不修改配置。未配置 sync 时返回错误并指向 `forja setup remote`。
 
 ### JSON 输出
 
@@ -826,12 +871,7 @@ forja sync transfer [--workspace <path>] [--json]
   "remotePath": "/home/dev/workspace",
   "uploaded": ["app/src/main.cpp"],
   "deleted": [],
-  "skipped": [],
-  "transfer": {
-    "configured": true,
-    "executed": true,
-    "artifacts": ["build/app.zip"]
-  }
+  "skipped": []
 }
 ```
 
@@ -864,6 +904,7 @@ forja sync transfer [--workspace <path>] [--json]
 | `forja.setup` | `Forja: Setup` | `forja setup` |
 | `forja.list` | `Forja: List` | `forja list` |
 | `forja.use` | `Forja: Use` | `forja use` |
+| `forja.remote` | `Forja: Remote` | `forja remote` |
 | `forja.server` | `Forja: Server` | `forja server` |
 | `forja.build` | `Forja: Build` | `forja build` |
 | `forja.run` | `Forja: Run` | `forja run` |

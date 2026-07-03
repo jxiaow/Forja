@@ -29,6 +29,7 @@ export interface StatusResult extends ForjaJsonResult {
     sync?: SyncStatusSummary;
     runtime?: RuntimeState;
     nextAction?: string;
+    choices?: Array<{ label: string; command: string; description: string }>;
 }
 
 export interface ToolchainSummary {
@@ -100,22 +101,26 @@ export function runStatus(workspace: string): StatusResult {
     // ── Target readiness ──
     if (!activeTarget) {
         readiness.target = 'not-selected';
-        const candidates = aggregateCandidates(workspace, activeTarget, qtConfig, sdkConfig);
-        const qtCount = candidates.filter(c => c.kind === 'qt').length;
-        const sdkCount = candidates.filter(c => c.kind === 'sdk').length;
-        if (qtCount > 0 || sdkCount > 0) {
-            diagnostics.push({
-                level: 'info',
-                message: T('sts.targetsFound', [String(qtCount), String(sdkCount)]),
-                fix: 'forja list targets',
-                params: { qtCount: String(qtCount), sdkCount: String(sdkCount) },
-            });
-        } else {
-            diagnostics.push({
-                level: 'warning',
-                message: T('noActiveTarget'),
-                fix: 'forja setup',
-            });
+        const hasAnyConfig = qtConfig.qtPath || qtConfig.vsInstall || sdkConfig.vsInstall || sdkConfig.pinnedProject;
+        // Only show target count if already initialized; otherwise it's noise
+        if (hasAnyConfig) {
+            const candidates = aggregateCandidates(workspace, activeTarget, qtConfig, sdkConfig);
+            const qtCount = candidates.filter(c => c.kind === 'qt').length;
+            const sdkCount = candidates.filter(c => c.kind === 'sdk').length;
+            if (qtCount > 0 || sdkCount > 0) {
+                diagnostics.push({
+                    level: 'info',
+                    message: T('sts.targetsFound', [String(qtCount), String(sdkCount)]),
+                    fix: 'forja list targets',
+                    params: { qtCount: String(qtCount), sdkCount: String(sdkCount) },
+                });
+            } else {
+                diagnostics.push({
+                    level: 'warning',
+                    message: T('noActiveTarget'),
+                    fix: 'forja setup',
+                });
+            }
         }
     } else {
         const projectPath = path.isAbsolute(activeTarget.project)
@@ -166,7 +171,6 @@ export function runStatus(workspace: string): StatusResult {
             diagnostics.push({
                 level: 'warning',
                 message: T('notInitialized'),
-                fix: 'forja setup',
             });
         }
     } else {
@@ -183,22 +187,17 @@ export function runStatus(workspace: string): StatusResult {
                 level: 'warning',
                 message: T('noSyncServer'),
                 hint: T('noSyncServerHint'),
-                fix: 'forja server',
+                fix: 'forja setup remote',
             });
         } else if (activeTarget?.runAt === 'remote' && syncConfig.selectedServer) {
             diagnostics.push({
                 level: 'warning',
                 message: T('sts.syncNotEnabled'),
                 hint: T('noSyncServerHint'),
-                fix: 'forja sync --server <name> --remote-path <path>',
-            });
-        } else if (activeTarget?.runAt === 'local' && !syncConfig.selectedServer) {
-            diagnostics.push({
-                level: 'info',
-                message: T('sts.syncNotEnabled'),
-                fix: 'forja sync --server <name> --remote-path <path>',
+                fix: 'forja setup remote',
             });
         }
+        // local mode: no sync diagnostic — local execution doesn't need sync
     } else {
         if (!syncServer) {
             readiness.sync = 'blocked';
@@ -206,7 +205,7 @@ export function runStatus(workspace: string): StatusResult {
                 level: 'error',
                 message: T('sts.syncServerNotFound', [syncConfig.selectedServer]),
                 hint: T('serverDeleted'),
-                fix: 'forja sync',
+                fix: 'forja setup remote',
                 params: { server: syncConfig.selectedServer },
             });
         } else {
@@ -216,7 +215,7 @@ export function runStatus(workspace: string): StatusResult {
                 diagnostics.push({
                     level: 'error',
                     message: `${T('remotePathNotConfigured')}: ${syncConfig.selectedServer}`,
-                    fix: 'forja sync --server <name> --remote-path <path>',
+                    fix: 'forja setup remote',
                     params: { server: syncConfig.selectedServer },
                 });
             } else {
@@ -236,7 +235,7 @@ export function runStatus(workspace: string): StatusResult {
             diagnostics.push({
                 level: 'error',
                 message: T('remoteNoServer'),
-                fix: 'forja server',
+                fix: 'forja setup remote',
             });
         } else {
             // Check remote Forja bin - not an error since it defaults to $HOME/.forja/bin/forja
@@ -253,7 +252,7 @@ export function runStatus(workspace: string): StatusResult {
                 diagnostics.push({
                     level: 'error',
                     message: serverId ? `${T('remotePathNotConfigured')}: ${serverId}` : T('remotePathNotConfigured'),
-                    fix: 'forja server',
+                    fix: 'forja setup remote',
                     params: serverId ? { server: serverId } : undefined,
                 });
                 readiness.remote = 'missing';
@@ -299,6 +298,13 @@ export function runStatus(workspace: string): StatusResult {
     // Next action — running process takes priority, then first diagnostic fix, then default to build
     if (result.runtime?.running) {
         result.nextAction = 'forja stop';
+    } else if (!activeTarget && readiness.toolchain === 'unknown') {
+        // Not initialized — AI should ask user to choose; text mode shows both options
+        result.nextAction = undefined;
+        result.choices = [
+            { label: 'forja setup', command: 'forja setup', description: T('statusSetupLocal') },
+            { label: 'forja setup remote', command: 'forja setup remote', description: T('statusSetupRemote') },
+        ];
     } else {
         const firstFix = diagnostics.find(d => d.fix)?.fix;
         const hasErrors = diagnostics.some(d => d.level === 'error');
@@ -481,7 +487,7 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
     if (result.workspace) { lines.push(`${T('workspace')}${result.workspace}`); }
     if (result.activeTarget) {
         const t = result.activeTarget;
-        lines.push(`${T('target')}${t.kind} ${t.project} ${t.mode} ${t.arch} ${t.runAt}`);
+        lines.push(`${T('target')}${t.project} ${t.mode} ${t.arch} ${t.runAt}`);
     }
     const r = result.readiness;
     const parts: string[] = [];
@@ -543,6 +549,11 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
     if (result.nextAction) {
         lines.push(T('next'));
         lines.push(`  ${result.nextAction}`);
+    } else if (!result.activeTarget && result.readiness?.toolchain === 'unknown') {
+        // Not initialized — show both setup options
+        lines.push(T('next'));
+        lines.push(`  forja setup          (${T('statusSetupLocal')})`);
+        lines.push(`  forja setup remote   (${T('statusSetupRemote')})`);
     }
 
     return lines.join('\n');

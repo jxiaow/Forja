@@ -19,8 +19,16 @@ const version = pkg.version;
 // Channel: --channel dev|stable (default: stable)
 const channelIdx = process.argv.indexOf('--channel');
 const channel = channelIdx >= 0 && process.argv[channelIdx + 1] ? process.argv[channelIdx + 1] : 'stable';
-const versionSuffix = (channel === 'stable' || version.endsWith(`-${channel}`)) ? '' : `-${channel}`;
-const displayVersion = `${version}${versionSuffix}`;
+
+// Dev builds append date: VSIX uses 0.7.55-dev.202607031430 (vsce requires hyphen pre-release)
+function dateStamp() {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+}
+const dateSuffix = (channel === 'dev') ? `-dev.${dateStamp()}` : '';
+const displayVersion = channel === 'dev'
+    ? `${version.replace(/\.dev$/, '')}${dateSuffix}`
+    : version;
 
 const distVs = path.join(root, 'dist', `forja-${version}`, 'vs');
 const rootReadme = path.join(root, 'README.md');
@@ -45,7 +53,9 @@ try {
 
     // Patch displayName and version for non-stable channels
     if (channel !== 'stable') {
-        pkg.displayName = `${pkg.displayName} (${channel.charAt(0).toUpperCase() + channel.slice(1)})`;
+        if (!pkg.displayName.includes(`(${channel.charAt(0).toUpperCase() + channel.slice(1)})`)) {
+            pkg.displayName = `${pkg.displayName} (${channel.charAt(0).toUpperCase() + channel.slice(1)})`;
+        }
         pkg.version = displayVersion;
         fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
         patchedPkg = true;

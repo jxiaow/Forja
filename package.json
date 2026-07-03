@@ -1,9 +1,9 @@
 {
   "name": "forja",
-  "displayName": "Forja (Dev) (Dev)",
+  "displayName": "Forja",
   "publisher": "forja",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.55-dev",
+  "version": "0.7.55.dev",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -38,6 +38,10 @@
       {
         "command": "forja.use",
         "title": "Forja: Use Target"
+      },
+      {
+        "command": "forja.remote",
+        "title": "Forja: Remote"
       },
       {
         "command": "forja.config.openPage",

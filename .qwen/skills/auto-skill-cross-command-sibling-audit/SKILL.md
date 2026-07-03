@@ -92,6 +92,50 @@ npx tsc --noEmit
 - **Check the dispatcher** (`index.ts`) — if you change a function signature, all call sites must update
 - **Verify with grep, not memory** — don't assume you know which commands have the pattern; search for it
 
+## Stale Command Reference Sweep (After Syntax Changes)
+
+When you **change a command's syntax** (remove flags, rename subcommands, change command structure), stale references to the old syntax propagate across the entire codebase. You MUST grep for ALL string references to the old syntax.
+
+### What to grep for
+
+After removing `forja foo --bar` or renaming a subcommand:
+
+```bash
+# Grep entire src/ for the old syntax string
+grep -rn "forja foo --bar" src/
+grep -rn "forja foo bar" src/
+```
+
+### Where stale references hide
+
+| Location | Example |
+|----------|---------|
+| Other commands' `nextAction` | `nextAction: 'forja sync --server <name>'` |
+| Diagnostic `fix` fields | `fix: 'forja sync --server <name> --remote-path <path>'` |
+| Help text in `types.ts` | `'help.sync': { en: 'forja sync --server ...' }` |
+| Translation keys | `'sts.syncNotEnabled': { en: '... use forja sync --server ...' }` |
+| `KEYWORD_SUGGESTIONS` | `'sync': { hint: 'forja sync', params: ['--server'] }` |
+| Test assertions | `assert.ok(src.includes('forja sync --server'))` |
+| VSCode command handlers | `showInformationMessage('Use "forja remote repo" ...')` |
+| Documentation files | `docs/operations/command-consolidation/command-api.zh.md` |
+
+### Real example from this project
+
+When `--server`/`--remote-path` flags were removed from `forja sync`:
+- `status.ts` had 3 diagnostic `fix` fields pointing to `forja sync --server`
+- `sync/cli.ts` had a `nextAction` pointing to `forja sync --server`
+- `doctor.ts` had a check `fix` pointing to `forja sync --server`
+- `types.ts` had help text and translation keys referencing `forja sync --server`
+- `sync.ts` had 2 `nextAction` values pointing to `forja sync --server`
+
+Total: **9 stale references** across 5 files, all found by a single grep.
+
+### Rule
+
+After any command syntax change, grep the old syntax string across `src/` and `docs/`. Fix ALL hits before declaring done.
+
+---
+
 ## Audit Checklist
 
 After fixing an issue in one CLI command:
@@ -104,4 +148,5 @@ After fixing an issue in one CLI command:
 - [ ] Fixed all siblings (not just the one reported)
 - [ ] Extracted shared helpers to avoid duplication (e.g., `buildRemoteShellCommand` in `remote/core/plan.ts`)
 - [ ] Updated all call sites in index.ts
+- [ ] **If syntax changed:** grepped entire `src/` and `docs/` for old syntax strings, fixed all hits
 - [ ] TypeScript compiles clean

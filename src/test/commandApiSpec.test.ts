@@ -16,22 +16,23 @@ function source(relativePath: string): string {
 
 // ── Command surface ──
 
-test('CLI dispatcher registers exactly 11 commands including setup and server', () => {
+test('CLI dispatcher registers exactly 12 commands including setup and server', () => {
     const indexSrc = source('src/cli/commands/index.ts');
-    const expectedCommands = ['status', 'setup', 'list', 'use', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+    const expectedCommands = ['status', 'setup', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
     for (const cmd of expectedCommands) {
         assert.ok(indexSrc.includes(`'${cmd}'`), `Command '${cmd}' must be registered in CLI dispatcher`);
     }
     assert.ok(!indexSrc.includes("'init'"), "'init' must NOT be a registered command (replaced by 'setup')");
 });
 
-test('COMMANDS and IMPLEMENTED_COMMANDS arrays are identical (all commands implemented)', () => {
+test('COMMANDS array includes all implemented commands', () => {
     const indexSrc = source('src/cli/commands/index.ts');
     const commandsMatch = indexSrc.match(/const COMMANDS: Command\[\] = \[([^\]]+)\]/);
-    const implementedMatch = indexSrc.match(/const IMPLEMENTED_COMMANDS: Command\[\] = \[([^\]]+)\]/);
     assert.ok(commandsMatch, 'COMMANDS array must exist');
-    assert.ok(implementedMatch, 'IMPLEMENTED_COMMANDS array must exist');
-    assert.equal(commandsMatch[1].trim(), implementedMatch[1].trim(), 'COMMANDS and IMPLEMENTED_COMMANDS must be identical');
+    const expectedCommands = ['status', 'setup', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+    for (const cmd of expectedCommands) {
+        assert.ok(commandsMatch[1].includes(`'${cmd}'`), `COMMANDS must include '${cmd}'`);
+    }
 });
 
 // ── No stale `forja init` references ──
@@ -63,7 +64,7 @@ test('qtCore.ts nextActions reference `forja setup` not `forja init`', () => {
 
 test('list command supports all categories', () => {
     const listSrc = source('src/cli/commands/list.ts');
-    const expectedCategories = ['targets', 'servers', 'env', 'remote', 'lang'];
+    const expectedCategories = ['targets', 'env', 'lang'];
     for (const cat of expectedCategories) {
         assert.ok(listSrc.includes(`'${cat}'`), `List category '${cat}' must be supported`);
     }
@@ -83,6 +84,15 @@ test('use command supports all documented subcommands', () => {
     const expectedSubcommands = [
         'runUseTarget',
         'runUseExecution',
+        'runUseLang',
+        'formatUseText',
+    ];
+    for (const fn of expectedSubcommands) {
+        assert.ok(useSrc.includes(`export function ${fn}`) || useSrc.includes(`export async function ${fn}`),
+            `use.ts must export ${fn}`);
+    }
+    // Removed functions that moved to remote.ts or were deleted
+    const removedSubcommands = [
         'runUseSync',
         'runUseRemote',
         'runUseRemoteWorkspace',
@@ -92,11 +102,27 @@ test('use command supports all documented subcommands', () => {
         'runUseRemoteTransfer',
         'runUseQt',
         'runUseSdk',
-        'runUseLang',
     ];
-    for (const fn of expectedSubcommands) {
-        assert.ok(useSrc.includes(`export function ${fn}`) || useSrc.includes(`export async function ${fn}`),
-            `use.ts must export ${fn}`);
+    for (const fn of removedSubcommands) {
+        assert.ok(!useSrc.includes(`export function ${fn}`) && !useSrc.includes(`export async function ${fn}`),
+            `use.ts must NOT export ${fn} (moved to remote.ts or deleted)`);
+    }
+});
+
+// ── Remote subcommands ──
+
+test('remote.ts exports all documented functions', () => {
+    const remoteSrc = source('src/cli/commands/remote.ts');
+    const expectedExports = [
+        'runRemoteShow',
+        'runRemoteSet',
+        'runRemoteRestore',
+        'runRemoteReset',
+        'formatRemoteText',
+    ];
+    for (const fn of expectedExports) {
+        assert.ok(remoteSrc.includes(`export function ${fn}`) || remoteSrc.includes(`export async function ${fn}`),
+            `remote.ts must export ${fn}`);
     }
 });
 
@@ -177,11 +203,15 @@ test('sync command supports plan and reset actions', () => {
 
 test('doctor command supports all documented actions', () => {
     const indexSrc = source('src/cli/commands/index.ts');
-    const doctorActions = ['fix', 'unlock', 'restore', 'reset', 'clean-untracked'];
-    for (const action of doctorActions) {
+    const doctorSrc = source('src/cli/commands/doctor.ts');
+    // 'fix' and 'unlock' are explicit subcommand cases in the CLI dispatcher
+    const dispatcherActions = ['fix', 'unlock'];
+    for (const action of dispatcherActions) {
         assert.ok(indexSrc.includes(`'${action}'`) || indexSrc.includes(`"${action}"`),
             `Doctor action '${action}' must be recognized in CLI dispatcher`);
     }
+    // 'check' is the default doctor action (defined in DoctorAction type)
+    assert.match(doctorSrc, /DoctorAction\s*=.*'check'/, "DoctorAction type must include 'check'");
 });
 
 // ── Unknown flag detection ──

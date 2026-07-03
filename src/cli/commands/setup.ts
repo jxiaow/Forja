@@ -12,17 +12,18 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { runInit } from './init';
 import { collectTargetCandidates } from './candidates';
-import { runUseRemote, runUseSync, runUseExecution } from './use';
+import { runRemoteSet } from './remote';
+import { runUseExecution } from './use';
 import { ForjaJsonResult, Diagnostic, diag, T } from './types';
 import { confirm, choose, prompt } from './prompt';
 import {
-    loadRemoteSettings,
-    loadSyncSettings,
+    loadRemoteSettings, saveRemoteSettings,
+    loadSyncSettings, saveSyncSettings,
     loadActiveTarget,
     loadQtSettings,
     loadSdkSettings,
 } from '../../core/settingsIO';
-import { readServers, addServer, ServerConfig } from '../../core/serverStore';
+import { readServers, addServer, getServerById, ServerConfig } from '../../core/serverStore';
 import { createSshRunner, createScpUploader } from '../../remote/core/shell';
 import { findBootstrapArtifact, executeRemoteBootstrap } from '../../remote/core/bootstrap';
 import { executeRemoteBridge } from '../../remote/core/bridge';
@@ -87,6 +88,14 @@ export interface SetupRemoteOptions {
     remotePath?: string;
     mode?: string;
     arch?: string;
+    workspaceMode?: 'staged' | 'legacy';
+    workspacePath?: string;
+    repos?: string[];
+    forjaBin?: string;
+    buildOrder?: string[];
+    transferServer?: string;
+    transferPath?: string;
+    transferArtifacts?: string[];
 }
 
 export interface SetupRemoteResult extends ForjaJsonResult {
@@ -563,7 +572,7 @@ export async function runSetupRemote(workspace: string, options: SetupRemoteOpti
     // Configure remote execution
     let remoteResult;
     try {
-        remoteResult = runUseRemote(workspace, { server: serverId, remotePath });
+        remoteResult = runRemoteSet(workspace, { server: serverId, remotePath });
     } catch (e) {
         remoteResult = { ok: false, diagnostics: [diag('error', `${T('setupRemoteConfigFailed')}: ${e instanceof Error ? e.message : String(e)}`)] };
     }
@@ -579,10 +588,73 @@ export async function runSetupRemote(workspace: string, options: SetupRemoteOpti
         return result;
     }
 
-    // Configure sync
-    let syncResult;
+    // Save advanced remote config (workspace/repo/forja-bin/build-order/transfer)
     try {
-        syncResult = runUseSync(workspace, { server: serverId, remotePath, enable: true });
+        const remote = loadRemoteSettings(workspace);
+        let advancedChanged = false;
+        if (options.workspaceMode) {
+            remote.workspaceMode = options.workspaceMode;
+            advancedChanged = true;
+        }
+        if (options.workspacePath) {
+            remote.remoteWorkspace = options.workspacePath;
+            advancedChanged = true;
+        }
+        if (options.repos && options.repos.length > 0) {
+            for (const repoSpec of options.repos) {
+                const parts = repoSpec.split(':');
+                if (parts.length >= 3) {
+                    const [localName, remoteName, roleStr] = parts;
+                    const role = roleStr.split('=')[0] as 'primary' | 'mapped' | 'remote-only' | 'existing-remote' | 'skip';
+                    const pathMatch = roleStr.match(/path=(.+)/);
+                    const repo: import('../../core/settingsIO').RemoteRepoSettings = { localName, remoteName, role };
+                    if (pathMatch) { repo.remotePath = pathMatch[1]; }
+                    remote.repos = [...remote.repos.filter(r => r.localName !== localName), repo];
+                    advancedChanged = true;
+                }
+            }
+        }
+        if (options.forjaBin) {
+            remote.remoteForjaBin = options.forjaBin;
+            advancedChanged = true;
+        }
+        if (options.buildOrder && options.buildOrder.length > 0) {
+            const items: import('../../core/settingsIO').RemoteBuildOrderItem[] = [];
+            for (const spec of options.buildOrder) {
+                const [target, action] = spec.split(':');
+                if (target === 'qt' || target === 'sdk') {
+                    items.push({ target, action: (action || 'build') as import('../../core/settingsIO').RemoteBuildOrderItem['action'], args: [] });
+                }
+            }
+            if (items.length > 0) {
+                remote.buildOrder = items;
+                advancedChanged = true;
+            }
+        }
+        if (options.transferServer && options.transferPath && options.transferArtifacts && options.transferArtifacts.length > 0) {
+            const server = getServerById(options.transferServer);
+            if (server) {
+                remote.transfer = { deployServer: server.id, deployPath: options.transferPath, artifacts: options.transferArtifacts };
+                advancedChanged = true;
+            }
+        }
+        if (advancedChanged) {
+            saveRemoteSettings(workspace, remote);
+            diagnostics.push(diag('info', T('setupAdvancedRemoteConfigured')));
+        }
+    } catch (e) {
+        diagnostics.push(diag('warning', `${T('setupAdvancedRemoteFailed')}: ${e instanceof Error ? e.message : String(e)}`));
+    }
+
+    // Configure sync (inlined from former runUseSync)
+    let syncResult: { ok: boolean; diagnostics?: Diagnostic[] };
+    try {
+        const sync = loadSyncSettings(workspace);
+        sync.selectedServer = serverId;
+        sync.remotePaths[serverId] = remotePath;
+        sync.enabled = true;
+        saveSyncSettings(workspace, sync);
+        syncResult = { ok: true };
     } catch (e) {
         syncResult = { ok: false, diagnostics: [diag('error', `${T('setupSyncConfigFailed')}: ${e instanceof Error ? e.message : String(e)}`)] };
     }
@@ -631,10 +703,24 @@ export async function runSetupRemote(workspace: string, options: SetupRemoteOpti
                 if (ver && ver !== 'UNKNOWN') detectedForjaVersion = ver;
             } catch { /* version detection is best-effort */ }
         } else {
-            diagnostics.push(diag('warning', `${T('setupSshUnreachable')} (${T('setupSshVerifyExisting')})`));
+            diagnostics.push(diag('error', `${T('setupSshUnreachable')} (${T('setupSshVerifyExisting')})`));
             result.steps.forjaDeploy = 'failed';
             result.steps.remoteInit = 'failed';
             result.steps.executionSwitch = 'failed';
+            result.ok = false;
+            result.remote = {
+                serverId,
+                serverName,
+                host: serverHost,
+                remotePath,
+                syncEnabled: true,
+                forjaDeployed: false,
+                executionMode: 'remote',
+                configured: false,
+            };
+            result.diagnostics = diagnostics;
+            result.nextAction = 'forja doctor --remote';
+            return result;
         }
     } else {
         try {

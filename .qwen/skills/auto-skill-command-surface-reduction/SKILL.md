@@ -12,9 +12,11 @@ When a command accumulates too many subcommands and flags, systematically reduce
 ## Signs a Command Needs Reduction
 
 - **Too many subcommands**: 4+ subcommands where some overlap with other commands
+- **Deep nesting**: 3+ levels of nesting (e.g., `forja use remote workspace`) — entity should be promoted to top-level
 - **Flag explosion**: Flags that only apply to edge cases (e.g., `--file`, `--repo`, `--server` on a sync command)
 - **Overlap with sibling commands**: e.g., `forja sync status` duplicates `forja status`
-- **Conceptual mismatch**: Subcommands that don't belong (e.g., `transfer` under `sync`)
+- **Conceptual mismatch**: Subcommands that don't belong (e.g., `transfer` under `sync`, `restore` under `doctor`)
+- **Configuration sprawl**: A "selection" command (`use`) accumulating one-time setup commands (`use qt`, `use sdk`)
 - **User says "too many"**: Direct feedback that the command surface is overwhelming
 
 ## Procedure
@@ -123,6 +125,41 @@ When a subcommand doesn't belong:
 Before: forja sync transfer (deploy artifacts — not file sync)
 After:  (removed from sync, core function preserved for future home)
 ```
+
+### Deep nesting → Promote to top-level
+When a command has 3+ levels of nesting (e.g., `forja use remote workspace`), promote the nested entity to its own top-level command. This flattens the hierarchy and groups all operations on that entity under one command.
+
+```
+Before: forja use remote                          (set server/path)
+        forja use remote workspace --mode staged   (3 levels deep)
+        forja use remote repo --local X --remote Y (3 levels deep)
+        forja doctor restore <repo> <paths>        (conceptually remote, not diagnostic)
+
+After:  forja remote                              (show config)
+        forja remote --server X --remote-path Y   (set server/path)
+        forja remote workspace --mode staged       (2 levels, not 3)
+        forja remote repo --local X --remote Y     (2 levels, not 3)
+        forja remote restore <repo> <paths>        (correct home)
+```
+
+**When to promote:**
+- Entity has 5+ configuration sub-commands (workspace, repo, forja-bin, build-order, transfer)
+- Entity has runtime operations (restore, reset) currently scattered in other commands
+- Maximum nesting depth exceeds 2 levels
+
+**Also move related operations from other commands** — e.g., `doctor restore/reset/clean-untracked` are remote repo operations, not diagnostics. Moving them to `remote` makes the command boundary cleaner.
+
+### Configuration sprawl → Consolidate into setup
+When a "selection" command (`use`) accumulates one-time configuration subcommands:
+```
+Before: forja use qt --qt-path <path>     (toolchain config, done once)
+        forja use sdk --vs-dev-cmd <path>  (toolchain config, done once)
+
+After:  forja setup --qt-path <path>       (setup absorbs toolchain config)
+        forja setup --vs-dev-cmd <path>
+```
+
+**Rule**: `use`/`select` commands should only handle frequent choices (target, execution mode). One-time configuration belongs in `setup`.
 
 ### Low-frequency flag → Evaluate carefully
 Don't remove flags just because "the default covers it". Check edge cases:

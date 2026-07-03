@@ -10,13 +10,10 @@ import { listProjectConfigs } from '../../core/settingsIO';
 import { listSyncStates } from '../../core/syncState';
 import { getServerById } from '../../core/serverStore';
 import { Diagnostic, CheckResult, CheckStatus, CommandPlan, diag, Locale, T } from './types';
-import { executeRemoteRestore } from '../../remote/core/restore';
-import { executeRemoteCleanUntracked } from '../../remote/core/cleanUntracked';
-import { createSshRunner, createScpUploader, remoteCommand } from '../../remote/core/shell';
+import { createSshRunner, createScpUploader } from '../../remote/core/shell';
 import { resolveRemoteConfig, resolveRemoteActionPath } from '../../remote/core/config';
 import { executeRemoteBootstrap, findBootstrapArtifact, findPackageRoot } from '../../remote/core/bootstrap';
 import { executeRemoteReleaseLock } from '../../remote/core/lock';
-import { buildRemoteRepoDirSetup } from '../../remote/core/repoPath';
 import { detectMake } from '../../sdk/cli/envDetector';
 import { ServerConfig } from '../../core/serverStore';
 
@@ -45,18 +42,12 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
         'remote-forja': T('doctorCheckRemoteForja'),
         'cleanup': T('doctorCheckCleanup'),
         'unlock': T('doctorCheckUnlock'),
-        'restore': T('doctorCheckRestore'),
-        'reset': T('doctorCheckReset'),
-        'clean-untracked': T('doctorCheckCleanUntracked'),
     };
 
     const actionMap: Record<string, string> = {
         'check': T('doctorActionCheck'),
         'fix': T('doctorActionFix'),
         'unlock': T('doctorActionUnlock'),
-        'restore': T('doctorActionRestore'),
-        'reset': T('doctorActionReset'),
-        'clean-untracked': T('doctorActionCleanUntracked'),
     };
 
     lines.push(`${T('doctor')} ${actionMap[result.doctorAction] || result.doctorAction}`);
@@ -117,7 +108,7 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
     return lines.join('\n');
 }
 
-export type DoctorAction = 'check' | 'fix' | 'unlock' | 'restore' | 'reset' | 'clean-untracked';
+export type DoctorAction = 'check' | 'fix' | 'unlock';
 
 export interface DoctorResult {
     ok: boolean;
@@ -141,11 +132,7 @@ export async function runDoctor(workspace: string, options: {
     server?: string;
     fix?: boolean;
     unlock?: string;
-    force?: boolean;
     plan?: boolean;
-    restore?: { repo: string; paths: string[] };
-    reset?: { repo: string; paths: string[] };
-    cleanUntracked?: { repo: string; paths: string[]; recursive?: boolean };
 } = {}): Promise<DoctorResult> {
     const checks: CheckResult[] = [];
     const diagnostics: Diagnostic[] = [];
@@ -155,9 +142,6 @@ export async function runDoctor(workspace: string, options: {
     let doctorAction: DoctorAction = 'check';
     if (options.fix) { doctorAction = 'fix'; }
     else if (options.unlock) { doctorAction = 'unlock'; }
-    else if (options.restore) { doctorAction = 'restore'; }
-    else if (options.reset) { doctorAction = 'reset'; }
-    else if (options.cleanUntracked) { doctorAction = 'clean-untracked'; }
 
     // ── Target check ──
     if (activeTarget) {
@@ -166,7 +150,7 @@ export async function runDoctor(workspace: string, options: {
             ? activeTarget.project
             : path.join(workspace, activeTarget.project);
         if (fs.existsSync(projectPath)) {
-            checks.push(check('target', 'ready', `${T('doctorActiveTarget')}: ${activeTarget.kind} ${activeTarget.project}`));
+            checks.push(check('target', 'ready', `${T('doctorActiveTarget')}: ${activeTarget.project}`));
         } else {
             checks.push(check('target', 'blocked', `${T('doctorProjectMissing')}: ${activeTarget.project}`,
                 [diag('error', `${T('doctorProjectMissing')}: ${activeTarget.project}`)],
@@ -194,7 +178,7 @@ export async function runDoctor(workspace: string, options: {
         } else {
             checks.push(check('toolchain-qt', 'warning', T('doctorQtNotConfigured'),
                 [diag('warning', T('doctorQtNotConfigured'))],
-                'forja use qt --qt-path <path>'));
+                'forja setup --qt-path <path>'));
         }
 
         // Platform-specific toolchain checks
@@ -244,6 +228,10 @@ export async function runDoctor(workspace: string, options: {
                 } else if (sdk.vsInstall) {
                     checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${sdk.vsInstall}`,
                         [diag('error', `VS dev environment not found: ${sdk.vsInstall}`)]));
+                    diagnostics.push(diag('error', `VS dev environment not found: ${sdk.vsInstall}`));
+                } else {
+                    checks.push(check('toolchain-vs', 'warning', T('doctorVsNotConfigured'),
+                        [diag('warning', T('doctorVsNotConfigured'))]));
                 }
             }
         } else {
@@ -272,7 +260,7 @@ export async function runDoctor(workspace: string, options: {
             } else {
                 checks.push(check('sync', 'blocked', T('doctorSyncRemote'),
                     [diag('warning', T('doctorSyncRemote'))],
-                    'forja sync --server <name> --remote-path <path>'));
+                    'forja setup remote'));
             }
         } else {
             checks.push(check('sync', 'blocked', `${T('doctorSyncDeleted')}: ${sync.selectedServer}`,
@@ -429,58 +417,6 @@ export async function runDoctor(workspace: string, options: {
                     diagnostics.push(diag(d.level, d.message));
                 }
                 checks.push(check('unlock', 'blocked', T('doctorLockFailed')));
-            }
-        }
-    }
-
-    // ── Destructive remote actions ──
-    if (doctorAction === 'restore' || doctorAction === 'reset' || doctorAction === 'clean-untracked') {
-        const resolved = resolveRemoteConfig(workspace, options.server);
-        if (!resolved.config) {
-            diagnostics.push(diag('error', T('doctorRemoteNotConfigured')));
-            checks.push(check('remote', 'blocked', T('doctorRemoteNotConfigured')));
-        } else {
-            const password = resolveSshPassword(resolved.config.server);
-            const runner = createSshRunner(resolved.config.server, password);
-            const remotePath = resolveRemoteActionPath(workspace, resolved.config.remotePath);
-            if (doctorAction === 'restore' && options.restore) {
-                const result = await executeRemoteRestore({
-                    remotePath, repo: options.restore.repo, paths: options.restore.paths, runner,
-                });
-                if (result.ok) {
-                    changed.push(`restore.${options.restore.repo}(${result.restored.length} paths)`);
-                    checks.push(check('restore', 'ready', `${T('doctorRestored')} ${result.restored.length} ${T('paths')} ${options.restore.repo}`));
-                } else {
-                    for (const d of result.diagnostics) {
-                        diagnostics.push(diag(d.level, d.message));
-                    }
-                    checks.push(check('restore', 'blocked', T('doctorRestoreFailed')));
-                }
-            } else if (doctorAction === 'reset' && options.reset) {
-                const pathArgs = remoteCommand(options.reset.paths);
-                const command = buildRemoteRepoDirSetup(remotePath, options.reset.repo, true) + ' cd "$repo_dir" && git reset --hard HEAD -- ' + pathArgs;
-                const executed = await runner.run(command, 30000);
-                if (executed.exitCode !== 0) {
-                    diagnostics.push(diag('error', executed.stderr.trim() || 'Remote reset failed'));
-                    checks.push(check('reset', 'blocked', T('doctorResetFailed')));
-                } else {
-                    changed.push(`reset.${options.reset.repo}(${options.reset.paths.length} paths)`);
-                    checks.push(check('reset', 'ready', `${T('doctorResetDone')} ${options.reset.paths.length} ${T('paths')} ${options.reset.repo}`));
-                }
-            } else if (doctorAction === 'clean-untracked' && options.cleanUntracked) {
-                const result = await executeRemoteCleanUntracked({
-                    remotePath, repo: options.cleanUntracked.repo, paths: options.cleanUntracked.paths,
-                    recursive: options.cleanUntracked.recursive ?? false, runner,
-                });
-                if (result.ok) {
-                    changed.push(`clean-untracked.${options.cleanUntracked.repo}(${result.cleaned.length} paths)`);
-                    checks.push(check('clean-untracked', 'ready', `${T('doctorCleanDone')} ${result.cleaned.length} ${T('paths')} ${options.cleanUntracked.repo}`));
-                } else {
-                    for (const d of result.diagnostics) {
-                        diagnostics.push(diag(d.level, d.message));
-                    }
-                    checks.push(check('clean-untracked', 'blocked', T('doctorCleanFailed')));
-                }
             }
         }
     }

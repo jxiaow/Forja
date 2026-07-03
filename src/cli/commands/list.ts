@@ -1,5 +1,5 @@
 /**
- * `forja list` — read-only enumeration of targets, env, remote, lang.
+ * `forja list` — read-only enumeration of targets, env, lang.
  */
 import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSummary, Diagnostic, Locale, T, resolveLocale } from './types';
 import { collectTargetCandidates } from './candidates';
@@ -9,7 +9,7 @@ import { detectMake } from '../../sdk/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 import { setSilent } from '../../core/loggerBase';
 
-export type ListCategory = 'targets' | 'env' | 'remote' | 'lang';
+export type ListCategory = 'targets' | 'env' | 'lang';
 /** @internal 'servers' is accessed via `forja server`, not `forja list servers` */
 export type InternalListCategory = ListCategory | 'servers';
 export type EnvSubCategory = 'qt' | 'vs' | 'jom' | 'make';
@@ -22,17 +22,7 @@ export interface ListResult extends ForjaJsonResult {
     env?: EnvSummary;
     envSubCategory?: EnvSubCategory;
     envAvailable?: Array<{ path: string; version?: string; edition?: string }>;
-    remote?: RemoteConfigDetail;
     lang?: string;
-}
-
-export interface RemoteConfigDetail {
-    workspaceMode: 'legacy' | 'staged';
-    remoteWorkspace?: string;
-    remoteForjaBin?: string;
-    buildOrder?: { target: string; action: string; args: string[] }[];
-    transfer?: { configured: boolean; deployServer?: string; deployPath?: string; artifacts?: string[] };
-    repos?: import('../../core/settingsIO').RemoteRepoSettings[];
 }
 
 function listLang(): ListResult {
@@ -75,7 +65,7 @@ export function formatListText(result: ListResult, locale: Locale): string {
                 for (const t of targets) {
                     const marker = t.current ? ' *' : '';
                     const cfg = t.configured ? ` ${T('configuredMark')}` : '';
-                    lines.push(`  ${t.kind}  ${t.label}${marker}${cfg}`);
+                    lines.push(`  ${t.label}${marker}${cfg}`);
                 }
             }
             if (result.diagnostics?.length) {
@@ -204,42 +194,6 @@ export function formatListText(result: ListResult, locale: Locale): string {
             }
             break;
         }
-        case 'remote': {
-            lines.push(T('remoteConfiguration'));
-            if (result.workspace) { lines.push(`${T('workspace')}${result.workspace}`); }
-            const rem = result.remote;
-            if (rem) {
-                const hasRealConfig = rem.remoteWorkspace || rem.remoteForjaBin
-                    || (rem.buildOrder && rem.buildOrder.length > 0)
-                    || rem.transfer?.configured
-                    || (rem.repos && rem.repos.length > 0);
-                if (hasRealConfig) {
-                    lines.push(`  ${T('workspaceMode')}${rem.workspaceMode}`);
-                }
-                if (rem.remoteWorkspace) { lines.push(`  ${T('remoteWorkspace')}${rem.remoteWorkspace}`); }
-                if (rem.remoteForjaBin) { lines.push(`  ${T('forjaBin')}${rem.remoteForjaBin}`); }
-                if (rem.buildOrder && rem.buildOrder.length > 0) {
-                    lines.push(`  ${T('buildOrder')}`);
-                    for (const b of rem.buildOrder) {
-                        const args = b.args?.length ? ` ${b.args.join(' ')}` : '';
-                        lines.push(`    ${b.target}:${b.action}${args}`);
-                    }
-                }
-                if (rem.transfer) {
-                    lines.push(`  ${T('transfer')}${rem.transfer.configured ? T('configured') : T('notConfigured')}`);
-                    if (rem.transfer.configured) {
-                        if (rem.transfer.deployServer) { lines.push(`    ${T('server')}${rem.transfer.deployServer}`); }
-                        if (rem.transfer.deployPath) { lines.push(`    ${T('path')}${rem.transfer.deployPath}`); }
-                        if (rem.transfer.artifacts?.length) { lines.push(`    ${T('artifacts')}${rem.transfer.artifacts.join(', ')}`); }
-                    }
-                }
-                if (rem.repos && rem.repos.length > 0) {
-                    lines.push(`  ${T('repos')}`);
-                    for (const r of rem.repos) { lines.push(`    ${r.localName} → ${r.remoteName}  ${T('roleLabel')}${r.role}`); }
-                }
-            }
-            break;
-        }
         case 'lang': {
             lines.push(`${T('language')} ${result.lang || 'en'}`);
             break;
@@ -265,8 +219,6 @@ export async function runList(workspace: string, category: InternalListCategory,
                 return listEnvAll(workspace);
             }
             return listEnvSub(workspace, options.envSubCategory);
-        case 'remote':
-            return listRemote(workspace);
         case 'lang':
             return listLang();
     }
@@ -335,12 +287,12 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
     if (servers.length === 0) {
         nextAction = 'forja server add --name <name> --host <host> --username <name>';
     } else if (servers.length === 1) {
-        nextAction = `forja use remote --server ${servers[0].name}`;
+        nextAction = `forja remote --server ${servers[0].name}`;
     } else if (servers.length <= 5) {
         const names = servers.map(s => s.name).join('|');
-        nextAction = `forja use remote --server <${names}>`;
+        nextAction = `forja remote --server <${names}>`;
     } else {
-        nextAction = 'forja use remote --server <name>';
+        nextAction = 'forja remote --server <name>';
     }
     return {
         ok: true,
@@ -461,30 +413,5 @@ async function listEnvMake(): Promise<ListResult> {
         category: 'env',
         envSubCategory: 'make',
         env: summary,
-    };
-}
-
-function listRemote(workspace: string): ListResult {
-    const remote = loadRemoteSettings(workspace);
-    const detail: RemoteConfigDetail = {
-        workspaceMode: remote.workspaceMode,
-        remoteWorkspace: remote.remoteWorkspace || undefined,
-        remoteForjaBin: remote.remoteForjaBin || undefined,
-        buildOrder: remote.buildOrder.length > 0 ? remote.buildOrder : undefined,
-        transfer: remote.transfer ? {
-            configured: true,
-            deployServer: remote.transfer.deployServer,
-            deployPath: remote.transfer.deployPath,
-            artifacts: remote.transfer.artifacts,
-        } : { configured: false },
-        repos: remote.repos.length > 0 ? remote.repos : undefined,
-    };
-
-    return {
-        ok: true,
-        action: 'list',
-        category: 'remote',
-        workspace,
-        remote: detail,
     };
 }

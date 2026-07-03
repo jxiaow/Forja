@@ -107,7 +107,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
     const remoteForjaBin = options.remoteForjaBin ?? remoteSettings?.remoteForjaBin ?? '';
     const versionResult = await runner.run(buildRemoteForjaVersionCommand(remoteForjaBin), 10000);
     const remoteVersion = versionResult.stdout.trim();
-    const baseVersion = (v: string) => v.replace(/-[^-]+$/, '');
+    const baseVersion = (v: string) => v.match(/^\d+\.\d+\.\d+/)?.[0] ?? v;
     const versionOk = versionResult.exitCode === 0 && baseVersion(remoteVersion) === baseVersion(VERSION);
     layers.push({
         name: 'remoteForja',

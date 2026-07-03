@@ -6,7 +6,7 @@
 
 **语法**：
 ```
-forja sync [--yes] [--reset] [--file <path>] [--server <name>] [--remote-path <path>] [--json]
+forja sync [--yes] [--reset] [--file <path>] [--json]
 forja sync plan [--file <path>] [--json]
 forja sync status [--json]
 ```
@@ -19,7 +19,7 @@ forja sync status [--json]
 | 预览上传计划 | `forja sync plan` |
 | 清除同步状态 | `forja sync --reset` |
 | 查看 sync 配置状态 | `forja sync status` |
-| 快速配置 sync server/path | `forja sync --server <name> --remote-path <path>`（配置+同步一步完成） |
+| 配置 sync server/path | `forja setup remote`（一次性配置） |
 | 查看 sync 完整状态 | `forja status`（sync 区块包含 server/port/auth 详情） |
 | 查看 servers | `forja server` |
 | 测试 SSH | `forja doctor --remote` |
@@ -28,7 +28,7 @@ forja sync status [--json]
 ## 行为
 
 1. 读取 sync 配置。
-2. 缺少 sync server/remote path 时，文本模式进入交互式引导（选/创建服务器 + 输入远程路径）；JSON 模式返回错误 + nextAction。
+2. 缺少 sync server/remote path 时，返回错误 + `nextAction: "forja setup remote"`。sync 不修改配置。
 3. `plan` 只输出计划，不上传、不删除远端文件。
 4. `--reset` 只清同步状态，不上传。不能与 `plan` 子命令或其他位置参数同时使用。
 5. `--yes` 跳过交互确认直接执行（脚本/自动化场景）。
@@ -36,8 +36,7 @@ forja sync status [--json]
 7. 默认交互流程：plan → 显示摘要 → 确认 [y/N] → execute。确认后的执行复用 plan 阶段的分类结果，不重复调用 git status。
 8. `--json` 模式直接执行，不弹确认。
 9. 同步失败不自动修改 server/path 配置。
-10. `--server <name>` / `--remote-path <path>` 快速配置并同步：配置服务器和/或远程路径后直接执行同步。只传 `--remote-path` 时复用已选服务器。
-11. `status` 显示当前 sync 配置状态（enabled、server 详情、remotePath、ignore 列表）。
+10. `status` 显示当前 sync 配置状态（enabled、server 详情、remotePath、ignore 列表）。
 
 ## 已移除的功能
 
@@ -46,7 +45,8 @@ forja sync status [--json]
 | `forja sync reset`（子命令形式） | `forja sync --reset` |
 | `forja sync transfer` | 概念不属于文件同步，核心函数保留在 `remote/core/transfer.ts` |
 | `--repo <name>` | 自动处理所有 git 仓库 |
-| `forja use sync` CLI 入口 | `forja sync --server <name> --remote-path <path>` 一步完成配置 |
+| `--server <name>` / `--remote-path <path>` | `forja setup remote` 配置，`forja sync` 只读配置 |
+| `forja use sync` CLI 入口 | `forja setup remote` 一步完成配置 |
 
 ## 吸收的旧命令
 

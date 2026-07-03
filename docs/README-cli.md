@@ -86,7 +86,7 @@ forja run --detach                            # 后台运行
 forja server add --name dev --host 192.168.1.10 --username dev
 
 # 配置远程执行
-forja use remote --server dev --remote-path /home/dev/workspace
+forja remote --server dev --remote-path /home/dev/workspace
 
 # 远程初始化（通过 SSH 在远端执行 init）
 forja init --remote
@@ -135,7 +135,7 @@ VSCode 扩展和 CLI 共享同一套配置存储（`~/.forja/projects/<hash>.jso
 |------|------|----------|
 | `status` | 查看就绪状态 | `forja status` |
 | `init` | 首次初始化 | `forja init`、`forja init --remote` |
-| `list` | 列出候选项 | `forja list targets`、`forja list env`、`forja list remote` |
+| `list` | 列出候选项 | `forja list targets`、`forja list env` |
 | `use` | 写入配置 | `forja use target --project`、`forja use execution --remote` |
 | `server` | 管理服务器 | `forja server add`、`forja server remove` |
 | `build` | 编译 | `forja build`、`forja build fresh`、`forja build qmake` |
@@ -187,7 +187,7 @@ forja init --json
 forja list targets --json     # 列出可用项目（.pro/.sln/Makefile/CMakeLists.txt）
 forja list env --json         # 列出检测到的工具链环境
 forja list env qt --json      # 列出 Qt 环境详情
-forja list remote --json      # 列出远程执行配置（含 repos）
+forja remote --json             # 显示远程执行配置（含 repos）
 forja list lang --json        # 列出当前语言设置
 ```
 
@@ -205,22 +205,22 @@ forja use execution --remote
 forja use execution --local
 
 # 配置同步
-forja use sync --server server-1 --remote-path /home/dev/workspace --enable
+forja setup remote --server server-1 --remote-path /home/dev/workspace
 
 # 配置远程执行
-forja use remote --server server-1 --remote-path /home/dev/workspace
+forja remote --server server-1 --remote-path /home/dev/workspace
 
 # 配置远程高级选项
-forja use remote repo set --local qt_client --remote qt_client --role primary
-forja use remote forja-bin set --path /home/dev/.forja/bin/forja
-forja use remote build-order set qt:build sdk:rebuild
-forja use remote transfer set --server server-2 --path /deploy/app
+forja remote repo set --local qt_client --remote qt_client --role primary
+forja remote forja-bin set --path /home/dev/.forja/bin/forja
+forja remote build-order set qt:build sdk:rebuild
+forja remote transfer set --server server-2 --path /deploy/app
 
 # 配置 Qt 工具链
-forja use qt --qt-path /path/to/Qt --vs-dev-shell /path/to/Launch-VsDevShell.ps1
+forja setup --qt-path /path/to/Qt --vs-dev-shell /path/to/Launch-VsDevShell.ps1
 
 # 配置 SDK 工具链
-forja use sdk --vs-dev-cmd "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/Tools/VsDevCmd.bat"
+forja setup --vs-dev-cmd "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/Tools/VsDevCmd.bat"
 ```
 
 ### `forja server`
@@ -313,19 +313,19 @@ forja sync plan                         # 预览待同步文件
 
 ```bash
 # 配置远程执行目标
-forja use remote --server server-1 --remote-path /home/dev/workspace
+forja remote --server server-1 --remote-path /home/dev/workspace
 
 # 配置远程仓库映射（staged 模式）
-forja use remote repo set --local qt_client --remote qt_client --role primary --baseline auto --overlay true
+forja remote repo set --local qt_client --remote qt_client --role primary --baseline auto --overlay true
 
 # 配置远程 forja 二进制路径
-forja use remote forja-bin set --path /home/dev/.forja/bin/forja-with-env
+forja remote forja-bin set --path /home/dev/.forja/bin/forja-with-env
 
 # 配置构建顺序
-forja use remote build-order set qt:build sdk:rebuild
+forja remote build-order set qt:build sdk:rebuild
 
 # 配置部署传输
-forja use remote transfer set --server server-2 --path /deploy/app --artifact out/app
+forja remote transfer set --server server-2 --path /deploy/app --artifact out/app
 ```
 
 `--local` 和 `--remote` 是仓库名称，不是路径；它们必须是单段名称，不能包含 `/`、`\`、`.` 或 `..`。如果 Linux 侧依赖仓库不是 staged workspace 下的子目录，用 `--remote-path /absolute/remote/repo` 表达真实路径。

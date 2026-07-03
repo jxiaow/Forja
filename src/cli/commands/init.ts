@@ -124,14 +124,18 @@ export async function runInit(workspace: string, options: InitOptions = {}): Pro
             };
         }
     } else if (totalTargets > 1 && options.interactive) {
+        // Add skip option as a sentinel
+        const SKIP_SENTINEL = { kind: 'skip' as const, project: '', label: T('init.skipSelection'), current: false, configured: false, diagnostics: [] };
+        const choicesWithSkip = [...candidates, SKIP_SENTINEL];
         const chosen = await choose(
             T('init.selectTarget'),
-            candidates,
-            c => `${c.label} (${c.kind}) — ${c.project}`,
+            choicesWithSkip,
+            c => c.kind === 'skip' ? c.label : `${c.label} — ${c.project}`,
         );
-        if (chosen) {
+        if (chosen && chosen.kind !== 'skip') {
             effectiveCandidates = [chosen];
         }
+        // If skip selected or null, effectiveCandidates stays as all candidates (ambiguous)
     }
 
     // Save toolchain defaults (only fill missing)

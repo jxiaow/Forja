@@ -81,21 +81,20 @@ if (flagsWithValues.has(arg)) {
 
 Similarly, `extractWorkspace()` must check `!argv[idx + 1].startsWith('--')` to prevent `--workspace --json` from parsing `--json` as a path.
 
-## Commands that need this
+## Critical: known flags must NOT contain dead/unused flags
 
-Every handler in the CLI dispatcher:
-- `status`: --process, --lang
-- `init`: --plan, --remote, --server
-- `list`: --detail
-- `use`: (all subcommand flags combined)
-- `server`: (all subcommand flags combined)
-- `build`: --plan
-- `run`: --file, --detach, --debug, --custom, --plan
-- `stop`: (none)
-- `clean`: --plan
-- `doctor`: --fix, --unlock, --restore, --reset, --clean-untracked, --remote, --server, --force, --recursive
-- `sync`: --plan, --file, --server, --force, --repo
+Every flag in the known set MUST be actually read somewhere in the handler via `hasFlag()`, `extractFlag()`, or `extractAllFlags()`. A flag in knownFlags that is never read is a **dead flag** — it silently accepts user input that has no effect.
+
+**Bug examples found in audit:**
+- `doctor` had `--fix`, `--unlock`, `--force` in knownFlags but the handler only read positional subcommands (`fix`/`unlock`), never the flag forms. `forja doctor --fix` was silently accepted and did nothing.
+- `remote` had `--local` and `--remote` in knownFlags but no subcommand ever read them. `forja remote --local` was silently accepted.
+
+**Audit rule:** After building the known set, grep the entire handler for every flag:
+```
+grep -c "hasFlag(argv, '--foo')\|extractFlag(argv, '--foo')\|extractAllFlags(argv, '--foo')" handler.ts
+```
+If count is 0, the flag is dead — remove it from knownFlags.
 
 ## Why this matters
 
-Without validation, `forja status --proces` (typo) runs normal status and the user never notices the flag was ignored. In scripts, this causes silent misconfiguration.
+Without validation, `forja status --proces` (typo) runs normal status and the user never notices the flag was ignored. In scripts, this causes silent misconfiguration. Dead flags are equally dangerous: `forja doctor --fix` looks correct but does nothing, because the handler only checks positional `fix`, not the flag form.

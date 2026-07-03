@@ -130,7 +130,7 @@ forja setup remote [--json] [--reset] [--answers <path>]
 ### 幂等性
 
 已配置 + SSH 可达 → 跳过全部步骤（检测远程 Forja 版本号）。
-已配置 + SSH 不可达 → 标记 failed（不自动重试，用户需手动排查后重新执行）。
+已配置 + SSH 不可达 → `ok: false`，标记 failed 并返回 `nextAction: "forja doctor --remote"`（不自动重试，用户需手动排查后重新执行）。
 
 ### `--reset`
 

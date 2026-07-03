@@ -17,8 +17,14 @@ const version = pkg.version;
 // Channel: --channel dev|stable (default: stable)
 const channelIdx = process.argv.indexOf('--channel');
 const channel = channelIdx >= 0 && process.argv[channelIdx + 1] ? process.argv[channelIdx + 1] : 'stable';
-const versionSuffix = (channel === 'stable' || version.endsWith(`-${channel}`)) ? '' : `-${channel}`;
-const displayVersion = `${version}${versionSuffix}`;
+
+// Dev builds append date: 0.7.55.dev.202607031430
+function dateStamp() {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+}
+const dateSuffix = (channel === 'dev') ? `.${dateStamp()}` : '';
+const displayVersion = `${version}${dateSuffix}`;
 
 const distCli = path.join(root, 'dist', `forja-${version}`, 'cli');
 const tmpBuild = path.join(root, 'dist', '_cli-build');
@@ -55,7 +61,8 @@ const coreFiles = [
     'core/gitChangedFiles.js',
     'core/gitRepoResolver.js',
     'core/syncFileSelection.js',
-    'core/sdkProjectScanner.js'
+    'core/sdkProjectScanner.js',
+    'core/projectTypeDetector.js'
 ];
 
 // Individual files needed from qt/platform/ (exclude builder.js, which depends on vscode)
@@ -138,13 +145,13 @@ for (const file of rootFiles) {
     }
 }
 
-// Patch version.js with channel suffix for dev builds
-if (versionSuffix && fs.existsSync(path.join(tmpBuild, 'version.js'))) {
+// Patch version.js with date suffix for dev builds
+if (dateSuffix && fs.existsSync(path.join(tmpBuild, 'version.js'))) {
     const vFile = path.join(tmpBuild, 'version.js');
     let vContent = fs.readFileSync(vFile, 'utf8');
     vContent = vContent.replace(
         /VERSION\s*=\s*["']([^"']+)["']/,
-        `VERSION = "$1${versionSuffix}"`
+        `VERSION = "$1${dateSuffix}"`
     );
     fs.writeFileSync(vFile, vContent, 'utf8');
 }

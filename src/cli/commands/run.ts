@@ -374,7 +374,7 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
         console.log(`${T('run')} ${status}`);
         if (result.activeTarget) {
             const t = result.activeTarget;
-            console.log(`${T('target')}${t.kind} · ${t.project} · ${t.mode}/${t.arch} · ${t.runAt}`);
+            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}`);
         }
         if (result.runtime?.pid) {
             console.log(`${T('pidLabel')}${result.runtime.pid}`);

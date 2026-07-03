@@ -53,7 +53,7 @@ export async function executeRemotePlan(options: RemotePlanOptions): Promise<Rem
             mode: 'remote',
             stages: [],
             diagnostics: [{ level: 'error', message: 'No remote server configured' }],
-            nextAction: 'forja use remote --server <name>',
+            nextAction: 'forja remote --server <name>',
         };
     }
 
@@ -77,7 +77,7 @@ export async function executeRemotePlan(options: RemotePlanOptions): Promise<Rem
             mode: 'remote',
             stages: [],
             diagnostics: [{ level: 'error', message: 'Remote path not configured' }],
-            nextAction: 'forja use remote --server <name> --remote-path <path>',
+            nextAction: 'forja remote --server <name> --remote-path <path>',
         };
     }
 
