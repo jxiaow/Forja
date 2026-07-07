@@ -14,9 +14,9 @@ import { runRun, outputRunResult } from './run';
 import { runStop, outputStopResult } from './stop';
 import { runClean, outputCleanResult } from './clean';
 import { runDoctor, formatDoctorText } from './doctor';
-import { runSyncPlan, runSyncExecute, runSyncReset, runSyncStatus, formatSyncText } from './sync';
+import { runSyncPlan, runSyncExecute, runSyncReset, runSyncStatus, runSyncIgnoreList, runSyncIgnoreAdd, runSyncIgnoreRm, formatSyncText } from './sync';
 import { confirm, prompt, choose } from './prompt';
-import { resolveLocale, Locale, T, setGlobalLocale } from './types';
+import { resolveLocale, Locale, T, setGlobalLocale, diag } from './types';
 import { loadGlobalConfig } from '../../core/settingsIO';
 import { readServers, addServer, getServerById, readProjectSyncConfig } from '../../core/serverStore';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
@@ -928,7 +928,7 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
     const files = extractAllFlags(argv, '--file');
 
     // ── 子命令校验 ──
-    if (subArg !== '' && subArg !== 'plan' && subArg !== 'status' && subArg !== 'reset') {
+    if (subArg !== '' && subArg !== 'plan' && subArg !== 'status' && subArg !== 'reset' && subArg !== 'ignore') {
         outputResult({
             ok: false,
             action: 'sync',
@@ -955,6 +955,38 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
     if (subArg === 'status') {
         const result = runSyncStatus(workspace);
         outputResult(result, wantsJson, fmt);
+        return;
+    }
+
+    // ignore: 管理忽略规则，不需要 sync 前置配置
+    if (subArg === 'ignore') {
+        const ignoreSub = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
+        if (ignoreSub === '' ) {
+            outputResult(runSyncIgnoreList(workspace), wantsJson, fmt);
+        } else if (ignoreSub === 'add') {
+            const pattern = argv[3];
+            if (!pattern || pattern.startsWith('--')) {
+                outputResult({ ok: false, action: 'sync', syncAction: 'ignore', ignoreAction: 'add', workspace, diagnostics: [diag('error', T('syncIgnorePatternRequired'))] }, wantsJson, fmt);
+                process.exitCode = 1;
+            } else {
+                const result = runSyncIgnoreAdd(workspace, pattern);
+                outputResult(result, wantsJson, fmt);
+                if (!result.ok) process.exitCode = 1;
+            }
+        } else if (ignoreSub === 'rm') {
+            const pattern = argv[3];
+            if (!pattern || pattern.startsWith('--')) {
+                outputResult({ ok: false, action: 'sync', syncAction: 'ignore', ignoreAction: 'rm', workspace, diagnostics: [diag('error', T('syncIgnorePatternRequired'))] }, wantsJson, fmt);
+                process.exitCode = 1;
+            } else {
+                const result = runSyncIgnoreRm(workspace, pattern);
+                outputResult(result, wantsJson, fmt);
+                if (!result.ok) process.exitCode = 1;
+            }
+        } else {
+            outputResult({ ok: false, action: 'sync', syncAction: 'ignore', workspace, diagnostics: [diag('error', `${T('sync.unknownAction')}: ${ignoreSub}`)], nextAction: 'forja sync ignore' }, wantsJson, fmt);
+            process.exitCode = 1;
+        }
         return;
     }
 

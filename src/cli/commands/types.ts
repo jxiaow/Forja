@@ -335,6 +335,12 @@ const UI: Record<string, { en: string; zh: string }> = {
     syncComplete:                  { en: 'Sync complete',                zh: '同步完成' },
     syncStateReset:                { en: 'Sync state reset',             zh: '同步状态已重置' },
     syncIgnore:                    { en: 'Ignore',                        zh: '忽略' },
+    syncIgnoreEmpty:               { en: 'No ignore patterns configured', zh: '未配置忽略规则' },
+    syncIgnoreAdded:               { en: 'Added: {pattern}',             zh: '已添加：{pattern}' },
+    syncIgnoreRemoved:             { en: 'Removed: {pattern}',           zh: '已移除：{pattern}' },
+    syncIgnoreAlreadyExists:       { en: 'Already in ignore list: {pattern}', zh: '已在忽略列表中：{pattern}' },
+    syncIgnoreNotFound:            { en: 'Not in ignore list: {pattern}', zh: '不在忽略列表中：{pattern}' },
+    syncIgnorePatternRequired:     { en: 'Pattern required. Usage: forja sync ignore add|rm <pattern>', zh: '需要提供规则。用法：forja sync ignore add|rm <pattern>' },
     pending:                       { en: 'Pending',                      zh: '待同步' },
     uploaded:                      { en: 'Uploaded',                     zh: '已上传' },
     deleted:                       { en: 'Deleted',                      zh: '已删除' },
@@ -599,6 +605,9 @@ Options:
   forja sync reset                                  Clear sync state
   forja sync plan                                   Preview pending changes
   forja sync status                                 Show sync configuration
+  forja sync ignore                                 List ignore patterns
+  forja sync ignore add <pattern>                   Add an ignore pattern
+  forja sync ignore rm <pattern>                    Remove an ignore pattern
   forja sync --file <path>                          Sync specific file (repeatable)
 
 Options:
@@ -609,6 +618,9 @@ Options:
   forja sync reset                                  清除同步状态
   forja sync plan                                   预览待同步文件
   forja sync status                                 查看同步配置
+  forja sync ignore                                 列出忽略规则
+  forja sync ignore add <pattern>                   添加忽略规则
+  forja sync ignore rm <pattern>                    移除忽略规则
   forja sync --file <路径>                          同步指定文件（可重复）
 
 选项:
@@ -769,6 +781,9 @@ Options:
   forja sync reset                                  Clear sync state
   forja sync plan                                   Preview pending changes
   forja sync status                                 Show sync configuration
+  forja sync ignore                                 List ignore patterns
+  forja sync ignore add <pattern>                   Add an ignore pattern
+  forja sync ignore rm <pattern>                    Remove an ignore pattern
   forja sync --file <path>                          Sync specific file (repeatable)
 
 Options:
@@ -779,6 +794,9 @@ Options:
   forja sync reset                                  清除同步状态
   forja sync plan                                   预览待同步文件
   forja sync status                                 查看同步配置
+  forja sync ignore                                 列出忽略规则
+  forja sync ignore add <pattern>                   添加忽略规则
+  forja sync ignore rm <pattern>                    移除忽略规则
   forja sync --file <路径>                          同步指定文件（可重复）
 
 选项:

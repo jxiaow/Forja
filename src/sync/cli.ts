@@ -109,7 +109,7 @@ function resolveSyncConfig(workspaceRoot: string): { ok: true; config: ResolvedS
 
     const remotePath = project.remotePaths[server.id] || '';
     if (!remotePath) {
-        return { ok: false, error: T('sync.noRemotePath'), nextAction: `forja remote set` };
+        return { ok: false, error: T('sync.noRemotePath'), nextAction: `forja sync` };
     }
 
     return { ok: true, config: { server, remotePath, ignore: project.ignore } };

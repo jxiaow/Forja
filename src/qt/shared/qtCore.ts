@@ -734,7 +734,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 }
             }
             const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
-            commands = [...qmakeCmds, ...buildCmds];
+            // Deduplicate env init when combining qmake + build
+            if (qmakeCmds.length > 0) {
+                const initLen = shellBuilder.initCommands(buildConfig).length;
+                commands = [...qmakeCmds, ...buildCmds.slice(initLen)];
+            } else {
+                commands = buildCmds;
+            }
             if (runtimeTarget) { result.executablePath = runtimeTarget.exePath; }
         } else {
             commands = buildCmds;
@@ -781,13 +787,17 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         // Append run command (launch executable) for both dry-run and execute
         if (project) {
             const runCmd = buildRunCommand(project, mode, arch, qtPath);
+            // Deduplicate env init when combining qmake + build
+            // Only dedup when no rcc commands are inserted between them (rcc may change cwd)
+            const initLen = shellBuilder.initCommands(buildConfig).length;
+            const dedupedBuildCmds = (qmakeCmds.length > 0 && rccCmds.length === 0) ? buildCmds.slice(initLen) : buildCmds;
             if (runCmd) {
                 const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
-                commands = [...qmakeCmds, ...rccCmds, ...buildCmds, runCmd];
+                commands = [...qmakeCmds, ...rccCmds, ...dedupedBuildCmds, runCmd];
                 result.executablePath = runtimeTarget?.exePath;
             } else {
                 // Makefile not yet generated or mismatched — return build commands with hint to run status
-                const fallbackCmds = [...qmakeCmds, ...buildCmds];
+                const fallbackCmds = [...qmakeCmds, ...dedupedBuildCmds];
                 return {
                     ...result,
                     ok: true,

@@ -53,6 +53,7 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
     }
     // For Qt targets, filter VS candidates by compiler tag in Qt path
     let vsCandidatesOverride: typeof ctx.toolchain.vsCandidates | undefined;
+    let vsForceInteractive = false;
     if (kind === 'qt' && qtPath.value) {
         const vsYear = extractVsYearFromQtPath(qtPath.value);
         if (vsYear) {
@@ -61,10 +62,11 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
                 vsCandidatesOverride = filtered;
             } else if (options.interactive) {
                 console.log(`  ⚠ ${T('use.vsVersionMismatch', [vsYear])}`);
+                vsForceInteractive = true;
             }
         }
     }
-    const vsInstall = await resolveVsPath(ctx, options, stored, vsCandidatesOverride);
+    const vsInstall = await resolveVsPath(ctx, options, stored, vsCandidatesOverride, vsForceInteractive);
 
     if (qtPath.questions) return { questions: qtPath.questions, diagnostics };
     if (vsInstall.questions) return { questions: vsInstall.questions, diagnostics };
@@ -209,14 +211,14 @@ async function resolveQtPath(ctx: DetectContext, options: ResolveOptions, stored
     return { value: undefined };
 }
 
-async function resolveVsPath(ctx: DetectContext, options: ResolveOptions, stored?: { vsInstall?: string }, candidatesOverride?: typeof ctx.toolchain.vsCandidates): Promise<ResolveResult<string>> {
+async function resolveVsPath(ctx: DetectContext, options: ResolveOptions, stored?: { vsInstall?: string }, candidatesOverride?: typeof ctx.toolchain.vsCandidates, forceInteractive = false): Promise<ResolveResult<string>> {
     const candidates = candidatesOverride ?? ctx.toolchain.vsCandidates;
     if (options.vsInstall) return { value: options.vsInstall };
     if (options.answers?.vsInstall) return { value: options.answers.vsInstall };
     if (!options.reset && (ctx.existingQt.vsInstall || ctx.existingSdk.vsInstall)) return { value: ctx.existingQt.vsInstall || ctx.existingSdk.vsInstall };
     if (stored?.vsInstall) return { value: stored.vsInstall };
-    if (candidates.length === 1) return { value: candidates[0].installPath };
-    if (options.interactive && candidates.length > 1) {
+    if (candidates.length === 1 && !forceInteractive) return { value: candidates[0].installPath };
+    if (options.interactive && candidates.length >= 1) {
         const chosen = await chooseRequired(T('init.selectVs'), candidates, v => `${v.version} ${v.edition} — ${v.installPath}`);
         console.log(`  ✓ ${chosen.version} ${chosen.edition} — ${chosen.installPath}`);
         return { value: chosen.installPath };

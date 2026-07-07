@@ -104,6 +104,28 @@ if (willPromptMode) {
 const effectiveMode = modeSkipped ? undefined : (resolvedMode || existingTarget?.mode);
 ```
 
+## Subcommand Status vs Top-Level Status
+
+**Top-level `forja status`** is the global readiness aggregator — it CAN suggest `forja build` because it spans all features.
+
+**Subcommand status views** (e.g., `forja sync status`, `forja remote status`) must stay within their own command's domain:
+- When config is missing → suggest the parent command (`forja sync`) to configure interactively
+- When config is complete → clear nextAction (suggesting `forja sync` would be self-referencing; suggesting `forja build` crosses domain boundaries)
+
+```typescript
+// BUG: sync status suggests forja build — wrong domain, user is in sync context
+if (syncConfigured) nextAction = 'forja build';
+
+// CORRECT: subcommand status stays in-domain; clear when nothing more to do
+let nextAction: string | undefined;
+if (!syncConfigured) nextAction = 'forja sync';  // configure
+// else: undefined — self-referencing to suggest 'forja sync', and 'forja build' is top-level status's job
+```
+
+### Rule
+
+Subcommand status views are **informational** — they show config state. They should not try to predict what the user will do with other features. Only the top-level `forja status` has the full picture to suggest cross-feature actions like `forja build`.
+
 ## Anti-Patterns
 
 | Anti-pattern | Why it's wrong | Correct approach |
@@ -114,6 +136,8 @@ const effectiveMode = modeSkipped ? undefined : (resolvedMode || existingTarget?
 | Generic `forja status` for all failures | Doesn't tell the user what to FIX | Use diagnostic `fix` field or specific command |
 | Hardcoded nextAction in list/view commands | Suggests same action regardless of current state | Toggle: suggest the alternative to current value |
 | Same nextAction for "nothing exists" and "already done" | User who already configured gets "run setup" | State-aware: nothing→setup, in-progress→configure, done→status |
+| Subcommand status suggests cross-domain command | `sync status` → `forja build` jumps out of sync context | Clear nextAction when configured; only top-level status suggests cross-feature actions |
+| Subcommand status points to unrelated config command | `sync status` → `forja remote set` ignores sync's independence | Point to the parent command (`forja sync`) which handles its own config |
 
 ## State-Aware nextAction on Success Paths
 
@@ -160,6 +184,8 @@ When reviewing nextAction assignments:
 - [ ] For success paths: does nextAction adapt to current state (nothing→setup, partial→configure, done→status)?
 - [ ] **No self-referencing**: nextAction never points to the command the user is already running
 - [ ] **No circular loops**: A→B→A chains are eliminated
+- [ ] **Subcommand status stays in-domain**: `X status` subcommands don't suggest commands outside X's domain; clear nextAction when fully configured
+- [ ] **Independent commands don't cross-reference**: if command X can self-configure, its nextAction should not point to command Y's config commands
 - [ ] **Most helpful command**: fix/nextAction points to the command that solves the problem most completely (e.g., `forja setup remote` over `forja server` when server needs to be created)
 - [ ] **JSON mode choices**: when config is missing in JSON mode, return `choices` array instead of pointing to a command that requires interactive input
 - [ ] **Context-aware diagnostics**: diagnostics only appear when relevant to the user's mode (e.g., no sync hints for local-only users)

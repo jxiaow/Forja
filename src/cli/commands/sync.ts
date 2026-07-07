@@ -2,12 +2,12 @@
  * `forja sync` — sync changed files to remote.
  */
 import { planSyncCli, executeSyncCli, resetSyncCli, ClassifiedChanges } from '../../sync/cli';
-import { readProjectSyncConfig, getServerById } from '../../core/serverStore';
+import { readProjectSyncConfig, writeProjectSyncConfig, getServerById } from '../../core/serverStore';
 import { Diagnostic, SyncPlan, ForjaJsonResult, diag, Locale, T } from './types';
 
 // ── Types ──
 
-export type SyncAction = 'run' | 'plan' | 'reset' | 'status';
+export type SyncAction = 'run' | 'plan' | 'reset' | 'status' | 'ignore';
 
 export interface SyncResult extends ForjaJsonResult {
     action: 'sync';
@@ -22,6 +22,9 @@ export interface SyncResult extends ForjaJsonResult {
     enabled?: boolean;
     serverDetail?: { name: string; host: string; username: string; port: number };
     ignore?: string[];
+    // ignore sub-command
+    ignoreAction?: 'list' | 'add' | 'rm';
+    ignorePattern?: string;
 }
 
 // ── Formatter ──
@@ -97,6 +100,27 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
             }
             if (result.ignore?.length) {
                 lines.push(`  ${T('syncIgnore')}: ${result.ignore.join(', ')}`);
+            }
+            break;
+        }
+        case 'ignore': {
+            if (result.ignoreAction === 'list') {
+                lines.push(T('syncIgnore'));
+                if (result.ignore?.length) {
+                    for (const p of result.ignore) { lines.push(`  ${p}`); }
+                } else {
+                    lines.push(`  ${T('syncIgnoreEmpty')}`);
+                }
+            } else if (result.ignoreAction === 'add') {
+                lines.push(T('syncIgnoreAdded').replace('{pattern}', result.ignorePattern || ''));
+                if (result.ignore?.length) {
+                    lines.push(`  ${result.ignore.join(', ')}`);
+                }
+            } else if (result.ignoreAction === 'rm') {
+                lines.push(T('syncIgnoreRemoved').replace('{pattern}', result.ignorePattern || ''));
+                if (result.ignore?.length) {
+                    lines.push(`  ${result.ignore.join(', ')}`);
+                }
             }
             break;
         }
@@ -176,13 +200,11 @@ export function runSyncStatus(workspace: string): SyncResult {
     const server = sync.selectedServer ? getServerById(sync.selectedServer) : null;
     const remotePath = server ? (sync.remotePaths[server.id] || '') : '';
 
-    let nextAction: string;
+    let nextAction: string | undefined;
     if (!sync.enabled || !server) {
-        nextAction = 'forja remote set';
+        nextAction = 'forja sync';
     } else if (!remotePath) {
-        nextAction = 'forja remote set';
-    } else {
-        nextAction = 'forja build';
+        nextAction = 'forja sync';
     }
 
     return {
@@ -195,6 +217,99 @@ export function runSyncStatus(workspace: string): SyncResult {
         remotePath: remotePath || undefined,
         ignore: sync.ignore,
         nextAction,
+    };
+}
+
+export function runSyncIgnoreList(workspace: string): SyncResult {
+    const sync = readProjectSyncConfig(workspace);
+    return {
+        ok: true,
+        action: 'sync',
+        syncAction: 'ignore',
+        ignoreAction: 'list',
+        workspace,
+        ignore: sync.ignore,
+    };
+}
+
+export function runSyncIgnoreAdd(workspace: string, pattern: string): SyncResult {
+    const sync = readProjectSyncConfig(workspace);
+    if (sync.ignore.includes(pattern)) {
+        return {
+            ok: false,
+            action: 'sync',
+            syncAction: 'ignore',
+            ignoreAction: 'add',
+            workspace,
+            ignore: sync.ignore,
+            ignorePattern: pattern,
+            diagnostics: [diag('error', T('syncIgnoreAlreadyExists').replace('{pattern}', pattern))],
+        };
+    }
+    const updated = [...sync.ignore, pattern];
+    try {
+        writeProjectSyncConfig(workspace, { ignore: updated });
+    } catch (e) {
+        return {
+            ok: false,
+            action: 'sync',
+            syncAction: 'ignore',
+            ignoreAction: 'add',
+            workspace,
+            ignore: sync.ignore,
+            ignorePattern: pattern,
+            diagnostics: [diag('error', `${T('error')}: ${e instanceof Error ? e.message : String(e)}`)],
+        };
+    }
+    return {
+        ok: true,
+        action: 'sync',
+        syncAction: 'ignore',
+        ignoreAction: 'add',
+        workspace,
+        ignore: updated,
+        ignorePattern: pattern,
+    };
+}
+
+export function runSyncIgnoreRm(workspace: string, pattern: string): SyncResult {
+    const sync = readProjectSyncConfig(workspace);
+    const idx = sync.ignore.indexOf(pattern);
+    if (idx === -1) {
+        return {
+            ok: false,
+            action: 'sync',
+            syncAction: 'ignore',
+            ignoreAction: 'rm',
+            workspace,
+            ignore: sync.ignore,
+            ignorePattern: pattern,
+            diagnostics: [diag('error', T('syncIgnoreNotFound').replace('{pattern}', pattern))],
+        };
+    }
+    const updated = sync.ignore.filter((_, i) => i !== idx);
+    try {
+        writeProjectSyncConfig(workspace, { ignore: updated });
+    } catch (e) {
+        return {
+            ok: false,
+            action: 'sync',
+            syncAction: 'ignore',
+            ignoreAction: 'rm',
+            workspace,
+            ignore: sync.ignore,
+            ignorePattern: pattern,
+            diagnostics: [diag('error', `${T('error')}: ${e instanceof Error ? e.message : String(e)}`)],
+        };
+    }
+    return {
+        ok: true,
+        action: 'sync',
+        syncAction: 'ignore',
+        ignoreAction: 'rm',
+        workspace,
+        ignore: updated,
+        ignorePattern: pattern,
     };
 }
 

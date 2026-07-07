@@ -29,7 +29,7 @@ function extractVsYearFromQtPath(qtPath: string): string | null {
 1. **Qt path has compiler tag** (e.g., `msvc2019`, `msvc2022`) → filter VS candidates to matching version only
    - 1 match → auto-select silently
    - Multiple matches (Community + Professional) → let user choose among matching ones
-   - 0 matches → warn `⚠ Qt 需要 VS 2019，未检测到，请手动选择` + fall back to all candidates (user chooses)
+   - 0 matches (mismatch) → warn `⚠ Qt 需要 VS 2019，未检测到，请手动选择` + **force interactive selection from all available VS candidates** — do NOT auto-select even if only 1 candidate exists
 2. **Qt path has no tag** → cannot determine, fall back to letting user choose all candidates (no warning)
 3. **SDK targets** → no filtering, VS selection works as before (SDK projects work with any VS)
 4. **Apply in ALL flows**: `resolveAll` (interactive no-flag path), `runSwitchTarget` interactive path, AND `runSwitchTarget` non-interactive fallback path — all three must filter VS candidates
@@ -51,7 +51,13 @@ if (kind === 'qt' && qtPath.value) {
 const vsInstall = await resolveVsPath(ctx, options, stored, vsCandidatesOverride);
 ```
 
-`resolveVsPath` accepts optional `candidatesOverride` parameter to use filtered list instead of full `ctx.toolchain.vsCandidates`.
+`resolveVsPath` accepts optional `candidatesOverride` parameter to use filtered list instead of full `ctx.toolchain.vsCandidates`, and a `forceInteractive` flag that bypasses the `candidates.length === 1` auto-select shortcut.
+
+In `runSwitchTarget` (index.ts), the mismatch case sets `vsCandidates = []` + `vsMismatch = true`, then uses a separate branch to prompt with `env.vsCandidates` (full list).
+
+## The Mismatch Bug (fixed 2026-07-07)
+
+When 0 VS candidates matched the Qt compiler tag, the old code printed a warning but left `vsCandidatesOverride` as `undefined`. This caused `resolveVsPath` to fall back to the full candidate list, where `candidates.length === 1` auto-selected the wrong VS without prompting. The fix: pass `forceInteractive = true` to bypass auto-select, or set `vsCandidates = []` and prompt separately with the full list.
 
 ## Why This Matters
 

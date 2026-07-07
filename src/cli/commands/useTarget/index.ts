@@ -248,6 +248,7 @@ export async function runSwitchTarget(workspace: string, args: {
 
         // Filter VS candidates by Qt compiler tag for Qt targets
         let vsCandidates = env.vsCandidates;
+        let vsMismatch = false;
         if (kind === 'qt' && qtPath) {
             const vsYear = extractVsYearFromQtPath(qtPath);
             if (vsYear) {
@@ -256,6 +257,8 @@ export async function runSwitchTarget(workspace: string, args: {
                     vsCandidates = filtered;
                 } else {
                     console.log(`  ⚠ ${T('use.vsVersionMismatch', [vsYear])}`);
+                    vsCandidates = [];
+                    vsMismatch = true;
                 }
             }
         }
@@ -265,6 +268,9 @@ export async function runSwitchTarget(workspace: string, args: {
             if (chosen) vsInstall = chosen.installPath;
         } else if (vsCandidates.length === 1) {
             vsInstall = vsCandidates[0].installPath;
+        } else if (vsMismatch && env.vsCandidates.length >= 1) {
+            const chosen = await choose(T('init.selectVs'), env.vsCandidates, v => `${v.version} ${v.edition} — ${v.installPath}`);
+            if (chosen) vsInstall = chosen.installPath;
         } else if (env.vs) {
             vsInstall = env.vs.installPath;
         }
