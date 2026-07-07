@@ -121,6 +121,14 @@ export function formatListText(result: ListResult, locale: Locale): string {
                             lines.push(`  ${star}${tag ? tag + '  ' : ''}${quotePath(item.path)}`);
                         }
                     }
+                    // Show jom/make alongside Qt/VS
+                    if (result.envSubCategory === 'qt') {
+                        if (process.platform === 'win32') {
+                            lines.push(`  ${T('jomLabel')}${env.jom ? quotePath(env.jom) : T('nothingDetected')}`);
+                        } else {
+                            lines.push(`  ${T('makeLabel')}${env.make ? T('available') : T('nothingDetected')}`);
+                        }
+                    }
                 }
             } else {
                 lines.push(T('environment'));
@@ -320,13 +328,16 @@ async function listEnvQt(workspace: string): Promise<ListResult> {
         path: c.path, version: c.version,
         ...(c.path === configuredPath ? { configured: true } : {}),
     }));
+    const summary: EnvSummary = { qt };
+    if (process.platform === 'win32' && env.jom) { summary.jom = env.jom; }
+    if (process.platform !== 'win32' && detectMake()) { summary.make = true; }
 
     return {
         ok: true,
         action: 'list',
         category: 'env',
         envSubCategory: 'qt',
-        env: { qt },
+        env: summary,
     };
 }
 
