@@ -20,6 +20,7 @@ export interface QtSettings {
     arch: 'x86' | 'x64' | '';
     vsInstall: string;
     qtPath: string;
+    qtVersion: string;
     jomPath: string;
     pinnedProject: { root: string; relative: string } | null;
     target: string;
@@ -34,6 +35,7 @@ export interface QtSettings {
     customCommands: { name: string; command: string }[];
     fileSyncPromptEnabled: boolean;
     qmakeReminderEnabled: boolean;
+    suppressedWarnings?: string[];
 }
 
 export interface SdkSettings {
@@ -98,6 +100,10 @@ export interface ActiveTargetSettings {
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';
     runAt: 'local' | 'remote';
+    qtPath?: string;
+    vsInstall?: string;
+    jomPath?: string;
+    qmakeTarget?: string;
 }
 
 export interface ForjaSettings {
@@ -114,6 +120,7 @@ export const DEFAULT_QT: Readonly<QtSettings> = {
     arch: '',
     vsInstall: '',
     qtPath: '',
+    qtVersion: '',
     jomPath: '',
     pinnedProject: null,
     target: '',
@@ -208,7 +215,7 @@ export function saveGlobalConfig(config: Partial<GlobalConfig>): void {
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
-export type ConfigType = 'qt' | 'sdk' | 'sync' | 'remote' | 'activeTarget';
+export type ConfigType = 'qt' | 'sdk' | 'sync' | 'remote' | 'activeTarget' | 'targetToolchains';
 
 export function projectConfigPath(workspace: string, type: ConfigType): string {
     const normalized = workspace.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
@@ -422,7 +429,43 @@ function sanitizeActiveTarget(raw: Record<string, unknown>): ActiveTargetSetting
         mode: (raw.mode === 'debug' || raw.mode === 'release') ? raw.mode : 'debug',
         arch: (raw.arch === 'x86' || raw.arch === 'x64') ? raw.arch : 'x64',
         runAt: (raw.runAt === 'local' || raw.runAt === 'remote') ? raw.runAt : 'local',
+        ...(typeof raw.qtPath === 'string' ? { qtPath: raw.qtPath } : {}),
+        ...(typeof raw.vsInstall === 'string' ? { vsInstall: raw.vsInstall } : {}),
+        ...(typeof raw.jomPath === 'string' ? { jomPath: raw.jomPath } : {}),
+        ...(typeof raw.qmakeTarget === 'string' ? { qmakeTarget: raw.qmakeTarget } : {}),
     };
+}
+
+// ── Per-target toolchain store ──
+
+export interface TargetToolchainConfig {
+    qtPath?: string;
+    qtVersion?: string;
+    vsInstall?: string;
+    jomPath?: string;
+    qmakeTarget?: string;
+}
+
+export function loadTargetToolchains(workspace: string): Record<string, TargetToolchainConfig> {
+    const filePath = resolveConfigPath(workspace, 'targetToolchains');
+    try {
+        if (fs.existsSync(filePath)) {
+            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+                return raw;
+            }
+        }
+    } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
+        warnSettingsLoadFailure('targetToolchains', filePath, e);
+    }
+    return {};
+}
+
+export function saveTargetToolchains(workspace: string, toolchains: Record<string, TargetToolchainConfig>): void {
+    const filePath = projectConfigPath(workspace, 'targetToolchains');
+    _ensureDir(filePath);
+    fs.writeFileSync(filePath, JSON.stringify(toolchains, null, 2), 'utf8');
 }
 
 // ── VS 路径推导 ──
@@ -518,6 +561,7 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
         arch: (raw.arch === 'x86' || raw.arch === 'x64' || raw.arch === '') ? raw.arch : d.arch,
         vsInstall: isString(raw.vsInstall) ? raw.vsInstall : d.vsInstall,
         qtPath: isString(raw.qtPath) ? raw.qtPath : d.qtPath,
+        qtVersion: isString(raw.qtVersion) ? raw.qtVersion : d.qtVersion,
         jomPath: isString(raw.jomPath) ? raw.jomPath : d.jomPath,
         pinnedProject,
         target: isString(raw.target) ? raw.target : d.target,
@@ -531,7 +575,8 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
         scanExcludeDirs: isStringArray(raw.scanExcludeDirs) ? raw.scanExcludeDirs : d.scanExcludeDirs,
         customCommands,
         fileSyncPromptEnabled: isBool(raw.fileSyncPromptEnabled) ? raw.fileSyncPromptEnabled : d.fileSyncPromptEnabled,
-        qmakeReminderEnabled: isBool(raw.qmakeReminderEnabled) ? raw.qmakeReminderEnabled : d.qmakeReminderEnabled
+        qmakeReminderEnabled: isBool(raw.qmakeReminderEnabled) ? raw.qmakeReminderEnabled : d.qmakeReminderEnabled,
+        suppressedWarnings: isStringArray(raw.suppressedWarnings) ? raw.suppressedWarnings : undefined
     };
 }
 function sanitizeSdk(raw: Record<string, unknown>): SdkSettings {

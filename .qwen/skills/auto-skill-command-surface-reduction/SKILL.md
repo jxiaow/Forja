@@ -103,12 +103,22 @@ Removing a category requires updating ALL docs that enumerate categories. Typica
 
 ## Common Patterns
 
-### Subcommand → Flag
-Low-frequency standalone actions become flags:
+### Flag-as-Action → Subcommand
+When a flag is used as the primary action dispatch mechanism, convert it to a positional subcommand for consistency:
 ```
-Before: forja sync reset
-After:  forja sync --reset
+Before: forja sync --reset           (flag as action)
+After:  forja sync reset             (subcommand)
+
+Before: forja remote --server X --remote-path Y   (flag triggers set)
+After:  forja remote set --server X --remote-path Y  (explicit subcommand)
+
+Before: forja run --custom <name>    (flag as action)
+After:  forja run custom <name>      (subcommand, consistent with `run designer <file>`)
 ```
+
+**Rule**: Flags are modifiers (`--json`, `--plan`, `--detach`, `--file`). Actions are positional subcommands (`build fresh`, `doctor fix`, `sync reset`).
+
+**Test**: If removing the flag leaves the command with no verb, it was a flag-as-action.
 
 ### Subcommand → Merge into sibling
 When command A's subcommand overlaps with command B:
@@ -149,17 +159,19 @@ After:  forja remote                              (show config)
 
 **Also move related operations from other commands** — e.g., `doctor restore/reset/clean-untracked` are remote repo operations, not diagnostics. Moving them to `remote` makes the command boundary cleaner.
 
-### Configuration sprawl → Consolidate into setup
-When a "selection" command (`use`) accumulates one-time configuration subcommands:
+### Setup/Init → Merge into selection command
+When a one-time setup command overlaps with an ongoing selection command, merge setup into the selection command rather than maintaining both:
 ```
-Before: forja use qt --qt-path <path>     (toolchain config, done once)
-        forja use sdk --vs-dev-cmd <path>  (toolchain config, done once)
+Before: forja setup --qt-path <path>       (one-time init)
+        forja use target --project <path>  (ongoing selection)
 
-After:  forja setup --qt-path <path>       (setup absorbs toolchain config)
-        forja setup --vs-dev-cmd <path>
+After:  forja use target                   (first use: detects + guides; subsequent: shows + modifies)
+        forja use target --qt-path <path>  (direct override)
 ```
 
-**Rule**: `use`/`select` commands should only handle frequent choices (target, execution mode). One-time configuration belongs in `setup`.
+**Rule**: If setup and use do the same thing (select target → select toolchain → save), they should be one command. The command should handle both first-time and subsequent-use cases: no flags = interactive guide (first time) or show-and-modify (subsequent); flags = direct override.
+
+**When to keep setup separate**: Only when setup does things that `use` fundamentally cannot (e.g., multi-step remote bootstrap with deploy + init + switch). If each step has its own command, the setup orchestrator is redundant — remove it.
 
 ### Low-frequency flag → Evaluate carefully
 Don't remove flags just because "the default covers it". Check edge cases:

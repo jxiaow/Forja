@@ -178,9 +178,9 @@ export function runSyncStatus(workspace: string): SyncResult {
 
     let nextAction: string;
     if (!sync.enabled || !server) {
-        nextAction = 'forja setup remote';
+        nextAction = 'forja remote set';
     } else if (!remotePath) {
-        nextAction = 'forja setup remote';
+        nextAction = 'forja remote set';
     } else {
         nextAction = 'forja build';
     }

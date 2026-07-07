@@ -346,7 +346,7 @@ Forja SDK CLI
 
 示例:
   forja status --json
-  forja setup --json
+  forja use target --json
   forja use target --project Makefile --mode release --json
   forja list env --json
   forja build --plan --json

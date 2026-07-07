@@ -76,7 +76,7 @@ function buildRemoteShellFallbackCommand(target: RemoteBridgeTarget, action: Rem
 }
 
 function buildQtCommand(action: RemoteBridgeAction, args: string[]): string {
-    const qtPath = readFlagValue(args, '--qt-path');
+    const qtPath = readFlagValue(args, '--qt');
     const envPrefix = qtPath ? qtEnvPrefix(qtPath) : '';
     if (action === 'ps') {
         return buildQtPsCommand();

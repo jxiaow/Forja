@@ -6,7 +6,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { requireActiveTarget, tryPinnedProjectFallback, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
-import { runCliResult } from '../../qt/shared/commandRunner';
+import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner';
+import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
 import { CliOptions } from '../../qt/cli/types';
 import { createSdkPlan } from '../../sdk/shared/plan';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
@@ -113,6 +114,21 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         };
     }
     const target = targetResult.target;
+    const qtSettings = loadQtSettings(workspace);
+
+    // Print build header before execution (text mode only)
+    if (!wantsJson && !options.plan) {
+        if (target.runAt === 'remote') {
+            const remote = loadRemoteSettings(workspace);
+            const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
+            console.log(`→ remote:${server?.name || remote.selectedServer}`);
+        } else {
+            console.log('→ local');
+        }
+        console.log(`  ${T('target')}${target.project}`);
+        console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
+        console.log();
+    }
 
     // Validate project file exists
     const buildProjectPath = path.isAbsolute(target.project)
@@ -221,7 +237,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             }
 
             const started = Date.now();
-            const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false });
+            const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false, suppressedWarnings: qtSettings.suppressedWarnings });
             const durationMs = Date.now() - started;
 
             const ok = executed.exitCode === 0;
@@ -263,7 +279,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             cleanOpts.action = 'clean';
             const cleanPlan = await createActionPlan(cleanOpts);
             if (cleanPlan.ok && cleanPlan.commands.length > 0) {
-                const cleanResult = await runCliResult(cleanPlan, { streaming: false, detach: false });
+                const cleanResult = await runCliResult(cleanPlan, { streaming: false, detach: false, suppressedWarnings: qtSettings.suppressedWarnings });
                 if (!cleanResult.ok) {
                     return {
                         ok: false,
@@ -317,7 +333,16 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             };
         }
 
-        const executed = await runCliResult(planned, { streaming: !wantsJson, detach: false });
+        // Pre-kill: terminate running instance before building (prevents LNK1104)
+        if (target.kind === 'qt' && (buildAction === 'default' || buildAction === 'fresh')) {
+            const projectDir = path.dirname(path.isAbsolute(target.project) ? target.project : path.join(workspace, target.project));
+            const runtimeInfo = resolveRuntimeTarget(projectDir, target.mode, target.arch);
+            if (runtimeInfo?.exePath) {
+                terminateExecutable(runtimeInfo.exePath);
+            }
+        }
+
+        const executed = await runCliResult(planned, { streaming: !wantsJson, detach: false, suppressedWarnings: qtSettings.suppressedWarnings });
         return {
             ok: executed.ok,
             action: 'build',
@@ -350,16 +375,6 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
     if (wantsJson) {
         console.log(JSON.stringify(result, null, 2));
     } else {
-        if (result.activeTarget) {
-            const t = result.activeTarget;
-            if (t.runAt === 'remote' && result.workspace) {
-                const remote = loadRemoteSettings(result.workspace);
-                const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-                console.log(`→ remote:${server?.name || remote.selectedServer}`);
-            } else {
-                console.log('→ local');
-            }
-        }
         const status = result.ok ? T('buildSucceeded') : T('buildFailed');
         console.log(`${T('build')} ${status}`);
         if (result.activeTarget) {

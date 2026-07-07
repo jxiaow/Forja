@@ -3,7 +3,7 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { loadActiveTarget, saveActiveTarget, loadSdkSettings } from '../../core/settingsIO';
+import { loadActiveTarget, saveActiveTarget, loadSdkSettings, loadQtSettings, loadTargetToolchains } from '../../core/settingsIO';
 import { ActiveTarget, T } from './types';
 
 export function getActiveTarget(workspace: string): ActiveTarget | null {
@@ -36,12 +36,41 @@ export function tryPinnedProjectFallback(
     targetResult: { target: ActiveTarget } | { error: string; nextAction?: string },
 ): { target: ActiveTarget } | { error: string; nextAction?: string } {
     if ('target' in targetResult) { return targetResult; }
+
+    const toolchains = loadTargetToolchains(workspace);
+
+    // Try Qt pinnedProject first
+    const qtSettings = loadQtSettings(workspace);
+    if (qtSettings.pinnedProject) {
+        const projectPath = path.isAbsolute(qtSettings.pinnedProject.relative)
+            ? qtSettings.pinnedProject.relative
+            : path.join(workspace, qtSettings.pinnedProject.relative);
+        if (fs.existsSync(projectPath)) {
+            const stored = toolchains[qtSettings.pinnedProject.relative];
+            return {
+                target: {
+                    kind: 'qt',
+                    project: qtSettings.pinnedProject.relative,
+                    mode: qtSettings.mode || 'debug',
+                    arch: qtSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
+                    runAt: 'local',
+                    qtPath: stored?.qtPath,
+                    vsInstall: stored?.vsInstall,
+                    jomPath: stored?.jomPath,
+                    qmakeTarget: stored?.qmakeTarget,
+                },
+            };
+        }
+    }
+
+    // Try SDK pinnedProject
     const sdkSettings = loadSdkSettings(workspace);
     if (sdkSettings.pinnedProject) {
         const projectPath = path.isAbsolute(sdkSettings.pinnedProject)
             ? sdkSettings.pinnedProject
             : path.join(workspace, sdkSettings.pinnedProject);
         if (fs.existsSync(projectPath)) {
+            const stored = toolchains[sdkSettings.pinnedProject];
             return {
                 target: {
                     kind: 'sdk',
@@ -49,6 +78,10 @@ export function tryPinnedProjectFallback(
                     mode: sdkSettings.mode || 'debug',
                     arch: sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
                     runAt: 'local',
+                    vsInstall: stored?.vsInstall,
+                    qtPath: stored?.qtPath,
+                    jomPath: stored?.jomPath,
+                    qmakeTarget: stored?.qmakeTarget,
                 },
             };
         }

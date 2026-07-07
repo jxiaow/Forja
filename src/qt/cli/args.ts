@@ -40,10 +40,10 @@ use 选项:
 
 示例:
   forja status --json            查看配置状态和下一步
-  forja setup --json              初始化并保存可自动确定的配置
+  forja use target --json              初始化并保存可自动确定的配置
   forja use target --mode release       确认/切换到 release 配置
   forja use target --project app.pro
-  forja setup --qt-path /usr/local/qt5.15.2
+  forja use target --qt-path /usr/local/qt5.15.2
   forja use target --mode release --arch x64
   forja build                    执行构建
   forja build --plan             查看构建命令（不执行）

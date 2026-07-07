@@ -1,29 +1,28 @@
 /**
  * `forja use` — user-facing configuration entry point.
- * Selects targets, build config, and execution endpoint.
+ * Delegates target operations to useTarget/ module.
  */
 import * as fs from 'fs';
-import * as path from 'path';
-import { ForjaJsonResult, ActiveTarget, Locale, T } from './types';
+import { ForjaJsonResult, ActiveTarget, Locale, T, Question } from './types';
 import { getActiveTarget, setActiveTarget } from './activeTarget';
 import {
     loadQtSettings, saveQtSettings,
     loadSdkSettings, saveSdkSettings,
     loadSyncSettings,
-    saveGlobalConfig,
+    saveGlobalConfig, loadGlobalConfig,
 } from '../../core/settingsIO';
-import { collectTargetCandidates } from './candidates';
-import { detectProjectType } from '../../core/projectTypeDetector';
+import {
+    runUseTarget as runUseTargetNew,
+    runSwitchTarget,
+    runUpdateModeArch,
+    runUpdateToolchain,
+    formatUseTargetText,
+} from './useTarget';
+import type { UseTargetResult } from './useTarget';
 
-// Helper to safely save settings and return error result on failure
-function safeSave(fn: () => void, configName: string): { ok: true } | { ok: false; error: string } {
-    try {
-        fn();
-        return { ok: true };
-    } catch (e) {
-        return { ok: false, error: `${T('cmd.failedToSave')} ${configName}: ${e instanceof Error ? e.message : String(e)}` };
-    }
-}
+// Re-export for index.ts
+export { formatUseTargetText } from './useTarget';
+export type { UseTargetResult } from './useTarget';
 
 // ── Config summary ──
 
@@ -33,33 +32,39 @@ export interface ConfigSummary {
     sync?: { configured: boolean; enabled: boolean; selectedServer?: string; remotePath?: string };
 }
 
-function buildConfigSummary(workspace: string, scope: string, target?: ActiveTarget): ConfigSummary | undefined {
-    switch (scope) {
-        case 'target':
-        case 'qt': {
-            if (target?.kind === 'qt') {
-                const qt = loadQtSettings(workspace);
-                return { qt: { configured: true, project: qt.pinnedProject?.relative, mode: qt.mode, arch: qt.arch, qtPath: qt.qtPath, vsInstall: qt.vsInstall, target: qt.target, qmakeArgs: qt.qmakeArgs } };
-            }
-            if (target?.kind === 'sdk') {
-                const sdk = loadSdkSettings(workspace);
-                return { sdk: { configured: true, project: sdk.pinnedProject ?? undefined, mode: sdk.mode, arch: sdk.arch, vsInstall: sdk.vsInstall } };
-            }
-            return undefined;
-        }
-        case 'sync': {
-            const sync = loadSyncSettings(workspace);
-            const hasConfig = !!(sync.selectedServer || sync.enabled);
-            return { sync: { configured: hasConfig, enabled: sync.enabled, selectedServer: sync.selectedServer, remotePath: sync.selectedServer ? sync.remotePaths[sync.selectedServer] : undefined } };
-        }
-        default:
-            return undefined;
-    }
-}
-
-// ── Text formatting ──
+// ── Text formatting (for execution/lang) ──
 
 export function formatUseText(result: UseResult, locale: Locale): string {
+    // For target scope, delegate to the new formatter
+    if (result.useScope === 'target') {
+        return formatUseTargetText(result as UseTargetResult);
+    }
+
+    // For show scope (no subcommand), display current config
+    if (result.useScope === 'show') {
+        const lines: string[] = [];
+        if (!result.ok) {
+            lines.push(T('error'));
+            if (result.diagnostics) {
+                for (const d of result.diagnostics) { lines.push(`  ${d.message}`); }
+            }
+            if (result.nextAction) { lines.push(T('next')); lines.push(`  ${result.nextAction}`); }
+            return lines.join('\n');
+        }
+        lines.push(T('setupTitle'));
+        if (result.activeTarget) {
+            const t = result.activeTarget;
+            lines.push(`  ${T('target')}${t.project}`);
+            if (t.qtPath) lines.push(`  ${T('setupSummaryQt')}: ${t.qtPath}`);
+            if (t.vsInstall) lines.push(`  ${T('setupSummaryVs')}: ${t.vsInstall}`);
+            if (t.jomPath) lines.push(`  ${T('init.currentJom')}: ${t.jomPath}`);
+            lines.push(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
+            lines.push(`  ${T('use.execution')}: ${t.runAt}`);
+        }
+        if (result.nextAction) { lines.push(T('next')); lines.push(`  ${result.nextAction}`); }
+        return lines.join('\n');
+    }
+
     const lines: string[] = [];
 
     if (!result.ok) {
@@ -105,235 +110,80 @@ export function formatUseText(result: UseResult, locale: Locale): string {
 
 export interface UseResult extends ForjaJsonResult {
     action: 'use';
-    useScope?: string;  // 'target' | 'execution' | 'lang'
+    status?: 'needs-input';
+    questions?: Question[];
+    useScope?: string;
     activeTarget?: ActiveTarget;
     config?: ConfigSummary;
     changed: string[];
+    nextActions?: string[];
 }
 
-// ── Helpers for runUseTarget ──
-
-function resolveProjectPath(workspace: string, projectInput: string): { resolvedPath: string; matchedCandidate?: { label: string; project: string } } | { error: UseResult } {
-    const projectPath = path.isAbsolute(projectInput) ? projectInput : path.join(workspace, projectInput);
-
-    if (fs.existsSync(projectPath) && !fs.statSync(projectPath).isDirectory()) {
-        return { resolvedPath: projectInput };
-    }
-
-    const candidates = collectTargetCandidates(workspace);
-    const inputLower = path.basename(projectInput).toLowerCase();
-    const matches = candidates.filter(c => c.label.toLowerCase() === inputLower);
-
-    if (matches.length === 1) {
-        return { resolvedPath: matches[0].project, matchedCandidate: matches[0] };
-    }
-    if (matches.length > 1) {
-        return {
-            error: {
-                ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: `${T('use.projectNotFound')}: ${projectInput}. ${T('idx.didYouMean')}: ${matches.map(m => m.project).join(', ')}?` }],
-                nextActions: matches.map(m => `forja use target --project ${m.project}`),
-            },
-        };
-    }
-
-    return {
-        error: {
-            ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.projectNotFound')}: ${projectInput}` }],
-            nextAction: 'forja list targets',
-        },
-    };
-}
-
-function inferKind(filePath: string): 'qt' | 'sdk' | null {
-    const ext = path.extname(filePath).toLowerCase();
-    const base = path.basename(filePath).toLowerCase();
-    
-    // Quick check for supported file types
-    if (ext !== '.pro' && ext !== '.sln' && base !== 'makefile' && base !== 'cmakelists.txt') {
-        return null;
-    }
-    
-    // Use auto-detection to determine if it's a Qt project
-    const typeInfo = detectProjectType(filePath);
-    return typeInfo.usesQt ? 'qt' : 'sdk';
-}
-
-function saveDomainConfig(workspace: string, kind: 'qt' | 'sdk', finalPath: string, mode: 'debug' | 'release', arch: 'x86' | 'x64'): { ok: true } | { ok: false; error: string } {
-    const relativeProject = path.relative(workspace, finalPath).replace(/\\/g, '/');
-    if (kind === 'qt') {
-        const qt = loadQtSettings(workspace);
-        qt.pinnedProject = { root: workspace, relative: relativeProject };
-        qt.mode = mode;
-        qt.arch = arch;
-        return safeSave(() => saveQtSettings(workspace, qt), 'Qt settings');
-    }
-    const sdk = loadSdkSettings(workspace);
-    sdk.pinnedProject = relativeProject;
-    sdk.mode = mode;
-    sdk.arch = arch;
-    return safeSave(() => saveSdkSettings(workspace, sdk), 'SDK settings');
-}
-
-function updateDomainModeArch(workspace: string, kind: 'qt' | 'sdk', mode?: 'debug' | 'release', arch?: 'x86' | 'x64'): { ok: true } | { ok: false; error: string } {
-    if (kind === 'qt') {
-        const qt = loadQtSettings(workspace);
-        if (mode) { qt.mode = mode; }
-        if (arch) { qt.arch = arch; }
-        return safeSave(() => saveQtSettings(workspace, qt), 'Qt settings');
-    }
-    const sdk = loadSdkSettings(workspace);
-    if (mode) { sdk.mode = mode; }
-    if (arch) { sdk.arch = arch; }
-    return safeSave(() => saveSdkSettings(workspace, sdk), 'SDK settings');
-}
-
-// ── runUseTarget ──
+// ── runUseTarget — dispatches to new module ──
 
 export interface UseTargetArgs {
     project?: string;
     mode?: 'debug' | 'release';
     arch?: 'x86' | 'x64';
+    qtPath?: string;
+    vsInstall?: string;
+    jomPath?: string;
+    suppressWarnings?: string;
+    reset?: boolean;
+    interactive?: boolean;
+    json?: boolean;
 }
 
-export function runUseTarget(workspace: string, args: UseTargetArgs): UseResult {
-    const changed: string[] = [];
-
-    if (!fs.existsSync(workspace)) {
-        return {
-            ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.workspaceNotFound')}: ${workspace}` }],
-        };
+export async function runUseTarget(workspace: string, args: UseTargetArgs): Promise<UseResult> {
+    // Handle --suppress-warnings (can combine with other flags or standalone)
+    if (args.suppressWarnings) {
+        const codes = args.suppressWarnings.split(',').map(s => s.trim()).filter(Boolean);
+        const qt = loadQtSettings(workspace);
+        qt.suppressedWarnings = codes;
+        saveQtSettings(workspace, qt);
+        // If no other flags, return immediately
+        if (!args.project && !args.mode && !args.arch && !args.qtPath && !args.vsInstall && !args.jomPath) {
+            return {
+                ok: true, action: 'use', useScope: 'target', workspace, changed: ['qt.suppressedWarnings'],
+                nextAction: 'forja build',
+            };
+        }
     }
 
-    if (args.mode && args.mode !== 'debug' && args.mode !== 'release') {
-        return {
-            ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.invalidMode')}: ${args.mode}. ${T('use.invalidModeDetail')}` }],
-            nextAction: 'forja use target --mode debug',
-        };
-    }
-
-    if (args.arch && args.arch !== 'x86' && args.arch !== 'x64') {
-        return {
-            ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.invalidArch')}: ${args.arch}. ${T('use.invalidArchDetail')}` }],
-            nextAction: 'forja use target --arch x64',
-        };
-    }
-
-    const currentTarget = getActiveTarget(workspace);
-
-    // --project: select or switch target
+    // If --project is specified, use the switch path
     if (args.project) {
-        const resolveResult = resolveProjectPath(workspace, args.project);
-        if ('error' in resolveResult) { return resolveResult.error; }
-
-        const { resolvedPath, matchedCandidate } = resolveResult;
-        const finalPath = path.isAbsolute(resolvedPath) ? resolvedPath : path.join(workspace, resolvedPath);
-
-        if (!fs.existsSync(finalPath)) {
-            return {
-                ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: `${T('use.projectNotFound')}: ${args.project}` }],
-                nextAction: 'forja list targets',
-            };
-        }
-
-        // Reject relative paths that escape the workspace boundary
-        if (!path.isAbsolute(resolvedPath)) {
-            const resolved = path.join(workspace, resolvedPath);
-            const relCheck = path.relative(workspace, resolved);
-            if (relCheck.startsWith('..') || path.isAbsolute(relCheck)) {
-                return {
-                    ok: false, action: 'use', useScope: 'target', changed: [],
-                    diagnostics: [{ level: 'error', message: `${T('use.projectOutsideWorkspace')}: ${args.project}` }],
-                    nextAction: 'forja list targets',
-                };
-            }
-        }
-
-        // Infer kind from the resolved file path (not the original user input)
-        const kind = inferKind(finalPath);
-        if (!kind) {
-            return {
-                ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: `${T('use.cannotDetermineKind')}: ${finalPath}. ${T('use.expectedExtensions')}` }],
-                nextAction: 'forja list targets',
-            };
-        }
-
-        const mode = args.mode ?? currentTarget?.mode ?? 'debug';
-        const arch = args.arch ?? currentTarget?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
-        const runAt = currentTarget?.runAt ?? 'local';
-
-        const newTarget: ActiveTarget = { kind, project: resolvedPath, mode, arch, runAt };
-
-        const domainSave = saveDomainConfig(workspace, kind, finalPath, mode, arch);
-        if (!domainSave.ok) {
-            return { ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: domainSave.error }],
-                nextAction: 'forja doctor' };
-        }
-        changed.push(kind === 'qt' ? 'qt.pinnedProject' : 'sdk.pinnedProject');
-
-        try {
-            setActiveTarget(workspace, newTarget);
-        } catch (e) {
-            return { ok: false, action: 'use', useScope: 'target', changed,
-                diagnostics: [{ level: 'error', message: `${T('use.failedToSaveActiveTarget')}: ${e instanceof Error ? e.message : e}` }],
-                nextAction: 'forja doctor' };
-        }
-        changed.push('activeTarget');
-
-        return {
-            ok: true, action: 'use', useScope: 'target',
-            workspace, activeTarget: newTarget,
-            config: buildConfigSummary(workspace, 'target', newTarget),
-            changed,
-            nextAction: 'forja status',
-        };
+        return runSwitchTarget(workspace, {
+            project: args.project,
+            mode: args.mode,
+            arch: args.arch,
+            interactive: args.interactive,
+            json: args.json,
+        });
     }
 
-    // --mode / --arch without --project: update current target
-    if (!currentTarget) {
-        return {
-            ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: T('use.noActiveTargetSelected') }],
-            nextAction: 'forja use target --project <path>',
-        };
+    // If --mode or --arch without --project, update current target
+    if (args.mode || args.arch) {
+        return runUpdateModeArch(workspace, {
+            mode: args.mode,
+            arch: args.arch,
+        });
     }
 
-    const updated = { ...currentTarget };
-    if (args.mode && args.mode !== currentTarget.mode) { updated.mode = args.mode; changed.push('activeTarget.mode'); }
-    if (args.arch && args.arch !== currentTarget.arch) { updated.arch = args.arch; changed.push('activeTarget.arch'); }
-
-    if (changed.length > 0) {
-        const domainSave = updateDomainModeArch(workspace, updated.kind,
-            args.mode && args.mode !== currentTarget.mode ? args.mode : undefined,
-            args.arch && args.arch !== currentTarget.arch ? args.arch : undefined);
-        if (!domainSave.ok) {
-            return { ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: domainSave.error }],
-                nextAction: 'forja doctor' };
-        }
-        try {
-            setActiveTarget(workspace, updated);
-        } catch (e) {
-            return { ok: false, action: 'use', useScope: 'target', changed,
-                diagnostics: [{ level: 'error', message: `${T('use.failedToSaveActiveTarget')}: ${e instanceof Error ? e.message : e}` }],
-                nextAction: 'forja doctor' };
-        }
+    // Toolchain-only update: --qt / --vs / --jom without --project
+    if (args.qtPath || args.vsInstall || args.jomPath) {
+        return runUpdateToolchain(workspace, {
+            qtPath: args.qtPath,
+            vsInstall: args.vsInstall,
+            jomPath: args.jomPath,
+        });
     }
 
-    return {
-        ok: true, action: 'use', useScope: 'target',
-        workspace, activeTarget: updated,
-        config: buildConfigSummary(workspace, 'target', updated),
-        changed,
-        nextAction: 'forja status',
-    };
+    // No flags: full interactive flow (absorbs setup functionality)
+    return runUseTargetNew(workspace, {
+        interactive: args.interactive ?? false,
+        json: args.json ?? false,
+        reset: args.reset ?? false,
+    });
 }
 
 // ── runUseExecution ──
@@ -373,11 +223,12 @@ export function runUseExecution(workspace: string, local: boolean, remote: boole
     }
 
     const updated = { ...currentTarget, runAt };
-    const saveResult = safeSave(() => setActiveTarget(workspace, updated), 'Active target');
-    if (!saveResult.ok) {
+    try {
+        setActiveTarget(workspace, updated);
+    } catch (e) {
         return {
             ok: false, action: 'use', useScope: 'execution', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveExecMode')}: ${saveResult.error}` }],
+            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveExecMode')}: ${e instanceof Error ? e.message : String(e)}` }],
             nextAction: 'forja use execution --local',
         };
     }
@@ -398,15 +249,55 @@ export function runUseLang(value: string, locale: Locale): UseResult {
             nextAction: 'forja use lang zh',
         };
     }
-    const saveResult = safeSave(() => saveGlobalConfig({ lang: value }), 'Global config');
-    if (!saveResult.ok) {
+    try {
+        saveGlobalConfig({ lang: value });
+    } catch (e) {
         return {
             ok: false, action: 'use', useScope: 'lang', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveLanguage')}: ${saveResult.error}` }],
+            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveLanguage')}: ${e instanceof Error ? e.message : String(e)}` }],
             nextAction: 'forja use lang zh',
         };
     }
     return {
         ok: true, action: 'use', useScope: 'lang', changed: ['lang'],
+    };
+}
+
+// ── Show current config (for `forja use` with no subcommand) ──
+
+export function runUseShow(workspace: string): UseResult {
+    const target = getActiveTarget(workspace);
+    if (!target) {
+        return {
+            ok: false, action: 'use', useScope: 'show', changed: [],
+            diagnostics: [{ level: 'info', message: T('use.noActiveTargetSelected') }],
+            nextAction: 'forja use target',
+        };
+    }
+
+    const qt = loadQtSettings(workspace);
+    const sdk = loadSdkSettings(workspace);
+    const globalConfig = loadGlobalConfig();
+
+    const lines: string[] = [];
+    lines.push(T('setupTitle'));
+    lines.push(`  ${T('target')}${target.project}`);
+    if (target.qtPath) {
+        lines.push(`  ${T('setupSummaryQt')}: ${target.qtPath}`);
+    }
+    if (target.vsInstall) {
+        lines.push(`  ${T('setupSummaryVs')}: ${target.vsInstall}`);
+    }
+    if (target.jomPath) {
+        lines.push(`  ${T('init.currentJom')}: ${target.jomPath}`);
+    }
+    lines.push(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
+    lines.push(`  ${T('use.execution')}: ${target.runAt}`);
+    lines.push(`  ${T('use.language')}: ${globalConfig.lang || 'en'}`);
+
+    return {
+        ok: true, action: 'use', useScope: 'show', changed: [],
+        activeTarget: target,
+        nextAction: 'forja status',
     };
 }

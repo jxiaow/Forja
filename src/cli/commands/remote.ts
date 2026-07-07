@@ -229,7 +229,7 @@ export function runRemoteSet(workspace: string, args: RemoteSetArgs): RemoteResu
         return {
             ok: false, action: 'remote', remoteAction: 'set', changed: [],
             diagnostics: [{ level: 'error', message: T('use.noServerConfigured') }],
-            nextAction: 'forja remote --server <name>',
+            nextAction: 'forja remote set --server <name>',
         };
     }
 
@@ -267,7 +267,7 @@ export async function runRemoteRestore(workspace: string, args: RemoteRestoreArg
         return {
             ok: false, action: 'remote', remoteAction: 'restore', changed: [],
             diagnostics: resolved.diagnostics.map(d => ({ level: 'error' as const, message: d.message })),
-            nextAction: 'forja setup remote',
+            nextAction: 'forja remote set',
         };
     }
 
@@ -309,7 +309,7 @@ export async function runRemoteReset(workspace: string, args: RemoteResetArgs): 
         return {
             ok: false, action: 'remote', remoteAction: 'reset', changed: [],
             diagnostics: resolved.diagnostics.map(d => ({ level: 'error' as const, message: d.message })),
-            nextAction: 'forja setup remote',
+            nextAction: 'forja remote set',
         };
     }
 

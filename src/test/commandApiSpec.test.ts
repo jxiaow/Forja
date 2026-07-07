@@ -16,20 +16,21 @@ function source(relativePath: string): string {
 
 // ── Command surface ──
 
-test('CLI dispatcher registers exactly 12 commands including setup and server', () => {
+test('CLI dispatcher registers exactly 11 commands (setup removed)', () => {
     const indexSrc = source('src/cli/commands/index.ts');
-    const expectedCommands = ['status', 'setup', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+    const expectedCommands = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
     for (const cmd of expectedCommands) {
         assert.ok(indexSrc.includes(`'${cmd}'`), `Command '${cmd}' must be registered in CLI dispatcher`);
     }
-    assert.ok(!indexSrc.includes("'init'"), "'init' must NOT be a registered command (replaced by 'setup')");
+    assert.ok(!indexSrc.includes("'setup'"), "'setup' must NOT be a registered command (removed)");
+    assert.ok(!indexSrc.includes("'init'"), "'init' must NOT be a registered command");
 });
 
 test('COMMANDS array includes all implemented commands', () => {
     const indexSrc = source('src/cli/commands/index.ts');
     const commandsMatch = indexSrc.match(/const COMMANDS: Command\[\] = \[([^\]]+)\]/);
     assert.ok(commandsMatch, 'COMMANDS array must exist');
-    const expectedCommands = ['status', 'setup', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+    const expectedCommands = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
     for (const cmd of expectedCommands) {
         assert.ok(commandsMatch[1].includes(`'${cmd}'`), `COMMANDS must include '${cmd}'`);
     }
@@ -42,29 +43,28 @@ test('no stale `forja init` in user-facing nextActions across source files', () 
         'src/cli/commands/activeTarget.ts',
         'src/cli/commands/status.ts',
         'src/cli/commands/list.ts',
-        'src/cli/commands/init.ts',
         'src/cli/index.ts',
         'src/qt/cli/args.ts',
         'src/sdk/cli/index.ts',
     ];
     for (const file of filesToCheck) {
         const content = source(file);
-        assert.ok(!content.includes("'forja init'"), `${file} must not contain 'forja init' (use 'forja setup')`);
-        assert.ok(!content.includes('"forja init"'), `${file} must not contain "forja init" (use "forja setup")`);
+        assert.ok(!content.includes("'forja init'"), `${file} must not contain 'forja init' (use 'forja use target')`);
+        assert.ok(!content.includes('"forja init"'), `${file} must not contain "forja init" (use "forja use target")`);
     }
 });
 
-test('qtCore.ts nextActions reference `forja setup` not `forja init`', () => {
+test('qtCore.ts nextActions reference `forja use target` not `forja init`', () => {
     const qtCore = source('src/qt/shared/qtCore.ts');
     assert.ok(!qtCore.includes('forja init'), 'qtCore.ts must not reference `forja init`');
-    assert.ok(qtCore.includes('forja setup'), 'qtCore.ts must reference `forja setup`');
+    assert.ok(qtCore.includes('forja use target'), 'qtCore.ts must reference `forja use target`');
 });
 
 // ── List categories ──
 
 test('list command supports all categories', () => {
     const listSrc = source('src/cli/commands/list.ts');
-    const expectedCategories = ['targets', 'env', 'lang'];
+    const expectedCategories = ['targets', 'env'];
     for (const cat of expectedCategories) {
         assert.ok(listSrc.includes(`'${cat}'`), `List category '${cat}' must be supported`);
     }
@@ -168,28 +168,17 @@ test('CLI entry point calls setGlobalLocale after resolving locale', () => {
     assert.ok(indexSrc.includes('resolveLocale'), 'CLI entry must call resolveLocale');
 });
 
-// ── Setup command ──
+// ── Use target command (absorbed setup) ──
 
-test('setup command has correct options interface', () => {
-    const setupSrc = source('src/cli/commands/setup.ts');
-    assert.ok(setupSrc.includes('json'), 'setup must support --json');
-    assert.ok(setupSrc.includes('reset'), 'setup must support --reset');
-    assert.ok(setupSrc.includes('answers'), 'setup must support --answers');
-    assert.ok(setupSrc.includes('SetupRemoteOptions'), 'setup must have SetupRemoteOptions interface');
-    assert.ok(setupSrc.includes('runSetupRemote'), 'setup must export runSetupRemote');
-    assert.ok(setupSrc.includes('Question'), 'setup must have Question interface for needs-input protocol');
-});
-
-test('setup result has local structure', () => {
-    const setupSrc = source('src/cli/commands/setup.ts');
-    assert.match(setupSrc, /interface SetupResult[\s\S]*?local:/, 'SetupResult must have `local` field');
-    assert.match(setupSrc, /interface SetupResult[\s\S]*?steps:/, 'SetupResult must have `steps` field');
-});
-
-test('setup remote result has remote structure', () => {
-    const setupSrc = source('src/cli/commands/setup.ts');
-    assert.match(setupSrc, /interface SetupRemoteResult[\s\S]*?remote\?:/, 'SetupRemoteResult must have optional `remote` field');
-    assert.match(setupSrc, /interface SetupRemoteResult[\s\S]*?steps:/, 'SetupRemoteResult must have `steps` field');
+test('use target command supports setup-equivalent options', () => {
+    const useSrc = source('src/cli/commands/useTarget/index.ts');
+    assert.ok(useSrc.includes('interactive'), 'use target must support interactive mode');
+    assert.ok(useSrc.includes('json'), 'use target must support --json');
+    assert.ok(useSrc.includes('answers'), 'use target must support --answers');
+    assert.ok(useSrc.includes('qtPath'), 'use target must support --qt');
+    assert.ok(useSrc.includes('vsInstall'), 'use target must support --vs');
+    assert.ok(useSrc.includes('jomPath'), 'use target must support --jom');
+    assert.ok(useSrc.includes('Question'), 'use target must have Question interface for needs-input protocol');
 });
 
 // ── Sync command ──
@@ -216,12 +205,12 @@ test('doctor command supports all documented actions', () => {
 
 // ── Unknown flag detection ──
 
-test('CLI dispatcher validates unknown flags for setup command', () => {
+test('CLI dispatcher validates unknown flags for all commands', () => {
     const indexSrc = source('src/cli/commands/index.ts');
     assert.ok(indexSrc.includes('findUnknownFlags'), 'CLI dispatcher must use findUnknownFlags');
-    const setupHandler = indexSrc.match(/function handleSetup\(([\s\S]*?)\n\}/);
-    assert.ok(setupHandler, 'handleSetup function must exist');
-    assert.ok(setupHandler[1].includes('findUnknownFlags') || setupHandler[1].includes('setupUnknown'), 'handleSetup must validate unknown flags');
+    const handleUse = indexSrc.match(/function handleUse\(([\s\S]*?)\n\}/);
+    assert.ok(handleUse, 'handleUse function must exist');
+    assert.ok(handleUse[1].includes('findUnknownFlags') || handleUse[1].includes('useUnknown'), 'handleUse must validate unknown flags');
 });
 
 // ── Build command ──
@@ -236,7 +225,7 @@ test('build command supports --project flag for bypassing activeTarget', () => {
 test('all command result types include ok and action fields', () => {
     const files = [
         { file: 'src/cli/commands/status.ts', action: 'status' },
-        { file: 'src/cli/commands/setup.ts', action: 'setup' },
+        { file: 'src/cli/commands/use.ts', action: 'use' },
         { file: 'src/cli/commands/build.ts', action: 'build' },
         { file: 'src/cli/commands/run.ts', action: 'run' },
         { file: 'src/cli/commands/stop.ts', action: 'stop' },
@@ -258,7 +247,7 @@ test('help text references setup not init', () => {
     const helpMatch = indexSrc.match(/const help = `([\s\S]*?)`\.trim/);
     if (helpMatch) {
         assert.ok(!helpMatch[1].includes('forja init'), 'Help text must not reference `forja init`');
-        assert.ok(helpMatch[1].includes('forja setup'), 'Help text must reference `forja setup`');
+        assert.ok(helpMatch[1].includes('forja use target'), 'Help text must reference `forja use target`');
     }
 });
 

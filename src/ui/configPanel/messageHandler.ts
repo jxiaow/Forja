@@ -178,7 +178,7 @@ export async function handleMessage(
                 const { getWorkspaceRoot } = await import('../../qt/services/configService');
                 const { applyManualProjectSelection } = await import('../../qt/project/projectManager');
                 const workspace = getWorkspaceRoot() || '';
-                const result = runUseTarget(workspace, { project: String(msg.value) });
+                const result = await runUseTarget(workspace, { project: String(msg.value), interactive: true });
                 if (!result.ok) {
                     const errorMsg = result.diagnostics?.[0]?.message || '项目选择失败';
                     vscode.window.showErrorMessage(errorMsg);

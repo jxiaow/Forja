@@ -7,47 +7,23 @@
 import { runCli } from './commands/index';
 import { VERSION } from '../version';
 import { setSilent } from '../core/loggerBase';
+import { T, setGlobalLocale, resolveLocale } from './commands/types';
+import { loadGlobalConfig } from '../core/settingsIO';
 
 function printHelp(): void {
-    const help = `
-Forja v${VERSION}
-
-Usage:
-  forja <command> [action] [options]
-
-Commands:
-  status    Current status and next steps
-  setup     One-stop initialization (local + remote)
-  list      List targets, servers, env, remote, config
-  use       Select target, build config, execution endpoint
-  server    Manage shared SSH servers (add/update/remove)
-  build     Build current target
-  run       Run current target
-  stop      Stop running target
-  clean     Clean build artifacts
-  doctor    Deep diagnostics and recovery
-  sync      Sync changed files to remote
-
-Global options:
-  --help, -h       Show help
-  --version, -v    Show version
-  --json           JSON output
-  --workspace <p>  Specify workspace (default: cwd)
-
-Examples:
-  forja status --json
-  forja setup --json
-  forja list targets --json
-  forja use target --project app/app.pro --json
-  forja build --json
-`.trim();
-    console.log(help);
+    console.log(`Forja v${VERSION}\n`);
+    console.log(T('help.toplevel'));
 }
 
 async function main(argv: string[]): Promise<void> {
     if (argv.includes('--json')) {
         setSilent(true);
     }
+
+    // Load locale before help/version so translations work
+    const globalConfig = loadGlobalConfig();
+    const locale = resolveLocale(undefined, globalConfig.lang);
+    setGlobalLocale(locale);
 
     const subcommand = argv[0];
 

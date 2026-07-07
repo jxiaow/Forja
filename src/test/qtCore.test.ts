@@ -271,7 +271,7 @@ test('status points to init before local qt settings exist', async () => {
     });
 
     const data = JSON.parse(result.stdout);
-    assert.equal(data.nextAction, 'forja setup --json');
+    assert.equal(data.nextAction, 'forja use target --json');
 });
 
 test('status points to projects/use when settings exist but no project is selected', async () => {

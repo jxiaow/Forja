@@ -107,33 +107,17 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.setup
-    context.subscriptions.push(
-        vscode.commands.registerCommand('forja.setup', async () => {
-            try {
-                const { runSetup, formatSetupText } = await import('../cli/commands/setup');
-                const result = await runSetup(workspace(), {});
-                const text = formatSetupText(result);
-                const ch = getOutputChannel();
-                if (ch) { ch.clear(); ch.appendLine(text); ch.show(true); }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
-            }
-        })
-    );
-
-    // forja.list — requires a category: targets|env|lang
+    // forja.list — requires a category: targets|env
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.list', async (category?: string) => {
             try {
                 const { resolveLocale } = await import('../cli/commands/types');
                 const locale = resolveLocale(undefined, loadGlobalConfig().lang);
-                const validCategories = ['targets', 'env', 'lang'];
+                const validCategories = ['targets', 'env'];
                 if (!category || !validCategories.includes(category)) {
                     const descMap: Record<string, [string, string]> = {
                         targets: ['Qt/SDK projects', 'Qt/SDK 项目'],
                         env: ['Toolchain environment', '工具链环境'],
-                        lang: ['Language', '语言设置'],
                     };
                     const picked = await vscode.window.showQuickPick(validCategories.map(c => ({
                         label: c,
@@ -203,7 +187,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         if (target) {
                             const { runUseTarget } = await import('../cli/commands/use');
                             const targetWs = target.kind === 'sdk' ? sdkWs : qtWs;
-                            const useResult = runUseTarget(targetWs, { project: target.project });
+                            const useResult = await runUseTarget(targetWs, { project: target.project, interactive: true });
                             if (!useResult.ok) {
                                 vscode.window.showErrorMessage(`Failed to select target: ${useResult.diagnostics?.map(d => d.message).join('; ') || 'unknown error'}`);
                                 return;
@@ -345,23 +329,23 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         break;
                     }
                     case '__workspace__': {
-                        vscode.window.showInformationMessage('Use "forja setup remote --workspace-mode staged|legacy" in terminal to configure workspace mode.');
+                        vscode.window.showInformationMessage('Use "forja remote set --workspace-mode staged|legacy" in terminal to configure workspace mode.');
                         break;
                     }
                     case '__repo__': {
-                        vscode.window.showInformationMessage('Use "forja setup remote --repo <local:remote:role>" in terminal to manage repo mappings.');
+                        vscode.window.showInformationMessage('Use "forja remote set --repo <local:remote:role>" in terminal to manage repo mappings.');
                         break;
                     }
                     case '__forja_bin__': {
-                        vscode.window.showInformationMessage('Use "forja setup remote --forja-bin <path>" in terminal to configure remote Forja binary.');
+                        vscode.window.showInformationMessage('Use "forja remote set --forja-bin <path>" in terminal to configure remote Forja binary.');
                         break;
                     }
                     case '__build_order__': {
-                        vscode.window.showInformationMessage('Use "forja setup remote --build-order qt:build sdk:build" in terminal to configure build order.');
+                        vscode.window.showInformationMessage('Use "forja remote set --build-order qt:build sdk:build" in terminal to configure build order.');
                         break;
                     }
                     case '__transfer__': {
-                        vscode.window.showInformationMessage('Use "forja setup remote --transfer-server/--transfer-path/--transfer-artifact" in terminal to configure transfer.');
+                        vscode.window.showInformationMessage('Use "forja remote set --transfer-server/--transfer-path/--transfer-artifact" in terminal to configure transfer.');
                         break;
                     }
                 }

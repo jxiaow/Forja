@@ -6,7 +6,7 @@
 
 **语法**：
 ```
-forja list [targets|servers|env|remote|config|lang] [--workspace <path>] [--json]
+forja list [targets|env] [--workspace <path>] [--json]
 forja server --detail <id> [--json]
 forja list env <qt|vs|jom|make> [--json]
 forja list remote [--detail] [--workspace <path>] [--json]
@@ -36,7 +36,6 @@ forja list remote [--detail] [--workspace <path>] [--json]
 | `env <qt\|vs\|jom\|make>` | - | 本地发现逻辑 | 列出指定子分类的已配置/可用项 |
 | `remote` | `forja list remote` | remote settings | 列出 workspace/bin/build-order/transfer/repos |
 | `remote --detail` | - | remote settings | 展开 buildOrder 和 artifacts 明细 |
-| `lang` | `forja list lang` | global config | 列出当前语言设置 |
 
 ## 吸收的旧命令
 
@@ -63,13 +62,12 @@ forja list remote [--detail] [--workspace <path>] [--json]
 ```ts
 interface ListResult extends ForjaJsonResult {
     action: 'list';
-    category: 'targets' | 'servers' | 'env' | 'remote' | 'config' | 'lang';
+    category: 'targets' | 'servers' | 'env' | 'remote' | 'config';
     targets?: TargetCandidate[];
     servers?: ServerSummary[] | ServerDetail;
     env?: EnvSummary;
     remote?: RemoteConfigDetail;
     config?: ConfigSummary;
-    lang?: string;
 }
 
 interface EnvSummary {

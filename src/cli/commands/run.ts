@@ -76,6 +76,20 @@ export async function runRun(workspace: string, options: {
     }
     const target = targetResult.target;
 
+    // Print run header before execution (text mode only)
+    if (!options.json && !options.plan) {
+        if (target.runAt === 'remote') {
+            const remote = loadRemoteSettings(workspace);
+            const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
+            console.log(`→ remote:${server?.name || remote.selectedServer}`);
+        } else {
+            console.log('→ local');
+        }
+        console.log(`  ${T('target')}${target.project}`);
+        console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
+        console.log();
+    }
+
     // Validate project file exists
     const runProjectPath = path.isAbsolute(target.project)
         ? target.project
@@ -200,7 +214,6 @@ export async function runRun(workspace: string, options: {
             pid: executed.pid,
             executablePath: executed.executablePath,
             logFile: executed.logFile ?? undefined,
-            runAt: 'local',
         } : undefined;
 
         return {
@@ -360,16 +373,6 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
     if (wantsJson) {
         console.log(JSON.stringify(result, null, 2));
     } else {
-        if (result.activeTarget) {
-            const t = result.activeTarget;
-            if (t.runAt === 'remote' && result.workspace) {
-                const remote = loadRemoteSettings(result.workspace);
-                const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-                console.log(`→ remote:${server?.name || remote.selectedServer}`);
-            } else {
-                console.log('→ local');
-            }
-        }
         const status = result.ok ? T('runCompleted') : T('runFailed');
         console.log(`${T('run')} ${status}`);
         if (result.activeTarget) {

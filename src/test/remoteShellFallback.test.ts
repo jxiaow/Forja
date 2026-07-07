@@ -71,14 +71,14 @@ test('remote shell fallback uses Qt runtime library path when qt path is provide
         target: 'qt',
         action: 'qmake',
         remotePath: '/remote/app',
-        args: ['--project', 'qt_client/app.pro', '--qt-path', '/usr/local/qt5.13.2'],
+        args: ['--project', 'qt_client/app.pro', '--qt', '/usr/local/qt5.13.2'],
         runner
     });
     await executeRemoteShellFallback({
         target: 'qt',
         action: 'build',
         remotePath: '/remote/app',
-        args: ['--qt-path', '/usr/local/qt5.13.2'],
+        args: ['--qt', '/usr/local/qt5.13.2'],
         runner
     });
 

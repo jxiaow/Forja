@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
     ForjaJsonResult, Diagnostic, Readiness, ReadinessState, ActiveTarget,
-    RuntimeState, Locale, readinessText, T,
+    RuntimeState, Locale, readinessText, readinessSymbol, T,
 } from './types';
 import { getActiveTarget } from './activeTarget';
 import { aggregateCandidates } from './candidates';
@@ -24,7 +24,6 @@ import { validateMakefile } from '../../qt/shared/runtimeTarget';
 export interface StatusResult extends ForjaJsonResult {
     action: 'status';
     readiness: Readiness;
-    toolchain?: ToolchainSummary;
     remote?: RemoteStatusSummary;
     sync?: SyncStatusSummary;
     runtime?: RuntimeState;
@@ -32,9 +31,9 @@ export interface StatusResult extends ForjaJsonResult {
     choices?: Array<{ label: string; command: string; description: string }>;
 }
 
-export interface ToolchainSummary {
-    qt?: { path: string; version?: string };
-    vs?: { path: string; version?: string };
+interface ToolchainSummary {
+    qt?: { version?: string };
+    vs?: { version?: string };
     jom?: string;
     make?: boolean;
 }
@@ -89,10 +88,10 @@ export function runStatus(workspace: string): StatusResult {
                 level: 'error',
                 message: `${T('sts.configCorrupted')}: ${detail}`,
                 hint: T('sts.configCorruptedHint'),
-                fix: 'forja setup',
+                fix: 'forja use target',
                 params: { file: corrupted.map((c: CorruptedConfig) => c.path).join(', '), detail: corrupted.map((c: CorruptedConfig) => c.detail).join('; ') },
             }],
-            nextAction: 'forja setup',
+            nextAction: 'forja use target',
         };
     }
 
@@ -118,7 +117,7 @@ export function runStatus(workspace: string): StatusResult {
                 diagnostics.push({
                     level: 'warning',
                     message: T('noActiveTarget'),
-                    fix: 'forja setup',
+                    fix: 'forja use target',
                 });
             }
         }
@@ -150,12 +149,28 @@ export function runStatus(workspace: string): StatusResult {
                 });
                 if (mfValidation.exists && !mfValidation.matches && mfValidation.mismatch) {
                     readiness.target = 'blocked';
+                    const mismatchFields = mfValidation.mismatch;
+                    const isConfigMismatch = mismatchFields.includes('mode') || mismatchFields.includes('arch');
+                    const hasOtherMismatch = mismatchFields.some(f => f !== 'mode' && f !== 'arch');
+
+                    let hint: string;
+                    let fix: string;
+                    if (isConfigMismatch && !hasOtherMismatch) {
+                        // Only mode/arch mismatch — user can either change config or re-run qmake
+                        hint = T('sts.makefileConfigMismatchHint');
+                        fix = 'forja use target --mode <debug|release>';
+                    } else {
+                        // qtPath/project/target/qmakeArgs mismatch — need qmake
+                        hint = T('sts.makefileMismatchHint');
+                        fix = 'forja build qmake';
+                    }
+
                     diagnostics.push({
                         level: 'warning',
-                        message: `${T('sts.makefileMismatch')} (${mfValidation.mismatch.join(', ')})`,
-                        hint: T('sts.makefileMismatchHint'),
-                        fix: 'forja build qmake',
-                        params: { diff: mfValidation.mismatch.join(', ') },
+                        message: `${T('sts.makefileMismatch')} (${mismatchFields.join(', ')})`,
+                        hint,
+                        fix,
+                        params: { diff: mismatchFields.join(', ') },
                     });
                 }
             }
@@ -187,14 +202,14 @@ export function runStatus(workspace: string): StatusResult {
                 level: 'warning',
                 message: T('noSyncServer'),
                 hint: T('noSyncServerHint'),
-                fix: 'forja setup remote',
+                fix: 'forja remote set',
             });
         } else if (activeTarget?.runAt === 'remote' && syncConfig.selectedServer) {
             diagnostics.push({
                 level: 'warning',
                 message: T('sts.syncNotEnabled'),
                 hint: T('noSyncServerHint'),
-                fix: 'forja setup remote',
+                fix: 'forja remote set',
             });
         }
         // local mode: no sync diagnostic — local execution doesn't need sync
@@ -205,7 +220,7 @@ export function runStatus(workspace: string): StatusResult {
                 level: 'error',
                 message: T('sts.syncServerNotFound', [syncConfig.selectedServer]),
                 hint: T('serverDeleted'),
-                fix: 'forja setup remote',
+                fix: 'forja remote set',
                 params: { server: syncConfig.selectedServer },
             });
         } else {
@@ -215,7 +230,7 @@ export function runStatus(workspace: string): StatusResult {
                 diagnostics.push({
                     level: 'error',
                     message: `${T('remotePathNotConfigured')}: ${syncConfig.selectedServer}`,
-                    fix: 'forja setup remote',
+                    fix: 'forja remote set',
                     params: { server: syncConfig.selectedServer },
                 });
             } else {
@@ -235,7 +250,7 @@ export function runStatus(workspace: string): StatusResult {
             diagnostics.push({
                 level: 'error',
                 message: T('remoteNoServer'),
-                fix: 'forja setup remote',
+                fix: 'forja remote set',
             });
         } else {
             // Check remote Forja bin - not an error since it defaults to $HOME/.forja/bin/forja
@@ -252,7 +267,7 @@ export function runStatus(workspace: string): StatusResult {
                 diagnostics.push({
                     level: 'error',
                     message: serverId ? `${T('remotePathNotConfigured')}: ${serverId}` : T('remotePathNotConfigured'),
-                    fix: 'forja setup remote',
+                    fix: 'forja remote set',
                     params: serverId ? { server: serverId } : undefined,
                 });
                 readiness.remote = 'missing';
@@ -263,14 +278,21 @@ export function runStatus(workspace: string): StatusResult {
     }
 
     // ── Build result ──
+    // Strip internal 'kind' field, merge toolchain versions into activeTarget
+    let targetForOutput: Record<string, unknown> | undefined;
+    if (activeTarget) {
+        const { kind: _kind, ...rest } = activeTarget;
+        targetForOutput = { ...rest };
+        if (toolchainSummary?.qt?.version) { targetForOutput.qtVersion = toolchainSummary.qt.version; }
+        if (toolchainSummary?.vs?.version) { targetForOutput.vsVersion = toolchainSummary.vs.version; }
+    }
     const result: StatusResult = {
         ok: assessOk(readiness),
         action: 'status',
         workspace,
         readiness,
         diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
-        activeTarget: activeTarget ?? undefined,
-        ...(toolchainSummary ? { toolchain: toolchainSummary } : {}),
+        activeTarget: targetForOutput as ActiveTarget | undefined,
     };
 
     // Remote summary
@@ -302,8 +324,8 @@ export function runStatus(workspace: string): StatusResult {
         // Not initialized — AI should ask user to choose; text mode shows both options
         result.nextAction = undefined;
         result.choices = [
-            { label: 'forja setup', command: 'forja setup', description: T('statusSetupLocal') },
-            { label: 'forja setup remote', command: 'forja setup remote', description: T('statusSetupRemote') },
+            { label: 'forja use target', command: 'forja use target', description: T('statusSetupLocal') },
+            { label: 'forja remote set', command: 'forja remote set', description: T('statusSetupRemote') },
         ];
     } else {
         const firstFix = diagnostics.find(d => d.fix)?.fix;
@@ -332,19 +354,17 @@ function buildToolchainSummary(target: ActiveTarget, qtConfig: QtSettings, sdkCo
     const summary: ToolchainSummary = {};
     if (target.kind === 'qt') {
         if (qtConfig.qtPath) {
-            const m = qtConfig.qtPath.match(/(\d+\.\d+\.\d+)/);
-            summary.qt = { path: qtConfig.qtPath, version: m ? m[1] : undefined };
+            summary.qt = { version: qtConfig.qtVersion || undefined };
         }
-        if (qtConfig.vsInstall) { summary.vs = { path: qtConfig.vsInstall, version: extractVsVersion(qtConfig.vsInstall) }; }
+        if (qtConfig.vsInstall) { summary.vs = { version: extractVsVersion(qtConfig.vsInstall) }; }
         if (qtConfig.jomPath) { summary.jom = qtConfig.jomPath; }
         if (process.platform !== 'win32') {
             summary.make = !!detectMake();
         }
     } else {
         if (process.platform === 'win32') {
-            if (sdkConfig.vsInstall) { summary.vs = { path: sdkConfig.vsInstall, version: extractVsVersion(sdkConfig.vsInstall) }; }
+            if (sdkConfig.vsInstall) { summary.vs = { version: extractVsVersion(sdkConfig.vsInstall) }; }
         } else {
-            // On POSIX, SDK uses make, not VS
             summary.make = !!detectMake();
         }
     }
@@ -354,7 +374,7 @@ function buildToolchainSummary(target: ActiveTarget, qtConfig: QtSettings, sdkCo
 function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarget, diagnostics: Diagnostic[], qtPath?: string): ReadinessState {
     if (target.kind === 'qt') {
         let qtOk = true;
-        if (!summary.qt?.path) {
+        if (!target.qtPath) {
             qtOk = false;
             const pathSuffix = qtPath ? `: ${qtPath}` : '';
             diagnostics.push({
@@ -368,7 +388,7 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarge
         // Platform-specific requirements — check all tools even if Qt is missing
         if (process.platform === 'win32') {
             // Windows Qt requires VS
-            if (!summary.vs?.path) {
+            if (!target.vsInstall) {
                 diagnostics.push({
                     level: 'error',
                     message: T('vsNotFoundDetail'),
@@ -384,7 +404,7 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarge
                     fix: 'forja list env qt',
                 });
             }
-            if (!qtOk || !summary.vs?.path) { return 'missing'; }
+            if (!qtOk || !target.vsInstall) { return 'missing'; }
         } else {
             // POSIX Qt requires make
             if (!summary.make) {
@@ -402,7 +422,7 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarge
     // SDK
     if (process.platform === 'win32') {
         // On Windows, SDK requires VS
-        if (!summary.vs?.path) {
+        if (!target.vsInstall) {
             diagnostics.push({
                 level: 'error',
                 message: T('vsNotFound'),
@@ -443,7 +463,7 @@ function buildRemoteStatusSummary(remoteConfig: RemoteSettings, syncConfig: Sync
 function buildRuntimeState(workspace: string, target: ActiveTarget | null, diagnostics: Diagnostic[], readiness: Readiness): RuntimeState {
     // Read local run state from the Qt localState file
     if (!target) {
-        return { running: false, runAt: 'local' };
+        return { running: false };
     }
     try {
         const state = readRunState(workspace);
@@ -454,7 +474,6 @@ function buildRuntimeState(workspace: string, target: ActiveTarget | null, diagn
                 pid: state.pid,
                 executablePath: state.executablePath,
                 logFile: state.logFile,
-                runAt: target.runAt,
             };
         }
     } catch (e) {
@@ -465,10 +484,10 @@ function buildRuntimeState(workspace: string, target: ActiveTarget | null, diagn
                 message: `${T('sts.failedToReadRunState')}: ${e instanceof Error ? e.message : String(e)}`,
             });
             readiness.runtime = 'unknown';
-            return { running: false, runAt: target.runAt };
+            return { running: false };
         }
     }
-    return { running: false, runAt: target.runAt };
+    return { running: false };
 }
 
 function assessOk(readiness: Readiness): boolean {
@@ -483,77 +502,105 @@ function assessOk(readiness: Readiness): boolean {
 // ── Text output ──
 
 export function formatStatusText(result: StatusResult, locale: Locale): string {
-    const lines: string[] = [T('sts.forjaStatus')];
-    if (result.workspace) { lines.push(`${T('workspace')}${result.workspace}`); }
+    const lines: string[] = [];
+    const indent = '  ';
+
+    // ── Title ──
+    lines.push(T('sts.forjaStatus'));
+
+    // ── Config section ──
+    if (result.workspace) {
+        lines.push(`${indent}${T('workspace')}  ${result.workspace}`);
+    }
     if (result.activeTarget) {
         const t = result.activeTarget;
-        lines.push(`${T('target')}${t.project} ${t.mode} ${t.arch} ${t.runAt}`);
+        lines.push(`${indent}${T('target')}  ${t.project}`);
+        lines.push(`${indent}${T('setupSummaryModeArch')}  ${t.mode} | ${t.arch} | ${t.runAt}`);
     }
+
+    // ── Readiness sub-list ──
     const r = result.readiness;
-    const parts: string[] = [];
-    if (r.target) { parts.push(`${T('readinessTarget')}=${readinessText(r.target, locale)}`); }
-    if (r.toolchain) { parts.push(`${T('readinessToolchain')}=${readinessText(r.toolchain, locale)}`); }
-    if (r.sync) { parts.push(`${T('readinessSync')}=${readinessText(r.sync, locale)}`); }
-    if (r.remote) { parts.push(`${T('readinessRemote')}=${readinessText(r.remote, locale)}`); }
-    if (r.runtime) { parts.push(`${T('readinessRuntime')}=${readinessText(r.runtime, locale)}`); }
-    if (parts.length > 0) { lines.push(`${T('readiness')}${parts.join('  ')}`); }
+    const readinessEntries: Array<{ label: string; state: ReadinessState }> = [];
+    if (r.target) { readinessEntries.push({ label: T('readinessTarget'), state: r.target }); }
+    if (r.toolchain) { readinessEntries.push({ label: T('readinessToolchain'), state: r.toolchain }); }
+    if (r.sync) { readinessEntries.push({ label: T('readinessSync'), state: r.sync }); }
+    if (r.remote) { readinessEntries.push({ label: T('readinessRemote'), state: r.remote }); }
+    if (r.runtime) { readinessEntries.push({ label: T('readinessRuntime'), state: r.runtime }); }
 
-    if (result.toolchain) {
-        const tc = result.toolchain;
-        const tcParts: string[] = [];
-        if (tc.qt) { tcParts.push(`Qt ${tc.qt.version || shortPath(tc.qt.path)}`); }
-        if (tc.vs) { tcParts.push(`VS ${tc.vs.version || shortPath(tc.vs.path)}`); }
-        if (tc.jom) { tcParts.push('jom'); }
-        if (tc.make) { tcParts.push('make'); }
-        if (tcParts.length > 0) { lines.push(`${T('toolchainLabel')}${tcParts.join(', ')}`); }
+    if (readinessEntries.length > 0) {
+        lines.push(`${indent}${T('readiness')}`);
+        for (const entry of readinessEntries) {
+            const sym = readinessSymbol(entry.state);
+            const text = readinessText(entry.state, locale);
+            lines.push(`${indent}  ${sym} ${entry.label}:  ${text}`);
+        }
     }
 
+    // ── Toolchain ──
+    if (result.activeTarget) {
+        const t = result.activeTarget;
+        const tcParts: string[] = [];
+        if (t.qtPath) {
+            const ver = t.qtVersion ? `${t.qtVersion} ` : '';
+            tcParts.push(`Qt ${ver}(${shortPath(t.qtPath)})`);
+        }
+        if (t.vsInstall) {
+            const ver = t.vsVersion ? `${t.vsVersion} ` : '';
+            tcParts.push(`VS ${ver}(${shortPath(t.vsInstall)})`);
+        }
+        if (t.jomPath) { tcParts.push('jom'); }
+        if (tcParts.length > 0) { lines.push(`${indent}${T('toolchainLabel')}  ${tcParts.join(', ')}`); }
+    }
+
+    // ── Remote ──
     if (result.remote) {
         const rem = result.remote;
         const remParts: string[] = [];
         if (rem.server) { remParts.push(`${rem.server.name} (${rem.server.host})`); }
         if (rem.remoteForjaBin) { remParts.push(`${T('forjaBin')}${rem.remoteForjaBin}`); }
-        if (remParts.length > 0) { lines.push(`${T('remoteLabel')}${remParts.join(', ')}`); }
-        if (rem.workspaceMode) { lines.push(`${T('workspaceMode')}${rem.workspaceMode}`); }
+        if (remParts.length > 0) { lines.push(`${indent}${T('remoteLabel')}  ${remParts.join(', ')}`); }
+        if (rem.workspaceMode) { lines.push(`${indent}${T('workspaceMode')}  ${rem.workspaceMode}`); }
     }
 
+    // ── Sync ──
     if (result.sync) {
         const s = result.sync;
         if (s.enabled) {
             if (s.server) {
-                lines.push(`${T('syncLabel')}${T('enabledStatus')} → ${s.server.username}@${s.server.host}:${s.server.port} → ${s.remotePath || ''} (${s.server.authMode})`);
+                lines.push(`${indent}${T('syncLabel')}  ${T('enabledStatus')} → ${s.server.username}@${s.server.host}:${s.server.port} → ${s.remotePath || ''} (${s.server.authMode})`);
             } else {
-                lines.push(`${T('syncLabel')}${T('enabledStatus')} (${T('sts.syncServerMissing')})`);
+                lines.push(`${indent}${T('syncLabel')}  ${T('enabledStatus')} (${T('sts.syncServerMissing')})`);
             }
         }
     }
 
-    if (result.runtime) {
-        if (result.runtime.running) {
-            lines.push(`${T('runtimeLabel')}${T('running')} (${T('pid')}${result.runtime.pid})`);
-            if (result.runtime.executablePath) { lines.push(`  ${T('executable')}${result.runtime.executablePath}`); }
-            if (result.runtime.logFile) { lines.push(`  ${T('log')}${result.runtime.logFile}`); }
-        } else {
-            lines.push(`${T('runtimeLabel')}${T('notRunning')}`);
-        }
+    // ── Runtime (only show when running — readiness section covers the not-running case) ──
+    if (result.runtime?.running) {
+        lines.push(`${indent}${T('runtimeLabel')}  ${T('running')} (${T('pid')}${result.runtime.pid})`);
+        if (result.runtime.executablePath) { lines.push(`${indent}  ${T('executable')}  ${result.runtime.executablePath}`); }
+        if (result.runtime.logFile) { lines.push(`${indent}  ${T('log')}  ${result.runtime.logFile}`); }
     }
 
+    // ── Diagnostics (warnings/errors) ──
     if (result.diagnostics) {
+        lines.push('');
         for (const d of result.diagnostics) {
-            const prefix = T(d.level);
-            lines.push(`${prefix}: ${d.message}`);
-            if (d.hint) { lines.push(`  ${T('hint')}${d.hint}`); }
+            const icon = d.level === 'warning' ? '⚠' : d.level === 'error' ? '✗' : 'ℹ';
+            lines.push(`${indent}${icon} ${d.message}`);
+            if (d.hint) { lines.push(`${indent}  → ${d.hint}`); }
         }
     }
 
+    // ── Next action ──
     if (result.nextAction) {
+        lines.push('');
         lines.push(T('next'));
-        lines.push(`  ${result.nextAction}`);
+        lines.push(`${indent}  ${result.nextAction}`);
     } else if (!result.activeTarget && result.readiness?.toolchain === 'unknown') {
-        // Not initialized — show both setup options
+        lines.push('');
         lines.push(T('next'));
-        lines.push(`  forja setup          (${T('statusSetupLocal')})`);
-        lines.push(`  forja setup remote   (${T('statusSetupRemote')})`);
+        lines.push(`${indent}  forja use target       (${T('statusSetupLocal')})`);
+        lines.push(`${indent}  forja remote set       (${T('statusSetupRemote')})`);
     }
 
     return lines.join('\n');

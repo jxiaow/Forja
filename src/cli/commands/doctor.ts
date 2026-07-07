@@ -178,7 +178,7 @@ export async function runDoctor(workspace: string, options: {
         } else {
             checks.push(check('toolchain-qt', 'warning', T('doctorQtNotConfigured'),
                 [diag('warning', T('doctorQtNotConfigured'))],
-                'forja setup --qt-path <path>'));
+                'forja use target --qt <path>'));
         }
 
         // Platform-specific toolchain checks
@@ -260,7 +260,7 @@ export async function runDoctor(workspace: string, options: {
             } else {
                 checks.push(check('sync', 'blocked', T('doctorSyncRemote'),
                     [diag('warning', T('doctorSyncRemote'))],
-                    'forja setup remote'));
+                    'forja remote set'));
             }
         } else {
             checks.push(check('sync', 'blocked', `${T('doctorSyncDeleted')}: ${sync.selectedServer}`,

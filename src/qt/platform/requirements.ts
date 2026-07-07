@@ -18,15 +18,15 @@ const windowsRequirements: PlatformRequirement[] = [
     {
         key: 'qtPath',
         label: 'Qt',
-        cliFlag: '--qt-path <path>',
-        missingHint: '使用 forja setup --qt-path <path> 保存 Qt 安装路径',
+        cliFlag: '--qt <path>',
+        missingHint: '使用 forja use target --qt <path> 保存 Qt 安装路径',
         check: (s) => !!s.qtPath
     },
     {
         key: 'vsInstall',
         label: 'Visual Studio',
-        cliFlag: '--vs-dev-shell <path>',
-        missingHint: '使用 forja setup --vs-dev-shell <path> 保存 Launch-VsDevShell.ps1 路径',
+        cliFlag: '--vs <path>',
+        missingHint: '使用 forja use target --vs <path> 保存 Launch-VsDevShell.ps1 路径',
         check: (s) => !!s.vsInstall
     },
     {
@@ -41,8 +41,8 @@ const linuxRequirements: PlatformRequirement[] = [
     {
         key: 'qtPath',
         label: 'Qt',
-        cliFlag: '--qt-path <path>',
-        missingHint: '使用 forja setup --qt-path <path> 保存 Qt 安装路径',
+        cliFlag: '--qt <path>',
+        missingHint: '使用 forja use target --qt <path> 保存 Qt 安装路径',
         check: (s) => !!s.qtPath
     }
 ];

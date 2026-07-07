@@ -2,12 +2,12 @@
 
 [← 返回总览](index.md)
 
-**职责**：选择目标、构建配置、执行端和常用远程/同步配置。它是普通用户唯一的配置入口。
+**职责**：选择目标、构建配置、执行端和常用远程/同步配置。它是普通用户唯一的配置入口。`use target` 同时承担原 `forja setup` 的本地初始化职责——交互式检测环境、选择 target、配置工具链。
 
 **公开语法**（进入主帮助）：
 ```
-forja use [--workspace <path>] [--json]
-forja use target --project <path> [--json]
+forja use [--json]
+forja use target --project <path> [--qt-path <path>] [--vs-install <path>] [--jom-path <path>] [--json]
 forja use target --mode debug|release [--arch x86|x64] [--json]
 forja use execution --local|--remote [--json]
 forja use sync --server <id> --remote-path <path> [--json]
@@ -50,27 +50,30 @@ forja use remote transfer clear [--json]
 
 ## 行为
 
-1. 无参数 + 交互终端：进入选择流程。
-2. 有参数：只更新显式传入字段，保留其他字段。
-3. `target --project` 推断 kind：`.pro` → qt，`.sln`/`Makefile` → sdk。
-4. 不提供按类型切换入口；切换 active target 必须给出具体 `target --project`。
-5. 切换 active target 只更新 `activeTarget` 指针和该类型的最近选择，不删除、不重置 Qt/SDK 各自的工具链或高级配置。
-6. `target --mode` 可单独更新；`--arch` 可跟随更新。二者写入当前 active target 所属配置域，并刷新 activeTarget 快照。
-7. `execution --local|--remote` 只更新 activeTarget.runAt。
-8. `execution --remote` 不自动创建服务器配置。
-9. 共享 server 列表由 `forja server add/update/remove` 管理；server 本身不属于 remote 或 sync 任一方专属。
-10. `sync --server --remote-path` 只写 sync 配置，引用共享 server。
-11. `remote --server --remote-path` 只写 remote execution 默认配置，引用共享 server。
-12. `--qmake-target` 是旧 Qt `--target <name>` 的新归宿；`--project` 是项目路径，二者语义不可复用。
-13. `use qt ...` 只写 Qt 专属配置；`use sdk ...` 只写 SDK 专属配置，互不清理对方配置。
-14. `use sync --enable|--disable` 只更新 sync.enabled，不修改 server/path。
-15. `remote repo/workspace/forja-bin/build-order/transfer set/clear` 负责远程高级配置。
-16. 成功后返回 `nextActions: ["forja status"]`。
+1. 无参数 + 交互终端：显示当前配置摘要。
+2. 无参数 + `--json`：返回当前 `activeTarget` 和配置摘要的 JSON。
+3. 有参数：只更新显式传入字段，保留其他字段。
+4. `target --project` 推断 kind：`.pro` → qt，`.sln`/`Makefile` → sdk。
+5. `target` 支持 `--qt-path`、`--vs-install`、`--jom-path` flags，在选 target 的同时配置工具链路径（吸收原 `forja setup` 的本地初始化功能）。交互模式下，如果工具链未配置且检测到多个安装，会提示用户选择。
+6. 不提供按类型切换入口；切换 active target 必须给出具体 `target --project`。
+7. 切换 active target 只更新 `activeTarget` 指针和该类型的最近选择，不删除、不重置 Qt/SDK 各自的工具链或高级配置。
+8. `target --mode` 可单独更新；`--arch` 可跟随更新。二者写入当前 active target 所属配置域，并刷新 activeTarget 快照。
+9. `execution --local|--remote` 只更新 activeTarget.runAt。
+10. `execution --remote` 不自动创建服务器配置。
+11. 共享 server 列表由 `forja server add/update/remove` 管理；server 本身不属于 remote 或 sync 任一方专属。
+12. `sync --server --remote-path` 只写 sync 配置，引用共享 server。
+13. `remote --server --remote-path` 只写 remote execution 默认配置，引用共享 server。
+14. `--qmake-target` 是旧 Qt `--target <name>` 的新归宿；`--project` 是项目路径，二者语义不可复用。
+15. `use qt ...` 只写 Qt 专属配置；`use sdk ...` 只写 SDK 专属配置，互不清理对方配置。
+16. `use sync --enable|--disable` 只更新 sync.enabled，不修改 server/path。
+17. `remote repo/workspace/forja-bin/build-order/transfer set/clear` 负责远程高级配置。
+18. 成功后返回 `nextActions: ["forja status"]`。
 
 ## 吸收的旧命令
 
 | 旧命令 | 新命令 |
 |--------|--------|
+| `forja setup`（本地初始化） | `forja use target`（交互式检测 + 配置，支持 `--qt-path`/`--vs-install`/`--jom-path`） |
 | `forja qt use --project <path>` | `forja use target --project <path>` |
 | `forja qt use --mode <mode> --arch <arch>` | `forja use target --mode <mode> --arch <arch>` |
 | `forja qt use --qt-path <path>` | `forja use qt --qt-path <path>` |

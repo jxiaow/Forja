@@ -74,6 +74,36 @@ nextAction: 'forja use lang zh'
 nextAction: lang === 'zh' ? 'forja use lang en' : 'forja use lang zh'
 ```
 
+## The "Skipped Config" Pattern
+
+When a user **explicitly skips** a configuration step (e.g., selects "跳过" for mode/arch/toolchain), nextAction must NOT suggest `forja build` — even if an existing target has values from a previous session. The skip means "I don't want to configure this now" and the system must respect that.
+
+```typescript
+// BUG: suggests build because existing target has mode/arch from before
+const hasTarget = !!(activeTarget || existingActiveTarget);
+if (hasTarget && toolchainReady) nextAction = 'forja build';
+
+// CORRECT: track whether user skipped in this session
+const skippedConfig = modeSkipped || archSkipped;
+if (hasTarget && toolchainReady && !skippedConfig) nextAction = 'forja build';
+else if (skippedConfig) nextAction = 'forja setup';  // come back to finish
+```
+
+### Key Insight
+
+`needTargetResolution` (whether target selection was needed) is NOT the same as "user skipped config". A user can have an existing target (so `needTargetResolution = false`) but still skip mode/arch prompts. The skip tracking must be independent:
+
+```typescript
+let modeSkipped = false;
+if (willPromptMode) {
+    const chosen = await choose(...);
+    if (chosen) resolvedMode = chosen.value;
+    else modeSkipped = true;  // explicitly tracked
+}
+// Don't fall back to existing values when skipped
+const effectiveMode = modeSkipped ? undefined : (resolvedMode || existingTarget?.mode);
+```
+
 ## Anti-Patterns
 
 | Anti-pattern | Why it's wrong | Correct approach |
@@ -93,13 +123,11 @@ nextAction should also adapt to current state on **success** paths, not just fai
 // BUG: always suggests 'use target' even when target is already selected
 nextAction: targets.length === 0 ? 'forja setup' : 'forja use target --project <path>'
 
-// CORRECT: three-state awareness
+// CORRECT: guide to selection after listing
 if (targets.length === 0) {
-    nextAction = 'forja setup';           // Nothing to work with
-} else if (targets.some(t => t.current)) {
-    nextAction = 'forja status';          // Already selected, check readiness
+    nextAction = 'forja use target';           // Nothing to work with
 } else {
-    nextAction = 'forja use target --project <path>';  // Need to select
+    nextAction = 'forja use target --project <name|path>';  // Select or change
 }
 ```
 
@@ -107,9 +135,8 @@ if (targets.length === 0) {
 
 | Command | State | Correct nextAction | Why |
 |---------|-------|--------------------|-----|
-| `list targets` | No targets exist | `forja setup` | Need to initialize |
-| `list targets` | Targets exist, none selected | `forja use target --project <path>` | Need to choose |
-| `list targets` | Target already selected | `forja status` | Already chosen, verify readiness |
+| `list targets` | No targets exist | `forja use target` | Need to initialize |
+| `list targets` | Targets exist (any selection state) | `forja use target --project <name\|path>` | After seeing list, natural next step is selection |
 | `list config` | Nothing configured | `forja setup` | Need to initialize |
 | `list config` | Only sync/remote, no target | `forja use target --project <path>` | Need to select target |
 | `list config` | Target configured | `forja status` | Already configured, verify readiness |
@@ -117,6 +144,8 @@ if (targets.length === 0) {
 ### Rule
 
 When a list/config command succeeds, the nextAction should answer: **"Given what the user just saw, what's the most useful next step?"** — not a hardcoded suggestion.
+
+After listing targets, the user's natural next action is to select or change target — even if one is already selected. Don't suggest `forja status` (readiness check) when the user is in "browsing targets" mode.
 
 ## Audit Checklist
 

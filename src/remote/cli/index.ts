@@ -725,7 +725,7 @@ function consumeTargetPassthrough(argv: string[], index: number, options: Remote
     const arg = argv[index];
     if (arg === '--workspace' || arg === '--json' || arg === '--') { return null; }
     if (!arg.startsWith('--')) { return null; }
-    const valueFlags = new Set(['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target', '--qmake-args', '--vs-dev-cmd']);
+    const valueFlags = new Set(['--project', '--mode', '--arch', '--qt', '--vs-dev-shell', '--target', '--qmake-args', '--vs-dev-cmd']);
     const booleanFlags = new Set(['--plan', '--detach']);
     const flag = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg;
     if (booleanFlags.has(flag) || arg.includes('=')) {

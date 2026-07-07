@@ -1,6 +1,6 @@
 # Forja 命令收敛迁移方案 v2
 
-> 目标：将 ~107 个分散的 Qt/SDK/Remote/Sync 命令收敛为 12 个意图驱动的顶层命令。旧能力必须全部有新命令归宿，不再依赖旧用户命令兼容层作为产品设计的一部分。
+> 目标：将 ~107 个分散的 Qt/SDK/Remote/Sync 命令收敛为 11 个意图驱动的顶层命令。旧能力必须全部有新命令归宿，不再依赖旧用户命令兼容层作为产品设计的一部分。
 
 **命令规格（各文件）**：
 [status](status.md) · [init](init.md) · [list](list.md) · [use](use.md) · [remote](remote.md) · [server](server.md) · [build](build.md) · [run](run.md) · [stop](stop.md) · [clean](clean.md) · [doctor](doctor.md) · [sync](sync.md)
@@ -12,7 +12,7 @@
 | 文件 | 作用 | v2 使用方式 |
 |------|------|-------------|
 | `command-inventory.md` | 全量盘点现有 CLI/VSCode 命令，约 107 个输入面 | 作为旧命令覆盖基准 |
-| `current-command-consolidation.md` | 定义命令收敛目标、旧→新映射、阶段计划 | 拆分为 v2 总览 + 12 个命令规格页 |
+| `current-command-consolidation.md` | 定义命令收敛目标、旧→新映射、阶段计划 | 拆分为 v2 总览 + 11 个命令规格页 |
 | `command-api.zh.md` | API/输出协议补充 | 合并到 v2 的 Result、Diagnostic、Readiness 结构 |
 | `command-consolidation*.html` | 展示产物 | 不作为源文档修改 |
 | `v2-en/`、`v2-zh/` | 由 v2 Markdown 生成的 HTML 产物 | 修改 Markdown 后再生成 |
@@ -40,8 +40,7 @@ v2 下每个公开命令都必须独立落盘，包含：职责边界、语法�
 
 ```
 forja status      — 当前状态和下一步建议
-forja setup       — 一站式初始化（本地 + 远程）
-forja list        — 列举可选项和配置摘要（targets/servers/env/remote/config/lang）
+forja list        — 列举可选项和配置摘要（targets/env）
 forja use         — 选择目标、构建配置、执行端和高级配置
 forja remote      — 远程配置和仓库操作
 forja server      — 管理共享 SSH server
@@ -53,7 +52,7 @@ forja doctor      — 深度诊断和恢复
 forja sync        — 同步变更文件到远程
 ```
 
-不引入 `forja qt`、`forja sdk` 作为用户命令。它们的能力由上面 12 个顶层命令及其子动作承接。
+不引入 `forja qt`、`forja sdk` 作为用户命令。它们的能力由上面 11 个顶层命令及其子动作承接。
 
 ---
 
@@ -302,7 +301,7 @@ FORJA_LANG=zh forja status --json    # 中文
 
 | 旧命令 | 新命令 | 说明 |
 |--------|--------|------|
-| `forja qt init` | `forja setup` | 吸收进统一 setup |
+| `forja qt init` | `forja use target` | 吸收进 use target（交互式检测 + 配置） |
 | `forja qt use` | `forja use target ...` / `forja use qt ...` | 项目选择用 `target --project`；mode/arch 用 `target --mode/--arch`；工具链用 `use qt --qt-path/--vs-dev-shell`；Qt TARGET 覆盖用 `--qmake-target`；qmake 参数用 `--qmake-args` |
 | `forja qt status` | `forja status` | 吸收进统一 status |
 | `forja qt env` | `forja list env` | 工具链路径枚举归 list |
@@ -319,7 +318,7 @@ FORJA_LANG=zh forja status --json    # 中文
 
 | 旧命令 | 新命令 | 说明 |
 |--------|--------|------|
-| `forja sdk init` | `forja setup` | 吸收进统一 setup |
+| `forja sdk init` | `forja use target` | 吸收进 use target（交互式检测 + 配置） |
 | `forja sdk use` | `forja use target ...` / `forja use sdk ...` | 项目选择用 `target --project`；mode/arch 用 `target --mode/--arch`；VS dev cmd 用 `use sdk --vs-dev-cmd` |
 | `forja sdk status` | `forja status` | 吸收进统一 status |
 | `forja sdk env` | `forja list env` | 工具链路径枚举归 list |
@@ -352,7 +351,7 @@ FORJA_LANG=zh forja status --json    # 中文
 | `forja remote transfer set/clear` | `forja use remote transfer set/clear` | artifact transfer 配置 |
 | `forja remote transfer run` | `forja sync transfer` | artifact transfer 执行 |
 | `forja remote qt status` | `forja status` | 统一 status |
-| `forja remote qt init` | `forja setup --server <id>` | 通过 bridge 执行远端初始化 |
+| `forja remote qt init` | `forja remote set` + `forja use execution --remote` + `forja sync` | 远程初始化拆分为显式步骤 |
 | `forja remote qt use` | `forja use target ...` / `forja use execution --remote` / `forja use remote --server ...` | 目标、执行端、remote 绑定分别配置 |
 | `forja remote qt build` | `forja build` | 统一 build（runAt=remote） |
 | `forja remote qt clean` | `forja clean` | 统一 clean（runAt=remote） |
@@ -364,7 +363,7 @@ FORJA_LANG=zh forja status --json    # 中文
 | `forja remote qt reset` | `forja remote reset <repo> <paths...>` | 隐藏破坏性操作 |
 | `forja remote qt clean-untracked` | `forja remote reset <repo> <paths...> --all` | 隐藏破坏性操作 |
 | `forja remote sdk status` | `forja status` | 统一 status |
-| `forja remote sdk init` | `forja setup --server <id>` | 通过 bridge 执行远端初始化 |
+| `forja remote sdk init` | `forja remote set` + `forja use execution --remote` + `forja sync` | 远程初始化拆分为显式步骤 |
 | `forja remote sdk use` | `forja use target ...` / `forja use execution --remote` / `forja use remote --server ...` | 目标、执行端、remote 绑定分别配置 |
 | `forja remote sdk build` | `forja build` | 统一 build |
 | `forja remote sdk rebuild` | `forja build fresh` | 统一 build fresh |
@@ -468,7 +467,6 @@ FORJA_LANG=zh forja status --json    # 中文
 | Command ID | 标题 | 对应 CLI |
 |------------|------|----------|
 | `forja.status` | Forja: Status | `forja status` |
-| `forja.setup` | Forja: Setup | `forja setup` |
 | `forja.list` | Forja: List | `forja list` |
 | `forja.use` | Forja: Use | `forja use` |
 | `forja.remote` | Forja: Remote | `forja remote` |
@@ -649,7 +647,7 @@ src/test/unifiedCliSync.test.ts
 - `forja status --json` 在无 active target 时不猜测。
 - `forja list --json` 列出 Qt + SDK 候选。
 - `forja use target --project <path> --json` 保存 active target。
-- `forja setup --json` 在混合 workspace 不选择。
+- `forja use target --json` 在混合 workspace 不选择。
 
 ### Stage 3: Execution Commands
 
@@ -734,15 +732,13 @@ Stage 2 和 Stage 3 可在 Stage 1 完成后并行推进。Stage 4 依赖 Stage 
 
 | 场景 | 命令 | 预期 |
 |------|------|------|
-| 空 workspace | `forja status --json` | 无 target，next action `forja setup` |
-| 一个 Qt target | `forja setup --json` | 保存 Qt active target + toolchain |
-| 一个 SDK target | `forja setup --json` | 保存 SDK active target + toolchain |
-| 1 Qt + 1 SDK | `forja setup --json` | 不选择，ambiguous=true，next actions `forja list`、`forja use target --project <path>` |
-| 零个目标 | `forja setup --json` | 仅保存工具链默认值，next action `forja list` |
-| 重复执行 setup | `forja setup --json` × 2 | 第二次不覆盖已有用户选择 |
-| setup --plan | `forja setup --plan --json` | 输出计划，不写入配置 |
-| setup --local-only | `forja setup --local-only --json` | 只做本地初始化，跳过远程配置 |
-| setup 指定 server | `forja setup --server dev --json` | 使用指定共享 server 进行远程配置 |
+| 空 workspace | `forja status --json` | 无 target，next action `forja use target` |
+| 一个 Qt target | `forja use target --json` | 保存 Qt active target + toolchain |
+| 一个 SDK target | `forja use target --json` | 保存 SDK active target + toolchain |
+| 1 Qt + 1 SDK | `forja use target --json` | 不选择，ambiguous=true，next actions `forja list`、`forja use target --project <path>` |
+| 零个目标 | `forja use target --json` | 仅保存工具链默认值，next action `forja list` |
+| 重复执行 use target | `forja use target --json` × 2 | 第二次不覆盖已有用户选择 |
+| use target 指定工具链 | `forja use target --qt-path <path> --json` | 同时配置工具链路径 |
 | 多个 Qt targets | `forja list --json` | 列出所有 .pro，标记 current |
 | 选择 Qt | `forja use target --project app.pro --json` | kind=qt |
 | 选择 SDK | `forja use target --project sdk.sln --json` | kind=sdk |

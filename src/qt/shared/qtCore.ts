@@ -147,7 +147,7 @@ function buildToolchainActions(missingTools: ReturnType<typeof getMissingTools>)
     const actions = ['forja list env --json'];
     for (const tool of missingTools) {
         if (tool.cliFlag) {
-            actions.push(`forja setup ${tool.cliFlag.replace(/<[^>]+>/g, '<path>')} --json`);
+            actions.push(`forja use target ${tool.cliFlag.replace(/<[^>]+>/g, '<path>')} --json`);
         }
     }
     return actions;
@@ -177,7 +177,7 @@ function buildStatusGuidance(
     hasExecutable: boolean
 ): { nextAction: string } {
     if (!hasSettings) {
-        return { nextAction: 'forja setup --json' };
+        return { nextAction: 'forja use target --json' };
     }
     if (!projectExists) {
         return { nextAction: 'forja list targets --json' };
@@ -411,7 +411,7 @@ function handleEnvAction(workspace: string, options: CliOptions, settings: QtSet
                 ...(process.platform === 'win32' ? { vsDevShell: detected.vsCandidates.map(c => ({ path: c.devShellPath, version: c.version, edition: c.edition })) } : {})
             },
             configHints: {
-                usage: 'forja use target --mode <mode> [--arch <arch>] | forja setup --qt-path <path> [--vs-dev-shell <path>] --json',
+                usage: 'forja use target --mode <mode> [--arch <arch>] [--qt <path>] [--vs <path>] --json',
                 mode: '--mode debug|release',
                 ...(getAvailableArch().length > 1 ? { arch: `--arch ${getAvailableArch().join('|')}` } : {}),
                 ...Object.fromEntries(

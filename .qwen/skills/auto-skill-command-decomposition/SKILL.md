@@ -21,9 +21,9 @@ When a CLI command accumulates too many responsibilities (many flags, overlappin
 ### 1. Identify the split axis
 
 Find the natural seam — what concerns are mixed?
-- Local vs remote → `setup` / `setup remote`
-- Init vs config → `setup` / `use`
+- Local vs remote → `use target` (local config) / `remote set` (remote binding)
 - View vs edit → `list` / `use`
+- Read-only vs destructive → `status` / `doctor fix`
 
 ### 2. Design the subcommands
 
@@ -34,9 +34,10 @@ Each subcommand should have:
 
 Example:
 ```
-Before: forja setup --local-only --host X --username Y --server Z --remote-path P --plan --json
-After:  forja setup [--plan --json]
-        forja setup remote [--plan --json]
+Before: forja setup --host X --username Y --server Z --remote-path P --plan --json
+After:  forja use target                               (local config)
+        forja remote set --server X --remote-path P    (remote binding)
+        forja use execution --remote                   (switch to remote)
 ```
 
 ### 3. Handle the shared logic

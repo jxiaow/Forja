@@ -1,15 +1,19 @@
 /**
- * `forja list` — read-only enumeration of targets, env, lang.
+ * `forja list` — read-only enumeration of targets, env.
  */
-import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSummary, Diagnostic, Locale, T, resolveLocale } from './types';
+import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSummary, Diagnostic, Locale, T } from './types';
 import { collectTargetCandidates } from './candidates';
 import { listServers, getServerDetail } from './server';
-import { loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings, loadGlobalConfig } from '../../core/settingsIO';
+import { loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
 import { detectMake } from '../../sdk/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 import { setSilent } from '../../core/loggerBase';
 
-export type ListCategory = 'targets' | 'env' | 'lang';
+function quotePath(p: string): string {
+    return p.includes(' ') ? `"${p}"` : p;
+}
+
+export type ListCategory = 'targets' | 'env';
 /** @internal 'servers' is accessed via `forja server`, not `forja list servers` */
 export type InternalListCategory = ListCategory | 'servers';
 export type EnvSubCategory = 'qt' | 'vs' | 'jom' | 'make';
@@ -21,20 +25,6 @@ export interface ListResult extends ForjaJsonResult {
     servers?: ServerSummary[] | ServerDetail;
     env?: EnvSummary;
     envSubCategory?: EnvSubCategory;
-    envAvailable?: Array<{ path: string; version?: string; edition?: string }>;
-    lang?: string;
-}
-
-function listLang(): ListResult {
-    const globalCfg = loadGlobalConfig();
-    const lang = globalCfg.lang || resolveLocale() || 'en';
-    return {
-        ok: true,
-        action: 'list',
-        category: 'lang',
-        lang,
-        nextAction: lang === 'zh' ? 'forja use lang en' : 'forja use lang zh',
-    };
 }
 
 export function formatListText(result: ListResult, locale: Locale): string {
@@ -63,9 +53,9 @@ export function formatListText(result: ListResult, locale: Locale): string {
                 lines.push(`  ${T('noneFound')}`);
             } else {
                 for (const t of targets) {
-                    const marker = t.current ? ' *' : '';
-                    const cfg = t.configured ? ` ${T('configuredMark')}` : '';
-                    lines.push(`  ${t.label}${marker}${cfg}`);
+                    const marker = t.current ? '* ' : '  ';
+                    const cfg = t.configured ? `${T('configuredMark')} ` : '';
+                    lines.push(`  ${marker}${cfg}${t.label} — ${t.project}`);
                 }
             }
             if (result.diagnostics?.length) {
@@ -108,7 +98,7 @@ export function formatListText(result: ListResult, locale: Locale): string {
                 const env = result.env || {};
                 if (result.envSubCategory === 'jom') {
                     if (env.jom) {
-                        lines.push(`  ${T('jomLabel')}${env.jom}`);
+                        lines.push(`  ${T('jomLabel')}${quotePath(env.jom)}`);
                     } else {
                         lines.push(`  ${T('nothingDetected')}`);
                     }
@@ -119,26 +109,17 @@ export function formatListText(result: ListResult, locale: Locale): string {
                         lines.push(`  ${T('nothingDetected')}`);
                     }
                 } else {
-                    const configured = result.envSubCategory === 'qt' ? env.qt : env.vs;
-                    if (configured && configured.length > 0) {
-                        lines.push(`  ${T('configured')}:`);
-                        for (const c of configured) {
-                            const ver = c.version ? ` (${c.version})` : '';
-                            lines.push(`    ${c.path}${ver}`);
-                        }
-                    } else {
-                        lines.push(`  ${T('notConfigured')}`);
-                    }
-                    const available = result.envAvailable || [];
-                    if (available.length > 0) {
-                        lines.push(`  ${T('available')}:`);
-                        for (const a of available) {
-                            const ver = a.version ? ` (${a.version})` : '';
-                            const ed = a.edition ? ` [${a.edition}]` : '';
-                            lines.push(`    ${a.path}${ver}${ed}`);
-                        }
-                    } else {
+                    const items = (result.envSubCategory === 'qt' ? env.qt : env.vs) || [];
+                    if (items.length === 0) {
                         lines.push(`  ${T('noneFound')}`);
+                    } else {
+                        for (const item of items) {
+                            const star = item.configured ? '* ' : '  ';
+                            const ver = item.version ? `(${item.version})` : '';
+                            const ed = 'edition' in item && item.edition ? `[${item.edition}]` : '';
+                            const tag = [ver, ed].filter(Boolean).join(' ');
+                            lines.push(`  ${star}${tag ? tag + '  ' : ''}${quotePath(item.path)}`);
+                        }
                     }
                 }
             } else {
@@ -147,42 +128,39 @@ export function formatListText(result: ListResult, locale: Locale): string {
 
                 // Qt
                 lines.push(`  ${T('qtLabel')}`);
-                if (env.qt && env.qt.length > 0) {
-                    lines.push(`    ${T('configured')}:`);
-                    for (const q of env.qt) { lines.push(`      ${q.path}${q.version ? ` (${q.version})` : ''}`); }
-                } else {
-                    lines.push(`    ${T('notConfigured')}`);
-                }
-                const qtAvail = env.qtAvailable || [];
-                if (qtAvail.length > 0) {
-                    lines.push(`    ${T('available')}:`);
-                    for (const q of qtAvail) { lines.push(`      ${q.path}${q.version ? ` (${q.version})` : ''}`); }
-                } else {
-                    lines.push(`    ${T('noneFound')}`);
+                {
+                    const items = env.qt || [];
+                    if (items.length === 0) {
+                        lines.push(`    ${T('noneFound')}`);
+                    } else {
+                        for (const q of items) {
+                            const star = q.configured ? '* ' : '  ';
+                            const ver = q.version ? `(${q.version})` : '';
+                            lines.push(`    ${star}${ver ? ver + '  ' : ''}${quotePath(q.path)}`);
+                        }
+                    }
                 }
 
                 // VS
                 lines.push(`  ${T('vsLabel')}`);
-                if (env.vs && env.vs.length > 0) {
-                    lines.push(`    ${T('configured')}:`);
-                    for (const v of env.vs) { lines.push(`      ${v.path}${v.version ? ` (${v.version})` : ''}`); }
-                } else {
-                    lines.push(`    ${T('notConfigured')}`);
-                }
-                const vsAvail = env.vsAvailable || [];
-                if (vsAvail.length > 0) {
-                    lines.push(`    ${T('available')}:`);
-                    for (const v of vsAvail) {
-                        const ed = v.edition ? ` [${v.edition}]` : '';
-                        lines.push(`      ${v.path}${v.version ? ` (${v.version})` : ''}${ed}`);
+                {
+                    const items = env.vs || [];
+                    if (items.length === 0) {
+                        lines.push(`    ${T('noneFound')}`);
+                    } else {
+                        for (const v of items) {
+                            const star = v.configured ? '* ' : '  ';
+                            const ed = v.edition ? `[${v.edition}]` : '';
+                            const ver = v.version ? `(${v.version})` : '';
+                            const tag = [ver, ed].filter(Boolean).join(' ');
+                            lines.push(`    ${star}${tag ? tag + '  ' : ''}${quotePath(v.path)}`);
+                        }
                     }
-                } else {
-                    lines.push(`    ${T('noneFound')}`);
                 }
 
                 // jom / make
                 if (env.jom) {
-                    lines.push(`  ${T('jomLabel')}${env.jom}`);
+                    lines.push(`  ${T('jomLabel')}${quotePath(env.jom)}`);
                 } else {
                     lines.push(`  ${T('jomLabel')}${T('nothingDetected')}`);
                 }
@@ -192,10 +170,6 @@ export function formatListText(result: ListResult, locale: Locale): string {
                     lines.push(`  ${T('makeLabel')}${T('nothingDetected')}`);
                 }
             }
-            break;
-        }
-        case 'lang': {
-            lines.push(`${T('language')} ${result.lang || 'en'}`);
             break;
         }
     }
@@ -219,35 +193,29 @@ export async function runList(workspace: string, category: InternalListCategory,
                 return listEnvAll(workspace);
             }
             return listEnvSub(workspace, options.envSubCategory);
-        case 'lang':
-            return listLang();
     }
     /* istanbul ignore next */
     throw new Error(`Unknown list category: ${category}`);
 }
 
 function listTargets(workspace: string): ListResult {
-    const targets = collectTargetCandidates(workspace);
+    const rawTargets = collectTargetCandidates(workspace);
     const diagnostics: Diagnostic[] = [];
 
     const qt = loadQtSettings(workspace);
     const sdk = loadSdkSettings(workspace);
-    if (!qt.qtPath) {
+    const hasQtTargets = rawTargets.some(t => t.kind === 'qt');
+    if (!qt.qtPath && hasQtTargets) {
         diagnostics.push({ level: 'warning', message: T('lst.qtPathNotConfigured') });
     }
     if (process.platform === 'win32' && !qt.vsInstall && !sdk.vsInstall) {
         diagnostics.push({ level: 'warning', message: T('lst.vsInstallNotConfigured') });
     }
 
-    const hasCurrent = targets.some(t => t.current);
-    let nextAction: string;
-    if (targets.length === 0) {
-        nextAction = 'forja setup';
-    } else if (hasCurrent) {
-        nextAction = 'forja status';
-    } else {
-        nextAction = 'forja use target --project <path>';
-    }
+    // Strip internal 'kind' field from output
+    const targets = rawTargets.map(({ kind: _kind, ...rest }) => rest as TargetCandidate);
+
+    const nextAction = 'forja use target --project <name|path>';
 
     return {
         ok: true,
@@ -310,20 +278,21 @@ async function listEnvAll(workspace: string): Promise<ListResult> {
     const env = await detectEnv();
 
     const summary: EnvSummary = {};
-    if (qtConfig.qtPath) {
-        summary.qt = [{ path: qtConfig.qtPath, version: (qtConfig.qtPath.match(/(\d+\.\d+\.\d+)/) || [])[1] }];
-    }
-    const vsPath = qtConfig.vsInstall || sdkConfig.vsInstall;
-    if (vsPath) {
-        summary.vs = [{ path: vsPath }];
-    }
+    const configuredQtPath = qtConfig.qtPath || '';
+    summary.qt = env.qtCandidates.map(c => ({
+        path: c.path, version: c.version,
+        ...(c.path === configuredQtPath ? { configured: true } : {}),
+    }));
+    const configuredVsPath = qtConfig.vsInstall || sdkConfig.vsInstall || '';
     if (process.platform === 'win32') {
         if (env.jom) { summary.jom = env.jom; }
-        summary.vsAvailable = env.vsCandidates.map(v => ({ path: v.installPath, version: v.version, edition: v.edition }));
+        summary.vs = env.vsCandidates.map(v => ({
+            path: v.installPath, version: v.version, edition: v.edition,
+            ...(v.installPath === configuredVsPath ? { configured: true } : {}),
+        }));
     } else {
-        if (env.jom) { summary.make = true; }
+        if (detectMake()) { summary.make = true; }
     }
-    summary.qtAvailable = env.qtCandidates.map(c => ({ path: c.path, version: c.version }));
 
     return {
         ok: true,
@@ -345,34 +314,32 @@ async function listEnvSub(workspace: string, sub: EnvSubCategory): Promise<ListR
 async function listEnvQt(workspace: string): Promise<ListResult> {
     setSilent(true);
     const qtConfig = loadQtSettings(workspace);
-    const configured = qtConfig.qtPath
-        ? { path: qtConfig.qtPath, version: (qtConfig.qtPath.match(/(\d+\.\d+\.\d+)/) || [])[1] }
-        : undefined;
+    const configuredPath = qtConfig.qtPath || '';
     const env = await detectEnv();
-    const available = env.qtCandidates.map(c => ({ path: c.path, version: c.version }));
+    const qt = env.qtCandidates.map(c => ({
+        path: c.path, version: c.version,
+        ...(c.path === configuredPath ? { configured: true } : {}),
+    }));
 
     return {
         ok: true,
         action: 'list',
         category: 'env',
         envSubCategory: 'qt',
-        env: { qt: configured ? [configured] : undefined },
-        envAvailable: available,
+        env: { qt },
     };
 }
 
 async function listEnvVs(_workspace: string): Promise<ListResult> {
     const qtConfig = loadQtSettings(_workspace);
     const sdkConfig = loadSdkSettings(_workspace);
-    const configuredPath = qtConfig.vsInstall || sdkConfig.vsInstall;
-    const configured = configuredPath ? { path: configuredPath } : undefined;
+    const configuredPath = qtConfig.vsInstall || sdkConfig.vsInstall || '';
 
     setSilent(true);
     const env = await detectEnv();
-    const available = env.vsCandidates.map(v => ({
-        path: v.installPath,
-        version: v.version,
-        edition: v.edition,
+    const vs = env.vsCandidates.map(v => ({
+        path: v.installPath, version: v.version, edition: v.edition,
+        ...(v.installPath === configuredPath ? { configured: true } : {}),
     }));
 
     return {
@@ -380,8 +347,7 @@ async function listEnvVs(_workspace: string): Promise<ListResult> {
         action: 'list',
         category: 'env',
         envSubCategory: 'vs',
-        env: { vs: configured ? [configured] : undefined },
-        envAvailable: available,
+        env: { vs },
     };
 }
 

@@ -14,9 +14,11 @@ const srcOut = path.join(root, 'out');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const version = pkg.version;
 
-// Channel: --channel dev|stable (default: stable)
+// Channel: auto-detect from version (.dev suffix → dev), or override with --channel
 const channelIdx = process.argv.indexOf('--channel');
-const channel = channelIdx >= 0 && process.argv[channelIdx + 1] ? process.argv[channelIdx + 1] : 'stable';
+const channel = channelIdx >= 0 && process.argv[channelIdx + 1]
+    ? process.argv[channelIdx + 1]
+    : (version.endsWith('.dev') ? 'dev' : 'stable');
 
 // Dev builds append date: 0.7.55.dev.202607031430
 function dateStamp() {
@@ -33,6 +35,7 @@ const tmpBuild = path.join(root, 'dist', '_cli-build');
 const dirs = [
     'cli',
     'cli/commands',
+    'cli/commands/useTarget',
     'qt/cli',
     'qt/shared',
     'qt/env',

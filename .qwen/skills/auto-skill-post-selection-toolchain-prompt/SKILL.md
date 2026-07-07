@@ -74,6 +74,7 @@ async function promptToolchainIfNeeded(kind: string) {
 4. **Only when unconfigured** — `!getQtPath()` or `!getVsDevShellPath()`
 5. **Only when ambiguous** — `candidates.length > 1` (single candidate = auto-configure)
 6. **Save to workspace config** — use `saveQtSettings` / `saveSdkSettings`, not global config
+7. **Qt targets: auto-match VS from Qt path** — if Qt path contains `msvc2019`/`msvc2022`, filter VS candidates to matching version. Don't let user pick a mismatched VS. See `qt-vs-auto-match` skill.
 
 ## Common Pitfalls
 

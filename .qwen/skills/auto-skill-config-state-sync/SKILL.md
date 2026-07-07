@@ -14,8 +14,9 @@ Forja has **multiple config/state layers** that must stay consistent. Changing o
 | Layer | Storage | Consumers |
 |---|---|---|
 | **Routing** | `activeTarget` (settingsIO) | `build.ts`, `run.ts`, `stop.ts`, `clean.ts` — dispatch to Qt or SDK backend |
-| **Qt domain** | `qtSettings.pinnedProject`, `qtSettings.mode/arch` | `qtCore.ts createActionPlan` → `resolveSavedProject` reads `pinnedProject` |
-| **SDK domain** | `sdkSettings.pinnedProject`, `sdkSettings.mode/arch` | `build.ts` SDK path reads `sdkSettings.pinnedProject` as fallback |
+| **Qt domain** | `qtSettings.pinnedProject`, `qtSettings.mode/arch`, `qtSettings.qtPath/vsInstall/jomPath` | `qtCore.ts createActionPlan` → `resolveSavedProject` reads `pinnedProject` |
+| **SDK domain** | `sdkSettings.pinnedProject`, `sdkSettings.mode/arch`, `sdkSettings.vsInstall` | `build.ts` SDK path reads `sdkSettings.pinnedProject` as fallback |
+| **Per-target store** | `targetToolchains[projectPath]` | `runUseTarget()` restores toolchain on target switch |
 | **UI module** | `statusBar._activeModule` | Status bar display, play button label |
 | **Runtime** | `qtState.isRunning` | Status bar run/stop button toggle |
 

@@ -36,7 +36,8 @@ export async function choose<T>(message: string, choices: T[], format: (item: T)
         console.log(`  [${index + 1}] ${format(choice)}`);
     });
 
-    const answer = await prompt(T('cmd.choosePrompt'), '1');
+    const answer = await prompt(T('cmd.choosePrompt'));
+    if (!answer) return null;
     const index = parseInt(answer) - 1;
 
     if (index >= 0 && index < choices.length) {
@@ -44,4 +45,13 @@ export async function choose<T>(message: string, choices: T[], format: (item: T)
     }
 
     return null;
+}
+
+export async function chooseRequired<T>(message: string, choices: T[], format: (item: T) => string): Promise<T> {
+    if (choices.length === 0) throw new Error('chooseRequired: no choices provided');
+    while (true) {
+        const result = await choose(message, choices, format);
+        if (result !== null) return result;
+        console.log(T('cmd.chooseRequired'));
+    }
 }

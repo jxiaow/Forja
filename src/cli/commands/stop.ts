@@ -149,7 +149,6 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
             pid,
             executablePath: state?.executablePath,
             logFile: state?.logFile,
-            runAt: 'local',
         },
         nextAction: 'forja run',
     };
