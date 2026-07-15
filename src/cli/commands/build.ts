@@ -4,7 +4,7 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { requireActiveTarget, tryPinnedProjectFallback, stripJsonFlag } from './activeTarget';
+import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner';
 import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
@@ -94,16 +94,15 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 project: projectPath,
                 mode: savedProfile?.mode || 'debug',
                 arch: savedProfile?.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
-                runAt: 'local',
+                runAt: savedProfile?.runAt || 'local',
+                qtPath: savedProfile?.toolchain.qtPath,
+                vsInstall: savedProfile?.toolchain.vsInstall,
+                jomPath: savedProfile?.toolchain.jomPath,
+                qmakeTarget: savedProfile?.toolchain.qmakeTarget,
             },
         };
     } else {
         targetResult = requireActiveTarget(workspace);
-    }
-
-    // Fallback: if no activeTarget but SDK has pinnedProject, synthesize target from SDK config
-    if ('error' in targetResult) {
-        targetResult = tryPinnedProjectFallback(workspace, targetResult);
     }
 
     if ('error' in targetResult) {

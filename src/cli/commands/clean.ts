@@ -4,7 +4,7 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { requireActiveTarget, tryPinnedProjectFallback, stripJsonFlag } from './activeTarget';
+import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
@@ -108,11 +108,6 @@ function extractCleanError(executed: { errors?: string[]; stderr?: string }): st
 export async function runClean(workspace: string, options: { plan?: boolean; json?: boolean } = {}): Promise<CleanResult> {
     const wantsJson = options.json ?? false;
     let targetResult = requireActiveTarget(workspace);
-
-    // Fallback: if no activeTarget but SDK has pinnedProject, synthesize target from SDK config
-    if ('error' in targetResult) {
-        targetResult = tryPinnedProjectFallback(workspace, targetResult);
-    }
 
     if ('error' in targetResult) {
         return {

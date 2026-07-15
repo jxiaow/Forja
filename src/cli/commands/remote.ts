@@ -203,6 +203,13 @@ export interface RemoteSetArgs {
 }
 
 export function runRemoteSet(workspace: string, args: RemoteSetArgs): RemoteResult {
+    if (!args.server && !args.remotePath) {
+        return {
+            ok: false, action: 'remote', remoteAction: 'set', changed: [],
+            diagnostics: [{ level: 'error', message: T('remote.setRequiresFlag') }],
+            nextAction: 'forja remote set --server <name>',
+        };
+    }
     const remote = loadRemoteSettings(workspace);
     const changed: string[] = [];
 

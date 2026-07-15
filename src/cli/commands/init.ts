@@ -225,11 +225,12 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
     console.log(`  ${T('init.foundProjects')}: ${candidates.length}`);
 
     const config = createEmptyWorkspaceConfig(workroot);
+
+    // Register workroot FIRST so resolveWorkroot can find it even if config save fails
+    registerWorkroot(workroot);
+
     const result = await configureNewTarget(workroot, config, options);
     if (!result.ok) return result;
-
-    // Register workroot
-    registerWorkroot(workroot);
 
     return {
         ok: true, action: 'init', workroot,

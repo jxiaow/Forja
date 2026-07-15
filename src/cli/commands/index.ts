@@ -553,7 +553,7 @@ async function handleRemote(argv: string[], workspace: string, wantsJson: boolea
             if (!repo || paths.length === 0) {
                 outputResult({
                     ok: false, action: 'remote', remoteAction: 'restore', changed: [],
-                    diagnostics: [{ level: 'error', message: 'forja remote restore requires <repo> and at least one <path>' }],
+                    diagnostics: [{ level: 'error', message: T('remote.restoreUsage') }],
                     nextAction: 'forja remote restore <repo> <paths...>',
                 }, wantsJson);
                 process.exitCode = 1;
@@ -572,7 +572,7 @@ async function handleRemote(argv: string[], workspace: string, wantsJson: boolea
             if (!repo || paths.length === 0) {
                 outputResult({
                     ok: false, action: 'remote', remoteAction: 'reset', changed: [],
-                    diagnostics: [{ level: 'error', message: 'forja remote reset requires <repo> and at least one <path>' }],
+                    diagnostics: [{ level: 'error', message: T('remote.resetUsage') }],
                     nextAction: 'forja remote reset <repo> <paths...>',
                 }, wantsJson);
                 process.exitCode = 1;
