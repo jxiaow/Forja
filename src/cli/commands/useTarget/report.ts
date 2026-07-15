@@ -54,15 +54,20 @@ export function buildConfigSummary(config: ResolvedConfig, toolchain: ToolchainI
  */
 export function buildSuccessResult(config: ResolvedConfig, toolchain: ToolchainInfo, changed: string[], workspace: string): UseTargetResult {
     const target = {
+        id: '',
+        name: '',
         kind: config.kind,
         project: config.project,
         mode: (config.mode || 'debug') as 'debug' | 'release',
         arch: (config.arch || (os.platform() === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
         runAt: config.runAt,
-        qtPath: config.qtPath,
-        vsInstall: config.vsInstall,
-        jomPath: config.jomPath,
-        qmakeTarget: config.qmakeTarget,
+        toolchain: {
+            qtPath: config.qtPath,
+            qtVersion: config.qtVersion,
+            vsInstall: config.vsInstall,
+            jomPath: config.jomPath,
+            qmakeTarget: config.qmakeTarget,
+        },
     };
 
     const diagnostics: Diagnostic[] = [];
@@ -107,19 +112,19 @@ export function formatUseTargetText(result: UseTargetResult): string {
     const t = result.activeTarget;
     if (t) {
         lines.push(`  ${T('target')}${t.project}`);
-        if (t.qtPath) {
+        if (t.toolchain.qtPath) {
             const ver = result.config?.qt?.qtVersion ? ` (${result.config.qt.qtVersion})` : '';
-            lines.push(`  ${T('setupSummaryQt')}${ver}: ${t.qtPath}`);
+            lines.push(`  ${T('setupSummaryQt')}${ver}: ${t.toolchain.qtPath}`);
         }
-        if (t.vsInstall) {
+        if (t.toolchain.vsInstall) {
             const ver = result.config?.qt?.vsVersion ? ` (${result.config.qt.vsVersion})` : '';
-            lines.push(`  ${T('setupSummaryVs')}${ver}: ${t.vsInstall}`);
+            lines.push(`  ${T('setupSummaryVs')}${ver}: ${t.toolchain.vsInstall}`);
         }
-        if (t.jomPath) {
-            lines.push(`  ${T('init.currentJom')}: ${t.jomPath}`);
+        if (t.toolchain.jomPath) {
+            lines.push(`  ${T('init.currentJom')}: ${t.toolchain.jomPath}`);
         }
         lines.push(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
-        if (t.qmakeTarget) { lines.push(`  ${T('init.qmakeTarget')}: ${t.qmakeTarget}`); }
+        if (t.toolchain.qmakeTarget) { lines.push(`  ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}`); }
     }
 
     if (result.changed && result.changed.length > 0) {

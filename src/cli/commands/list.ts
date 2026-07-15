@@ -308,7 +308,7 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
     }
     const sync = loadSyncSettings(workspace);
     const remote = loadRemoteSettings(workspace);
-    const selectedId = remote.selectedServer || sync.selectedServer || undefined;
+    const selectedId = remote.selectedServer || undefined;
     const servers = listServers(selectedId);
     let nextAction: string | undefined = undefined;
     if (servers.length === 0) {

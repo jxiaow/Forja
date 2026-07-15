@@ -71,7 +71,7 @@ function getBuildOutputDir(projectPath: string, kind: 'qt' | 'sdk'): string {
 // ── CLI options builder ──
 
 function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: boolean, qmakeArgs?: string): CliOptions {
-    const vsDevShell = target.vsInstall ? resolveVsDevCmdPath(target.vsInstall) : null;
+    const vsDevShell = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
     return {
         action: 'clean',
         executionMode: plan ? 'dryRun' : 'execute',
@@ -79,9 +79,9 @@ function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: b
         project: target.project,
         mode: target.mode,
         arch: target.arch,
-        qtPath: target.qtPath || null,
+        qtPath: target.toolchain.qtPath || null,
         vsDevShell: vsDevShell,
-        target: target.qmakeTarget || null,
+        target: target.toolchain.qmakeTarget || null,
         qmakeArgs: qmakeArgs || null,
         detach: false,
         saveLocal: false,
@@ -177,7 +177,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
 
     // SDK local
     if (target.kind === 'sdk') {
-        const vsDevCmdPath = target.vsInstall ? resolveVsDevCmdPath(target.vsInstall) : null;
+        const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
         const plan = createSdkPlan({
             action: 'clean',
             workspace,

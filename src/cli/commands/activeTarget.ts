@@ -1,60 +1,34 @@
 /**
- * ActiveTarget read/write — reads from workspaceStore, returns legacy ActiveTarget shape.
+ * ActiveTarget read/write — thin wrapper over workspaceStore.
+ * Returns TargetProfile directly (no adapter layer).
  */
 import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig, getActiveTarget as getTargetProfile } from '../../core/workspaceStore';
 import type { TargetProfile } from '../../core/workspaceStore';
-import { ActiveTarget, T } from './types';
-
-/** Convert TargetProfile to legacy ActiveTarget shape for downstream compatibility. */
-export function targetProfileToActiveTarget(profile: TargetProfile, workroot: string): ActiveTarget {
-    return {
-        kind: profile.kind,
-        project: profile.project,
-        mode: profile.mode,
-        arch: profile.arch,
-        runAt: profile.runAt,
-        qtPath: profile.toolchain.qtPath,
-        vsInstall: profile.toolchain.vsInstall,
-        jomPath: profile.toolchain.jomPath,
-        qmakeTarget: profile.toolchain.qmakeTarget,
-        qtVersion: profile.toolchain.qtVersion,
-    };
-}
+import { T } from './types';
 
 /** Resolve workroot from cwd and return the active target, or null. */
-export function getActiveTarget(cwd: string): ActiveTarget | null {
+export function getActiveTarget(cwd: string): TargetProfile | null {
     const workroot = resolveWorkroot(cwd);
     if (!workroot) { return null; }
     const config = loadWorkspaceConfig(workroot);
-    const profile = getTargetProfile(config);
-    if (!profile) { return null; }
-    return targetProfileToActiveTarget(profile, workroot);
+    return getTargetProfile(config);
 }
 
 /** Returns true if save succeeded, false if workroot not registered or no active target. */
-export function setActiveTarget(cwd: string, target: ActiveTarget): boolean {
+export function setActiveTarget(cwd: string, target: TargetProfile): boolean {
     const workroot = resolveWorkroot(cwd);
     if (!workroot) { return false; }
     const config = loadWorkspaceConfig(workroot);
     if (!config.activeTarget) { return false; }
-    const profile = config.targets[config.activeTarget];
-    if (!profile) { return false; }
+    if (!config.targets[config.activeTarget]) { return false; }
 
-    // Update profile fields from ActiveTarget
-    profile.mode = target.mode;
-    profile.arch = target.arch;
-    profile.runAt = target.runAt;
-    if (target.qtPath !== undefined) profile.toolchain.qtPath = target.qtPath;
-    if (target.vsInstall !== undefined) profile.toolchain.vsInstall = target.vsInstall;
-    if (target.jomPath !== undefined) profile.toolchain.jomPath = target.jomPath;
-    if (target.qmakeTarget !== undefined) profile.toolchain.qmakeTarget = target.qmakeTarget;
-    if (target.qtVersion !== undefined) profile.toolchain.qtVersion = target.qtVersion;
-
+    // Replace the active target profile entirely
+    config.targets[config.activeTarget] = target;
     saveWorkspaceConfig(config);
     return true;
 }
 
-export function requireActiveTarget(cwd: string): { target: ActiveTarget } | { error: string; nextAction?: string } {
+export function requireActiveTarget(cwd: string): { target: TargetProfile } | { error: string; nextAction?: string } {
     const target = getActiveTarget(cwd);
     if (!target) {
         const workroot = resolveWorkroot(cwd);

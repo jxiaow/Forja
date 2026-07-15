@@ -6,7 +6,7 @@ import {
     ServerConfig, AuthMode,
 } from '../../core/serverStore';
 import { ForjaJsonResult, Diagnostic, ServerDetail, ServerSummary, Locale, T } from './types';
-import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
+import { loadRemoteSettings, saveRemoteSettings } from '../../core/settingsIO';
 import * as path from 'path';
 
 export function formatServerText(result: ServerResult, locale: Locale): string {
@@ -245,21 +245,6 @@ export function runServerRemove(id: string, workspace: string): ServerResult {
             if (remoteChanged) {
                 saveRemoteSettings(ws, remote);
                 changed.push('remote.selectedServer');
-            }
-
-            const sync = loadSyncSettings(ws);
-            let syncChanged = false;
-            if (sync.selectedServer === id) {
-                sync.selectedServer = '';
-                syncChanged = true;
-            }
-            if (sync.remotePaths[id]) {
-                delete sync.remotePaths[id];
-                syncChanged = true;
-            }
-            if (syncChanged) {
-                saveSyncSettings(ws, sync);
-                changed.push('sync.selectedServer');
             }
         }
 

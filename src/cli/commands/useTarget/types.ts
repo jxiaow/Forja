@@ -1,7 +1,8 @@
 /**
  * useTarget module — shared types.
  */
-import { ActiveTarget, TargetCandidate, Diagnostic, Question, ForjaJsonResult } from '../types';
+import { TargetCandidate, Diagnostic, Question, ForjaJsonResult } from '../types';
+import type { TargetProfile } from '../../../core/workspaceStore';
 
 // ── Detection context ──
 
@@ -25,7 +26,7 @@ export interface DetectContext {
     qtCandidates: TargetCandidate[];
     sdkCandidates: TargetCandidate[];
     toolchain: ToolchainInfo;
-    existingTarget: ActiveTarget | null;
+    existingTarget: TargetProfile | null;
     existingQt: {
         pinnedProject: { root: string; relative: string } | null;
         qtPath: string;

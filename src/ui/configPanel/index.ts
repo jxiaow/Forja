@@ -11,6 +11,7 @@ import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
+import { loadRemoteSettings } from '../../core/settingsIO';
 import { getSyncPendingInfo } from '../../core/syncState';
 
 const logger = createLogger('ConfigPanelView');
@@ -138,16 +139,17 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             version: this._version,
             ...(() => {
                 const wsRoot = getWorkspaceRoot();
-                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release'], remotePaths: {} };
+                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release'] };
+                const remote = wsRoot ? loadRemoteSettings(wsRoot) : { selectedServer: '', remotePaths: {} as Record<string, string> };
                 const servers = readServers();
                 const pendingInfo = wsRoot ? getSyncPendingInfo(wsRoot, sync.ignore) : { count: 0, lastTime: '' };
 
                 return {
                     syncEnabled: sync.enabled,
-                    syncSelectedServer: sync.selectedServer,
+                    syncSelectedServer: remote.selectedServer,
                     syncServers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, authMode: s.authMode, privateKeyPath: s.privateKeyPath, password: s.password })),
                     syncIgnore: sync.ignore.join(', '),
-                    syncRemotePath: sync.remotePaths[sync.selectedServer] || '',
+                    syncRemotePath: remote.remotePaths[remote.selectedServer] || '',
                     syncPendingCount: pendingInfo.count,
                     syncLastTime: pendingInfo.lastTime
                 };

@@ -53,9 +53,9 @@ export function formatUseText(result: UseResult, locale: Locale): string {
         if (result.activeTarget) {
             const t = result.activeTarget;
             lines.push(`  ${T('target')}${t.project}`);
-            if (t.qtPath) lines.push(`  ${T('setupSummaryQt')}: ${t.qtPath}`);
-            if (t.vsInstall) lines.push(`  ${T('setupSummaryVs')}: ${t.vsInstall}`);
-            if (t.jomPath) lines.push(`  ${T('init.currentJom')}: ${t.jomPath}`);
+            if (t.toolchain.qtPath) lines.push(`  ${T('setupSummaryQt')}: ${t.toolchain.qtPath}`);
+            if (t.toolchain.vsInstall) lines.push(`  ${T('setupSummaryVs')}: ${t.toolchain.vsInstall}`);
+            if (t.toolchain.jomPath) lines.push(`  ${T('init.currentJom')}: ${t.toolchain.jomPath}`);
             lines.push(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
             lines.push(`  ${T('use.execution')}: ${t.runAt}`);
         }

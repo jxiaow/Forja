@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getActiveTarget } from './activeTarget';
-import { loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
+import { loadRemoteSettings } from '../../core/settingsIO';
 import { listProjectConfigs } from '../../core/settingsIO';
 import { listSyncStates } from '../../core/syncState';
 import { getServerById } from '../../core/serverStore';
@@ -166,9 +166,9 @@ export async function runDoctor(workspace: string, options: {
     const checkedToolchain = new Set<string>();
     if (activeTarget?.kind === 'qt' || !activeTarget) {
         // Use activeTarget toolchain fields (from workspaceStore) instead of old settingsIO
-        const qtPath = activeTarget?.qtPath;
-        const vsInstall = activeTarget?.vsInstall;
-        const jomPath = activeTarget?.jomPath;
+        const qtPath = activeTarget?.toolchain.qtPath;
+        const vsInstall = activeTarget?.toolchain.vsInstall;
+        const jomPath = activeTarget?.toolchain.jomPath;
 
         if (qtPath && fs.existsSync(qtPath)) {
             checks.push(check('toolchain-qt', 'ready', `Qt: ${qtPath}`));
@@ -218,7 +218,7 @@ export async function runDoctor(workspace: string, options: {
 
     if (activeTarget?.kind === 'sdk' || !activeTarget) {
         // Use activeTarget toolchain fields for SDK
-        const sdkVsInstall = activeTarget?.vsInstall;
+        const sdkVsInstall = activeTarget?.toolchain.vsInstall;
 
         // Platform-specific toolchain checks for SDK (skip if already checked for Qt)
         if (process.platform === 'win32') {
@@ -249,11 +249,11 @@ export async function runDoctor(workspace: string, options: {
     }
 
     // ── Sync check ──
-    const sync = loadSyncSettings(workspace);
-    if (sync.selectedServer) {
-        const server = getServerById(sync.selectedServer);
+    const remote = loadRemoteSettings(workspace);
+    if (remote.selectedServer) {
+        const server = getServerById(remote.selectedServer);
         if (server) {
-            const remotePath = sync.remotePaths[sync.selectedServer];
+            const remotePath = remote.remotePaths[remote.selectedServer];
             if (remotePath) {
                 checks.push(check('sync', 'ready', `${T('readinessSync')}: ${server.name}:${remotePath}`));
             } else {
@@ -262,8 +262,8 @@ export async function runDoctor(workspace: string, options: {
                     'forja remote set'));
             }
         } else {
-            checks.push(check('sync', 'blocked', `${T('doctorSyncDeleted')}: ${sync.selectedServer}`,
-                [diag('error', T('doctorSyncServerNotExist', [sync.selectedServer]))],
+            checks.push(check('sync', 'blocked', `${T('doctorSyncDeleted')}: ${remote.selectedServer}`,
+                [diag('error', T('doctorSyncServerNotExist', [remote.selectedServer]))],
                 'forja server'));
         }
     } else {
@@ -272,7 +272,6 @@ export async function runDoctor(workspace: string, options: {
 
     // ── Remote checks ──
     if (isRemote) {
-        const remote = loadRemoteSettings(workspace);
         // Use resolveRemoteConfig for consistent remote config resolution
         const resolvedRemote = resolveRemoteConfig(workspace, options.server);
         const server = resolvedRemote.config?.server || null;

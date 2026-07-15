@@ -11,7 +11,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { forjaConfigDir, loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
+import { forjaConfigDir, loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC, loadRemoteSettings, saveRemoteSettings } from './settingsIO';
 import { warn } from './loggerBase';
 
 function atomicWriteJson(filePath: string, data: unknown): void {
@@ -43,10 +43,7 @@ export interface ServerConfig {
 
 export interface ProjectSyncConfig {
     enabled: boolean;
-    selectedServer: string; // server id
     ignore: string[];
-    /** 每个服务器对应的远程路径 */
-    remotePaths: Record<string, string>;
 }
 
 // ── 路径 ──
@@ -199,12 +196,10 @@ export function readProjectSyncConfig(workspaceRoot: string): ProjectSyncConfig 
         const sync = loadSyncSettings(workspaceRoot);
         return {
             enabled: sync.enabled,
-            selectedServer: sync.selectedServer,
             ignore: sync.ignore.length > 0 ? sync.ignore : [...DEFAULT_IGNORE],
-            remotePaths: sync.remotePaths
         };
     } catch {
-        return { enabled: false, selectedServer: '', ignore: [...DEFAULT_IGNORE], remotePaths: {} };
+        return { enabled: false, ignore: [...DEFAULT_IGNORE] };
     }
 }
 
@@ -213,8 +208,6 @@ export function writeProjectSyncConfig(workspaceRoot: string, config: Partial<Pr
     const updated: SyncSettings = { ...current };
 
     if (config.enabled !== undefined) { updated.enabled = config.enabled; }
-    if (config.selectedServer !== undefined) { updated.selectedServer = config.selectedServer; }
-    if (config.remotePaths !== undefined) { updated.remotePaths = config.remotePaths; }
     if (config.ignore !== undefined) { updated.ignore = config.ignore; }
 
     saveSyncSettings(workspaceRoot, updated);
@@ -225,4 +218,18 @@ export function writeProjectSyncConfig(workspaceRoot: string, config: Partial<Pr
  */
 export function updateProjectSyncField<K extends keyof ProjectSyncConfig>(workspaceRoot: string, key: K, value: ProjectSyncConfig[K]): void {
     writeProjectSyncConfig(workspaceRoot, { [key]: value } as Partial<ProjectSyncConfig>);
+}
+
+// ── Remote 字段更新辅助（selectedServer / remotePaths 已从 sync 迁移到 remote） ──
+
+export function updateRemoteSelectedServer(workspaceRoot: string, serverId: string): void {
+    const remote = loadRemoteSettings(workspaceRoot);
+    remote.selectedServer = serverId;
+    saveRemoteSettings(workspaceRoot, remote);
+}
+
+export function updateRemotePath(workspaceRoot: string, serverId: string, remotePath: string): void {
+    const remote = loadRemoteSettings(workspaceRoot);
+    remote.remotePaths[serverId] = remotePath;
+    saveRemoteSettings(workspaceRoot, remote);
 }

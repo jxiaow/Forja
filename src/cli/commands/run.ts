@@ -34,7 +34,7 @@ export interface RunResult {
 }
 
 function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: { detach?: boolean; plan?: boolean }, qmakeArgs?: string): CliOptions {
-    const vsDevShell = target.vsInstall ? resolveVsDevCmdPath(target.vsInstall) : null;
+    const vsDevShell = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
     return {
         action: 'run',
         executionMode: options.plan ? 'dryRun' : 'execute',
@@ -42,9 +42,9 @@ function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: 
         project: target.project,
         mode: target.mode,
         arch: target.arch,
-        qtPath: target.qtPath || null,
+        qtPath: target.toolchain.qtPath || null,
         vsDevShell: vsDevShell,
-        target: target.qmakeTarget || null,
+        target: target.toolchain.qmakeTarget || null,
         qmakeArgs: qmakeArgs || null,
         detach: options.detach ?? false,
         saveLocal: false,
@@ -90,7 +90,7 @@ export async function runRun(workspace: string, options: {
         }
         console.log(`  ${T('target')}${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
-        if (target.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.qmakeTarget}`); }
+        if (target.toolchain.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.toolchain.qmakeTarget}`); }
         console.log();
     }
 
@@ -267,7 +267,7 @@ async function handleDesigner(workspace: string, uiFile: string): Promise<RunRes
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const designerPath = wsConfig?.qtModulePrefs.designerPath || '';
     const target = getActiveTarget(workspace);
-    const qtPath = target?.qtPath || '';
+    const qtPath = target?.toolchain.qtPath || '';
     const designerResult = await launchDesigner(resolvedPath, designerPath, qtPath);
 
     if (!designerResult.ok) {
@@ -328,8 +328,8 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
 
         // Inject Qt bin into PATH so custom commands can find Qt tools
         const env = { ...process.env };
-        if (target.qtPath) {
-            env.PATH = `${target.qtPath}${path.sep}bin${path.delimiter}${env.PATH || ''}`;
+        if (target.toolchain.qtPath) {
+            env.PATH = `${target.toolchain.qtPath}${path.sep}bin${path.delimiter}${env.PATH || ''}`;
         }
 
         const result = cp.spawnSync(customCmd.command, {
@@ -404,7 +404,7 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
         console.log(`${T('run')} ${status}`);
         if (result.activeTarget) {
             const t = result.activeTarget;
-            const qt = t.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.qmakeTarget}` : '';
+            const qt = t.toolchain.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}` : '';
             console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
         }
         if (result.runtime?.pid) {

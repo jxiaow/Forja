@@ -14,20 +14,21 @@ import {
 import { getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
+import { loadRemoteSettings } from '../../core/settingsIO';
 import { getSyncPendingInfo } from '../../core/syncState';
 import type { ServerConfig, ProjectSyncConfig } from '../../core/serverStore';
 
-function buildSyncReadinessIssues(sync: ProjectSyncConfig, servers: ServerConfig[]): string[] {
+function buildSyncReadinessIssues(sync: ProjectSyncConfig, remote: { selectedServer: string; remotePaths: Record<string, string> }, servers: ServerConfig[]): string[] {
     const issues: string[] = [];
-    const selectedServerExists = !!sync.selectedServer && servers.some(s => s.id === sync.selectedServer);
+    const selectedServerExists = !!remote.selectedServer && servers.some(s => s.id === remote.selectedServer);
     if (!sync.enabled) { issues.push('未启用远程同步'); }
     if (servers.length === 0) { issues.push('未添加服务器'); }
-    if (!sync.selectedServer) {
+    if (!remote.selectedServer) {
         issues.push('未选择同步服务器');
     } else if (!selectedServerExists) {
         issues.push('已选择服务器不存在');
     }
-    if (!selectedServerExists || !sync.remotePaths[sync.selectedServer]) {
+    if (!selectedServerExists || !remote.remotePaths[remote.selectedServer]) {
         issues.push('未设置远程路径');
     }
     return issues;
@@ -40,9 +41,12 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
     const wsRoot = getWorkspaceRoot();
     const sync = wsRoot
         ? readProjectSyncConfig(wsRoot)
-        : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release'], remotePaths: {} };
+        : { enabled: false, ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release'] };
+    const remote = wsRoot
+        ? loadRemoteSettings(wsRoot)
+        : { selectedServer: '', remotePaths: {} as Record<string, string> };
     const servers = readServers();
-    const selectedServerExists = !!sync.selectedServer && servers.some(s => s.id === sync.selectedServer);
+    const selectedServerExists = !!remote.selectedServer && servers.some(s => s.id === remote.selectedServer);
     const pendingInfo = wsRoot ? getSyncPendingInfo(wsRoot, sync.ignore) : { count: 0, lastTime: '' };
 
     return {
@@ -69,17 +73,17 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         rccProjectPath: getRccProjectPath(),
         version: context.extension.packageJSON.version ?? '',
         syncEnabled: sync.enabled,
-        syncSelectedServer: sync.selectedServer,
+        syncSelectedServer: remote.selectedServer,
         syncServers: servers.map(s => ({
             id: s.id, name: s.name, host: s.host, port: s.port,
             username: s.username, authMode: s.authMode,
             privateKeyPath: s.privateKeyPath, password: s.password
         })),
         syncIgnore: sync.ignore.join(', '),
-        syncRemotePath: selectedServerExists ? (sync.remotePaths[sync.selectedServer] || '') : '',
+        syncRemotePath: selectedServerExists ? (remote.remotePaths[remote.selectedServer] || '') : '',
         syncPendingCount: pendingInfo.count,
         syncLastTime: pendingInfo.lastTime,
-        syncReadinessIssues: buildSyncReadinessIssues(sync, servers),
+        syncReadinessIssues: buildSyncReadinessIssues(sync, remote, servers),
         // SDK
         sdkProjectName: getSdkSetting('pinnedProject') || '未选择',
         sdkMode: getSdkSetting('mode'),

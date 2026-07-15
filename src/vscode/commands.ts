@@ -415,11 +415,16 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     const sdkSettings = loadSdkSettings(workspace());
                     if (sdkSettings.pinnedProject) {
                         target = {
-                            kind: 'sdk',
+                            id: '',
+                            name: '',
+                            kind: 'sdk' as const,
                             project: sdkSettings.pinnedProject,
-                            mode: sdkSettings.mode || 'debug',
-                            arch: sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
-                            runAt: 'local',
+                            mode: (sdkSettings.mode || 'debug') as 'debug' | 'release',
+                            arch: (sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+                            runAt: 'local' as const,
+                            toolchain: {
+                                vsInstall: sdkSettings.vsInstall,
+                            },
                         };
                     }
                 }
@@ -602,11 +607,16 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     const sdkSettings = loadSdkSettings(workspace());
                     if (sdkSettings.pinnedProject) {
                         target = {
-                            kind: 'sdk',
+                            id: '',
+                            name: '',
+                            kind: 'sdk' as const,
                             project: sdkSettings.pinnedProject,
-                            mode: sdkSettings.mode || 'debug',
-                            arch: sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
-                            runAt: 'local',
+                            mode: (sdkSettings.mode || 'debug') as 'debug' | 'release',
+                            arch: (sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+                            runAt: 'local' as const,
+                            toolchain: {
+                                vsInstall: sdkSettings.vsInstall,
+                            },
                         };
                     }
                 }

@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { clearSyncState, filterNeedsDelete, filterNeedsSync, markDeletedBatch, markSyncedBatch, SyncTargetContext } from '../core/syncState';
 import { readProjectSyncConfig, writeProjectSyncConfig, resolveServerSelector, ServerConfig } from '../core/serverStore';
+import { loadRemoteSettings, saveRemoteSettings } from '../core/settingsIO';
 import { deleteRemoteFile, ensureRemoteDir, scpUpload } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
 import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
@@ -96,7 +97,8 @@ function resolveSyncConfig(workspaceRoot: string): { ok: true; config: ResolvedS
         return { ok: false, error: T('sync.notConfigured') };
     }
 
-    const targetId = project.selectedServer;
+    const remote = loadRemoteSettings(workspaceRoot);
+    const targetId = remote.selectedServer;
     if (!targetId) {
         return { ok: false, error: T('sync.notConfigured') };
     }
@@ -107,7 +109,7 @@ function resolveSyncConfig(workspaceRoot: string): { ok: true; config: ResolvedS
         return { ok: false, error: resolvedServer.error || `${T('sync.serverNotFound')}: "${targetId}"` };
     }
 
-    const remotePath = project.remotePaths[server.id] || '';
+    const remotePath = remote.remotePaths[server.id] || '';
     if (!remotePath) {
         return { ok: false, error: T('sync.noRemotePath'), nextAction: `forja sync` };
     }
@@ -202,20 +204,22 @@ export interface ConfigureSyncOptions {
 }
 
 export function configureSyncSettings(workspaceRoot: string, options: ConfigureSyncOptions): { ok: true } | { ok: false; error: string } {
+    // Update sync enabled state
     const sync = readProjectSyncConfig(workspaceRoot);
-    sync.selectedServer = options.serverId;
-    if (options.remotePath) {
-        sync.remotePaths[options.serverId] = options.remotePath;
-    }
     if (options.enable !== false) {
         sync.enabled = true;
     }
     try {
         writeProjectSyncConfig(workspaceRoot, {
             enabled: sync.enabled,
-            selectedServer: sync.selectedServer,
-            remotePaths: sync.remotePaths,
         });
+        // Update remote selectedServer and remotePath
+        const remote = loadRemoteSettings(workspaceRoot);
+        remote.selectedServer = options.serverId;
+        if (options.remotePath) {
+            remote.remotePaths[options.serverId] = options.remotePath;
+        }
+        saveRemoteSettings(workspaceRoot, remote);
         return { ok: true };
     } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };

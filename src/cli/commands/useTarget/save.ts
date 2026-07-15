@@ -7,23 +7,27 @@ import {
     generateTargetId, registerWorkroot,
 } from '../../../core/workspaceStore';
 import type { TargetProfile } from '../../../core/workspaceStore';
-import { ActiveTarget } from '../types';
 import type { ResolvedConfig } from './types';
 
 /**
- * Build an ActiveTarget from resolved config (legacy shape for downstream compat).
+ * Build a TargetProfile from resolved config (for result output).
  */
-export function buildActiveTarget(config: ResolvedConfig): ActiveTarget {
+export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
     return {
+        id: '',
+        name: '',
         kind: config.kind,
         project: config.project,
         mode: (config.mode || 'debug') as 'debug' | 'release',
         arch: (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
         runAt: config.runAt,
-        qtPath: config.qtPath,
-        vsInstall: config.vsInstall,
-        jomPath: config.jomPath,
-        qmakeTarget: config.qmakeTarget,
+        toolchain: {
+            qtPath: config.qtPath,
+            qtVersion: config.qtVersion,
+            vsInstall: config.vsInstall,
+            jomPath: config.jomPath,
+            qmakeTarget: config.qmakeTarget,
+        },
     };
 }
 
@@ -80,17 +84,4 @@ export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; 
     } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
-}
-
-// Kept for backward compat — no-op since workspaceStore is single source of truth
-export function saveDomainFields(_workspace: string, _config: ResolvedConfig): { ok: true } | { ok: false; error: string } {
-    return { ok: true };
-}
-
-export function saveActive(_workspace: string, _target: ActiveTarget): { ok: true } | { ok: false; error: string } {
-    return { ok: true };
-}
-
-export function saveToolchain(_workspace: string, _config: ResolvedConfig): void {
-    // no-op
 }

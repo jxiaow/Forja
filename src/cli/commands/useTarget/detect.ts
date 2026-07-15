@@ -18,19 +18,8 @@ export async function detectContext(workspace: string): Promise<DetectContext> {
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const profile = wsConfig ? getActiveTarget(wsConfig) : null;
 
-    // Build legacy-shaped existingTarget from workspaceStore profile
-    const existingTarget = profile ? {
-        kind: profile.kind,
-        project: profile.project,
-        mode: profile.mode,
-        arch: profile.arch,
-        runAt: profile.runAt,
-        qtPath: profile.toolchain.qtPath,
-        vsInstall: profile.toolchain.vsInstall,
-        jomPath: profile.toolchain.jomPath,
-        qmakeTarget: profile.toolchain.qmakeTarget,
-        qtVersion: profile.toolchain.qtVersion,
-    } : null;
+    // Pass profile directly as existingTarget (now TargetProfile)
+    const existingTarget = profile;
 
     return {
         workspace,

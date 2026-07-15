@@ -19,7 +19,7 @@ import { runSyncPlan, runSyncExecute, runSyncReset, runSyncStatus, runSyncIgnore
 import { runInit, formatInitText } from './init';
 import { confirm, prompt, choose } from './prompt';
 import { resolveLocale, Locale, T, setGlobalLocale, diag } from './types';
-import { loadGlobalConfig } from '../../core/settingsIO';
+import { loadGlobalConfig, loadRemoteSettings } from '../../core/settingsIO';
 import { readServers, addServer, getServerById, readProjectSyncConfig } from '../../core/serverStore';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
 import { ClassifiedChanges, configureSyncSettings } from '../../sync/cli';
@@ -1002,8 +1002,8 @@ async function interactiveSyncSetup(workspace: string): Promise<{ ok: true } | {
     }
 
     // Remote path: reuse existing or prompt
-    const syncCfg = readProjectSyncConfig(workspace);
-    let remotePath = syncCfg.remotePaths[serverId || ''] || '';
+    const remoteCfg = loadRemoteSettings(workspace);
+    let remotePath = remoteCfg.remotePaths[serverId || ''] || '';
     if (!remotePath) {
         const defaultPath = `/home/${selectedServer?.username || 'user'}/${path.basename(workspace)}`;
         remotePath = await prompt(T('setupRemotePathPrompt'), defaultPath);
@@ -1098,8 +1098,9 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
 
     // ── 检查配置是否完整 ──
     const syncCfg = readProjectSyncConfig(workspace);
-    const serverExists = syncCfg.selectedServer ? readServers().some(s => s.id === syncCfg.selectedServer) : false;
-    const needsSetup = !syncCfg.enabled || !syncCfg.selectedServer || !serverExists || !syncCfg.remotePaths[syncCfg.selectedServer];
+    const remoteCfg = loadRemoteSettings(workspace);
+    const serverExists = remoteCfg.selectedServer ? readServers().some(s => s.id === remoteCfg.selectedServer) : false;
+    const needsSetup = !syncCfg.enabled || !remoteCfg.selectedServer || !serverExists || !remoteCfg.remotePaths[remoteCfg.selectedServer];
     if (needsSetup) {
         if (wantsJson) {
             // JSON mode: return choices for AI to guide user

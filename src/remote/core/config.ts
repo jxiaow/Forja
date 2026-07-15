@@ -21,7 +21,7 @@ export function resolveRemoteConfigFrom(
     sync: SyncSettings,
     serverOverride?: string,
 ): ResolveRemoteConfigResult {
-    const serverId = serverOverride || remote.selectedServer || sync.selectedServer;
+    const serverId = serverOverride || remote.selectedServer;
     if (!serverId) {
         return blocked('No server selected');
     }
@@ -29,8 +29,7 @@ export function resolveRemoteConfigFrom(
     if (!server) {
         return blocked(`Server not found: ${serverId}`);
     }
-    // Prefer remote.remotePaths, fall back to sync.remotePaths for backward compatibility
-    const remotePath = remote.remotePaths[serverId] || sync.remotePaths[serverId] || '';
+    const remotePath = remote.remotePaths[serverId] || '';
     if (!remotePath) {
         return blocked(`Server ${server.name || server.id}: remotePath not configured`);
     }

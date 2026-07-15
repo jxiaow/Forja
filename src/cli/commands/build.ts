@@ -42,7 +42,7 @@ function buildQtCliOptions(workspace: string, target: ActiveTarget, action: Buil
         case 'rcc': qtAction = 'rcc'; break;
         default: qtAction = 'build'; break;
     }
-    const vsDevShell = target.vsInstall ? resolveVsDevCmdPath(target.vsInstall) : null;
+    const vsDevShell = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
     return {
         action: qtAction,
         executionMode: plan ? 'dryRun' : 'execute',
@@ -50,9 +50,9 @@ function buildQtCliOptions(workspace: string, target: ActiveTarget, action: Buil
         project: target.project,
         mode: target.mode,
         arch: target.arch,
-        qtPath: target.qtPath || null,
+        qtPath: target.toolchain.qtPath || null,
         vsDevShell: vsDevShell,
-        target: target.qmakeTarget || null,
+        target: target.toolchain.qmakeTarget || null,
         qmakeArgs: qmakeArgs || null,
         detach: false,
         saveLocal: false,
@@ -98,16 +98,15 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             || allTargets.find(t => t.kind === kind)
             || null;
         targetResult = {
-            target: {
+            target: savedProfile || {
+                id: '',
+                name: '',
                 kind,
                 project: relativeProject,
-                mode: savedProfile?.mode || 'debug',
-                arch: savedProfile?.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
-                runAt: savedProfile?.runAt || 'local',
-                qtPath: savedProfile?.toolchain.qtPath,
-                vsInstall: savedProfile?.toolchain.vsInstall,
-                jomPath: savedProfile?.toolchain.jomPath,
-                qmakeTarget: savedProfile?.toolchain.qmakeTarget,
+                mode: 'debug' as const,
+                arch: (process.platform === 'win32' ? 'x86' : 'x64') as 'x86' | 'x64',
+                runAt: 'local' as const,
+                toolchain: {},
             },
         };
     } else {
@@ -139,7 +138,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         }
         console.log(`  ${T('target')}${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
-        if (target.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.qmakeTarget}`); }
+        if (target.toolchain.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.toolchain.qmakeTarget}`); }
         console.log();
     }
 
@@ -227,7 +226,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     if (target.kind === 'sdk') {
         try {
             const sdkAction = buildAction === 'fresh' ? 'rebuild' : 'build';
-            const vsDevCmdPath = target.vsInstall ? resolveVsDevCmdPath(target.vsInstall) : null;
+            const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
             const plan = createSdkPlan({
                 action: sdkAction as 'build' | 'rebuild' | 'clean',
                 workspace,
@@ -400,7 +399,7 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
         console.log(`${T('build')} ${status}`);
         if (result.activeTarget) {
             const t = result.activeTarget;
-            const qt = t.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.qmakeTarget}` : '';
+            const qt = t.toolchain.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}` : '';
             console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
         }
         if (result.durationMs) {

@@ -5,7 +5,8 @@ import { getState, setState } from '../../vscode/qtState';
 import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig } from '../../core/serverStore';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig, updateRemoteSelectedServer } from '../../core/serverStore';
+import { loadRemoteSettings, saveRemoteSettings } from '../../core/settingsIO';
 import { executeTestConnection, refreshSyncStatusBar } from '../../sync/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
 import { setSdkSetting } from '../../vscode/settingsStore';
@@ -263,7 +264,7 @@ export async function handleMessage(
             logger.info(`选择服务器: "${msg.value}"`);
             const ws2 = getWorkspaceRoot();
             if (ws2) {
-                updateProjectSyncField(ws2, 'selectedServer', String(msg.value || ''));
+                updateRemoteSelectedServer(ws2, String(msg.value || ''));
                 // 选中服务器时自动启用同步
                 if (msg.value) { updateProjectSyncField(ws2, 'enabled', true); }
             }
@@ -275,14 +276,14 @@ export async function handleMessage(
             logger.info(`保存项目远程路径: "${msg.value}"`);
             const ws3 = getWorkspaceRoot();
             if (ws3) {
-                const currentConfig = readProjectSyncConfig(ws3);
-                const serverId = currentConfig.selectedServer;
+                const remoteCfg = loadRemoteSettings(ws3);
+                const serverId = remoteCfg.selectedServer;
                 if (serverId) {
                     const newVal = String(msg.value || '');
                     // 不用空值覆盖已有路径（防止页面重渲染时 onblur 误触发）
-                    if (newVal || !currentConfig.remotePaths[serverId]) {
-                        const newPaths = { ...currentConfig.remotePaths, [serverId]: newVal };
-                        updateProjectSyncField(ws3, 'remotePaths', newPaths);
+                    if (newVal || !remoteCfg.remotePaths[serverId]) {
+                        remoteCfg.remotePaths[serverId] = newVal;
+                        saveRemoteSettings(ws3, remoteCfg);
                     }
                 }
             }
@@ -316,12 +317,12 @@ export async function handleMessage(
             // 保存远程路径和选中服务器到项目配置
             const wsAdd = getWorkspaceRoot();
             if (wsAdd) {
-                updateProjectSyncField(wsAdd, 'selectedServer', created.id);
+                updateRemoteSelectedServer(wsAdd, created.id);
                 updateProjectSyncField(wsAdd, 'enabled', true);
                 if (msg.remotePath) {
-                    const syncCfg = readProjectSyncConfig(wsAdd);
-                    const newPaths = { ...syncCfg.remotePaths, [created.id]: String(msg.remotePath) };
-                    updateProjectSyncField(wsAdd, 'remotePaths', newPaths);
+                    const remoteCfg = loadRemoteSettings(wsAdd);
+                    remoteCfg.remotePaths[created.id] = String(msg.remotePath);
+                    saveRemoteSettings(wsAdd, remoteCfg);
                 }
             }
             refreshSyncStatusBar();
@@ -335,10 +336,10 @@ export async function handleMessage(
                 // 如果删除的是当前选中的服务器，切换到剩余的第一个
                 const wsRm = getWorkspaceRoot();
                 if (wsRm) {
-                    const syncCfgRm = readProjectSyncConfig(wsRm);
-                    if (syncCfgRm.selectedServer === msg.id) {
+                    const remoteCfgRm = loadRemoteSettings(wsRm);
+                    if (remoteCfgRm.selectedServer === msg.id) {
                         const remaining = readServers();
-                        updateProjectSyncField(wsRm, 'selectedServer', remaining.length > 0 ? remaining[0].id : '');
+                        updateRemoteSelectedServer(wsRm, remaining.length > 0 ? remaining[0].id : '');
                     }
                 }
             }
@@ -377,11 +378,11 @@ export async function handleMessage(
             // 保存远程路径到项目配置，并确保选中的是当前编辑的服务器
             const wsUpd = getWorkspaceRoot();
             if (wsUpd) {
-                updateProjectSyncField(wsUpd, 'selectedServer', serverId);
+                updateRemoteSelectedServer(wsUpd, serverId);
                 if (msg.remotePath !== undefined) {
-                    const syncCfgUpd = readProjectSyncConfig(wsUpd);
-                    const newPathsUpd = { ...syncCfgUpd.remotePaths, [serverId]: String(msg.remotePath || '') };
-                    updateProjectSyncField(wsUpd, 'remotePaths', newPathsUpd);
+                    const remoteCfgUpd = loadRemoteSettings(wsUpd);
+                    remoteCfgUpd.remotePaths[serverId] = String(msg.remotePath || '');
+                    saveRemoteSettings(wsUpd, remoteCfgUpd);
                 }
             }
             _pushServerList(webview, serverId);

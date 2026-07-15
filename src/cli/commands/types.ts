@@ -5,19 +5,10 @@
 
 // ── ActiveTarget ──
 
-export interface ActiveTarget {
-    kind: 'qt' | 'sdk';
-    project: string;
-    mode: 'debug' | 'release';
-    arch: 'x86' | 'x64';
-    runAt: 'local' | 'remote';
-    qtPath?: string;
-    vsInstall?: string;
-    jomPath?: string;
-    qmakeTarget?: string;
-    qtVersion?: string;
-    vsVersion?: string;
-}
+import type { TargetProfile } from '../../core/workspaceStore';
+
+/** @deprecated Use TargetProfile directly. Kept as alias for backward compat. */
+export type ActiveTarget = TargetProfile;
 
 // ── Diagnostic ──
 
