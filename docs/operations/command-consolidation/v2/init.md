@@ -2,463 +2,199 @@
 
 [← 返回总览](index.md)
 
-**职责**：首次初始化。检测工具链路径并保存无歧义配置，不替用户做模糊选择。重复执行安全。
+**职责**：注册 workroot 并配置初始 target。用户通过 `forja init` 明确告诉系统工作根目录，所有后续命令从 cwd 向上查找已注册的 workroot 来解析配置。
 
 **语法**：
 ```
-forja init [--workspace <path>] [--remote] [--server <id>] [--plan] [--json]
+forja init [--workroot <path>] [--json]
+forja init --answers <file> --json
 ```
 
-**行为**：
-1. 扫描 Qt 目标（.pro）。
-2. 扫描 SDK 目标（.sln/Makefile）。
-3. 发现可用工具链路径（Qt/VS/jom/make）用于保存默认值 — 仅发现路径，不做健康验证（健康验证归 `doctor`）。
-4. 保存 toolchain 默认值（Qt path、VS path、jom path）。
-5. 保存 mode/arch 默认值。mode 默认 `release`；arch 根据平台决定（Windows 默认 `x86`，其他平台默认 `x64`）。
-6. 整个 workspace 只有一个目标时保存为 active target。
-7. 多个目标或混合 Qt+SDK 时不选择，next actions 指向 `forja list` + `forja use target --project <path>`。
-8. 零个目标时仅保存工具链默认值，next action 指向 `forja list`。
-9. `--remote` 通过 bridge 在远端执行初始化。需要已配置 server；若远端缺少 Forja bin，next action 指向 `forja doctor fix --remote`。
-10. `--remote --server <id>` 临时指定共享 server 执行远端初始化，不修改 remote/sync 配置。
+**前置条件**：无。`forja init` 是唯一不要求 workroot 已注册的命令。
 
-**幂等性**：重复执行安全。已保存的用户选择不覆盖，仅填充缺失项。
+## 行为
 
-**`--plan`**：输出"将检测到什么、将保存什么"，不写入配置。
+### 新 workroot（未注册）
 
-**吸收的旧命令**：
-`forja qt init`、`forja sdk init`、`forja remote qt init`、`forja remote sdk init`
+1. 解析 workroot（`--workroot` flag 或 cwd）
+2. **先注册 workroot** 到 `~/.forja/workspaces.json`（确保即使后续步骤失败，workroot 也已注册）
+3. 扫描 workroot 下的项目文件（`.pro` / `.sln` / `Makefile` / `CMakeLists.txt`）
+4. 检测工具链环境（Qt / VS / jom / make）
+5. 交互流程：
+   - 选择目标项目
+   - 配置工具链（Qt 路径、VS 路径）
+   - 选择 mode（debug/release）和 arch（x86/x64）
+6. 生成 target profile，写入 `~/.forja/workspaces/<hash>.json`
+7. 输出摘要 + `nextAction: forja status`
 
-**不吸收**：
-`forja remote bootstrap`（部署 Forja bin）→ `forja doctor fix --remote [--server <id>]`
+### 已注册 workroot
 
-**VSCode 映射**：
+1. 显示当前已保存的 targets 列表
+2. 提供选项：
+   - **添加新 target** → 走完整配置流程
+   - **修改现有 target** → 选择已有 target → 重新检测工具链 + mode/arch
+   - **退出**
 
-| 旧 Command ID | 新 Command ID | 说明 |
-|---------------|---------------|------|
-| `forja.remote.bootstrap` | `forja.doctor` | 部署远端 Forja bin 不归 init，归 doctor fix |
-| 旧 Qt/SDK 初始化入口 | `forja.init` | 统一首次初始化 |
+### 三种模式
 
-**Result**：
+| 模式 | 触发条件 | 行为 |
+|------|----------|------|
+| 交互模式 | 无 `--json`、无 `--answers` | 逐步 prompt 用户选择 |
+| JSON 模式 | `--json` 且无 `--answers` | 返回 `questions` 数组，等待 AI 填写 |
+| Answers 模式 | `--answers <file>` | 从 JSON 文件读取预配置答案 |
+
+## Result
+
 ```ts
 interface InitResult extends ForjaJsonResult {
     action: 'init';
-    mode: 'local' | 'remote';
-    detected: {
-        qtTargets: number;
-        sdkTargets: number;
-        toolchain: { qt?: boolean; vs?: boolean; jom?: boolean; make?: boolean };
-    };
-    saved?: { mode?: string; arch?: string; toolchain?: string[] };
-    ambiguous?: boolean;  // true when multiple targets or mixed Qt+SDK
-    plan?: CommandPlan;
+    workroot?: string;
+    registered?: boolean;     // true 表示本次新注册
+    target?: TargetProfile;   // 配置完成的 target
 }
 ```
 
-**实现细节**：
+## Target Profile
 
-### `--remote` Bridge 命令构造
-
-`forja init --remote` 通过 `executeRemoteBridge` 在远端执行初始化。对每个检测到的 target kind（qt/sdk）分别执行：
-
-```bash
-cd <remotePath> && <remoteForjaBin> <target> init --workspace <remotePath> --json
+```ts
+interface TargetProfile {
+    id: string;               // 如 "qt-app-debug-x64"
+    name: string;             // 如 "app debug x64"
+    kind: 'qt' | 'sdk';
+    project: string;          // workroot 相对路径
+    mode: 'debug' | 'release';
+    arch: 'x86' | 'x64';
+    runAt: 'local' | 'remote';
+    toolchain: {
+        qtPath?: string;
+        qtVersion?: string;
+        vsInstall?: string;
+        jomPath?: string;
+    };
+}
 ```
 
-- `<target>`：`qt` 或 `sdk`，由本地检测到的 target kind 决定。
-- `<remoteForjaBin>`：来自 `RemoteSettings.remoteForjaBin`，默认 `$HOME/.forja/bin/forja`。
-- 超时：默认 120 秒（与 bridge 默认值一致）。
-- 远端 Forja bin 不存在时（exit 127/126），返回错误并指向 `forja doctor fix --remote`。
+## Target ID 生成规则
 
-### ActiveTarget 存储
+格式：`{kind}-{projectBasename}-{mode}-{arch}`
 
-单目标自动保存时，activeTarget 存储在：
+示例：`qt-app-debug-x64`、`sdk-corelib-release-x86`
+
+冲突时追加短 hash：`qt-app-debug-x64-a3f2b1`
+
+## 存储结构
 
 ```
-~/.forja/projects/<hash(workspace:activeTarget)>.json
+~/.forja/
+  workspaces.json            ← workroot 注册表（路径列表）
+  workspaces/
+    <hash>.json              ← per-workspace 配置（targets + modulePrefs）
 ```
 
-格式：
+## 场景示例
 
+**新 workroot 交互模式**：
+```
+$ forja init
+Initializing new workspace
+  Work root: C:\Code\myapp
+Found projects: 3
+? Select a project:
+  1. app (app/app.pro)
+  2. utils (utils/Makefile)
+  3. corelib (sdk/corelib.sln)
+> 1
+  ✓ app (app/app.pro)
+? Select Qt:
+  1. 6.5.3 — C:/Qt/6.5.3/msvc2019_64
+  2. 5.15.2 — C:/Qt/5.15.2/msvc2019
+> 1
+? Select mode:
+  1. debug
+  2. release
+> 1
+```
+
+**已注册 workroot**：
+```
+$ forja init
+Work root is already registered
+  Work root: C:\Code\myapp
+  Existing targets:
+    * qt-app-debug-x64 [qt] app/app.pro
+      sdk-lib-release-x86 [sdk] sdk/lib.sln
+? Action:
+  1. Add a new target
+  2. Modify an existing target
+  3. Exit
+> 1
+```
+
+**JSON 模式（AI 调用）**：
 ```json
 {
-    "type": "activeTarget",
-    "kind": "qt",
-    "project": "app/app.pro",
-    "mode": "release",
-    "arch": "x86",
-    "runAt": "local"
+    "ok": false,
+    "action": "init",
+    "workroot": "C:\\Code\\myapp",
+    "questions": [
+        { "id": "project", "label": "Select a project", "choices": ["app/app.pro", "utils/Makefile"] },
+        { "id": "mode", "label": "Select mode", "choices": ["debug", "release"] },
+        { "id": "arch", "label": "Select arch", "choices": ["x86", "x64"] }
+    ],
+    "nextAction": "forja init --answers <answers.json>"
 }
 ```
 
-`activeTarget` 只是当前目标指针和执行快照；Qt/SDK 工具链、QMake TARGET 覆盖、VS dev cmd、远程配置等分别独立保存。自动保存或切换 active target 不删除、不重置另一类配置。
-
-**Init 诊断码表**：
-
-| code | level | EN message | ZH message |
-|------|-------|-----------|-----------|
-| `init.workspaceNotFound` | error | Workspace does not exist: {path} | Workspace 不存在: {path} |
-| `init.noTargets` | info | No Qt or SDK targets found, only toolchain defaults saved | 未找到 Qt 或 SDK 目标，仅保存工具链默认值 |
-| `init.multipleTargets` | info | Found {count} targets, not auto-selecting | 发现 {count} 个目标，未自动选择 |
-| `init.mixedTargets` | info | Found {qtCount} Qt and {sdkCount} SDK targets, not auto-selecting | 发现 {qtCount} 个 Qt 目标和 {sdkCount} 个 SDK 目标，未自动选择 |
-| `init.toolchainQtMissing` | warning | Qt installation not detected | 未检测到 Qt 安装 |
-| `init.toolchainVsMissing` | warning | Visual Studio installation not detected | 未检测到 Visual Studio 安装 |
-| `init.toolchainMakeMissing` | warning | make not detected | 未检测到 make 工具 |
-| `init.toolchainJomMissing` | warning | jom not detected (optional, recommended for faster Qt builds on Windows) | 未检测到 jom（可选，推荐安装以加速 Qt 构建） |
-| `init.configWriteFailed` | error | Failed to write configuration: {detail} | 写入配置失败: {detail} |
-| `init.remoteNoServer` | error | No server configured for remote init | 未配置服务器，无法执行远程初始化 |
-| `init.serverNotFound` | error | Server does not exist: {server} | Server 不存在: {server} |
-| `init.remoteForjaMissing` | error | Remote Forja bin not installed | 远端 Forja 未安装 |
-| `init.remoteBridgeFailed` | error | Remote bridge execution failed: {detail} | 远端 bridge 执行失败: {detail} |
-| `init.alreadyInitialized` | info | Configuration already exists, only filling missing items | 配置已存在，仅填充缺失项 |
-
-**正常场景**：
-
-_单目标 Qt workspace_：
+**成功结果**：
 ```json
 {
     "ok": true,
     "action": "init",
-    "mode": "local",
-    "workspace": "/path/to/workspace",
-    "detected": {
-        "qtTargets": 1,
-        "sdkTargets": 0,
-        "toolchain": { "qt": true, "vs": true, "jom": true }
-    },
-    "saved": {
-        "mode": "release",
-        "arch": "x86",
-        "toolchain": ["qtPath", "vsInstall", "jomPath"]
-    },
-    "activeTarget": {
+    "workroot": "C:\\Code\\myapp",
+    "registered": true,
+    "target": {
+        "id": "qt-app-debug-x64",
+        "name": "app debug x64",
         "kind": "qt",
         "project": "app/app.pro",
-        "mode": "release",
-        "arch": "x86",
-        "runAt": "local"
-    },
-    "nextActions": ["forja build"]
-}
-```
-
-_多目标混合 workspace_：
-```json
-{
-    "ok": true,
-    "action": "init",
-    "mode": "local",
-    "workspace": "/path/to/workspace",
-    "detected": {
-        "qtTargets": 2,
-        "sdkTargets": 1,
-        "toolchain": { "qt": true, "vs": true, "jom": true }
-    },
-    "saved": {
-        "mode": "release",
-        "arch": "x86",
-        "toolchain": ["qtPath", "vsInstall", "jomPath"]
-    },
-    "ambiguous": true,
-    "diagnostics": [
-        { "code": "init.mixedTargets", "level": "info", "message": "Found 2 Qt and 1 SDK targets, not auto-selecting", "params": { "qtCount": "2", "sdkCount": "1" } }
-    ],
-    "nextActions": ["forja list", "forja use target --project <path>"]
-}
-```
-
-_零目标 workspace_：
-```json
-{
-    "ok": true,
-    "action": "init",
-    "mode": "local",
-    "workspace": "/path/to/workspace",
-    "detected": {
-        "qtTargets": 0,
-        "sdkTargets": 0,
-        "toolchain": { "qt": false, "vs": true }
-    },
-    "saved": {
-        "toolchain": ["vsInstall"]
-    },
-    "diagnostics": [
-        { "code": "init.noTargets", "level": "info", "message": "No Qt or SDK targets found, only toolchain defaults saved" }
-    ],
-    "nextActions": ["forja list"]
-}
-```
-
-_重复执行（幂等）_：
-```json
-{
-    "ok": true,
-    "action": "init",
-    "mode": "local",
-    "workspace": "/path/to/workspace",
-    "detected": {
-        "qtTargets": 1,
-        "sdkTargets": 0,
-        "toolchain": { "qt": true, "vs": true, "jom": true }
-    },
-    "saved": {},
-    "diagnostics": [
-        { "code": "init.alreadyInitialized", "level": "info", "message": "Configuration already exists, only filling missing items" }
-    ],
-    "nextActions": ["forja status"]
-}
-```
-
-_`--plan` 预览_：
-```json
-{
-    "ok": true,
-    "action": "init",
-    "mode": "local",
-    "plan": {
-        "mode": "dryRun",
-        "willWrite": [
-            "~/.forja/projects/<hash(workspace:qt)>.json",
-            "~/.forja/projects/<hash(workspace:activeTarget)>.json"
-        ],
-        "willSave": {
-            "qtPath": "C:/Qt/5.15.2/msvc2019",
-            "vsInstall": "C:/Program Files/Microsoft Visual Studio/2019/Professional",
-            "jomPath": "C:/Qt/Tools/QtCreator/bin/jom.exe",
-            "mode": "release",
-            "arch": "x86",
-            "activeTarget": "app/app.pro"
+        "mode": "debug",
+        "arch": "x64",
+        "runAt": "local",
+        "toolchain": {
+            "qtPath": "C:/Qt/6.5.3/msvc2019_64",
+            "qtVersion": "6.5.3",
+            "vsInstall": "C:/Program Files/Microsoft VS/2019/Professional"
         }
     },
-    "nextActions": ["forja init"]
+    "nextAction": "forja status"
 }
 ```
 
-**异常场景**：
-
-_Workspace 不存在_：
+**workroot 不存在**：
 ```json
 {
     "ok": false,
     "action": "init",
-    "mode": "local",
     "diagnostics": [
-        { "code": "init.workspaceNotFound", "level": "error", "message": "Workspace does not exist: /path/to/workspace", "params": { "path": "/path/to/workspace" } }
-    ],
-    "nextActions": []
+        { "level": "error", "message": "Work root not found: /nonexistent" }
+    ]
 }
 ```
 
-_工具链缺失_：
-```json
-{
-    "ok": true,
-    "action": "init",
-    "mode": "local",
-    "workspace": "/path/to/workspace",
-    "detected": {
-        "qtTargets": 1,
-        "sdkTargets": 0,
-        "toolchain": { "qt": false, "vs": true, "jom": false }
-    },
-    "saved": {
-        "mode": "release",
-        "arch": "x86",
-        "toolchain": ["vsInstall"]
-    },
-    "diagnostics": [
-        { "code": "init.toolchainQtMissing", "level": "warning", "message": "Qt installation not detected", "hint": "Install Qt and re-run forja init, or use forja use qt --qt-path to specify manually" },
-        { "code": "init.toolchainMakeMissing", "level": "warning", "message": "make not detected", "hint": "Install build-essential or equivalent toolchain" }
-    ],
-    "nextActions": ["forja list env", "forja use qt --qt-path <path>"]
-}
-```
+## 与其他命令的关系
 
-_`--remote` 未配置 server_：
-```json
-{
-    "ok": false,
-    "action": "init",
-    "mode": "remote",
-    "diagnostics": [
-        { "code": "init.remoteNoServer", "level": "error", "message": "No server configured for remote init", "hint": "Add a shared server first, then bind remote execution with forja use remote --server <id>" }
-    ],
-    "nextActions": ["forja server", "forja server add --name <name> --host <host> --username <name>", "forja use remote --server <id> --remote-path <path>"]
-}
-```
+| 命令 | 关系 |
+|------|------|
+| `forja status` | init 后的推荐下一步 |
+| `forja use target` | 切换/添加 target（要求 workroot 已注册） |
+| `forja list targets` | 查看已保存和发现的 targets |
+| `forja build` | 构建（要求 workroot 已注册且有 active target） |
 
-_`--remote` 远端缺少 Forja bin_：
-```json
-{
-    "ok": false,
-    "action": "init",
-    "mode": "remote",
-    "diagnostics": [
-        { "code": "init.remoteForjaMissing", "level": "error", "message": "Remote Forja bin not installed", "hint": "Deploy Forja to remote server first" }
-    ],
-    "nextActions": ["forja doctor fix --remote"]
-}
-```
+## 验证点
 
-_`--remote` bridge 执行失败_：
-```json
-{
-    "ok": false,
-    "action": "init",
-    "mode": "remote",
-    "diagnostics": [
-        { "code": "init.remoteBridgeFailed", "level": "error", "message": "Remote bridge execution failed: SSH connection timeout", "hint": "Check server connectivity and credentials", "params": { "detail": "SSH connection timeout" } }
-    ],
-    "nextActions": ["forja doctor --remote"]
-}
-```
-
-_配置写入失败_：
-```json
-{
-    "ok": false,
-    "action": "init",
-    "mode": "local",
-    "workspace": "/path/to/workspace",
-    "detected": {
-        "qtTargets": 1,
-        "sdkTargets": 0,
-        "toolchain": { "qt": true, "vs": true }
-    },
-    "diagnostics": [
-        { "code": "init.configWriteFailed", "level": "error", "message": "Failed to write configuration: Permission denied", "params": { "detail": "Permission denied" } }
-    ],
-    "nextActions": []
-}
-```
-
-**文本输出**（无 `--json` 时）：
-
-_单目标初始化成功_：
-```
-Forja init succeeded
-Workspace: /path/to/workspace
-Detected: 1 Qt target, toolchain: Qt/VS/jom
-Saved: mode=release arch=x86 activeTarget=app/app.pro
-Active target: qt app/app.pro release x86 local
-Next:
-  forja build
-```
-
-_多目标未选择_：
-```
-Forja init succeeded
-Workspace: /path/to/workspace
-Detected: 2 Qt targets, 1 SDK target, toolchain: Qt/VS/jom
-Saved: mode=release arch=x86
-Not auto-selecting (multiple targets found)
-Next:
-  forja list
-  forja use target --project <path>
-```
-
-_零目标_：
-```
-Forja init succeeded
-Workspace: /path/to/workspace
-Detected: 0 targets, toolchain: VS
-No targets found, only toolchain defaults saved
-Next:
-  forja list
-```
-
-_工具链缺失_：
-```
-Forja init succeeded
-Workspace: /path/to/workspace
-Detected: 1 Qt target, toolchain: VS (Qt: not found, jom: not found)
-Saved: mode=release arch=x86
-Warning: Qt installation not detected
-Warning: make not detected
-Next:
-  forja list env
-  forja use qt --qt-path <path>
-```
-
-_Workspace 不存在_：
-```
-Forja init failed
-Error: Workspace does not exist: /path/to/workspace
-```
-
-_`--remote` 缺 bin_：
-```
-Forja init failed (remote)
-Error: Remote Forja bin not installed
-Next:
-  forja doctor fix --remote
-```
-
-_重复执行（幂等）_：
-```
-Forja init succeeded
-Workspace: /path/to/workspace
-Detected: 1 Qt target, toolchain: Qt/VS/jom
-Configuration already exists, only filling missing items
-Next:
-  forja status
-```
-
-_`--plan` 预览_：
-```
-Forja init plan (dry run)
-Workspace: /path/to/workspace
-Will detect: Qt targets, SDK targets, toolchain paths
-Will save:
-  mode=release arch=x86
-  qtPath=C:/Qt/5.15.2/msvc2019
-  vsInstall=C:/Program Files/Microsoft Visual Studio/2019/Professional
-  jomPath=C:/Qt/Tools/QtCreator/bin/jom.exe
-  activeTarget=app/app.pro
-Next:
-  forja init
-```
-
-_`--remote` 缺 server_：
-```
-Forja init failed (remote)
-Error: No server configured for remote init
-  hint: Add a shared server first, then bind remote execution with forja use remote --server <id>
-Next:
-  forja server
-  forja use remote --server <id> --remote-path <path>
-```
-
-_`--remote` bridge 失败_：
-```
-Forja init failed (remote)
-Error: Remote bridge execution failed: SSH connection timeout
-  hint: Check server connectivity and credentials
-Next:
-  forja doctor --remote
-```
-
-_配置写入失败_：
-```
-Forja init failed
-Error: Failed to write configuration: Permission denied
-```
-
-**`ok` 判定规则**：
-- `mode: 'local'` 时：
-  - 配置写入成功 → `ok: true`（即使工具链缺失、目标为 0 或多目标）
-  - 配置写入失败 → `ok: false`
-- `mode: 'remote'` 时：
-  - 任何 error 级别诊断 → `ok: false`
-  - Bridge 执行成功且远端返回 `ok: true` → `ok: true`
-  - Bridge 执行失败或远端返回 `ok: false` → `ok: false`
-- warning 级别诊断不影响 `ok` 值
-- `info` 级别诊断仅用于信息提示，不影响 `ok` 值
-
-**验证点**：
-
-- `forja init --json` 在单目标 workspace 自动保存 active target。
-- `forja init --json` 在混合 workspace 不自动选择，返回 `ambiguous: true`。
-- `forja init --plan --json` 不写配置，只输出 `CommandPlan`。
-- 重复执行 init 不覆盖已有用户选择。
-- `forja init --remote --json` 缺远端 Forja bin 时指向 `forja doctor fix --remote`。
-- `forja init --remote --server <id> --json` 临时指定共享 server，不修改配置。
+- `forja init` 在空目录注册 workroot 并配置初始 target
+- `forja init` 在已注册 workroot 显示现有 targets 并提供添加/修改选项
+- `forja init --json` 返回 questions 供 AI 填写
+- `forja init --answers <file>` 从文件读取答案完成配置
+- workroot 注册在 config 保存之前（防止崩溃导致孤立配置）
+- `forja init` 从子目录运行时正确解析到父目录的 workroot
