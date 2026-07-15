@@ -206,7 +206,7 @@ export function runStatus(workspace: string): StatusResult {
         }
     } else {
         toolchainSummary = buildToolchainSummary(activeTarget);
-        readiness.toolchain = assessToolchainReadiness(toolchainSummary, activeTarget, diagnostics, activeTarget.qtPath);
+        readiness.toolchain = assessToolchainReadiness(toolchainSummary, activeTarget, diagnostics);
     }
 
     // ── Sync readiness ──
@@ -387,18 +387,16 @@ function buildToolchainSummary(target: ActiveTarget): ToolchainSummary {
     return summary;
 }
 
-function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarget, diagnostics: Diagnostic[], qtPath?: string): ReadinessState {
+function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarget, diagnostics: Diagnostic[]): ReadinessState {
     if (target.kind === 'qt') {
         let qtOk = true;
         if (!target.qtPath) {
             qtOk = false;
-            const pathSuffix = qtPath ? `: ${qtPath}` : '';
             diagnostics.push({
                 level: 'error',
-                message: `${T('qtNotFound')}${pathSuffix}`,
+                message: T('qtNotFound'),
                 hint: T('qtReconfigure'),
                 fix: 'forja list env qt',
-                params: qtPath ? { path: qtPath } : undefined,
             });
         }
         // Platform-specific requirements — check all tools even if Qt is missing

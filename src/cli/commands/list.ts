@@ -4,7 +4,7 @@
 import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSummary, Diagnostic, Locale, T } from './types';
 import { collectTargetCandidates } from './candidates';
 import { listServers, getServerDetail } from './server';
-import { loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
+import { loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget as getActiveTargetFromStore } from '../../core/workspaceStore';
 import { detectMake } from '../../sdk/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
@@ -336,17 +336,20 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
 
 async function listEnvAll(workspace: string): Promise<ListResult> {
     setSilent(true);
-    const qtConfig = loadQtSettings(workspace);
-    const sdkConfig = loadSdkSettings(workspace);
     const env = await detectEnv();
 
+    // Get configured paths from workspaceStore (active target's toolchain)
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+    const configuredQtPath = activeProfile?.toolchain.qtPath || '';
+    const configuredVsPath = activeProfile?.toolchain.vsInstall || '';
+
     const summary: EnvSummary = {};
-    const configuredQtPath = qtConfig.qtPath || '';
     summary.qt = env.qtCandidates.map(c => ({
         path: c.path, version: c.version,
         ...(c.path === configuredQtPath ? { configured: true } : {}),
     }));
-    const configuredVsPath = qtConfig.vsInstall || sdkConfig.vsInstall || '';
     if (process.platform === 'win32') {
         if (env.jom) { summary.jom = env.jom; }
         summary.vs = env.vsCandidates.map(v => ({
@@ -376,8 +379,10 @@ async function listEnvSub(workspace: string, sub: EnvSubCategory): Promise<ListR
 
 async function listEnvQt(workspace: string): Promise<ListResult> {
     setSilent(true);
-    const qtConfig = loadQtSettings(workspace);
-    const configuredPath = qtConfig.qtPath || '';
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+    const configuredPath = activeProfile?.toolchain.qtPath || '';
     const env = await detectEnv();
     const qt = env.qtCandidates.map(c => ({
         path: c.path, version: c.version,
@@ -396,10 +401,11 @@ async function listEnvQt(workspace: string): Promise<ListResult> {
     };
 }
 
-async function listEnvVs(_workspace: string): Promise<ListResult> {
-    const qtConfig = loadQtSettings(_workspace);
-    const sdkConfig = loadSdkSettings(_workspace);
-    const configuredPath = qtConfig.vsInstall || sdkConfig.vsInstall || '';
+async function listEnvVs(workspace: string): Promise<ListResult> {
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+    const configuredPath = activeProfile?.toolchain.vsInstall || '';
 
     setSilent(true);
     const env = await detectEnv();

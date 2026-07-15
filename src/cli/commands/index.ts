@@ -531,7 +531,7 @@ async function handleUse(argv: string[], workspace: string, wantsJson: boolean, 
 // ── Remote ──
 
 async function handleRemote(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const remoteKnown = new Set(['--server', '--remote-path', '--all']);
+    const remoteKnown = new Set(['--server', '--remote-path']);
     const remoteWithVal = new Set(['--server', '--remote-path']);
     const remoteUnknown = findUnknownFlags(argv, remoteKnown, remoteWithVal);
     if (remoteUnknown.length > 0) {
@@ -564,6 +564,14 @@ async function handleRemote(argv: string[], workspace: string, wantsJson: boolea
             return;
         }
         case 'reset': {
+            const resetKnown = new Set(['--all', '--server']);
+            const resetWithVal = new Set(['--server']);
+            const resetUnknown = findUnknownFlags(argv.slice(1), resetKnown, resetWithVal);
+            if (resetUnknown.length > 0) {
+                outputResult({ ok: false, action: 'remote', remoteAction: 'reset', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(resetUnknown, resetKnown) }], nextAction: 'forja remote reset' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
             const repo = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
             const paths: string[] = [];
             for (let i = 3; i < argv.length; i++) {
@@ -1093,6 +1101,8 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
                     { label: 'forja remote set', command: 'forja remote set', description: T('statusSetupRemote') },
                 ],
             }, wantsJson);
+            process.exitCode = 1;
+            return;
         } else {
             // Text mode: interactive setup
             const guided = await interactiveSyncSetup(workspace);
@@ -1101,10 +1111,6 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
                 return;
             }
             // Config is now complete, fall through to sync execution
-        }
-        if (wantsJson) {
-            process.exitCode = 1;
-            return;
         }
     }
 

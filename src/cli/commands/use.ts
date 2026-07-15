@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import { ForjaJsonResult, ActiveTarget, Locale, T, Question } from './types';
 import { getActiveTarget, setActiveTarget } from './activeTarget';
 import {
-    saveGlobalConfig, loadGlobalConfig,
+    saveGlobalConfig,
 } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } from '../../core/workspaceStore';
 import {
@@ -326,24 +326,6 @@ export function runUseShow(workspace: string): UseResult {
             nextAction: 'forja use target',
         };
     }
-
-    const globalConfig = loadGlobalConfig();
-
-    const lines: string[] = [];
-    lines.push(T('setupTitle'));
-    lines.push(`  ${T('target')}${target.project}`);
-    if (target.qtPath) {
-        lines.push(`  ${T('setupSummaryQt')}: ${target.qtPath}`);
-    }
-    if (target.vsInstall) {
-        lines.push(`  ${T('setupSummaryVs')}: ${target.vsInstall}`);
-    }
-    if (target.jomPath) {
-        lines.push(`  ${T('init.currentJom')}: ${target.jomPath}`);
-    }
-    lines.push(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
-    lines.push(`  ${T('use.execution')}: ${target.runAt}`);
-    lines.push(`  ${T('use.language')}: ${globalConfig.lang || 'en'}`);
 
     return {
         ok: true, action: 'use', useScope: 'show', changed: [],

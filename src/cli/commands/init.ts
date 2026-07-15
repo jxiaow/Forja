@@ -236,7 +236,7 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
     // Register workroot FIRST so resolveWorkroot can find it even if config save fails
     registerWorkroot(workroot);
 
-    const result = await configureNewTarget(workroot, config, options);
+    const result = await configureNewTarget(workroot, config, options, candidates);
     if (!result.ok) return result;
 
     return {
@@ -291,8 +291,8 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
     return candidates;
 }
 
-async function configureNewTarget(workroot: string, config: WorkspaceConfig, options: InitOptions): Promise<{ ok: boolean; action: 'init'; target?: TargetProfile; diagnostics?: Diagnostic[] }> {
-    const candidates = await scanProjects(workroot);
+async function configureNewTarget(workroot: string, config: WorkspaceConfig, options: InitOptions, existingCandidates?: ProjectCandidate[]): Promise<{ ok: boolean; action: 'init'; target?: TargetProfile; diagnostics?: Diagnostic[] }> {
+    const candidates = existingCandidates || await scanProjects(workroot);
     if (candidates.length === 0) {
         return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.noProjectsFound') }] };
     }
@@ -309,7 +309,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         const chosen = await chooseRequired(T('init.selectProject'), candidates, c => c.label);
         selectedProject = chosen;
     } else {
-        return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.noProjectsFound') }] };
+        return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.answersMissingProject') }] };
     }
 
     console.log(`  ✓ ${selectedProject.label}`);

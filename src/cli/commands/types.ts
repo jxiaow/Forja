@@ -685,6 +685,7 @@ Options:
     'init.noProjectsFound':             { en: 'No projects found in work root',       zh: '工作根目录下未找到项目' },
     'init.selectProject':               { en: 'Select a project',                     zh: '选择项目' },
     'init.noTargetsToModify':           { en: 'No targets to modify',                 zh: '没有可修改的目标' },
+    'init.answersMissingProject':       { en: 'Answers file missing required "project" field', zh: '答案文件缺少必需的 "project" 字段' },
     'init.selectTargetToModify':        { en: 'Select target to modify',              zh: '选择要修改的目标' },
     'init.configurationCancelled':      { en: 'Configuration cancelled',              zh: '配置已取消' },
     'init.existingAction':              { en: 'Action for existing workroot',         zh: '对已注册工作根目录的操作' },
