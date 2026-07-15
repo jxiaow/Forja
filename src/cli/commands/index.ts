@@ -421,24 +421,32 @@ async function handleList(argv: string[], workspace: string, wantsJson: boolean,
 // ── Use ──
 
 async function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const useKnown = new Set(['--project','--mode','--arch','--qt','--vs','--jom','--reset','--local','--remote','--add','--rm']);
-    const useWithVal = new Set(['--project','--mode','--arch','--qt','--vs','--jom']);
-    const useUnknown = findUnknownFlags(argv, useKnown, useWithVal);
-    if (useUnknown.length > 0) {
-        outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(useUnknown, useKnown) }], nextAction: 'forja use target' }, wantsJson);
-        process.exitCode = 1;
-        return;
-    }
     const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
 
+    // Per-subcommand flag validation
     switch (subCmd) {
         case 'target': {
             if (argv[2] === 'suppress-warnings') {
+                const swKnown = new Set(['--add', '--rm']);
+                const swUnknown = findUnknownFlags(argv.slice(2), swKnown, new Set<string>());
+                if (swUnknown.length > 0) {
+                    outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(swUnknown, swKnown) }], nextAction: 'forja use target suppress-warnings' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
                 const add = hasFlag(argv, '--add');
                 const rm = hasFlag(argv, '--rm');
                 const codes = argv.slice(3).filter(a => !a.startsWith('--'));
                 const result = runSuppressWarnings(workspace, codes, add, rm);
                 outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
+                return;
+            }
+            const targetKnown = new Set(['--project', '--mode', '--arch', '--qt', '--vs', '--jom', '--reset']);
+            const targetWithVal = new Set(['--project', '--mode', '--arch', '--qt', '--vs', '--jom']);
+            const targetUnknown = findUnknownFlags(argv, targetKnown, targetWithVal);
+            if (targetUnknown.length > 0) {
+                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(targetUnknown, targetKnown) }], nextAction: 'forja use target' }, wantsJson);
+                process.exitCode = 1;
                 return;
             }
             const result = await runUseTarget(workspace, {
@@ -456,11 +464,24 @@ async function handleUse(argv: string[], workspace: string, wantsJson: boolean, 
             return;
         }
         case 'execution': {
+            const execKnown = new Set(['--local', '--remote']);
+            const execUnknown = findUnknownFlags(argv, execKnown, new Set<string>());
+            if (execUnknown.length > 0) {
+                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(execUnknown, execKnown) }], nextAction: 'forja use execution' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
             const result = runUseExecution(workspace, hasFlag(argv, '--local'), hasFlag(argv, '--remote'));
             outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
             return;
         }
         case 'lang': {
+            const langUnknown = findUnknownFlags(argv.slice(1), new Set<string>(), new Set<string>());
+            if (langUnknown.length > 0) {
+                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(langUnknown, new Set()) }], nextAction: 'forja use lang <zh|en>' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
             const langValue = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
             if (!langValue) {
                 outputResult({
@@ -495,6 +516,12 @@ async function handleUse(argv: string[], workspace: string, wantsJson: boolean, 
                 return;
             }
             // No subcommand — show current config
+            const showUnknown = findUnknownFlags(argv, new Set<string>(), new Set<string>());
+            if (showUnknown.length > 0) {
+                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(showUnknown, new Set()) }], nextAction: 'forja use' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
             const result = runUseShow(workspace);
             outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
         }

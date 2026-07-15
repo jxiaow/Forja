@@ -481,8 +481,8 @@ const UI: Record<string, { en: string; zh: string }> = {
     doctorCheckCleanUntracked:     { en: 'clean-untracked',              zh: '清理未跟踪' },
     // help texts
     'help.toplevel': {
-        en: 'Usage: forja <command> [action] [options]\n\nCommands:\n  status     Show workspace readiness\n  list       List targets, env\n  use        Select target and execution mode\n  server     Manage remote servers (add/update/remove)\n  remote     Manage remote configuration\n  build      Build the active target\n  run        Run the built application\n  stop       Stop a running application\n  clean      Clean build artifacts\n  doctor     Deep diagnostics and recovery\n  sync       Sync files with remote server\n\nGlobal options:\n  --help, -h       Show help\n  --version, -v    Show version\n  --json           JSON output\n  --lang <locale>  Language: zh or en\n  --workspace <p>  Specify workspace (default: cwd)',
-        zh: '用法: forja <命令> [动作] [选项]\n\n命令:\n  status     查看工作区就绪状态\n  list       列出目标、环境\n  use        选择目标和执行模式\n  server     管理远程服务器（添加/更新/删除）\n  remote     管理远程配置\n  build      构建当前目标\n  run        运行已构建的应用\n  stop       停止运行中的应用\n  clean      清理构建产物\n  doctor     深度诊断与修复\n  sync       与远程服务器同步文件\n\n全局选项:\n  --help, -h       显示帮助\n  --version, -v    显示版本\n  --json           JSON 输出\n  --lang <locale>  语言: zh 或 en\n  --workspace <p>  指定工作区（默认当前目录）',
+        en: 'Usage: forja <command> [action] [options]\n\nCommands:\n  init       Register work root and configure initial target\n  status     Show workspace readiness\n  list       List targets, env\n  use        Select target and execution mode\n  server     Manage remote servers (add/update/remove)\n  remote     Manage remote configuration\n  build      Build the active target\n  run        Run the built application\n  stop       Stop a running application\n  clean      Clean build artifacts\n  doctor     Deep diagnostics and recovery\n  sync       Sync files with remote server\n\nGlobal options:\n  --help, -h       Show help\n  --version, -v    Show version\n  --json           JSON output\n  --lang <locale>  Language: zh or en\n  --workspace <p>  Specify workspace (default: cwd)',
+        zh: '用法: forja <命令> [动作] [选项]\n\n命令:\n  init       注册工作根目录并配置初始目标\n  status     查看工作区就绪状态\n  list       列出目标、环境\n  use        选择目标和执行模式\n  server     管理远程服务器（添加/更新/删除）\n  remote     管理远程配置\n  build      构建当前目标\n  run        运行已构建的应用\n  stop       停止运行中的应用\n  clean      清理构建产物\n  doctor     深度诊断与修复\n  sync       与远程服务器同步文件\n\n全局选项:\n  --help, -h       显示帮助\n  --version, -v    显示版本\n  --json           JSON 输出\n  --lang <locale>  语言: zh 或 en\n  --workspace <p>  指定工作区（默认当前目录）',
     },
     'help.status': {
         en: `Usage:
@@ -599,8 +599,8 @@ Options:
         zh: '用法: forja clean [--plan] [--json]',
     },
     'help.doctor': {
-        en: 'Usage: forja doctor [check|fix|unlock] [--remote] [--force] [--json]',
-        zh: '用法: forja doctor [check|fix|unlock] [--remote] [--force] [--json]',
+        en: 'Usage: forja doctor [check|fix|unlock] [--remote] [--json]',
+        zh: '用法: forja doctor [check|fix|unlock] [--remote] [--json]',
     },
     'help.sync': {
         en: `Usage:
