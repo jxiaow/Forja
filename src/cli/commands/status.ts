@@ -191,8 +191,8 @@ export function runStatus(workspace: string): StatusResult {
             });
         }
     } else {
-        toolchainSummary = buildToolchainSummary(activeTarget, qtConfig, sdkConfig);
-        readiness.toolchain = assessToolchainReadiness(toolchainSummary, activeTarget, diagnostics, qtConfig.qtPath);
+        toolchainSummary = buildToolchainSummary(activeTarget);
+        readiness.toolchain = assessToolchainReadiness(toolchainSummary, activeTarget, diagnostics, activeTarget.qtPath);
     }
 
     // ── Sync readiness ──
@@ -352,20 +352,20 @@ function extractVsVersion(vsPath: string): string | undefined {
     return undefined;
 }
 
-function buildToolchainSummary(target: ActiveTarget, qtConfig: QtSettings, sdkConfig: SdkSettings): ToolchainSummary {
+function buildToolchainSummary(target: ActiveTarget): ToolchainSummary {
     const summary: ToolchainSummary = {};
     if (target.kind === 'qt') {
-        if (qtConfig.qtPath) {
-            summary.qt = { version: qtConfig.qtVersion || undefined };
+        if (target.qtPath) {
+            summary.qt = { version: target.qtVersion || undefined };
         }
-        if (qtConfig.vsInstall) { summary.vs = { version: extractVsVersion(qtConfig.vsInstall) }; }
-        if (qtConfig.jomPath) { summary.jom = qtConfig.jomPath; }
+        if (target.vsInstall) { summary.vs = { version: extractVsVersion(target.vsInstall) }; }
+        if (target.jomPath) { summary.jom = target.jomPath; }
         if (process.platform !== 'win32') {
             summary.make = !!detectMake();
         }
     } else {
         if (process.platform === 'win32') {
-            if (sdkConfig.vsInstall) { summary.vs = { version: extractVsVersion(sdkConfig.vsInstall) }; }
+            if (target.vsInstall) { summary.vs = { version: extractVsVersion(target.vsInstall) }; }
         } else {
             summary.make = !!detectMake();
         }

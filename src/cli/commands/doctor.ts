@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getActiveTarget } from './activeTarget';
-import { loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
+import { loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
 import { listProjectConfigs } from '../../core/settingsIO';
 import { listSyncStates } from '../../core/syncState';
 import { getServerById } from '../../core/serverStore';
@@ -167,14 +167,18 @@ export async function runDoctor(workspace: string, options: {
     // ── Toolchain checks ──
     const checkedToolchain = new Set<string>();
     if (activeTarget?.kind === 'qt' || !activeTarget) {
-        const qt = loadQtSettings(workspace);
-        if (qt.qtPath && fs.existsSync(qt.qtPath)) {
-            checks.push(check('toolchain-qt', 'ready', `Qt: ${qt.qtPath}`));
-        } else if (qt.qtPath) {
-            checks.push(check('toolchain-qt', 'blocked', `${T('doctorQtInvalid')}: ${qt.qtPath}`,
-                [diag('error', `Qt not found at configured path: ${qt.qtPath}`)],
+        // Use activeTarget toolchain fields (from workspaceStore) instead of old settingsIO
+        const qtPath = activeTarget?.qtPath;
+        const vsInstall = activeTarget?.vsInstall;
+        const jomPath = activeTarget?.jomPath;
+
+        if (qtPath && fs.existsSync(qtPath)) {
+            checks.push(check('toolchain-qt', 'ready', `Qt: ${qtPath}`));
+        } else if (qtPath) {
+            checks.push(check('toolchain-qt', 'blocked', `${T('doctorQtInvalid')}: ${qtPath}`,
+                [diag('error', `Qt not found at configured path: ${qtPath}`)],
                 'forja list env'));
-            diagnostics.push(diag('error', `Qt not found at configured path: ${qt.qtPath}`));
+            diagnostics.push(diag('error', `Qt not found at configured path: ${qtPath}`));
         } else {
             checks.push(check('toolchain-qt', 'warning', T('doctorQtNotConfigured'),
                 [diag('warning', T('doctorQtNotConfigured'))],
@@ -185,22 +189,22 @@ export async function runDoctor(workspace: string, options: {
         if (process.platform === 'win32') {
             checkedToolchain.add('toolchain-vs');
             // Windows: check VS and jom
-            if (qt.vsInstall && fs.existsSync(qt.vsInstall)) {
-                checks.push(check('toolchain-vs', 'ready', `VS: ${qt.vsInstall}`));
-            } else if (qt.vsInstall) {
-                checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${qt.vsInstall}`,
-                    [diag('error', `VS dev environment not found: ${qt.vsInstall}`)]));
-                diagnostics.push(diag('error', `VS dev environment not found: ${qt.vsInstall}`));
+            if (vsInstall && fs.existsSync(vsInstall)) {
+                checks.push(check('toolchain-vs', 'ready', `VS: ${vsInstall}`));
+            } else if (vsInstall) {
+                checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${vsInstall}`,
+                    [diag('error', `VS dev environment not found: ${vsInstall}`)]));
+                diagnostics.push(diag('error', `VS dev environment not found: ${vsInstall}`));
             } else {
                 checks.push(check('toolchain-vs', 'warning', T('doctorVsNotConfigured'),
                     [diag('warning', T('doctorVsNotConfigured'))]));
             }
-            if (qt.jomPath) {
-                if (fs.existsSync(qt.jomPath)) {
-                    checks.push(check('toolchain-jom', 'ready', `jom: ${qt.jomPath}`));
+            if (jomPath) {
+                if (fs.existsSync(jomPath)) {
+                    checks.push(check('toolchain-jom', 'ready', `jom: ${jomPath}`));
                 } else {
-                    checks.push(check('toolchain-jom', 'warning', `${T('doctorJomInvalid')}: ${qt.jomPath}`,
-                        [diag('warning', `jom not found at: ${qt.jomPath}`)]));
+                    checks.push(check('toolchain-jom', 'warning', `${T('doctorJomInvalid')}: ${jomPath}`,
+                        [diag('warning', `jom not found at: ${jomPath}`)]));
                 }
             }
         } else {
@@ -218,17 +222,19 @@ export async function runDoctor(workspace: string, options: {
     }
 
     if (activeTarget?.kind === 'sdk' || !activeTarget) {
-        const sdk = loadSdkSettings(workspace);
+        // Use activeTarget toolchain fields for SDK
+        const sdkVsInstall = activeTarget?.vsInstall;
+
         // Platform-specific toolchain checks for SDK (skip if already checked for Qt)
         if (process.platform === 'win32') {
             if (!checkedToolchain.has('toolchain-vs')) {
                 // Windows: check VS
-                if (sdk.vsInstall && fs.existsSync(sdk.vsInstall)) {
-                    checks.push(check('toolchain-vs', 'ready', `VS: ${sdk.vsInstall}`));
-                } else if (sdk.vsInstall) {
-                    checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${sdk.vsInstall}`,
-                        [diag('error', `VS dev environment not found: ${sdk.vsInstall}`)]));
-                    diagnostics.push(diag('error', `VS dev environment not found: ${sdk.vsInstall}`));
+                if (sdkVsInstall && fs.existsSync(sdkVsInstall)) {
+                    checks.push(check('toolchain-vs', 'ready', `VS: ${sdkVsInstall}`));
+                } else if (sdkVsInstall) {
+                    checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${sdkVsInstall}`,
+                        [diag('error', `VS dev environment not found: ${sdkVsInstall}`)]));
+                    diagnostics.push(diag('error', `VS dev environment not found: ${sdkVsInstall}`));
                 } else {
                     checks.push(check('toolchain-vs', 'warning', T('doctorVsNotConfigured'),
                         [diag('warning', T('doctorVsNotConfigured'))]));
