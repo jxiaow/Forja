@@ -738,6 +738,8 @@ Options:
     'lst.qtPathNotConfigured':          { en: 'Qt path not configured',             zh: 'Qt 路径未配置' },
     'lst.vsInstallNotConfigured':       { en: 'VS install not configured',          zh: 'VS 安装未配置' },
     'lst.serverNotFound':               { en: 'Server not found',                   zh: '服务器未找到' },
+    'lst.savedTargets':                 { en: 'Saved targets',                      zh: '已保存目标' },
+    'lst.discoveredTargets':            { en: 'Discovered (not saved)',              zh: '已发现（未保存）' },
     // use diagnostics
     'use.workspaceNotFound':             { en: 'Workspace does not exist',          zh: '工作区不存在' },
     'use.invalidMode':                   { en: 'Invalid mode',                      zh: '无效模式' },
@@ -753,6 +755,8 @@ Options:
     'use.cannotSpecifyBothLocalRemote':  { en: 'Cannot specify both --local and --remote', zh: '不能同时指定 --local 和 --remote' },
     'use.mustSpecifyLocalOrRemote':      { en: 'Must specify --local or --remote',  zh: '必须指定 --local 或 --remote' },
     'use.noActiveTargetSelected':        { en: 'No active target selected',         zh: '未选择活动目标' },
+    'use.selectTarget':                  { en: 'Select a target',                    zh: '选择目标' },
+    'use.addNewTarget':                  { en: '+ Add new target',                   zh: '+ 添加新目标' },
     'use.confirmChangeTarget':           { en: 'Change target?',                    zh: '是否更换目标？' },
     'use.multipleTargetsFound':          { en: 'Multiple targets found',            zh: '找到多个匹配目标' },
     'use.vsVersionMismatch':             { en: 'Qt requires VS {0}, not detected — please select manually', zh: 'Qt 需要 VS {0}，未检测到，请手动选择' },

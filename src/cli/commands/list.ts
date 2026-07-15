@@ -19,10 +19,21 @@ export type ListCategory = 'targets' | 'env';
 export type InternalListCategory = ListCategory | 'servers';
 export type EnvSubCategory = 'qt' | 'vs' | 'jom' | 'make';
 
+export interface SavedTargetInfo {
+    id: string;
+    name: string;
+    kind: 'qt' | 'sdk';
+    project: string;
+    mode: string;
+    arch: string;
+    active: boolean;
+}
+
 export interface ListResult extends ForjaJsonResult {
     action: 'list';
     category: InternalListCategory;
     targets?: TargetCandidate[];
+    savedTargets?: SavedTargetInfo[];
     servers?: ServerSummary[] | ServerDetail;
     env?: EnvSummary;
     envSubCategory?: EnvSubCategory;
@@ -49,16 +60,35 @@ export function formatListText(result: ListResult, locale: Locale): string {
         case 'targets': {
             lines.push(T('targets'));
             if (result.workspace) { lines.push(`${T('workspace')}${result.workspace}`); }
+
+            // Show saved targets first (from workspaceStore)
+            const saved = result.savedTargets || [];
+            if (saved.length > 0) {
+                lines.push(`  ${T('lst.savedTargets')}:`);
+                for (const t of saved) {
+                    const marker = t.active ? '* ' : '  ';
+                    lines.push(`  ${marker}${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}`);
+                }
+                lines.push('');
+            }
+
+            // Show discovered targets
             const targets = result.targets || [];
-            if (targets.length === 0) {
-                lines.push(`  ${T('noneFound')}`);
-            } else {
+            if (targets.length > 0) {
+                if (saved.length > 0) {
+                    lines.push(`  ${T('lst.discoveredTargets')}:`);
+                } else {
+                    lines.push(T('targets'));
+                }
                 for (const t of targets) {
                     const marker = t.current ? '* ' : '  ';
                     const cfg = t.configured ? `${T('configuredMark')} ` : '';
                     lines.push(`  ${marker}${cfg}${t.label} — ${t.project}`);
                 }
+            } else if (saved.length === 0) {
+                lines.push(`  ${T('noneFound')}`);
             }
+
             if (result.diagnostics?.length) {
                 lines.push('');
                 for (const d of result.diagnostics) {
@@ -215,6 +245,22 @@ function listTargets(workspace: string): ListResult {
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
 
+    // Build saved targets info from workspaceStore
+    const savedTargets: SavedTargetInfo[] = [];
+    if (wsConfig) {
+        for (const [id, profile] of Object.entries(wsConfig.targets)) {
+            savedTargets.push({
+                id,
+                name: profile.name,
+                kind: profile.kind,
+                project: profile.project,
+                mode: profile.mode,
+                arch: profile.arch,
+                active: id === wsConfig.activeTarget,
+            });
+        }
+    }
+
     const hasQtTargets = rawTargets.some(t => t.kind === 'qt');
     const hasQtToolchain = activeProfile?.toolchain.qtPath;
     const hasVsToolchain = activeProfile?.toolchain.vsInstall;
@@ -229,7 +275,9 @@ function listTargets(workspace: string): ListResult {
     // Strip internal 'kind' field from output
     const targets = rawTargets.map(({ kind: _kind, ...rest }) => rest as TargetCandidate);
 
-    const nextAction = 'forja use target --project <name|path>';
+    const nextAction = savedTargets.length > 0
+        ? 'forja use target --project <name|path>'
+        : 'forja init';
 
     return {
         ok: true,
@@ -237,6 +285,7 @@ function listTargets(workspace: string): ListResult {
         category: 'targets',
         workspace,
         targets,
+        savedTargets: savedTargets.length > 0 ? savedTargets : undefined,
         diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
         nextAction,
     };

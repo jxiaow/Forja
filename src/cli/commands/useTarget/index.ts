@@ -149,6 +149,73 @@ export async function runSwitchTarget(workspace: string, args: {
 
     const ctx = await detectContext(workspace);
 
+    // First: try to match against saved targets by ID or name (quick switch)
+    const workroot = (await import('../../../core/workspaceStore')).resolveWorkroot(workspace);
+    if (workroot) {
+        const wsConfig = (await import('../../../core/workspaceStore')).loadWorkspaceConfig(workroot);
+        const savedTargets = Object.values(wsConfig.targets);
+        const inputLower = args.project.toLowerCase();
+
+        // Exact ID match
+        const exactId = savedTargets.find(t => t.id === args.project);
+        if (exactId) {
+            // Quick switch: just update activeTarget pointer
+            wsConfig.activeTarget = exactId.id;
+            (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
+            const { targetProfileToActiveTarget } = await import('../activeTarget');
+            const activeTarget = targetProfileToActiveTarget(exactId, workroot);
+            return {
+                ok: true, action: 'use', useScope: 'target',
+                workspace, activeTarget, changed: ['activeTarget'],
+                nextAction: 'forja status',
+            };
+        }
+
+        // ID prefix match or name match
+        const prefixMatches = savedTargets.filter(t =>
+            t.id.toLowerCase().startsWith(inputLower) ||
+            t.name.toLowerCase().includes(inputLower)
+        );
+        if (prefixMatches.length === 1) {
+            wsConfig.activeTarget = prefixMatches[0].id;
+            (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
+            const { targetProfileToActiveTarget } = await import('../activeTarget');
+            const activeTarget = targetProfileToActiveTarget(prefixMatches[0], workroot);
+            return {
+                ok: true, action: 'use', useScope: 'target',
+                workspace, activeTarget, changed: ['activeTarget'],
+                nextAction: 'forja status',
+            };
+        }
+        if (prefixMatches.length > 1) {
+            if (args.interactive) {
+                const chosen = await choose(
+                    T('use.multipleTargetsFound'),
+                    prefixMatches,
+                    t => `${t.id}  ${t.name}  [${t.kind}]`,
+                );
+                if (chosen) {
+                    wsConfig.activeTarget = chosen.id;
+                    (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
+                    const { targetProfileToActiveTarget } = await import('../activeTarget');
+                    const activeTarget = targetProfileToActiveTarget(chosen, workroot);
+                    return {
+                        ok: true, action: 'use', useScope: 'target',
+                        workspace, activeTarget, changed: ['activeTarget'],
+                        nextAction: 'forja status',
+                    };
+                }
+            } else {
+                const ids = prefixMatches.map(t => t.id).join('\n    ');
+                return {
+                    ok: false, action: 'use', useScope: 'target', changed: [],
+                    diagnostics: [{ level: 'error', message: `${T('use.multipleTargetsFound')}: ${args.project}\n    ${ids}` }],
+                    nextAction: 'forja list targets',
+                };
+            }
+        }
+    }
+
     // Resolve project path
     const projectPath = path.isAbsolute(args.project) ? args.project : path.join(workspace, args.project);
     let canonicalProject = args.project;

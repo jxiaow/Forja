@@ -202,7 +202,35 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
         });
     }
 
-    // No flags: full interactive flow (absorbs setup functionality)
+    // No flags: interactive picker if saved targets exist, otherwise full flow
+    const { resolveWorkroot, loadWorkspaceConfig } = await import('../../core/workspaceStore');
+    const workroot = resolveWorkroot(workspace);
+    if (workroot && args.interactive !== false && !args.json) {
+        const wsConfig = loadWorkspaceConfig(workroot);
+        const savedTargets = Object.values(wsConfig.targets);
+        if (savedTargets.length > 0) {
+            const { choose } = await import('./prompt');
+            const { T: tr } = await import('./types');
+            const ADD_NEW = '__add_new__';
+            interface PickerItem { value: string; label: string }
+            const items: PickerItem[] = savedTargets.map(t => ({
+                value: t.id,
+                label: `${t.id === wsConfig.activeTarget ? '* ' : '  '}${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}`,
+            }));
+            items.push({ value: ADD_NEW, label: tr('use.addNewTarget') });
+
+            const chosen = await choose(tr('use.selectTarget'), items, item => item.label);
+            if (chosen && chosen.value !== ADD_NEW) {
+                return runSwitchTarget(workspace, {
+                    project: chosen.value,
+                    interactive: true,
+                    json: false,
+                });
+            }
+            // User chose "add new" or cancelled — fall through to full flow
+        }
+    }
+
     return runUseTargetNew(workspace, {
         interactive: args.interactive ?? false,
         json: args.json ?? false,
