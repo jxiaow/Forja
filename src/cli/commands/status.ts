@@ -102,19 +102,33 @@ export function runStatus(workspace: string): StatusResult {
     if (!activeTarget) {
         readiness.target = 'not-selected';
         const workroot = resolveWorkrootForStatus(workspace);
-        const wsConfig = workroot ? loadWsConfig(workroot) : null;
-        const hasAnyConfig = wsConfig && Object.keys(wsConfig.targets).length > 0;
-        if (hasAnyConfig) {
-            const candidates = collectTargetCandidates(workspace);
-            const qtCount = candidates.filter(c => c.kind === 'qt').length;
-            const sdkCount = candidates.filter(c => c.kind === 'sdk').length;
-            if (qtCount > 0 || sdkCount > 0) {
-                diagnostics.push({
-                    level: 'info',
-                    message: T('sts.targetsFound', [String(qtCount), String(sdkCount)]),
-                    fix: 'forja list targets',
-                    params: { qtCount: String(qtCount), sdkCount: String(sdkCount) },
-                });
+        if (!workroot) {
+            diagnostics.push({
+                level: 'warning',
+                message: T('notInitialized'),
+                fix: 'forja init',
+            });
+        } else {
+            const wsConfig = loadWsConfig(workroot);
+            const hasAnyConfig = Object.keys(wsConfig.targets).length > 0;
+            if (hasAnyConfig) {
+                const candidates = collectTargetCandidates(workspace);
+                const qtCount = candidates.filter(c => c.kind === 'qt').length;
+                const sdkCount = candidates.filter(c => c.kind === 'sdk').length;
+                if (qtCount > 0 || sdkCount > 0) {
+                    diagnostics.push({
+                        level: 'info',
+                        message: T('sts.targetsFound', [String(qtCount), String(sdkCount)]),
+                        fix: 'forja list targets',
+                        params: { qtCount: String(qtCount), sdkCount: String(sdkCount) },
+                    });
+                } else {
+                    diagnostics.push({
+                        level: 'warning',
+                        message: T('noActiveTarget'),
+                        fix: 'forja use target',
+                    });
+                }
             } else {
                 diagnostics.push({
                     level: 'warning',

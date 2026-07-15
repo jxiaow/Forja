@@ -2,13 +2,12 @@
  * `forja remote` — remote configuration and repo operations.
  * Top-level command: show config, set server/path, restore/reset remote repos.
  */
-import * as path from 'path';
 import { ForjaJsonResult, Diagnostic, Locale, T } from './types';
 import {
     loadRemoteSettings, saveRemoteSettings,
     RemoteRepoSettings, RemoteBuildOrderItem, RemoteTransferSettings,
 } from '../../core/settingsIO';
-import { getServerById, resolveServerSelector } from '../../core/serverStore';
+import { resolveServerSelector } from '../../core/serverStore';
 import { executeRemoteRestore } from '../../remote/core/restore';
 import { executeRemoteCleanUntracked } from '../../remote/core/cleanUntracked';
 import { createSshRunner, remoteCommand } from '../../remote/core/shell';
@@ -155,25 +154,10 @@ export function formatRemoteText(result: RemoteResult, locale: Locale): string {
     return lines.join('\n');
 }
 
-// ── Valid repo name pattern ──
-
-const REPO_NAME_PATTERN = /^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$/;
-
-function isValidRepoName(name: string): boolean {
-    return REPO_NAME_PATTERN.test(name) && name !== '..' && !name.includes('/');
-}
-
-// Valid build order actions per target
-const VALID_BUILD_ACTIONS: Record<string, string[]> = {
-    qt: ['build', 'clean', 'qmake'],
-    sdk: ['build', 'rebuild', 'clean'],
-};
-
 // ── runRemoteShow ──
 
 export function runRemoteShow(workspace: string): RemoteResult {
     const remote = loadRemoteSettings(workspace);
-    const hasConfig = !!remote.selectedServer;
 
     return {
         ok: true,

@@ -242,7 +242,7 @@ export async function runSwitchTarget(workspace: string, args: {
                 if (chosen) {
                     canonicalProject = chosen.project;
                     kind = chosen.kind;
-                    console.log(`  ✓ ${chosen.label} — ${chosen.project}`);
+                    if (!args.json) { console.log(`  ✓ ${chosen.label} — ${chosen.project}`); }
                 } else {
                     return {
                         ok: false, action: 'use', useScope: 'target', changed: [],
@@ -319,7 +319,7 @@ export async function runSwitchTarget(workspace: string, args: {
                 if (filtered.length > 0) {
                     vsCandidates = filtered;
                 } else {
-                    console.log(`  ⚠ ${T('use.vsVersionMismatch', [vsYear])}`);
+                    if (!args.json) { console.log(`  ⚠ ${T('use.vsVersionMismatch', [vsYear])}`); }
                     vsCandidates = [];
                     vsMismatch = true;
                 }

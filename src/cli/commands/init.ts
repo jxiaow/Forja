@@ -69,8 +69,15 @@ export function formatInitText(result: InitResult): string {
 // ── Main entry ──
 
 export async function runInit(cwd: string, options: InitOptions): Promise<InitResult> {
-    // Resolve workroot
-    const workroot = options.workroot ? path.resolve(options.workroot) : cwd;
+    // Resolve workroot — if --workroot is given, use it; otherwise check if cwd is under an existing workroot
+    let workroot: string;
+    if (options.workroot) {
+        workroot = path.resolve(options.workroot);
+    } else {
+        // Check if cwd is under an already-registered workroot (e.g. running from a subdirectory)
+        const existingWorkroot = resolveWorkroot(cwd);
+        workroot = existingWorkroot || cwd;
+    }
 
     if (!fs.existsSync(workroot)) {
         return {
@@ -106,7 +113,7 @@ async function handleExistingWorkroot(workroot: string, options: InitOptions): P
         };
     }
 
-    if (!options.interactive) {
+    if (!options.interactive && !options.answers) {
         return {
             ok: false, action: 'init', workroot,
             diagnostics: [{ level: 'error', message: T('init.workrootAlreadyRegistered') }],
@@ -202,7 +209,7 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
         };
     }
 
-    if (!options.interactive) {
+    if (!options.interactive && !options.answers) {
         return {
             ok: false, action: 'init', workroot,
             diagnostics: [{ level: 'error', message: T('init.workrootNotRegistered') }],
