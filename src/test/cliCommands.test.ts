@@ -14,6 +14,7 @@ import test, { before, after } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { execSync } from 'child_process';
 
 // ── 测试环境 ──
@@ -90,12 +91,10 @@ test('run --plan 返回 plan 字段而不执行', () => {
     }
 });
 
-test('setup --json 返回本地初始化结果', () => {
-    const j = json('setup');
+test('init --json 返回初始化结果', () => {
+    const j = json('init');
     assert.ok(j, '必须返回有效 JSON');
-    assert.equal(j.action, 'setup');
-    assert.ok(j.steps, '必须有 steps');
-    assert.ok(j.steps.localConfig, '必须有 localConfig 步骤');
+    assert.equal(j.action, 'init');
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -235,14 +234,15 @@ test('server update 实际修改了数据', () => {
     run(`server remove ${addResult.server.id}`);
 });
 
-test('use lang → list lang 一致', () => {
+test('use lang → 配置持久化一致', () => {
     run('use lang zh');
-    const j = json('list lang');
-    assert.equal(j.lang, 'zh');
+    const configPath = path.join(process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja'), 'config.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    assert.equal(config.lang, 'zh');
 
     run('use lang en');
-    const j2 = json('list lang');
-    assert.equal(j2.lang, 'en');
+    const config2 = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    assert.equal(config2.lang, 'en');
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -428,21 +428,19 @@ test('use execution --remote 设置远程执行', () => {
 });
 
 test('use lang 切换语言', () => {
+    const configPath = path.join(process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja'), 'config.json');
+
     // 设置中文
     const zhResult = json('use lang zh');
     assert.ok(zhResult.ok);
-
-    // 验证
-    const langResult = json('list lang');
-    assert.equal(langResult.lang, 'zh');
+    const zhConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    assert.equal(zhConfig.lang, 'zh');
 
     // 设置英文
     const enResult = json('use lang en');
     assert.ok(enResult.ok);
-
-    // 验证
-    const langResult2 = json('list lang');
-    assert.equal(langResult2.lang, 'en');
+    const enConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    assert.equal(enConfig.lang, 'en');
 });
 
 test('use lang 无参数报错', () => {
@@ -525,15 +523,16 @@ test('use lang 后配置持久化', () => {
     // 设置语言
     run('use lang zh');
 
-    // 重新读取
-    const r1 = json('list lang');
+    // 重新读取配置文件
+    const configPath = path.join(process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja'), 'config.json');
+    const r1 = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     assert.equal(r1.lang, 'zh');
 
     // 再次设置
     run('use lang en');
 
     // 验证变更
-    const r2 = json('list lang');
+    const r2 = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     assert.equal(r2.lang, 'en');
 });
 
@@ -600,9 +599,9 @@ test('JSON 输出必须可解析', () => {
 // ═════════════════════════════════════════════════════════════
 
 test('所有命令 --help 格式一致', () => {
-    const cmds = ['status', 'setup', 'list', 'use', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+    const cmds = ['status', 'init', 'list', 'use', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
     for (const cmd of cmds) {
-        const r = run(`${cmd} --help`);
+        const r = run(`${cmd} --help --lang en`);
         assert.equal(r.code, 0, `${cmd} --help 必须成功`);
         assert.match(r.out, /Usage:/, `${cmd} --help 必须包含 Usage:`);
     }

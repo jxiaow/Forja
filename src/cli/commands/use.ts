@@ -6,11 +6,9 @@ import * as fs from 'fs';
 import { ForjaJsonResult, ActiveTarget, Locale, T, Question } from './types';
 import { getActiveTarget, setActiveTarget } from './activeTarget';
 import {
-    loadQtSettings, saveQtSettings,
-    loadSdkSettings, saveSdkSettings,
-    loadSyncSettings,
     saveGlobalConfig, loadGlobalConfig,
 } from '../../core/settingsIO';
+import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } from '../../core/workspaceStore';
 import {
     runUseTarget as runUseTargetNew,
     runSwitchTarget,
@@ -128,27 +126,53 @@ export interface UseTargetArgs {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
-    suppressWarnings?: string;
     reset?: boolean;
     interactive?: boolean;
     json?: boolean;
 }
 
-export async function runUseTarget(workspace: string, args: UseTargetArgs): Promise<UseResult> {
-    // Handle --suppress-warnings (can combine with other flags or standalone)
-    if (args.suppressWarnings) {
-        const codes = args.suppressWarnings.split(',').map(s => s.trim()).filter(Boolean);
-        const qt = loadQtSettings(workspace);
-        qt.suppressedWarnings = codes;
-        saveQtSettings(workspace, qt);
-        // If no other flags, return immediately
-        if (!args.project && !args.mode && !args.arch && !args.qtPath && !args.vsInstall && !args.jomPath) {
-            return {
-                ok: true, action: 'use', useScope: 'target', workspace, changed: ['qt.suppressedWarnings'],
-                nextAction: 'forja build',
-            };
-        }
+export function runSuppressWarnings(workspace: string, codes: string[], add: boolean, rm: boolean): UseResult {
+    const workroot = resolveWorkroot(workspace);
+    if (!workroot) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: T('use.noActiveTargetSelected') }],
+            nextAction: 'forja init',
+        };
     }
+    const config = loadWorkspaceConfig(workroot);
+    const current = config.qtModulePrefs.suppressedWarnings ?? [];
+
+    if (!add && !rm && codes.length === 0) {
+        return {
+            ok: true, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: current.length > 0
+                ? [{ level: 'info', message: `Suppressed warnings: ${current.join(', ')}` }]
+                : [{ level: 'info', message: 'No suppressed warnings' }],
+        };
+    }
+
+    let updated: string[];
+    if (add) {
+        const set = new Set(current);
+        for (const c of codes) set.add(c);
+        updated = [...set];
+    } else if (rm) {
+        const toRemove = new Set(codes);
+        updated = current.filter(c => !toRemove.has(c));
+    } else {
+        updated = codes;
+    }
+
+    config.qtModulePrefs.suppressedWarnings = updated;
+    saveWorkspaceConfig(config);
+    return {
+        ok: true, action: 'use', useScope: 'target', workspace, changed: ['qt.suppressedWarnings'],
+        nextAction: 'forja build',
+    };
+}
+
+export async function runUseTarget(workspace: string, args: UseTargetArgs): Promise<UseResult> {
 
     // If --project is specified, use the switch path
     if (args.project) {
@@ -275,8 +299,6 @@ export function runUseShow(workspace: string): UseResult {
         };
     }
 
-    const qt = loadQtSettings(workspace);
-    const sdk = loadSdkSettings(workspace);
     const globalConfig = loadGlobalConfig();
 
     const lines: string[] = [];

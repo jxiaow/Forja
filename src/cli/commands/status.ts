@@ -9,12 +9,13 @@ import {
     RuntimeState, Locale, readinessText, readinessSymbol, T,
 } from './types';
 import { getActiveTarget } from './activeTarget';
-import { aggregateCandidates } from './candidates';
+import { collectTargetCandidates } from './candidates';
 import {
     loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings,
     getCorruptedConfigs, clearCorruptedConfigs,
     QtSettings, SdkSettings, SyncSettings, RemoteSettings, CorruptedConfig,
 } from '../../core/settingsIO';
+import { resolveWorkroot as resolveWorkrootForStatus, loadWorkspaceConfig as loadWsConfig } from '../../core/workspaceStore';
 import { readRunState, resolveRunProcessStatus } from '../../qt/shared/localState';
 import { getServerById } from '../../core/serverStore';
 import { resolveRemoteConfigFrom } from '../../remote/core/config';
@@ -100,10 +101,11 @@ export function runStatus(workspace: string): StatusResult {
     // ── Target readiness ──
     if (!activeTarget) {
         readiness.target = 'not-selected';
-        const hasAnyConfig = qtConfig.qtPath || qtConfig.vsInstall || sdkConfig.vsInstall || sdkConfig.pinnedProject;
-        // Only show target count if already initialized; otherwise it's noise
+        const workroot = resolveWorkrootForStatus(workspace);
+        const wsConfig = workroot ? loadWsConfig(workroot) : null;
+        const hasAnyConfig = wsConfig && Object.keys(wsConfig.targets).length > 0;
         if (hasAnyConfig) {
-            const candidates = aggregateCandidates(workspace, activeTarget, qtConfig, sdkConfig);
+            const candidates = collectTargetCandidates(workspace);
             const qtCount = candidates.filter(c => c.kind === 'qt').length;
             const sdkCount = candidates.filter(c => c.kind === 'sdk').length;
             if (qtCount > 0 || sdkCount > 0) {
@@ -516,6 +518,7 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         const t = result.activeTarget;
         lines.push(`${indent}${T('target')}  ${t.project}`);
         lines.push(`${indent}${T('setupSummaryModeArch')}  ${t.mode} | ${t.arch} | ${t.runAt}`);
+        if (t.qmakeTarget) { lines.push(`${indent}${T('init.qmakeTarget')}: ${t.qmakeTarget}`); }
     }
 
     // ── Readiness sub-list ──

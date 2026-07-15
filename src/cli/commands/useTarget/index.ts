@@ -11,10 +11,6 @@ import { resolveAll } from './resolve';
 import { saveAll, buildActiveTarget } from './save';
 import { buildSuccessResult, formatUseTargetText } from './report';
 import type { ResolveOptions, UseTargetResult, ResolvedConfig } from './types';
-import {
-    loadQtSettings, saveQtSettings, loadSdkSettings, saveSdkSettings,
-    loadActiveTarget,
-} from '../../../core/settingsIO';
 import { detectProjectType } from '../../../core/projectTypeDetector';
 import { detectEnv } from '../../../qt/env/envDetector';
 import { setSilent } from '../../../core/loggerBase';
@@ -213,7 +209,6 @@ export async function runSwitchTarget(workspace: string, args: {
     }
 
     // Resolve toolchain for the new target
-    const stored = ctx.storedToolchains[canonicalProject];
     const currentTarget = ctx.existingTarget;
     const mode = args.mode ?? currentTarget?.mode ?? 'debug';
     const arch = args.arch ?? currentTarget?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
@@ -225,13 +220,14 @@ export async function runSwitchTarget(workspace: string, args: {
     let qmakeTarget: string | undefined;
     const changed: string[] = [];
 
-    if (stored?.qtPath || stored?.vsInstall) {
+    // Try to get toolchain from existing target profile (workspaceStore)
+    if (currentTarget?.qtPath || currentTarget?.vsInstall) {
         if (kind === 'qt') {
-            qtPath = stored.qtPath;
-            jomPath = stored.jomPath;
-            qmakeTarget = stored.qmakeTarget;
+            qtPath = currentTarget.qtPath;
+            jomPath = currentTarget.jomPath;
+            qmakeTarget = currentTarget.qmakeTarget;
         }
-        vsInstall = stored.vsInstall;
+        vsInstall = currentTarget.vsInstall;
     } else if (args.interactive) {
         setSilent(true);
         const env = await detectEnv();
@@ -354,7 +350,8 @@ export async function runUpdateModeArch(workspace: string, args: {
     mode?: 'debug' | 'release';
     arch?: 'x86' | 'x64';
 }): Promise<UseTargetResult> {
-    const currentTarget = loadActiveTarget(workspace);
+    const { setActiveTarget } = await import('../activeTarget');
+    const currentTarget = (await import('../activeTarget')).getActiveTarget(workspace);
     if (!currentTarget) {
         return {
             ok: false, action: 'use', useScope: 'target', changed: [],
@@ -376,21 +373,7 @@ export async function runUpdateModeArch(workspace: string, args: {
     }
 
     if (changed.length > 0) {
-        // Save to domain config
-        if (updated.kind === 'qt') {
-            const qt = loadQtSettings(workspace);
-            if (args.mode) qt.mode = args.mode;
-            if (args.arch) qt.arch = args.arch;
-            saveQtSettings(workspace, qt);
-        } else {
-            const sdk = loadSdkSettings(workspace);
-            if (args.mode) sdk.mode = args.mode;
-            if (args.arch) sdk.arch = args.arch;
-            saveSdkSettings(workspace, sdk);
-        }
-
         try {
-            const { setActiveTarget } = await import('../activeTarget');
             setActiveTarget(workspace, updated);
         } catch (e) {
             return {
@@ -418,7 +401,8 @@ export async function runUpdateToolchain(workspace: string, args: {
     vsInstall?: string;
     jomPath?: string;
 }): Promise<UseTargetResult> {
-    const currentTarget = loadActiveTarget(workspace);
+    const { getActiveTarget, setActiveTarget } = await import('../activeTarget');
+    const currentTarget = getActiveTarget(workspace);
     if (!currentTarget) {
         return {
             ok: false, action: 'use', useScope: 'target', changed: [],
@@ -430,46 +414,29 @@ export async function runUpdateToolchain(workspace: string, args: {
     const changed: string[] = [];
     const updated = { ...currentTarget };
 
-    if (currentTarget.kind === 'qt') {
-        const qt = loadQtSettings(workspace);
-        if (args.qtPath && args.qtPath !== qt.qtPath) {
-            qt.qtPath = args.qtPath;
-            updated.qtPath = args.qtPath;
-            changed.push('qtPath');
-            // Look up version from detected candidates
-            setSilent(true);
-            const env = await detectEnv();
-            setSilent(false);
-            const match = env.qtCandidates.find(q => q.path === args.qtPath);
-            if (match) {
-                qt.qtVersion = match.version;
-                changed.push('qtVersion');
-            }
+    if (args.qtPath && args.qtPath !== currentTarget.qtPath) {
+        updated.qtPath = args.qtPath;
+        changed.push('qtPath');
+        setSilent(true);
+        const env = await detectEnv();
+        setSilent(false);
+        const match = env.qtCandidates.find(q => q.path === args.qtPath);
+        if (match) {
+            updated.qtVersion = match.version;
+            changed.push('qtVersion');
         }
-        if (args.vsInstall && args.vsInstall !== qt.vsInstall) {
-            qt.vsInstall = args.vsInstall;
-            updated.vsInstall = args.vsInstall;
-            changed.push('vsInstall');
-        }
-        if (args.jomPath && args.jomPath !== qt.jomPath) {
-            qt.jomPath = args.jomPath;
-            updated.jomPath = args.jomPath;
-            changed.push('jomPath');
-        }
-        saveQtSettings(workspace, qt);
-    } else {
-        const sdk = loadSdkSettings(workspace);
-        if (args.vsInstall && args.vsInstall !== sdk.vsInstall) {
-            sdk.vsInstall = args.vsInstall;
-            updated.vsInstall = args.vsInstall;
-            changed.push('vsInstall');
-        }
-        saveSdkSettings(workspace, sdk);
+    }
+    if (args.vsInstall && args.vsInstall !== currentTarget.vsInstall) {
+        updated.vsInstall = args.vsInstall;
+        changed.push('vsInstall');
+    }
+    if (args.jomPath && args.jomPath !== currentTarget.jomPath) {
+        updated.jomPath = args.jomPath;
+        changed.push('jomPath');
     }
 
     if (changed.length > 0) {
         try {
-            const { setActiveTarget } = await import('../activeTarget');
             setActiveTarget(workspace, updated);
         } catch (e) {
             return {

@@ -16,21 +16,20 @@ function source(relativePath: string): string {
 
 // ── Command surface ──
 
-test('CLI dispatcher registers exactly 11 commands (setup removed)', () => {
+test('CLI dispatcher registers exactly 12 commands (setup removed, init added)', () => {
     const indexSrc = source('src/cli/commands/index.ts');
-    const expectedCommands = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+    const expectedCommands = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync', 'init'];
     for (const cmd of expectedCommands) {
         assert.ok(indexSrc.includes(`'${cmd}'`), `Command '${cmd}' must be registered in CLI dispatcher`);
     }
     assert.ok(!indexSrc.includes("'setup'"), "'setup' must NOT be a registered command (removed)");
-    assert.ok(!indexSrc.includes("'init'"), "'init' must NOT be a registered command");
 });
 
 test('COMMANDS array includes all implemented commands', () => {
     const indexSrc = source('src/cli/commands/index.ts');
     const commandsMatch = indexSrc.match(/const COMMANDS: Command\[\] = \[([^\]]+)\]/);
     assert.ok(commandsMatch, 'COMMANDS array must exist');
-    const expectedCommands = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+    const expectedCommands = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync', 'init'];
     for (const cmd of expectedCommands) {
         assert.ok(commandsMatch[1].includes(`'${cmd}'`), `COMMANDS must include '${cmd}'`);
     }
@@ -38,21 +37,7 @@ test('COMMANDS array includes all implemented commands', () => {
 
 // ── No stale `forja init` references ──
 
-test('no stale `forja init` in user-facing nextActions across source files', () => {
-    const filesToCheck = [
-        'src/cli/commands/activeTarget.ts',
-        'src/cli/commands/status.ts',
-        'src/cli/commands/list.ts',
-        'src/cli/index.ts',
-        'src/qt/cli/args.ts',
-        'src/sdk/cli/index.ts',
-    ];
-    for (const file of filesToCheck) {
-        const content = source(file);
-        assert.ok(!content.includes("'forja init'"), `${file} must not contain 'forja init' (use 'forja use target')`);
-        assert.ok(!content.includes('"forja init"'), `${file} must not contain "forja init" (use "forja use target")`);
-    }
-});
+test('`forja init` is a valid command for workroot registration', () => { const activeTargetSrc = source('src/cli/commands/activeTarget.ts'); assert.ok(activeTargetSrc.includes("'forja init'"), 'activeTarget.ts should suggest forja init when workroot not registered'); });
 
 test('qtCore.ts nextActions reference `forja use target` not `forja init`', () => {
     const qtCore = source('src/qt/shared/qtCore.ts');
@@ -159,7 +144,9 @@ test('T() function uses global locale (no locale parameter required)', () => {
     assert.ok(typesSrc.includes('setGlobalLocale'), 'types.ts must export setGlobalLocale');
     assert.ok(typesSrc.includes('getGlobalLocale'), 'types.ts must export getGlobalLocale');
     assert.ok(typesSrc.includes('_globalLocale'), 'types.ts must have _globalLocale state');
-    assert.match(typesSrc, /export function T\(\s*key\s*:\s*string\s*\)/, 'T() must accept only key parameter');
+    // T() may accept optional params for interpolation, but must NOT have a locale parameter
+    assert.match(typesSrc, /export function T\(\s*key\s*:\s*string/, 'T() must accept key parameter');
+    assert.doesNotMatch(typesSrc, /export function T\([^)]*locale/, 'T() must not have locale parameter');
 });
 
 test('CLI entry point calls setGlobalLocale after resolving locale', () => {
@@ -246,7 +233,7 @@ test('help text references setup not init', () => {
     const indexSrc = source('src/cli/commands/index.ts');
     const helpMatch = indexSrc.match(/const help = `([\s\S]*?)`\.trim/);
     if (helpMatch) {
-        assert.ok(!helpMatch[1].includes('forja init'), 'Help text must not reference `forja init`');
+        // forja init is now a valid command
         assert.ok(helpMatch[1].includes('forja use target'), 'Help text must reference `forja use target`');
     }
 });
@@ -266,3 +253,5 @@ test('resolveLocale prioritizes --lang flag over env and system', () => {
     assert.ok(typesSrc.includes('resolveLocale'), 'types.ts must export resolveLocale');
     assert.match(typesSrc, /function resolveLocale\(/, 'resolveLocale must be a function');
 });
+
+

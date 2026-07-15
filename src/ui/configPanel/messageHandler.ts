@@ -188,17 +188,17 @@ export async function handleMessage(
                 applyManualProjectSelection(workspace, String(msg.value));
             } else {
                 setState('currentProject', null);
-                // Also clear activeTarget and pinnedProject so CLI doesn't build old target
+                // Also clear activeTarget in workspaceStore so CLI doesn't build old target
                 const { getWorkspaceRoot: gwr } = await import('../../qt/services/configService');
                 const ws = gwr();
                 if (ws) {
-                    const fs = await import('fs');
-                    const { projectConfigPath, loadQtSettings, saveQtSettings, loadSdkSettings, saveSdkSettings } = await import('../../core/settingsIO');
-                    try { fs.unlinkSync(projectConfigPath(ws, 'activeTarget')); } catch { /* may not exist */ }
-                    const qt = loadQtSettings(ws);
-                    if (qt.pinnedProject) { qt.pinnedProject = null; saveQtSettings(ws, qt); }
-                    const sdk = loadSdkSettings(ws);
-                    if (sdk.pinnedProject) { sdk.pinnedProject = null; saveSdkSettings(ws, sdk); }
+                    const { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } = await import('../../core/workspaceStore');
+                    const workroot = resolveWorkroot(ws);
+                    if (workroot) {
+                        const config = loadWorkspaceConfig(workroot);
+                        config.activeTarget = null;
+                        saveWorkspaceConfig(config);
+                    }
                 }
             }
             await updateConfig('manualProPath', String(msg.value || ''));

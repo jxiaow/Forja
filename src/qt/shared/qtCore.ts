@@ -676,13 +676,14 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
 
     const project = projectResult.project;
     const unconfirmedBuildConfig = getUnconfirmedBuildConfig(settings);
-    const mode = settings.mode || 'debug';
+    // Prioritize values passed via CliOptions (from workspaceStore) over QtSettings
+    const mode = options.mode || settings.mode || 'debug';
     const autoArch = getAvailableArch().length === 1 ? getDefaultArch() : '';
-    const arch = settings.arch || autoArch || getDefaultArch();
-    const qtPath = settings.qtPath || getQtPathEnv();
-    const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || getVsDevShellEnv();
-    const target = settings.target || '';
-    const qmakeArgs = settings.qmakeArgs || '';
+    const arch = options.arch || settings.arch || autoArch || getDefaultArch();
+    const qtPath = options.qtPath || settings.qtPath || getQtPathEnv();
+    const vsDevShell = options.vsDevShell || resolveVsDevShellPath(settings.vsInstall) || getVsDevShellEnv();
+    const target = options.target || settings.target || '';
+    const qmakeArgs = options.qmakeArgs || settings.qmakeArgs || '';
     const jomPath = settings.jomPath || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
 

@@ -2,7 +2,6 @@
  * useTarget module — shared types.
  */
 import { ActiveTarget, TargetCandidate, Diagnostic, Question, ForjaJsonResult } from '../types';
-import { TargetToolchainConfig } from '../../../core/settingsIO';
 
 // ── Detection context ──
 
@@ -42,7 +41,7 @@ export interface DetectContext {
         mode: string;
         arch: string;
     };
-    storedToolchains: Record<string, TargetToolchainConfig>;
+    storedToolchains: Record<string, never>;
 }
 
 // ── Resolve options ──
@@ -83,7 +82,7 @@ export interface UseTargetResult extends ForjaJsonResult {
     status?: 'needs-input';
     questions?: Question[];
     config?: {
-        qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qtVersion?: string; vsVersion?: string };
+        qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qtVersion?: string; vsVersion?: string; qmakeTarget?: string };
         sdk?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
     };
     changed: string[];

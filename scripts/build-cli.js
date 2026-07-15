@@ -65,7 +65,8 @@ const coreFiles = [
     'core/gitRepoResolver.js',
     'core/syncFileSelection.js',
     'core/sdkProjectScanner.js',
-    'core/projectTypeDetector.js'
+    'core/projectTypeDetector.js',
+    'core/workspaceStore.js'
 ];
 
 // Individual files needed from qt/platform/ (exclude builder.js, which depends on vscode)

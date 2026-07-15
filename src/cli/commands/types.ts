@@ -531,7 +531,9 @@ Target options:
   --qt <path>             Set Qt installation path
   --vs <path>             Set Visual Studio installation path
   --jom <path>            Set jom installation path
-  --suppress-warnings <codes>  Suppress build warnings (comma-separated, e.g. C4819,C5297)`,
+  suppress-warnings [codes]     Manage suppressed warnings (no args = show)
+    --add <codes>               Add to list
+    --rm <codes>                Remove from list`,
         zh: `用法: forja use <子命令> [选项] [--json]
 
 子命令:
@@ -546,7 +548,9 @@ Target 选项:
   --qt <路径>             设置 Qt 安装路径
   --vs <路径>             设置 Visual Studio 安装路径
   --jom <路径>            设置 jom 安装路径
-  --suppress-warnings <代码>  过滤构建警告（逗号分隔，如 C4819,C5297）`,
+  suppress-warnings [代码]      管理被过滤的构建警告（无参数=查看）
+    --add <代码>                追加到列表
+    --rm <代码>                 从列表删除`,
     },
     'help.server': {
         en: 'Usage: forja server <add|update|remove> [options] [--json]',
@@ -660,6 +664,32 @@ Options:
     'init.remoteInitFailed':            { en: 'Remote init failed',                  zh: '远程初始化失败' },
     'init.remoteInitSucceeded':         { en: 'Remote init succeeded',               zh: '远程初始化成功' },
     'init.configWriteFailed':           { en: 'Failed to write configuration',       zh: '写入配置失败' },
+    // workroot init (forja init)
+    'init.title':                       { en: 'Workspace initialized',               zh: '工作区已初始化' },
+    'init.workroot':                    { en: 'Work root',                            zh: '工作根目录' },
+    'init.newlyRegistered':             { en: '(newly registered)',                   zh: '（新注册）' },
+    'init.project':                     { en: 'Project',                              zh: '项目' },
+    'init.modeArch':                    { en: 'Mode / Arch',                          zh: '模式 / 架构' },
+    'init.qt':                          { en: 'Qt',                                   zh: 'Qt' },
+    'init.vs':                          { en: 'Visual Studio',                        zh: 'Visual Studio' },
+    'init.workrootNotFound':            { en: 'Work root not found',                  zh: '工作根目录不存在' },
+    'init.workrootAlreadyRegistered':   { en: 'Work root is already registered',      zh: '工作根目录已注册' },
+    'init.workrootNotRegistered':       { en: 'Work root is not registered. Run `forja init` first.', zh: '工作根目录未注册。请先运行 `forja init`。' },
+    'init.existingTargets':             { en: 'Existing targets',                     zh: '已有目标' },
+    'init.selectAction':                { en: 'What would you like to do?',           zh: '你想做什么？' },
+    'init.addAction':                   { en: 'Add a new target',                     zh: '添加新目标' },
+    'init.modifyAction':                { en: 'Modify an existing target',            zh: '修改现有目标' },
+    'init.exitAction':                  { en: 'Exit',                                 zh: '退出' },
+    'init.newWorkroot':                 { en: 'Initializing new workspace',           zh: '初始化新工作区' },
+    'init.foundProjects':               { en: 'Found projects',                       zh: '找到项目' },
+    'init.noProjectsFound':             { en: 'No projects found in work root',       zh: '工作根目录下未找到项目' },
+    'init.selectProject':               { en: 'Select a project',                     zh: '选择项目' },
+    'init.noTargetsToModify':           { en: 'No targets to modify',                 zh: '没有可修改的目标' },
+    'init.selectTargetToModify':        { en: 'Select target to modify',              zh: '选择要修改的目标' },
+    'init.configurationCancelled':      { en: 'Configuration cancelled',              zh: '配置已取消' },
+    'init.existingAction':              { en: 'Action for existing workroot',         zh: '对已注册工作根目录的操作' },
+    'help.init':                        { en: 'Usage: forja init [--workroot <path>]\n\nRegister a work root and configure the initial target.\n\nOptions:\n  --workroot <path>   Specify work root directory (default: current directory)\n  --answers <file>    JSON file with pre-configured answers (for automation)',
+                                          zh: '用法: forja init [--workroot <path>]\n\n注册工作根目录并配置初始目标。\n\n选项:\n  --workroot <path>   指定工作根目录（默认：当前目录）\n  --answers <file>    预配置答案的 JSON 文件（用于自动化）' },
     // index.ts dispatcher messages
     'idx.noCommand':                    { en: 'No command specified. Run `forja --help` for usage.', zh: '未指定命令。运行 `forja --help` 查看用法。' },
     'idx.unknownCommand':               { en: 'Unknown command',                    zh: '未知命令' },
@@ -674,6 +704,7 @@ Options:
     'idx.invalidPortHint':              { en: 'Must be a number between 1 and 65535.', zh: '必须是 1 到 65535 之间的数字。' },
     'idx.unknownServerSubcommand':      { en: 'Unknown server subcommand',          zh: '未知 server 子命令' },
     'idx.unknownRemoteSubcommand':      { en: 'Unknown remote subcommand',          zh: '未知 remote 子命令' },
+    'remote.serverNotFound':            { en: 'Server not found',                   zh: '服务器未找到' },
     'idx.unknownBuildAction':           { en: 'Unknown build action',               zh: '未知构建动作' },
     'idx.validActions':                 { en: 'Valid actions: fresh, qmake, rcc',   zh: '有效动作: fresh, qmake, rcc' },
     'idx.runDesignerUsage':             { en: 'Usage: forja run designer <ui-file>', zh: '用法: forja run designer <ui文件>' },

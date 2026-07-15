@@ -5,6 +5,7 @@ import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSumma
 import { collectTargetCandidates } from './candidates';
 import { listServers, getServerDetail } from './server';
 import { loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
+import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget as getActiveTargetFromStore } from '../../core/workspaceStore';
 import { detectMake } from '../../sdk/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 import { setSilent } from '../../core/loggerBase';
@@ -210,13 +211,18 @@ function listTargets(workspace: string): ListResult {
     const rawTargets = collectTargetCandidates(workspace);
     const diagnostics: Diagnostic[] = [];
 
-    const qt = loadQtSettings(workspace);
-    const sdk = loadSdkSettings(workspace);
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+
     const hasQtTargets = rawTargets.some(t => t.kind === 'qt');
-    if (!qt.qtPath && hasQtTargets) {
+    const hasQtToolchain = activeProfile?.toolchain.qtPath;
+    const hasVsToolchain = activeProfile?.toolchain.vsInstall;
+
+    if (!hasQtToolchain && hasQtTargets) {
         diagnostics.push({ level: 'warning', message: T('lst.qtPathNotConfigured') });
     }
-    if (process.platform === 'win32' && !qt.vsInstall && !sdk.vsInstall) {
+    if (process.platform === 'win32' && !hasVsToolchain) {
         diagnostics.push({ level: 'warning', message: T('lst.vsInstallNotConfigured') });
     }
 

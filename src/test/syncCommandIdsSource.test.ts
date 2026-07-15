@@ -11,7 +11,7 @@ test('package contributes only v2 commands', () => {
 
     // v2 commands
     assert.ok(commands.includes('forja.status'));
-    assert.ok(commands.includes('forja.setup'));
+    assert.ok(commands.includes('forja.init'));
     assert.ok(commands.includes('forja.list'));
     assert.ok(commands.includes('forja.use'));
     assert.ok(commands.includes('forja.server'));

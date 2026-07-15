@@ -11,7 +11,8 @@ import { CliOptions } from '../../qt/cli/types';
 import { createSdkPlan } from '../../sdk/shared/plan';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, diag, T } from './types';
-import { loadSdkSettings, loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 import { getServerById } from '../../core/serverStore';
 
 export interface CleanResult {
@@ -69,7 +70,8 @@ function getBuildOutputDir(projectPath: string, kind: 'qt' | 'sdk'): string {
 
 // ── CLI options builder ──
 
-function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: boolean): CliOptions {
+function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: boolean, qmakeArgs?: string): CliOptions {
+    const vsDevShell = target.vsInstall ? resolveVsDevCmdPath(target.vsInstall) : null;
     return {
         action: 'clean',
         executionMode: plan ? 'dryRun' : 'execute',
@@ -77,10 +79,10 @@ function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: b
         project: target.project,
         mode: target.mode,
         arch: target.arch,
-        qtPath: null,
-        vsDevShell: null,
-        target: null,
-        qmakeArgs: null,
+        qtPath: target.qtPath || null,
+        vsDevShell: vsDevShell,
+        target: target.qmakeTarget || null,
+        qmakeArgs: qmakeArgs || null,
         detach: false,
         saveLocal: false,
         json: false,
@@ -180,8 +182,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
 
     // SDK local
     if (target.kind === 'sdk') {
-        const sdkSettings = loadSdkSettings(workspace);
-        const vsDevCmdPath = resolveVsDevCmdPath(sdkSettings.vsInstall);
+        const vsDevCmdPath = target.vsInstall ? resolveVsDevCmdPath(target.vsInstall) : null;
         const plan = createSdkPlan({
             action: 'clean',
             workspace,
@@ -233,7 +234,10 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     }
 
     // Qt local
-    const cliOptions = buildCleanQtCliOptions(workspace, target, options.plan ?? false);
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
+    const cliOptions = buildCleanQtCliOptions(workspace, target, options.plan ?? false, qmakeArgs);
 
     try {
         const planned = await createActionPlan(cliOptions);

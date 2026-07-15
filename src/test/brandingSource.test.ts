@@ -123,7 +123,6 @@ test('current CLI surfaces do not document removed --dry-run alias', () => {
         'src/qt/cli/args.ts',
         'src/sdk/cli/index.ts',
         'src/sync/cli.ts',
-        'src/cli/cleanup.ts',
         'docs/cli-interface-spec.md',
         'docs/README-cli.md',
         'skills/forja/SKILL.md'

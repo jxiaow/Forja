@@ -1,12 +1,13 @@
 /**
- * CLI entry — dispatches to 11 top-level commands.
+ * CLI entry — dispatches to 12 top-level commands.
  * Called by src/cli/index.ts.
  */
 import * as path from 'path';
+import * as fs from 'fs';
 import { ForjaJsonResult } from './types';
 import { runStatus, formatStatusText } from './status';
 import { runList, ListCategory, EnvSubCategory, formatListText } from './list';
-import { runUseTarget, runUseExecution, runUseLang, runUseShow, formatUseText } from './use';
+import { runUseTarget, runUseExecution, runUseLang, runUseShow, runSuppressWarnings, formatUseText } from './use';
 import { runRemoteShow, runRemoteSet, runRemoteRestore, runRemoteReset, formatRemoteText } from './remote';
 import { runServerAdd, runServerUpdate, runServerRemove, formatServerText } from './server';
 import { runBuild, BuildAction, outputBuildResult } from './build';
@@ -15,6 +16,7 @@ import { runStop, outputStopResult } from './stop';
 import { runClean, outputCleanResult } from './clean';
 import { runDoctor, formatDoctorText } from './doctor';
 import { runSyncPlan, runSyncExecute, runSyncReset, runSyncStatus, runSyncIgnoreList, runSyncIgnoreAdd, runSyncIgnoreRm, formatSyncText } from './sync';
+import { runInit, formatInitText } from './init';
 import { confirm, prompt, choose } from './prompt';
 import { resolveLocale, Locale, T, setGlobalLocale, diag } from './types';
 import { loadGlobalConfig } from '../../core/settingsIO';
@@ -22,9 +24,9 @@ import { readServers, addServer, getServerById, readProjectSyncConfig } from '..
 import { resolveGitRoots } from '../../core/gitRepoResolver';
 import { ClassifiedChanges, configureSyncSettings } from '../../sync/cli';
 
-type Command = 'status' | 'list' | 'use' | 'remote' | 'server' | 'build' | 'run' | 'stop' | 'clean' | 'doctor' | 'sync';
+type Command = 'status' | 'list' | 'use' | 'remote' | 'server' | 'build' | 'run' | 'stop' | 'clean' | 'doctor' | 'sync' | 'init';
 
-const COMMANDS: Command[] = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+const COMMANDS: Command[] = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync', 'init'];
 
 export function isCommand(cmd: string): cmd is Command {
     return COMMANDS.includes(cmd as Command);
@@ -48,6 +50,7 @@ function getCommandHelp(cmd: string): string {
         clean: T('help.clean'),
         doctor: T('help.doctor'),
         sync: T('help.sync.actual'),
+        init: T('help.init'),
     };
     return map[cmd] || '';
 }
@@ -121,8 +124,10 @@ export async function runCli(argv: string[]): Promise<void> {
             return handleDoctor(argv, workspace, wantsJson, locale);
         case 'sync':
             return handleSync(argv, workspace, wantsJson, locale);
+        case 'init':
+            return handleInit(argv, workspace, wantsJson, locale);
         default: {
-            const KNOWN_COMMANDS = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+            const KNOWN_COMMANDS = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync', 'init'];
             const suggestion = suggestCorrection(command, KNOWN_COMMANDS);
             const msg = suggestion
                 ? `${T('idx.unknownCommand')}: ${command}. ${T('idx.didYouMean')}: forja ${suggestion}?`
@@ -297,6 +302,41 @@ function handleStatus(argv: string[], workspace: string, wantsJson: boolean, loc
     outputResult(result, wantsJson, (r) => formatStatusText(r as Parameters<typeof formatStatusText>[0], locale));
 }
 
+// ── Init ──
+
+async function handleInit(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    const initKnown = new Set(['--workroot', '--answers']);
+    const initWithValue = new Set(['--workroot', '--answers']);
+    const initUnknown = findUnknownFlags(argv, initKnown, initWithValue);
+    if (initUnknown.length > 0) {
+        outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: unknownFlagsMessage(initUnknown, initKnown) }], nextAction: 'forja init' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    const workrootFlag = extractFlag(argv, '--workroot');
+    const answersFile = extractFlag(argv, '--answers');
+
+    let answers: Record<string, string> | undefined;
+    if (answersFile) {
+        try {
+            answers = JSON.parse(fs.readFileSync(answersFile, 'utf8'));
+        } catch {
+            outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: `Failed to read answers file: ${answersFile}` }] }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+    }
+
+    const result = await runInit(workspace, {
+        workroot: workrootFlag,
+        interactive: !wantsJson && !answers,
+        json: wantsJson,
+        answers,
+    });
+    outputResult(result, wantsJson, (r) => formatInitText(r as Parameters<typeof formatInitText>[0]));
+}
+
 // ── List ──
 
 async function handleList(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
@@ -381,8 +421,8 @@ async function handleList(argv: string[], workspace: string, wantsJson: boolean,
 // ── Use ──
 
 async function handleUse(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const useKnown = new Set(['--project','--mode','--arch','--qt','--vs','--jom','--reset','--local','--remote','--suppress-warnings']);
-    const useWithVal = new Set(['--project','--mode','--arch','--qt','--vs','--jom','--suppress-warnings']);
+    const useKnown = new Set(['--project','--mode','--arch','--qt','--vs','--jom','--reset','--local','--remote','--add','--rm']);
+    const useWithVal = new Set(['--project','--mode','--arch','--qt','--vs','--jom']);
     const useUnknown = findUnknownFlags(argv, useKnown, useWithVal);
     if (useUnknown.length > 0) {
         outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(useUnknown, useKnown) }], nextAction: 'forja use target' }, wantsJson);
@@ -393,6 +433,14 @@ async function handleUse(argv: string[], workspace: string, wantsJson: boolean, 
 
     switch (subCmd) {
         case 'target': {
+            if (argv[2] === 'suppress-warnings') {
+                const add = hasFlag(argv, '--add');
+                const rm = hasFlag(argv, '--rm');
+                const codes = argv.slice(3).filter(a => !a.startsWith('--'));
+                const result = runSuppressWarnings(workspace, codes, add, rm);
+                outputResult(result, wantsJson, (r) => formatUseText(r as Parameters<typeof formatUseText>[0], locale));
+                return;
+            }
             const result = await runUseTarget(workspace, {
                 project: extractFlag(argv, '--project'),
                 mode: extractFlag(argv, '--mode') as 'debug' | 'release' | undefined,
@@ -400,7 +448,6 @@ async function handleUse(argv: string[], workspace: string, wantsJson: boolean, 
                 qtPath: extractFlag(argv, '--qt'),
                 vsInstall: extractFlag(argv, '--vs'),
                 jomPath: extractFlag(argv, '--jom'),
-                suppressWarnings: extractFlag(argv, '--suppress-warnings'),
                 reset: hasFlag(argv, '--reset'),
                 interactive: !wantsJson,
                 json: wantsJson,
@@ -520,6 +567,20 @@ async function handleRemote(argv: string[], workspace: string, wantsJson: boolea
                 return;
             }
             // No subcommand: show current remote config
+            const serverFlag = extractFlag(argv, '--server');
+            if (serverFlag) {
+                const servers = readServers();
+                const match = servers.find(s => s.id === serverFlag || s.name === serverFlag);
+                if (!match) {
+                    outputResult({
+                        ok: false, action: 'remote', remoteAction: 'show', changed: [],
+                        diagnostics: [{ level: 'error', message: `${T('remote.serverNotFound')}: ${serverFlag}` }],
+                        nextAction: 'forja server add',
+                    }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+            }
             const result = runRemoteShow(workspace);
             outputResult(result, wantsJson, fmt);
             return;
