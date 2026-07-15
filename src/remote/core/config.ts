@@ -23,16 +23,16 @@ export function resolveRemoteConfigFrom(
 ): ResolveRemoteConfigResult {
     const serverId = serverOverride || remote.selectedServer || sync.selectedServer;
     if (!serverId) {
-        return blocked('未选择服务器');
+        return blocked('No server selected');
     }
     const server = getServerById(serverId);
     if (!server) {
-        return blocked(`服务器不存在: ${serverId}`);
+        return blocked(`Server not found: ${serverId}`);
     }
     // Prefer remote.remotePaths, fall back to sync.remotePaths for backward compatibility
     const remotePath = remote.remotePaths[serverId] || sync.remotePaths[serverId] || '';
     if (!remotePath) {
-        return blocked(`服务器 ${server.name || server.id} 未配置 remotePath`);
+        return blocked(`Server ${server.name || server.id}: remotePath not configured`);
     }
     return {
         config: { workspace: resolvedWorkspace, server, remotePath, ignore: sync.ignore },
@@ -74,9 +74,9 @@ function blocked(message: string): ResolveRemoteConfigResult {
             name: 'syncConfig',
             ok: false,
             message,
-            nextAction: '配置 sync server 和 remotePath'
+            nextAction: 'forja remote set'
         },
         diagnostics: [{ level: 'error', message }],
-        nextAction: '配置 sync server 和 remotePath'
+        nextAction: 'forja remote set'
     };
 }

@@ -8,6 +8,7 @@ import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner';
 import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
+import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
 import { createSdkPlan } from '../../sdk/shared/plan';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
@@ -92,7 +93,10 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             : projectPath;
         const earlyWorkroot = resolveWorkroot(workspace);
         const wsConfigEarly = earlyWorkroot ? loadWorkspaceConfig(earlyWorkroot) : null;
-        const savedProfile = wsConfigEarly ? Object.values(wsConfigEarly.targets).find(t => t.kind === kind) : null;
+        const allTargets = wsConfigEarly ? Object.values(wsConfigEarly.targets) : [];
+        const savedProfile = allTargets.find(t => t.kind === kind && t.id === wsConfigEarly?.activeTarget)
+            || allTargets.find(t => t.kind === kind)
+            || null;
         targetResult = {
             target: {
                 kind,
@@ -350,6 +354,12 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             const runtimeInfo = resolveRuntimeTarget(projectDir, target.mode, target.arch);
             if (runtimeInfo?.exePath) {
                 terminateExecutable(runtimeInfo.exePath);
+            } else {
+                // Makefile mismatch or unresolved — fall back to saved run state
+                const state = readRunState(workspace);
+                if (state?.executablePath) {
+                    terminateExecutable(state.executablePath);
+                }
             }
         }
 

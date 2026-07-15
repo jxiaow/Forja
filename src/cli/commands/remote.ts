@@ -14,6 +14,7 @@ import { createSshRunner, remoteCommand } from '../../remote/core/shell';
 import { resolveRemoteConfig, resolveRemoteActionPath } from '../../remote/core/config';
 import { buildRemoteRepoDirSetup } from '../../remote/core/repoPath';
 import { ServerConfig } from '../../core/serverStore';
+import * as path from 'path';
 
 function resolveSshPassword(server: ServerConfig): string | null {
     return server.password || process.env.FORJA_SSH_PASSWORD || null;
@@ -77,16 +78,16 @@ export function formatRemoteText(result: RemoteResult, locale: Locale): string {
 
     switch (result.remoteAction) {
         case 'show': {
-            lines.push('Remote:');
+            lines.push(T('remoteLabel'));
             const r = result.remote;
             if (!r || (!r.selectedServer && !r.remoteWorkspace && !r.remoteForjaBin)) {
                 lines.push(`  ${T('doctorNoServer')}`);
             } else {
                 if (r.selectedServer) {
-                    lines.push(`  Server: ${r.selectedServer}`);
+                    lines.push(`  ${T('serverLabel')} ${r.selectedServer}`);
                 }
                 if (r.remotePath) {
-                    lines.push(`  Remote path: ${r.remotePath}`);
+                    lines.push(`  ${T('remotePathLabel')} ${r.remotePath}`);
                 }
                 if (r.workspaceMode && r.workspaceMode !== 'legacy') {
                     lines.push(`  ${T('workspaceMode')}: ${r.workspaceMode}`);
@@ -308,8 +309,20 @@ export async function runRemoteReset(workspace: string, args: RemoteResetArgs): 
     const runner = createSshRunner(resolved.config.server, password);
     const remotePath = resolveRemoteActionPath(workspace, resolved.config.remotePath);
     const changed: string[] = [];
+    const diagnostics: Diagnostic[] = [];
     let resetPaths = 0;
     let cleaned = 0;
+
+    // Validate paths - reject absolute paths and .. segments
+    for (const p of args.paths) {
+        if (path.isAbsolute(p) || p.includes('..')) {
+            return {
+                ok: false, action: 'remote', remoteAction: 'reset', changed: [],
+                diagnostics: [{ level: 'error', message: `${T('remote.invalidPath')}: ${p}` }],
+                nextAction: 'forja remote reset <repo> <paths...>',
+            };
+        }
+    }
 
     // Reset: git reset --hard HEAD
     const pathArgs = remoteCommand(args.paths);
@@ -335,12 +348,9 @@ export async function runRemoteReset(workspace: string, args: RemoteResetArgs): 
             changed.push(`clean-untracked.${args.repo}(${cleanResult.cleaned.length} paths)`);
             cleaned = cleanResult.cleaned.length;
         } else {
-            return {
-                ok: false, action: 'remote', remoteAction: 'reset', changed,
-                diagnostics: cleanResult.diagnostics.map(d => ({ level: d.level as 'error' | 'warning', message: d.message })),
-                remote: { resetPaths, cleaned },
-                nextAction: 'forja doctor',
-            };
+            // Reset succeeded but clean failed — report as success with warning
+            const cleanDetail = cleanResult.diagnostics?.map(d => d.message).join('; ') || 'unknown error';
+            diagnostics.push({ level: 'warning', message: `${T('remote.cleanFailedWarning')}: ${cleanDetail}` });
         }
     }
 
@@ -348,6 +358,7 @@ export async function runRemoteReset(workspace: string, args: RemoteResetArgs): 
         ok: true, action: 'remote', remoteAction: 'reset',
         workspace, changed,
         remote: { resetPaths, cleaned },
+        diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
         nextAction: 'forja status',
     };
 }

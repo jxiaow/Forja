@@ -161,7 +161,11 @@ export function runSuppressWarnings(workspace: string, codes: string[], add: boo
         const toRemove = new Set(codes);
         updated = current.filter(c => !toRemove.has(c));
     } else {
-        updated = codes;
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: T('use.suppressWarningsRequiresFlag') }],
+            nextAction: 'forja use target suppress-warnings --add <code>',
+        };
     }
 
     config.qtModulePrefs.suppressedWarnings = updated;
@@ -180,6 +184,7 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
             project: args.project,
             mode: args.mode,
             arch: args.arch,
+            reset: args.reset,
             interactive: args.interactive,
             json: args.json,
         });

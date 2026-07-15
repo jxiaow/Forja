@@ -6,6 +6,8 @@ import {
     ServerConfig, AuthMode,
 } from '../../core/serverStore';
 import { ForjaJsonResult, Diagnostic, ServerDetail, ServerSummary, Locale, T } from './types';
+import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
+import * as path from 'path';
 
 export function formatServerText(result: ServerResult, locale: Locale): string {
     const lines: string[] = [];
@@ -103,6 +105,13 @@ export interface ServerAddArgs {
 
 export function runServerAdd(args: ServerAddArgs): ServerResult {
     const diagnostics: Diagnostic[] = [];
+    if (args.port !== undefined && (isNaN(args.port) || args.port < 1 || args.port > 65535)) {
+        return {
+            ok: false, action: 'server', serverAction: 'add', changed: [],
+            diagnostics: [{ level: 'error', message: `${T('idx.invalidPort')}: ${args.port}` }],
+            nextAction: 'forja server add --port 22',
+        };
+    }
     if (!args.name) {
         diagnostics.push({ level: 'error', message: T('srv.missingName') });
     }
@@ -174,6 +183,13 @@ export function runServerUpdate(id: string, updates: Partial<ServerAddArgs>): Se
     if (updates.password !== undefined) { patch.password = updates.password; }
     if (updates.strictHostKeyChecking !== undefined) { patch.strictHostKeyChecking = updates.strictHostKeyChecking; }
 
+    // Clear stale credentials when auth mode changes
+    if (updates.authMode === 'key') {
+        patch.password = '';
+    } else if (updates.authMode === 'password') {
+        patch.privateKeyPath = '';
+    }
+
     try {
         const ok = updateServer(id, patch);
         if (!ok) {
@@ -199,7 +215,7 @@ export function runServerUpdate(id: string, updates: Partial<ServerAddArgs>): Se
     }
 }
 
-export function runServerRemove(id: string): ServerResult {
+export function runServerRemove(id: string, workspace: string): ServerResult {
     const existing = getServerById(id);
     if (!existing) {
         return {
@@ -210,10 +226,47 @@ export function runServerRemove(id: string): ServerResult {
     }
     try {
         removeServer(id);
+
+        const changed = [`servers.${id}`];
+
+        // Cascade cleanup: clear references in remote and sync settings
+        if (workspace) {
+            const ws = path.resolve(workspace);
+            const remote = loadRemoteSettings(ws);
+            let remoteChanged = false;
+            if (remote.selectedServer === id) {
+                remote.selectedServer = '';
+                remoteChanged = true;
+            }
+            if (remote.remotePaths[id]) {
+                delete remote.remotePaths[id];
+                remoteChanged = true;
+            }
+            if (remoteChanged) {
+                saveRemoteSettings(ws, remote);
+                changed.push('remote.selectedServer');
+            }
+
+            const sync = loadSyncSettings(ws);
+            let syncChanged = false;
+            if (sync.selectedServer === id) {
+                sync.selectedServer = '';
+                syncChanged = true;
+            }
+            if (sync.remotePaths[id]) {
+                delete sync.remotePaths[id];
+                syncChanged = true;
+            }
+            if (syncChanged) {
+                saveSyncSettings(ws, sync);
+                changed.push('sync.selectedServer');
+            }
+        }
+
         return {
             ok: true, action: 'server', serverAction: 'remove',
             removed: id,
-            changed: [`servers.${id}`],
+            changed,
             nextAction: 'forja server',
         };
     } catch (e) {

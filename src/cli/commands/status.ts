@@ -11,9 +11,9 @@ import {
 import { getActiveTarget } from './activeTarget';
 import { collectTargetCandidates } from './candidates';
 import {
-    loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings,
+    loadSyncSettings, loadRemoteSettings,
     getCorruptedConfigs, clearCorruptedConfigs,
-    QtSettings, SdkSettings, SyncSettings, RemoteSettings, CorruptedConfig,
+    SyncSettings, RemoteSettings, CorruptedConfig,
 } from '../../core/settingsIO';
 import { resolveWorkroot as resolveWorkrootForStatus, loadWorkspaceConfig as loadWsConfig } from '../../core/workspaceStore';
 import { readRunState, resolveRunProcessStatus } from '../../qt/shared/localState';
@@ -73,8 +73,6 @@ export function runStatus(workspace: string): StatusResult {
     }
 
     // Load all configs once — also populates corruption tracking as a side-effect
-    const qtConfig = loadQtSettings(workspace);
-    const sdkConfig = loadSdkSettings(workspace);
     const syncConfig = loadSyncSettings(workspace);
     const remoteConfig = loadRemoteSettings(workspace);
     const corrupted = getCorruptedConfigs();
@@ -97,11 +95,12 @@ export function runStatus(workspace: string): StatusResult {
     }
 
     const activeTarget = getActiveTarget(workspace);
+    const workroot = resolveWorkrootForStatus(workspace);
+    const wsConfig = workroot ? loadWsConfig(workroot) : null;
 
     // ── Target readiness ──
     if (!activeTarget) {
         readiness.target = 'not-selected';
-        const workroot = resolveWorkrootForStatus(workspace);
         if (!workroot) {
             diagnostics.push({
                 level: 'warning',
@@ -109,8 +108,7 @@ export function runStatus(workspace: string): StatusResult {
                 fix: 'forja init',
             });
         } else {
-            const wsConfig = loadWsConfig(workroot);
-            const hasAnyConfig = Object.keys(wsConfig.targets).length > 0;
+            const hasAnyConfig = Object.keys(wsConfig!.targets).length > 0;
             if (hasAnyConfig) {
                 const candidates = collectTargetCandidates(workspace);
                 const qtCount = candidates.filter(c => c.kind === 'qt').length;
@@ -158,10 +156,10 @@ export function runStatus(workspace: string): StatusResult {
                 const mfValidation = validateMakefile(projectDir, {
                     mode: activeTarget.mode,
                     arch: activeTarget.arch,
-                    qtPath: qtConfig.qtPath,
+                    qtPath: activeTarget.qtPath || '',
                     proFile: activeTarget.project,
-                    target: qtConfig.target,
-                    qmakeArgs: qtConfig.qmakeArgs,
+                    target: activeTarget.qmakeTarget || '',
+                    qmakeArgs: wsConfig?.qtModulePrefs.qmakeArgs,
                 });
                 if (mfValidation.exists && !mfValidation.matches && mfValidation.mismatch) {
                     readiness.target = 'blocked';
@@ -196,9 +194,11 @@ export function runStatus(workspace: string): StatusResult {
     // ── Toolchain readiness ──
     let toolchainSummary: ToolchainSummary | undefined;
     if (!activeTarget) {
-        const hasAnyConfig = qtConfig.qtPath || qtConfig.vsInstall || sdkConfig.vsInstall || sdkConfig.pinnedProject;
-        readiness.toolchain = hasAnyConfig ? 'configured' : 'unknown';
-        if (!hasAnyConfig) {
+        const hasAnyToolchain = wsConfig ? Object.values(wsConfig.targets).some(t =>
+            t.toolchain.qtPath || t.toolchain.vsInstall
+        ) : false;
+        readiness.toolchain = hasAnyToolchain ? 'configured' : 'unknown';
+        if (!hasAnyToolchain) {
             diagnostics.push({
                 level: 'warning',
                 message: T('notInitialized'),
@@ -217,14 +217,12 @@ export function runStatus(workspace: string): StatusResult {
             diagnostics.push({
                 level: 'warning',
                 message: T('noSyncServer'),
-                hint: T('noSyncServerHint'),
                 fix: 'forja remote set',
             });
         } else if (activeTarget?.runAt === 'remote' && syncConfig.selectedServer) {
             diagnostics.push({
                 level: 'warning',
                 message: T('sts.syncNotEnabled'),
-                hint: T('noSyncServerHint'),
                 fix: 'forja remote set',
             });
         }
@@ -396,7 +394,7 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarge
                 level: 'error',
                 message: T('qtNotFound'),
                 hint: T('qtReconfigure'),
-                fix: 'forja list env qt',
+                fix: 'forja use target --qt <path>',
             });
         }
         // Platform-specific requirements — check all tools even if Qt is missing
@@ -407,7 +405,7 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarge
                     level: 'error',
                     message: T('vsNotFoundDetail'),
                     hint: T('installVs'),
-                    fix: 'forja list env vs',
+                    fix: 'forja use target --vs <path>',
                 });
             }
             // jom is optional but recommended on Windows
@@ -441,7 +439,7 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: ActiveTarge
                 level: 'error',
                 message: T('vsNotFound'),
                 hint: T('installVsSdk'),
-                fix: 'forja list env vs',
+                fix: 'forja use target --vs <path>',
             });
             return 'missing';
         }
@@ -603,6 +601,7 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
             const icon = d.level === 'warning' ? '⚠' : d.level === 'error' ? '✗' : 'ℹ';
             lines.push(`${indent}${icon} ${d.message}`);
             if (d.hint) { lines.push(`${indent}  → ${d.hint}`); }
+            if (d.fix) { lines.push(`${indent}  → ${d.fix}`); }
         }
     }
 

@@ -110,7 +110,7 @@ export async function runRun(workspace: string, options: {
         };
     }
 
-    // ── --debug：CLI 层无法启动 VSCode 调试器 ──
+    // ── --debug：CLI 层无法启动 VSCode 调试器（仅 VSCode 扩展内部调用时使用） ──
     if (options.debug) {
         return {
             ok: false,
@@ -223,8 +223,13 @@ export async function runRun(workspace: string, options: {
             logFile: executed.logFile ?? undefined,
         } : undefined;
 
+        // Foreground run: app exited with non-zero code → reflect failure
+        const appExitedNonZero = !options.detach
+            && executed.runtimeExitCode !== undefined
+            && executed.runtimeExitCode !== 0;
+
         return {
-            ok: executed.ok,
+            ok: executed.ok && !appExitedNonZero,
             action: 'run',
             runAction,
             workspace,
@@ -232,12 +237,14 @@ export async function runRun(workspace: string, options: {
             runtime,
             exitCode: executed.runtimeExitCode ?? executed.exitCode ?? undefined,
             logFile: executed.logFile ?? undefined,
-            diagnostics: executed.ok ? undefined : [diag('error', T('cmd.qtRunFailed'))],
-            nextAction: executed.ok
-                ? (executed.runtimeExitCode !== undefined
-                    ? undefined
-                    : 'forja stop')
-                : 'forja doctor',
+            diagnostics: appExitedNonZero
+                ? [diag('warning', `${T('cmd.appExitedWithError')}: ${executed.runtimeExitCode}`)]
+                : (executed.ok ? undefined : [diag('error', T('cmd.qtRunFailed'))]),
+            nextAction: appExitedNonZero
+                ? 'forja build'
+                : (executed.ok
+                    ? (executed.runtimeExitCode !== undefined ? undefined : 'forja stop')
+                    : 'forja doctor'),
         };
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -319,11 +326,18 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
             ? path.dirname(target.project)
             : path.join(workspace, path.dirname(target.project));
 
+        // Inject Qt bin into PATH so custom commands can find Qt tools
+        const env = { ...process.env };
+        if (target.qtPath) {
+            env.PATH = `${target.qtPath}${path.sep}bin${path.delimiter}${env.PATH || ''}`;
+        }
+
         const result = cp.spawnSync(customCmd.command, {
             cwd: projectDir,
             shell: true,
             stdio: ['inherit', 'pipe', 'pipe'],
             timeout: 5 * 60 * 1000,
+            env,
         });
 
         const stdout = result.stdout?.toString() ?? '';

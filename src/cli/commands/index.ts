@@ -269,7 +269,17 @@ function outputResult(result: ForjaJsonResult, wantsJson: boolean, textFormatter
     if (wantsJson) {
         console.log(JSON.stringify(result, null, 2));
     } else if (textFormatter) {
-        console.log(textFormatter(result));
+        try {
+            console.log(textFormatter(result));
+        } catch (e) {
+            // Fallback: show raw diagnostics
+            console.error('Format error:', e instanceof Error ? e.message : String(e));
+            if (result.diagnostics) {
+                for (const d of result.diagnostics) {
+                    if (d) { console.error(d.message); }
+                }
+            }
+        }
     } else {
         const lines: string[] = [];
         if (!result.ok) {
@@ -682,7 +692,7 @@ async function handleServer(argv: string[], workspace: string, wantsJson: boolea
             if (!id) {
                 outputResult({
                     ok: false, action: 'server', serverAction: 'update', changed: [],
-                    diagnostics: [{ level: 'error', message:'Server ID required: forja server update <id>' }],
+                    diagnostics: [{ level: 'error', message:`${T('idx.serverIdRequired')}: forja server update <id>` }],
                     nextAction: 'forja server',
                 }, wantsJson);
                 process.exitCode = 1;
@@ -726,13 +736,13 @@ async function handleServer(argv: string[], workspace: string, wantsJson: boolea
             if (!id) {
                 outputResult({
                     ok: false, action: 'server', serverAction: 'remove', changed: [],
-                    diagnostics: [{ level: 'error', message:'Server ID required: forja server remove <id>' }],
+                    diagnostics: [{ level: 'error', message:`${T('idx.serverIdRequired')}: forja server remove <id>` }],
                     nextAction: 'forja server',
                 }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
-            const result = runServerRemove(id);
+            const result = runServerRemove(id, workspace);
             outputResult(result, wantsJson, (r) => formatServerText(r as Parameters<typeof formatServerText>[0], locale));
             return;
         }
@@ -946,7 +956,7 @@ async function handleDoctor(argv: string[], workspace: string, wantsJson: boolea
  * Interactive sync setup — guides user to select/create server and input remote path.
  * Returns true if configuration was completed successfully.
  */
-async function interactiveSyncSetup(workspace: string): Promise<boolean> {
+async function interactiveSyncSetup(workspace: string): Promise<{ ok: true } | { ok: false; reason: 'cancelled' | 'configError'; error?: string }> {
     const existingServers = readServers();
     let serverId: string | undefined;
     let selectedServer: { username: string } | undefined;
@@ -955,12 +965,12 @@ async function interactiveSyncSetup(workspace: string): Promise<boolean> {
         // No servers — guide creation
         console.log(T('sync.notConfigured'));
         const host = await prompt(T('setupPromptHost'));
-        if (!host) return false;
+        if (!host) return { ok: false, reason: 'cancelled' };
         const username = await prompt(T('setupPromptUsername'));
-        if (!username) return false;
+        if (!username) return { ok: false, reason: 'cancelled' };
         const portStr = await prompt(T('setupPromptPort'), '22');
         const port = parseInt(portStr || '22', 10);
-        if (isNaN(port) || port < 1 || port > 65535) return false;
+        if (isNaN(port) || port < 1 || port > 65535) return { ok: false, reason: 'cancelled' };
         const authChoice = await choose(T('setupPromptAuthMode'), ['key', 'password'] as const, m => m === 'key' ? T('setupAuthKey') : T('setupAuthPassword'));
         const authMode = authChoice || 'key';
         let privateKeyPath = '';
@@ -977,7 +987,7 @@ async function interactiveSyncSetup(workspace: string): Promise<boolean> {
             selectedServer = created;
             console.log(`${T('setupServerCreated')}: ${created.name} (${created.host})`);
         } catch {
-            return false;
+            return { ok: false, reason: 'cancelled' };
         }
     } else if (existingServers.length === 1) {
         // Single server — auto-select
@@ -986,7 +996,7 @@ async function interactiveSyncSetup(workspace: string): Promise<boolean> {
     } else {
         // Multiple servers — interactive selection
         const server = await choose(T('setupSelectServer'), existingServers, s => `${s.name} (${s.username}@${s.host})`);
-        if (!server) return false;
+        if (!server) return { ok: false, reason: 'cancelled' };
         serverId = server.id;
         selectedServer = server;
     }
@@ -997,14 +1007,16 @@ async function interactiveSyncSetup(workspace: string): Promise<boolean> {
     if (!remotePath) {
         const defaultPath = `/home/${selectedServer?.username || 'user'}/${path.basename(workspace)}`;
         remotePath = await prompt(T('setupRemotePathPrompt'), defaultPath);
-        if (!remotePath) return false;
+        if (!remotePath) return { ok: false, reason: 'cancelled' };
     }
 
     const cfg = configureSyncSettings(workspace, { serverId: serverId!, remotePath, enable: true });
-    if (!cfg.ok) return false;
+    if (!cfg.ok) {
+        return { ok: false, reason: 'configError', error: cfg.error || 'Failed to configure sync settings' };
+    }
 
     console.log();
-    return true;
+    return { ok: true };
 }
 
 // ── Sync ──
@@ -1104,7 +1116,15 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
         } else {
             // Text mode: interactive setup
             const guided = await interactiveSyncSetup(workspace);
-            if (!guided) {
+            if (!guided.ok) {
+                const msg = guided.reason === 'configError'
+                    ? (guided.error || 'Failed to configure sync settings')
+                    : T('syncCancelled');
+                outputResult({
+                    ok: false, action: 'sync',
+                    diagnostics: [{ level: 'error', message: msg }],
+                    nextAction: 'forja sync',
+                }, wantsJson);
                 process.exitCode = 1;
                 return;
             }

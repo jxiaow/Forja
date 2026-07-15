@@ -155,13 +155,11 @@ export async function runDoctor(workspace: string, options: {
             checks.push(check('target', 'blocked', `${T('doctorProjectMissing')}: ${activeTarget.project}`,
                 [diag('error', `${T('doctorProjectMissing')}: ${activeTarget.project}`)],
                 'forja list targets'));
-            diagnostics.push(diag('error', `${T('doctorProjectMissing')}: ${activeTarget.project}`));
         }
     } else {
         checks.push(check('target', 'warning', T('doctorNoTarget'),
             [diag('warning', T('doctorNoTarget'))],
             'forja list targets'));
-        diagnostics.push(diag('warning', T('doctorNoTarget')));
     }
 
     // ── Toolchain checks ──
@@ -176,9 +174,8 @@ export async function runDoctor(workspace: string, options: {
             checks.push(check('toolchain-qt', 'ready', `Qt: ${qtPath}`));
         } else if (qtPath) {
             checks.push(check('toolchain-qt', 'blocked', `${T('doctorQtInvalid')}: ${qtPath}`,
-                [diag('error', `Qt not found at configured path: ${qtPath}`)],
+                [diag('error', T('doctorQtNotFoundAtPath', [qtPath]))],
                 'forja list env'));
-            diagnostics.push(diag('error', `Qt not found at configured path: ${qtPath}`));
         } else {
             checks.push(check('toolchain-qt', 'warning', T('doctorQtNotConfigured'),
                 [diag('warning', T('doctorQtNotConfigured'))],
@@ -193,8 +190,7 @@ export async function runDoctor(workspace: string, options: {
                 checks.push(check('toolchain-vs', 'ready', `VS: ${vsInstall}`));
             } else if (vsInstall) {
                 checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${vsInstall}`,
-                    [diag('error', `VS dev environment not found: ${vsInstall}`)]));
-                diagnostics.push(diag('error', `VS dev environment not found: ${vsInstall}`));
+                    [diag('error', T('doctorVsNotFoundAtInstall', [vsInstall]))]));
             } else {
                 checks.push(check('toolchain-vs', 'warning', T('doctorVsNotConfigured'),
                     [diag('warning', T('doctorVsNotConfigured'))]));
@@ -204,7 +200,7 @@ export async function runDoctor(workspace: string, options: {
                     checks.push(check('toolchain-jom', 'ready', `jom: ${jomPath}`));
                 } else {
                     checks.push(check('toolchain-jom', 'warning', `${T('doctorJomInvalid')}: ${jomPath}`,
-                        [diag('warning', `jom not found at: ${jomPath}`)]));
+                        [diag('warning', T('doctorJomNotFoundAtPath', [jomPath]))]));
                 }
             }
         } else {
@@ -216,7 +212,6 @@ export async function runDoctor(workspace: string, options: {
             } else {
                 checks.push(check('toolchain-make', 'blocked', T('doctorMakeNotFound'),
                     [diag('error', T('doctorMakeNotFound'))]));
-                diagnostics.push(diag('error', T('doctorMakeNotFound')));
             }
         }
     }
@@ -233,8 +228,7 @@ export async function runDoctor(workspace: string, options: {
                     checks.push(check('toolchain-vs', 'ready', `VS: ${sdkVsInstall}`));
                 } else if (sdkVsInstall) {
                     checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${sdkVsInstall}`,
-                        [diag('error', `VS dev environment not found: ${sdkVsInstall}`)]));
-                    diagnostics.push(diag('error', `VS dev environment not found: ${sdkVsInstall}`));
+                        [diag('error', T('doctorVsNotFoundAtInstall', [sdkVsInstall]))]));
                 } else {
                     checks.push(check('toolchain-vs', 'warning', T('doctorVsNotConfigured'),
                         [diag('warning', T('doctorVsNotConfigured'))]));
@@ -249,7 +243,6 @@ export async function runDoctor(workspace: string, options: {
                 } else {
                     checks.push(check('toolchain-make', 'blocked', T('doctorMakeNotFound'),
                         [diag('error', T('doctorMakeNotFound'))]));
-                    diagnostics.push(diag('error', T('doctorMakeNotFound')));
                 }
             }
         }
@@ -270,7 +263,7 @@ export async function runDoctor(workspace: string, options: {
             }
         } else {
             checks.push(check('sync', 'blocked', `${T('doctorSyncDeleted')}: ${sync.selectedServer}`,
-                [diag('error', `Sync server "${sync.selectedServer}" does not exist`)],
+                [diag('error', T('doctorSyncServerNotExist', [sync.selectedServer]))],
                 'forja server'));
         }
     } else {
@@ -288,7 +281,6 @@ export async function runDoctor(workspace: string, options: {
             checks.push(check('remote', 'blocked', T('doctorNoServer'),
                 [diag('error', T('doctorNoServer'))],
                 'forja server'));
-            diagnostics.push(diag('error', T('doctorNoServer')));
         } else {
             checks.push(check('remote', 'ready', `Server: ${server.name} (${server.host})`));
             if (remote.remoteForjaBin) {
@@ -298,7 +290,6 @@ export async function runDoctor(workspace: string, options: {
                 checks.push(check('remote-forja', 'blocked', T('doctorForjaBinNotConfigured'),
                     [diag('error', T('doctorForjaBinNotConfigured'))],
                     'forja doctor fix --remote'));
-                diagnostics.push(diag('error', T('doctorForjaBinNotConfigured')));
             }
         }
     }
@@ -326,7 +317,7 @@ export async function runDoctor(workspace: string, options: {
         if (options.plan) {
             if (stale.length > 0) {
                 checks.push(check('cleanup', 'warning', `${T('doctorStaleConfigs')}: ${stale.length}`,
-                    [diag('warning', `${stale.length} stale config file(s) would be removed`)],
+                    [diag('warning', T('doctorStaleConfigWouldRemove', [String(stale.length)]))],
                     'forja doctor fix'));
                 planResult = {
                     mode: 'dryRun',
@@ -350,10 +341,10 @@ export async function runDoctor(workspace: string, options: {
                 changed.push(`cleanup.staleProjectSettings(${removed})`);
             }
             if (errors.length > 0) {
-                diagnostics.push(diag('error', `Cleanup errors: ${errors.join('; ')}`));
-                checks.push(check('cleanup', 'blocked', `Cleanup partially failed: ${errors.length} error(s)`));
+                checks.push(check('cleanup', 'blocked', T('doctorCleanupPartiallyFailed', [String(errors.length)]),
+                    [diag('error', T('doctorCleanupErrors', [errors.join('; ')]))]));
             } else {
-                checks.push(check('cleanup', 'ready', removed > 0 ? `Cleaned ${removed} stale config(s)` : T('doctorNoStaleConfigs')));
+                checks.push(check('cleanup', 'ready', removed > 0 ? T('doctorCleanedStaleConfigs', [String(removed)]) : T('doctorNoStaleConfigs')));
             }
         }
 
@@ -361,40 +352,35 @@ export async function runDoctor(workspace: string, options: {
         if (options.remote) {
             const resolved = resolveRemoteConfig(workspace, options.server);
             if (!resolved.config) {
-                for (const d of resolved.diagnostics) {
-                    diagnostics.push(diag('error', d.message));
-                }
-                checks.push(check('remote', 'blocked', T('doctorRemoteNotConfigured')));
+                checks.push(check('remote', 'blocked', T('doctorRemoteNotConfigured'),
+                    resolved.diagnostics.map(d => diag('error', d.message))));
             } else {
                 const password = resolveSshPassword(resolved.config.server);
                 const runner = createSshRunner(resolved.config.server, password);
                 const uploader = createScpUploader(resolved.config.server, password);
 
                 if (options.plan) {
-                    checks.push(check('remote-forja', 'warning', 'Would deploy/update remote Forja bin',
-                        [diag('warning', 'Remote Forja bin would be deployed')]));
+                    checks.push(check('remote-forja', 'warning', T('doctorWouldDeployForjaBin'),
+                        [diag('warning', T('doctorWouldDeployForjaBinDetail'))]));
                     if (!planResult) {
                         planResult = { mode: 'dryRun' };
                     }
-                    planResult.willRun = ['bootstrap remote Forja bin'];
+                    planResult.willRun = [T('doctorBootstrapForjaBin')];
                 } else {
                     const artifactRoot = findPackageRoot(__dirname) || path.resolve(__dirname, '..', '..', '..');
                     const artifact = findBootstrapArtifact(artifactRoot);
                     if (!artifact.ok) {
-                        for (const d of artifact.diagnostics) {
-                            diagnostics.push(diag('error', d.message));
-                        }
-                        checks.push(check('remote-forja', 'blocked', 'Bootstrap artifact not available'));
+                        checks.push(check('remote-forja', 'blocked', T('doctorBootstrapArtifactNotAvailable'),
+                            artifact.diagnostics.map(d => diag('error', d.message))));
                     } else {
                         const bootstrapResult = await executeRemoteBootstrap({ artifact, runner, uploader });
                         if (bootstrapResult.ok) {
                             changed.push(`remote.forjaBin(${bootstrapResult.version})`);
-                            checks.push(check('remote-forja', 'ready', `Remote Forja deployed: ${bootstrapResult.version}`));
+                            const deployVer = bootstrapResult.version || 'unknown';
+                            checks.push(check('remote-forja', 'ready', T('doctorRemoteForjaDeployed', [deployVer]) || `Remote Forja deployed: ${deployVer}`));
                         } else {
-                            for (const d of bootstrapResult.diagnostics) {
-                                diagnostics.push(diag(d.level, d.message));
-                            }
-                            checks.push(check('remote-forja', 'blocked', 'Remote Forja deploy failed'));
+                            checks.push(check('remote-forja', 'blocked', T('doctorRemoteForjaDeployFailed'),
+                                bootstrapResult.diagnostics.map(d => diag(d.level, d.message))));
                         }
                     }
                 }
@@ -406,8 +392,8 @@ export async function runDoctor(workspace: string, options: {
     if (doctorAction === 'unlock' && options.unlock) {
         const resolved = resolveRemoteConfig(workspace, options.server);
         if (!resolved.config) {
-            diagnostics.push(diag('error', T('doctorRemoteNotConfigured')));
-            checks.push(check('unlock', 'blocked', T('doctorRemoteNotConfigured')));
+            checks.push(check('unlock', 'blocked', T('doctorRemoteNotConfigured'),
+                [diag('error', T('doctorRemoteNotConfigured'))]));
         } else {
             const password = resolveSshPassword(resolved.config.server);
             const runner = createSshRunner(resolved.config.server, password);
@@ -419,10 +405,8 @@ export async function runDoctor(workspace: string, options: {
                 changed.push(`lock-${options.unlock}`);
                 checks.push(check('unlock', 'ready', `${T('doctorLockReleased')}: ${options.unlock}`));
             } else {
-                for (const d of releaseResult.diagnostics) {
-                    diagnostics.push(diag(d.level, d.message));
-                }
-                checks.push(check('unlock', 'blocked', T('doctorLockFailed')));
+                checks.push(check('unlock', 'blocked', T('doctorLockFailed'),
+                    releaseResult.diagnostics.map(d => diag(d.level, d.message))));
             }
         }
     }
@@ -436,9 +420,30 @@ export async function runDoctor(workspace: string, options: {
 
     const hasBlocked = checks.some(c => c.status === 'blocked');
     let nextAction: string | undefined = undefined;
-    if (hasBlocked) { nextAction = 'forja doctor fix'; }
-    else if (!activeTarget) { nextAction = 'forja list targets'; }
-    else { nextAction = 'forja status'; }
+    if (hasBlocked) {
+        // Check if any blocked check is fixable
+        const fixableChecks = ['cleanup', 'remote-forja'];
+        const hasFixable = checks.some(c => c.status === 'blocked' && fixableChecks.includes(c.name));
+        if (hasFixable) {
+            nextAction = 'forja doctor fix';
+        } else {
+            // No fixable blocks — suggest the most relevant command based on what's blocked
+            const targetBlocked = checks.find(c => c.name === 'target' && c.status === 'blocked');
+            const syncBlocked = checks.find(c => c.name === 'sync' && c.status === 'blocked');
+            const remoteBlocked = checks.find(c => c.name === 'remote' && c.status === 'blocked');
+            if (targetBlocked) {
+                nextAction = 'forja list targets';
+            } else if (syncBlocked || remoteBlocked) {
+                nextAction = 'forja remote set';
+            } else {
+                nextAction = 'forja use target';
+            }
+        }
+    } else if (!activeTarget) {
+        nextAction = 'forja list targets';
+    } else {
+        nextAction = 'forja status';
+    }
 
     return {
         ok: !hasBlocked,

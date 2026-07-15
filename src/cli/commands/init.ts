@@ -210,17 +210,17 @@ async function handleModifyTarget(workroot: string, config: WorkspaceConfig, opt
     }
 
     // Re-detect toolchain and reconfigure
-    const updated = await configureTargetFields(selected, options);
-    if (!updated) {
-        return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: T('init.configurationCancelled') }] };
+    const updatedResult = await configureTargetFields(selected, options);
+    if (!updatedResult.ok) {
+        return { ok: false, action: 'init', workroot, diagnostics: updatedResult.diagnostics };
     }
 
-    config.targets[updated.id] = updated;
+    config.targets[updatedResult.target.id] = updatedResult.target;
     saveWorkspaceConfig(config);
 
     return {
         ok: true, action: 'init', workroot,
-        target: updated,
+        target: updatedResult.target,
         nextAction: 'forja status',
     };
 }
@@ -273,11 +273,11 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
 
     const config = createEmptyWorkspaceConfig(workroot);
 
-    // Register workroot FIRST so resolveWorkroot can find it even if config save fails
-    registerWorkroot(workroot);
-
     const result = await configureNewTarget(workroot, config, options, candidates);
     if (!result.ok) return result;
+
+    // Register AFTER configureNewTarget succeeds — avoids orphaned workroot on failure
+    registerWorkroot(workroot);
 
     return {
         ok: true, action: 'init', workroot,
@@ -300,8 +300,8 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
 
     // Scan Qt projects (.pro files)
     setSilent(true);
-    const proFiles = scanProFiles(workroot);
-    setSilent(false);
+    let proFiles;
+    try { proFiles = scanProFiles(workroot); } finally { setSilent(false); }
     for (const pro of proFiles) {
         candidates.push({
             kind: 'qt',
@@ -312,8 +312,8 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
 
     // Scan SDK projects
     setSilent(true);
-    const sdkFiles = scanSdkProjects({ workspace: workroot, relativePaths: true });
-    setSilent(false);
+    let sdkFiles;
+    try { sdkFiles = scanSdkProjects({ workspace: workroot, relativePaths: true }); } finally { setSilent(false); }
     for (const sdkFile of sdkFiles) {
         const fullPath = path.join(workroot, sdkFile);
         const typeInfo = detectProjectType(fullPath);
@@ -356,8 +356,8 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
 
     // Detect toolchain
     setSilent(true);
-    const env = await detectEnv();
-    setSilent(false);
+    let env;
+    try { env = await detectEnv(); } finally { setSilent(false); }
 
     let qtPath: string | undefined;
     let vsInstall: string | undefined;
@@ -398,26 +398,34 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
 
     // Mode — validate from answers
     let mode: 'debug' | 'release' = 'debug';
-    if (options.answers?.mode === 'debug' || options.answers?.mode === 'release') {
-        mode = options.answers.mode;
+    if (options.answers?.mode) {
+        if (options.answers.mode === 'debug' || options.answers.mode === 'release') {
+            mode = options.answers.mode;
+        } else {
+            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `Invalid mode value: ${options.answers.mode}. Expected: debug | release` }] };
+        }
     } else if (options.interactive) {
-        const chosen = await choose(T('init.selectMode'), [
+        const chosen = await chooseRequired(T('init.selectMode'), [
             { value: 'debug' as const, label: 'debug' },
             { value: 'release' as const, label: 'release' },
         ], item => item.label);
-        if (chosen) mode = chosen.value;
+        mode = chosen.value;
     }
 
     // Arch — validate from answers
     let arch: 'x86' | 'x64' = process.platform === 'win32' ? 'x86' : 'x64';
-    if (options.answers?.arch === 'x86' || options.answers?.arch === 'x64') {
-        arch = options.answers.arch;
+    if (options.answers?.arch) {
+        if (options.answers.arch === 'x86' || options.answers.arch === 'x64') {
+            arch = options.answers.arch;
+        } else {
+            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `Invalid arch value: ${options.answers.arch}. Expected: x86 | x64` }] };
+        }
     } else if (options.interactive && process.platform === 'win32') {
-        const chosen = await choose(T('init.selectArch'), [
+        const chosen = await chooseRequired(T('init.selectArch'), [
             { value: 'x86' as const, label: 'x86' },
             { value: 'x64' as const, label: 'x64' },
         ], item => item.label);
-        if (chosen) arch = chosen.value;
+        arch = chosen.value;
     }
 
     const existingIds = new Set(Object.keys(config.targets));
@@ -447,14 +455,15 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
     return { ok: true, action: 'init', target };
 }
 
-async function configureTargetFields(target: TargetProfile, options: InitOptions): Promise<TargetProfile | null> {
+async function configureTargetFields(target: TargetProfile, options: InitOptions): Promise<{ ok: true; target: TargetProfile } | { ok: false; diagnostics: Diagnostic[] }> {
     setSilent(true);
-    const env = await detectEnv();
-    setSilent(false);
+    let env;
+    try { env = await detectEnv(); } finally { setSilent(false); }
 
     const updated = { ...target, toolchain: { ...target.toolchain } };
 
     // Re-detect toolchain — answers take priority, then interactive, then auto-detect
+    // In modify mode: only auto-apply single-candidate detection when not previously configured
     if (target.kind === 'qt') {
         if (options.answers?.qtPath) {
             updated.toolchain.qtPath = options.answers.qtPath;
@@ -464,7 +473,8 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
                 updated.toolchain.qtPath = chosen.path;
                 updated.toolchain.qtVersion = chosen.version;
             }
-        } else if (env.qt) {
+        } else if (env.qt && !target.toolchain.qtPath) {
+            // Only auto-apply if not previously configured
             updated.toolchain.qtPath = env.qt.path;
             updated.toolchain.qtVersion = env.qt.version;
         }
@@ -474,47 +484,57 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
         } else if (options.interactive && env.vsCandidates.length > 1) {
             const chosen = await choose(T('init.selectVs'), env.vsCandidates, v => `${v.version} ${v.edition} — ${v.installPath}`);
             if (chosen) updated.toolchain.vsInstall = chosen.installPath;
-        } else if (env.vs) {
+        } else if (env.vs && !target.toolchain.vsInstall) {
+            // Only auto-apply if not previously configured
             updated.toolchain.vsInstall = env.vs.installPath;
         }
 
-        if (env.jom) updated.toolchain.jomPath = env.jom;
+        if (env.jom && !target.toolchain.jomPath) updated.toolchain.jomPath = env.jom;
     } else {
         if (options.answers?.vsInstall) {
             updated.toolchain.vsInstall = options.answers.vsInstall;
         } else if (options.interactive && env.vsCandidates.length > 1) {
             const chosen = await choose(T('init.selectVs'), env.vsCandidates, v => `${v.version} ${v.edition} — ${v.installPath}`);
             if (chosen) updated.toolchain.vsInstall = chosen.installPath;
-        } else if (env.vs) {
+        } else if (env.vs && !target.toolchain.vsInstall) {
+            // Only auto-apply if not previously configured
             updated.toolchain.vsInstall = env.vs.installPath;
         }
     }
 
     // Mode — validate from answers
-    if (options.answers?.mode === 'debug' || options.answers?.mode === 'release') {
-        updated.mode = options.answers.mode;
+    if (options.answers?.mode) {
+        if (options.answers.mode === 'debug' || options.answers.mode === 'release') {
+            updated.mode = options.answers.mode;
+        } else {
+            return { ok: false, diagnostics: [{ level: 'error', message: `Invalid mode value: ${options.answers.mode}. Expected: debug | release` }] };
+        }
     } else if (options.interactive) {
-        const chosen = await choose(T('init.selectMode'), [
+        const chosen = await chooseRequired(T('init.selectMode'), [
             { value: 'debug' as const, label: `debug ${updated.mode === 'debug' ? '(current)' : ''}` },
             { value: 'release' as const, label: `release ${updated.mode === 'release' ? '(current)' : ''}` },
         ], item => item.label);
-        if (chosen) updated.mode = chosen.value;
+        updated.mode = chosen.value;
     }
 
     // Arch — validate from answers
-    if (options.answers?.arch === 'x86' || options.answers?.arch === 'x64') {
-        updated.arch = options.answers.arch;
+    if (options.answers?.arch) {
+        if (options.answers.arch === 'x86' || options.answers.arch === 'x64') {
+            updated.arch = options.answers.arch;
+        } else {
+            return { ok: false, diagnostics: [{ level: 'error', message: `Invalid arch value: ${options.answers.arch}. Expected: x86 | x64` }] };
+        }
     } else if (options.interactive && process.platform === 'win32') {
-        const chosen = await choose(T('init.selectArch'), [
+        const chosen = await chooseRequired(T('init.selectArch'), [
             { value: 'x86' as const, label: `x86 ${updated.arch === 'x86' ? '(current)' : ''}` },
             { value: 'x64' as const, label: `x64 ${updated.arch === 'x64' ? '(current)' : ''}` },
         ], item => item.label);
-        if (chosen) updated.arch = chosen.value;
+        updated.arch = chosen.value;
     }
 
     // Update name
     const basename = path.basename(target.project, path.extname(target.project));
     updated.name = `${basename} ${updated.mode} ${updated.arch}`;
 
-    return updated;
+    return { ok: true, target: updated };
 }

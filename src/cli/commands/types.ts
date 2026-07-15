@@ -250,7 +250,6 @@ const UI: Record<string, { en: string; zh: string }> = {
     statusSetupLocal:              { en: 'local setup',                     zh: '本地初始化' },
     statusSetupRemote:             { en: 'local + remote setup',            zh: '本地 + 远程初始化' },
     noSyncServer:                  { en: 'No sync server added',         zh: '未添加同步服务器' },
-    noSyncServerHint:              { en: 'Configure sync server with forja sync', zh: '使用 forja sync 配置同步服务器' },
     remotePathNotConfigured:       { en: 'Remote path not configured',   zh: '远程路径未配置' },
     remoteNoServer:                { en: 'runAt=remote but no server configured', zh: '执行位置=远程但未配置服务器' },
     remoteForjaBinDefault:         { en: 'Remote Forja bin not configured, will use default: $HOME/.forja/bin/forja', zh: '远程 Forja 二进制未配置，将使用默认值：$HOME/.forja/bin/forja' },
@@ -319,7 +318,6 @@ const UI: Record<string, { en: string; zh: string }> = {
     'sync.remoteBlocked':          { en: 'Sync failed',                 zh: '同步失败' },
     'sync.unknownFlag':            { en: 'Unknown flag(s)',             zh: '未知参数' },
     'sync.unknownAction':          { en: 'Unknown sync action',         zh: '未知同步动作' },
-    'sync.notEnabled':             { en: 'Sync is not enabled',         zh: '远程同步未启用' },
     'sync.noRemotePath':           { en: 'Remote path not configured',  zh: '未配置远程路径' },
     'sync.noGitRepos':             { en: 'No git repositories found',   zh: '未找到 git 仓库' },
     'sync.filesNotFound':          { en: 'Specified files not found in any git root', zh: '指定文件在任何 git 仓库中均未找到' },
@@ -328,7 +326,6 @@ const UI: Record<string, { en: string; zh: string }> = {
     'sync.ambiguous':              { en: 'matched multiple servers, use id', zh: '匹配到多个服务器，请使用 id' },
     'sync.createRemoteDirFailed':  { en: 'Create remote directory failed', zh: '创建远程目录失败' },
     'sync.resetDone':              { en: 'Sync state cleared; next sync will recalculate', zh: '已清除同步状态；下次同步会重新计算待同步文件' },
-    'sync.resetConflict':          { en: 'cannot combine with',           zh: '不能与以下参数同时使用' },
     syncConfirm:                   { en: 'Proceed with sync?',          zh: '确认执行同步？' },
     syncCancelled:                 { en: 'Sync cancelled',              zh: '同步已取消' },
     syncNothing:                   { en: 'Nothing to sync',             zh: '没有需要同步的内容' },
@@ -367,18 +364,6 @@ const UI: Record<string, { en: string; zh: string }> = {
     stopSdkUnsupported:            { en: 'SDK target does not support stop. SDK builds are not long-running.', zh: 'SDK 目标不支持停止。SDK 构建不是长运行进程。' },
     stopTerminateFailed:           { en: 'Failed to terminate process',  zh: '终止进程失败' },
     stopStillRunning:              { en: 'Process still running',        zh: '进程仍在运行' },
-    // init
-    initFailed:                    { en: 'Forja use target failed',           zh: 'Forja 初始化失败' },
-    initPlan:                      { en: 'Forja use target plan (dry run)',   zh: 'Forja 初始化计划（预演）' },
-    initSucceeded:                 { en: 'Forja use target succeeded',        zh: 'Forja 初始化成功' },
-    initWillDetect:                { en: 'Will detect: Qt targets, SDK targets, toolchain paths', zh: '将检测：Qt 目标、SDK 目标、工具链路径' },
-    initNotAutoSelecting:          { en: 'Not auto-selecting (multiple targets found)', zh: '未自动选择（找到多个目标）' },
-    qtTargetSingular:              { en: 'Qt target',                    zh: 'Qt 目标' },
-    qtTargetPlural:                { en: 'Qt targets',                   zh: 'Qt 目标' },
-    sdkTargetSingular:             { en: 'SDK target',                   zh: 'SDK 目标' },
-    sdkTargetPlural:               { en: 'SDK targets',                  zh: 'SDK 目标' },
-    zeroTargets:                   { en: '0 targets',                    zh: '0 个目标' },
-    toolchainNone:                 { en: 'none',                         zh: '无' },
     // list extras
     configuredMark:                { en: '[configured]',                 zh: '[已配置]' },
     serverIdLabel:                 { en: 'ID:',                          zh: 'ID：' },
@@ -457,6 +442,20 @@ const UI: Record<string, { en: string; zh: string }> = {
     doctorResetFailed:             { en: 'Remote reset failed',          zh: '远程重置失败' },
     doctorCleanDone:               { en: 'Cleaned untracked',            zh: '已清理未跟踪文件' },
     doctorCleanFailed:             { en: 'Remote clean-untracked failed', zh: '远程清理失败' },
+    doctorQtNotFoundAtPath:        { en: 'Qt not found at configured path: {0}', zh: '在配置路径未找到 Qt：{0}' },
+    doctorVsNotFoundAtInstall:     { en: 'VS dev environment not found: {0}', zh: '未找到 VS 开发环境：{0}' },
+    doctorJomNotFoundAtPath:       { en: 'jom not found at: {0}',       zh: '未找到 jom：{0}' },
+    doctorSyncServerNotExist:      { en: 'Sync server "{0}" does not exist', zh: '同步服务器 "{0}" 不存在' },
+    doctorCleanupErrors:           { en: 'Cleanup errors: {0}',          zh: '清理错误：{0}' },
+    doctorCleanupPartiallyFailed:  { en: 'Cleanup partially failed: {0} error(s)', zh: '清理部分失败：{0} 个错误' },
+    doctorCleanedStaleConfigs:     { en: 'Cleaned {0} stale config(s)',  zh: '已清理 {0} 个过期配置' },
+    doctorWouldDeployForjaBin:     { en: 'Would deploy/update remote Forja bin', zh: '将部署/更新远程 Forja 二进制' },
+    doctorWouldDeployForjaBinDetail: { en: 'Remote Forja bin would be deployed', zh: '将部署远程 Forja 二进制' },
+    doctorBootstrapForjaBin:       { en: 'bootstrap remote Forja bin',   zh: '引导远程 Forja 二进制' },
+    doctorBootstrapArtifactNotAvailable: { en: 'Bootstrap artifact not available', zh: '引导制品不可用' },
+    doctorRemoteForjaDeployed:     { en: 'Remote Forja deployed: {0}',   zh: '远程 Forja 已部署：{0}' },
+    doctorRemoteForjaDeployFailed: { en: 'Remote Forja deploy failed',   zh: '远程 Forja 部署失败' },
+    doctorStaleConfigWouldRemove:  { en: '{0} stale config file(s) would be removed', zh: '将移除 {0} 个过期配置' },
     paths:                         { en: 'path(s) in',                   zh: '个路径，仓库' },
     // doctor actions
     doctorActionCheck:             { en: 'check',                        zh: '检查' },
@@ -552,10 +551,6 @@ Target 选项:
     --add <代码>                追加到列表
     --rm <代码>                 从列表删除`,
     },
-    'help.server': {
-        en: 'Usage: forja server <add|update|remove> [options] [--json]',
-        zh: '用法: forja server <add|update|remove> [选项] [--json]',
-    },
     'help.remote': {
         en: 'Usage: forja remote [action] [options] [--json]\n\n  forja remote                                    Show remote configuration\n  forja remote set --server <name> --remote-path <path>\n                                                  Set remote server and path\n  forja remote restore <repo> <paths...>          Restore remote workspace\n  forja remote reset <repo> <paths...> [--all]    Reset remote workspace',
         zh: '用法: forja remote [动作] [选项] [--json]\n\n  forja remote                                    显示远程配置\n  forja remote set --server <名称> --remote-path <路径>\n                                                  设置远程服务器和路径\n  forja remote restore <仓库> <路径...>            恢复远程工作区\n  forja remote reset <仓库> <路径...> [--all]      重置远程工作区',
@@ -602,39 +597,8 @@ Options:
         en: 'Usage: forja doctor [check|fix|unlock] [--remote] [--json]',
         zh: '用法: forja doctor [check|fix|unlock] [--remote] [--json]',
     },
-    'help.sync': {
-        en: `Usage:
-  forja sync                                        Sync changed files (interactive confirm)
-  forja sync --yes                                  Skip confirmation
-  forja sync reset                                  Clear sync state
-  forja sync plan                                   Preview pending changes
-  forja sync status                                 Show sync configuration
-  forja sync ignore                                 List ignore patterns
-  forja sync ignore add <pattern>                   Add an ignore pattern
-  forja sync ignore rm <pattern>                    Remove an ignore pattern
-  forja sync --file <path>                          Sync specific file (repeatable)
-
-Options:
-  --json                                  JSON output`,
-        zh: `用法:
-  forja sync                                        同步变更文件（交互确认）
-  forja sync --yes                                  跳过确认
-  forja sync reset                                  清除同步状态
-  forja sync plan                                   预览待同步文件
-  forja sync status                                 查看同步配置
-  forja sync ignore                                 列出忽略规则
-  forja sync ignore add <pattern>                   添加忽略规则
-  forja sync ignore rm <pattern>                    移除忽略规则
-  forja sync --file <路径>                          同步指定文件（可重复）
-
-选项:
-  --json                                  JSON 格式输出`,
-    },
     // init diagnostics
-    'init.workspaceNotFound':            { en: 'Workspace does not exist',            zh: '工作区不存在' },
     'init.projectNotFound':              { en: 'Project not found in workspace',      zh: '工作区中未找到项目' },
-    'init.invalidMode':                  { en: 'Invalid build mode',                    zh: '无效的构建模式' },
-    'init.invalidArch':                  { en: 'Invalid target architecture',           zh: '无效的目标架构' },
     'init.foundQtSdkNotAutoSelecting':   { en: 'Found Qt and SDK targets, not auto-selecting', zh: '找到 Qt 和 SDK 目标，未自动选择' },
     'init.foundTargetsNotAutoSelecting': { en: 'Found targets, not auto-selecting',          zh: '找到多个目标，未自动选择' },
     'init.noTargetsToolchainOnly':       { en: 'No Qt or SDK targets found, only toolchain defaults saved', zh: '未找到 Qt 或 SDK 目标，仅保存了工具链默认值' },
@@ -642,7 +606,6 @@ Options:
     'init.vsMissing':                    { en: 'Visual Studio installation not detected', zh: '未检测到 Visual Studio 安装' },
     'init.jomMissing':                   { en: 'jom not detected (optional, recommended for faster Qt builds on Windows)', zh: '未检测到 jom（可选，建议安装以加速 Windows 上的 Qt 构建）' },
     'init.makeMissing':                  { en: 'make not detected',                   zh: '未检测到 make' },
-    'init.configAlreadyExists':          { en: 'Configuration already exists, only filling missing items', zh: '配置已存在，仅补充缺失项' },
     'init.selectTarget':                 { en: 'Select a target project', zh: '选择目标项目' },
     'init.currentTarget':                { en: 'Current target',          zh: '当前目标' },
     'init.skipSelection':                { en: 'Skip (select later)',      zh: '跳过（稍后选择）' },
@@ -657,13 +620,7 @@ Options:
     'init.currentQt':                    { en: 'Current Qt',                zh: '当前 Qt' },
     'init.currentVs':                    { en: 'Current VS',                zh: '当前 VS' },
     'init.currentJom':                   { en: 'Current jom',               zh: '当前 jom' },
-    'init.remoteNoServer':               { en: 'Remote init requested but no server configured', zh: '请求了远程初始化但未配置服务器' },
-    'init.serverNotFound':               { en: 'Server not found',                    zh: '服务器未找到' },
-    'init.remotePathMissing':            { en: 'No remote path configured for server', zh: '服务器未配置远程路径' },
     'init.noLocalTargetsSkipRemote':     { en: 'No local targets detected; skipping remote bridge init. Use `forja use target` first.', zh: '未检测到本地目标；跳过远程桥接初始化。请先使用 `forja use target`。' },
-    'init.remoteInitFailed':            { en: 'Remote init failed',                  zh: '远程初始化失败' },
-    'init.remoteInitSucceeded':         { en: 'Remote init succeeded',               zh: '远程初始化成功' },
-    'init.configWriteFailed':           { en: 'Failed to write configuration',       zh: '写入配置失败' },
     // workroot init (forja init)
     'init.title':                       { en: 'Workspace initialized',               zh: '工作区已初始化' },
     'init.workroot':                    { en: 'Work root',                            zh: '工作根目录' },
@@ -723,11 +680,13 @@ Options:
     'idx.invalidPortHint':              { en: 'Must be a number between 1 and 65535.', zh: '必须是 1 到 65535 之间的数字。' },
     'idx.unknownServerSubcommand':      { en: 'Unknown server subcommand',          zh: '未知 server 子命令' },
     'idx.unknownRemoteSubcommand':      { en: 'Unknown remote subcommand',          zh: '未知 remote 子命令' },
-    'remote.serverNotFound':            { en: 'Server not found',                   zh: '服务器未找到' },
     'remote.setRequiresFlag':           { en: 'Specify --server and/or --remote-path', zh: '请指定 --server 和/或 --remote-path' },
     'remote.showNoFlags':               { en: '--server and --remote-path are only valid with `forja remote set`', zh: '--server 和 --remote-path 仅在 `forja remote set` 中有效' },
     'remote.restoreUsage':              { en: 'forja remote restore requires <repo> and at least one <path>', zh: 'forja remote restore 需要 <repo> 和至少一个 <path>' },
     'remote.resetUsage':                { en: 'forja remote reset requires <repo> and at least one <path>', zh: 'forja remote reset 需要 <repo> 和至少一个 <path>' },
+    'remote.invalidPath':               { en: 'Invalid path (must be relative, no \'..\')', zh: '无效路径（必须是相对路径，不能包含 \'..\'）' },
+    'remote.cleanFailedWarning':        { en: 'Clean untracked files failed after reset', zh: '重置后清理未跟踪文件失败' },
+    'idx.serverIdRequired':             { en: 'Server ID required',                   zh: '需要服务器 ID' },
     'idx.unknownBuildAction':           { en: 'Unknown build action',               zh: '未知构建动作' },
     'idx.validActions':                 { en: 'Valid actions: fresh, qmake, rcc',   zh: '有效动作: fresh, qmake, rcc' },
     'idx.runDesignerUsage':             { en: 'Usage: forja run designer <ui-file>', zh: '用法: forja run designer <ui文件>' },
@@ -770,7 +729,6 @@ Options:
     'use.invalidArch':                   { en: 'Invalid arch',                      zh: '无效架构' },
     'use.invalidArchDetail':             { en: 'Must be x86 or x64',               zh: '必须为 x86 或 x64' },
     'use.projectNotFound':              { en: 'Project file not found',            zh: '项目文件未找到' },
-    'use.projectOutsideWorkspace':       { en: 'Project is outside the workspace',  zh: '项目在工作区之外' },
     'use.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
     'use.expectedExtensions':            { en: 'Expected .pro, .sln, Makefile, or CMakeLists.txt',  zh: '期望 .pro、.sln、Makefile 或 CMakeLists.txt' },
     'use.failedToSaveActiveTarget':      { en: 'Failed to save activeTarget',       zh: '保存活动目标失败' },
@@ -785,6 +743,7 @@ Options:
     'use.vsVersionMismatch':             { en: 'Qt requires VS {0}, not detected — please select manually', zh: 'Qt 需要 VS {0}，未检测到，请手动选择' },
     'use.toolchainNotConfigured':        { en: 'Toolchain not configured for this target', zh: '此目标未配置工具链' },
     'use.cannotSpecifyBothEnableDisable':{ en: 'Cannot specify both --enable and --disable', zh: '不能同时指定 --enable 和 --disable' },
+    'use.suppressWarningsRequiresFlag':  { en: 'Specify --add or --rm to modify the suppress-warnings list', zh: '请指定 --add 或 --rm 来修改抑制警告列表' },
     'use.serverNotFound':                { en: 'Server not found',                  zh: '服务器未找到' },
     'use.ambiguousServerName':           { en: 'Ambiguous server name',              zh: '服务器名称不明确' },
     'use.useServerIdInstead':            { en: 'Use server ID instead',              zh: '请改用服务器 ID' },
@@ -821,6 +780,7 @@ Options:
     'cmd.customNotFound':                { en: 'Custom command not found',           zh: '自定义命令未找到' },
     'cmd.customFailed':                  { en: 'Custom command failed',              zh: '自定义命令失败' },
     'cmd.qtRunFailed':                   { en: 'Qt run failed',                      zh: 'Qt 运行失败' },
+    'cmd.appExitedWithError':            { en: 'Application exited with error',      zh: '应用程序异常退出' },
     'cmd.targetNotSelected':             { en: 'Target not selected',                zh: '目标未选择' },
     'cmd.sdkCleanFailed':                { en: 'SDK clean failed',                   zh: 'SDK 清理失败' },
     'cmd.qtCleanFailed':                 { en: 'Qt clean failed',                    zh: 'Qt 清理失败' },

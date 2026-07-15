@@ -67,7 +67,7 @@ export function formatListText(result: ListResult, locale: Locale): string {
                 lines.push(`  ${T('lst.savedTargets')}:`);
                 for (const t of saved) {
                     const marker = t.active ? '* ' : '  ';
-                    lines.push(`  ${marker}${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}`);
+                    lines.push(`  ${marker}${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}  ${t.project}`);
                 }
                 lines.push('');
             }
@@ -75,11 +75,7 @@ export function formatListText(result: ListResult, locale: Locale): string {
             // Show discovered targets
             const targets = result.targets || [];
             if (targets.length > 0) {
-                if (saved.length > 0) {
-                    lines.push(`  ${T('lst.discoveredTargets')}:`);
-                } else {
-                    lines.push(T('targets'));
-                }
+                lines.push(`  ${T('lst.discoveredTargets')}:`);
                 for (const t of targets) {
                     const marker = t.current ? '* ' : '  ';
                     const cfg = t.configured ? `${T('configuredMark')} ` : '';
@@ -318,12 +314,12 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
     if (servers.length === 0) {
         nextAction = 'forja server add --name <name> --host <host> --username <name>';
     } else if (servers.length === 1) {
-        nextAction = `forja remote --server ${servers[0].name}`;
+        nextAction = `forja remote set --server ${servers[0].name}`;
     } else if (servers.length <= 5) {
         const names = servers.map(s => s.name).join('|');
-        nextAction = `forja remote --server <${names}>`;
+        nextAction = `forja remote set --server <${names}>`;
     } else {
-        nextAction = 'forja remote --server <name>';
+        nextAction = 'forja remote set --server <name>';
     }
     return {
         ok: true,

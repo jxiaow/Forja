@@ -137,6 +137,7 @@ export async function runSwitchTarget(workspace: string, args: {
     project: string;
     mode?: 'debug' | 'release';
     arch?: 'x86' | 'x64';
+    reset?: boolean;
     interactive?: boolean;
     json?: boolean;
 }): Promise<UseTargetResult> {
@@ -279,7 +280,8 @@ export async function runSwitchTarget(workspace: string, args: {
     const currentTarget = ctx.existingTarget;
     const mode = args.mode ?? currentTarget?.mode ?? 'debug';
     const arch = args.arch ?? currentTarget?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
-    const runAt = currentTarget?.runAt ?? 'local';
+    // SDK targets don't support remote execution — force local when switching to SDK
+    const runAt = (kind === 'sdk') ? 'local' : (currentTarget?.runAt ?? 'local');
 
     let qtPath: string | undefined;
     let vsInstall: string | undefined;
@@ -288,7 +290,8 @@ export async function runSwitchTarget(workspace: string, args: {
     const changed: string[] = [];
 
     // Try to get toolchain from existing target profile (workspaceStore)
-    if (currentTarget?.qtPath || currentTarget?.vsInstall) {
+    // When reset is true, skip inherited toolchain and force re-detection
+    if (!args.reset && (currentTarget?.qtPath || currentTarget?.vsInstall)) {
         if (kind === 'qt') {
             qtPath = currentTarget.qtPath;
             jomPath = currentTarget.jomPath;
