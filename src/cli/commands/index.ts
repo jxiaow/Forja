@@ -602,19 +602,17 @@ async function handleRemote(argv: string[], workspace: string, wantsJson: boolea
                 return;
             }
             // No subcommand: show current remote config
+            // --server is only meaningful for set/restore/reset, reject in show mode
             const serverFlag = extractFlag(argv, '--server');
-            if (serverFlag) {
-                const servers = readServers();
-                const match = servers.find(s => s.id === serverFlag || s.name === serverFlag);
-                if (!match) {
-                    outputResult({
-                        ok: false, action: 'remote', remoteAction: 'show', changed: [],
-                        diagnostics: [{ level: 'error', message: `${T('remote.serverNotFound')}: ${serverFlag}` }],
-                        nextAction: 'forja server add',
-                    }, wantsJson);
-                    process.exitCode = 1;
-                    return;
-                }
+            const remotePathFlag = extractFlag(argv, '--remote-path');
+            if (serverFlag || remotePathFlag) {
+                outputResult({
+                    ok: false, action: 'remote', remoteAction: 'show', changed: [],
+                    diagnostics: [{ level: 'error', message: T('remote.showNoFlags') }],
+                    nextAction: 'forja remote set --server <name>',
+                }, wantsJson);
+                process.exitCode = 1;
+                return;
             }
             const result = runRemoteShow(workspace);
             outputResult(result, wantsJson, fmt);

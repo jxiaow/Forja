@@ -121,6 +121,22 @@ async function handleExistingWorkroot(workroot: string, options: InitOptions): P
         };
     }
 
+    // Answers mode: read action from answers
+    if (options.answers) {
+        const action = options.answers.action;
+        if (action === 'add') {
+            return handleAddTargetFromAnswers(workroot, config, options);
+        } else if (action === 'modify') {
+            return handleModifyTarget(workroot, config, options);
+        }
+        // 'exit' or unknown → return current state
+        return {
+            ok: true, action: 'init', workroot,
+            target: config.activeTarget ? config.targets[config.activeTarget] : undefined,
+            nextAction: 'forja status',
+        };
+    }
+
     console.log(T('init.workrootAlreadyRegistered'));
     console.log(`  ${T('init.workroot')}: ${workroot}`);
     if (targets.length > 0) {
@@ -157,6 +173,18 @@ async function handleExistingWorkroot(workroot: string, options: InitOptions): P
     };
 }
 
+async function handleAddTargetFromAnswers(workroot: string, config: WorkspaceConfig, options: InitOptions): Promise<InitResult> {
+    const result = await configureNewTarget(workroot, config, options);
+    if (!result.ok) return result;
+
+    return {
+        ok: true, action: 'init', workroot,
+        registered: false,
+        target: result.target,
+        nextAction: 'forja status',
+    };
+}
+
 async function handleModifyTarget(workroot: string, config: WorkspaceConfig, options: InitOptions): Promise<InitResult> {
     const targets = Object.values(config.targets);
     if (targets.length === 0) {
@@ -167,7 +195,19 @@ async function handleModifyTarget(workroot: string, config: WorkspaceConfig, opt
         };
     }
 
-    const selected = await chooseRequired(T('init.selectTargetToModify'), targets, t => `${t.name} [${t.kind}] ${t.project}`);
+    // Answers mode: find target by ID or name from answers
+    let selected: TargetProfile;
+    if (options.answers?.target) {
+        const match = targets.find(t => t.id === options.answers!.target || t.name === options.answers!.target);
+        if (!match) {
+            return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: `${T('init.targetNotFound')}: ${options.answers.target}` }] };
+        }
+        selected = match;
+    } else if (options.interactive) {
+        selected = await chooseRequired(T('init.selectTargetToModify'), targets, t => `${t.name} [${t.kind}] ${t.project}`);
+    } else {
+        return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: T('init.answersMissingTarget') }] };
+    }
 
     // Re-detect toolchain and reconfigure
     const updated = await configureTargetFields(selected, options);
