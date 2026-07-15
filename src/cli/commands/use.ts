@@ -275,13 +275,12 @@ export function runUseExecution(workspace: string, local: boolean, remote: boole
     }
 
     const updated = { ...currentTarget, runAt };
-    try {
-        setActiveTarget(workspace, updated);
-    } catch (e) {
+    const saved = setActiveTarget(workspace, updated);
+    if (!saved) {
         return {
             ok: false, action: 'use', useScope: 'execution', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveExecMode')}: ${e instanceof Error ? e.message : String(e)}` }],
-            nextAction: 'forja use execution --local',
+            diagnostics: [{ level: 'error', message: T('use.failedToSaveExecMode') }],
+            nextAction: 'forja init',
         };
     }
     return {

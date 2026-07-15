@@ -106,6 +106,22 @@ export function workspaceConfigPath(workroot: string): string {
     return path.join(workspacesDir(), `${hash}.json`);
 }
 
+// ── Atomic write helper ──
+
+function atomicWriteFileSync(filePath: string, data: string): void {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    const tmpPath = filePath + '.tmp.' + process.pid;
+    try {
+        fs.writeFileSync(tmpPath, data, 'utf8');
+        fs.renameSync(tmpPath, filePath);
+    } catch (e) {
+        // Clean up temp file on failure
+        try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+        throw e;
+    }
+}
+
 // ── Registry ──
 
 export function loadWorkspacesRegistry(): WorkspacesRegistry {
@@ -124,9 +140,7 @@ export function loadWorkspacesRegistry(): WorkspacesRegistry {
 }
 
 export function saveWorkspacesRegistry(registry: WorkspacesRegistry): void {
-    const dir = forjaConfigDir();
-    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
-    fs.writeFileSync(workspacesRegistryPath(), JSON.stringify(registry, null, 2), 'utf8');
+    atomicWriteFileSync(workspacesRegistryPath(), JSON.stringify(registry, null, 2));
 }
 
 // ── Per-workspace config ──
@@ -214,11 +228,9 @@ export function loadWorkspaceConfig(workroot: string): WorkspaceConfig {
 }
 
 export function saveWorkspaceConfig(config: WorkspaceConfig): void {
-    const dir = workspacesDir();
-    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
     const normalized = { ...config, workroot: normalizePath(config.workroot) };
     const filePath = workspaceConfigPath(normalized.workroot);
-    fs.writeFileSync(filePath, JSON.stringify(normalized, null, 2), 'utf8');
+    atomicWriteFileSync(filePath, JSON.stringify(normalized, null, 2));
 }
 
 // ── Workroot resolution ──

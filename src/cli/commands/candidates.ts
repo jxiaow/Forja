@@ -5,14 +5,10 @@
 import * as path from 'path';
 import { scanProFiles } from '../../qt/shared/projectScanner';
 import { scanSdkProjects } from '../../core/sdkProjectScanner';
-import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget } from '../../core/workspaceStore';
+import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget, normalizePath } from '../../core/workspaceStore';
 import type { TargetProfile } from '../../core/workspaceStore';
 import { TargetCandidate } from './types';
 import { detectProjectType } from '../../core/projectTypeDetector';
-
-function normalizePath(p: string): string {
-    return p.replace(/\\/g, '/');
-}
 
 /**
  * Pure aggregation — workspace + configs explicit, no config I/O.

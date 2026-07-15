@@ -31,13 +31,14 @@ export function getActiveTarget(cwd: string): ActiveTarget | null {
     return targetProfileToActiveTarget(profile, workroot);
 }
 
-export function setActiveTarget(cwd: string, target: ActiveTarget): void {
+/** Returns true if save succeeded, false if workroot not registered or no active target. */
+export function setActiveTarget(cwd: string, target: ActiveTarget): boolean {
     const workroot = resolveWorkroot(cwd);
-    if (!workroot) { return; }
+    if (!workroot) { return false; }
     const config = loadWorkspaceConfig(workroot);
-    if (!config.activeTarget) { return; }
+    if (!config.activeTarget) { return false; }
     const profile = config.targets[config.activeTarget];
-    if (!profile) { return; }
+    if (!profile) { return false; }
 
     // Update profile fields from ActiveTarget
     profile.mode = target.mode;
@@ -47,8 +48,10 @@ export function setActiveTarget(cwd: string, target: ActiveTarget): void {
     if (target.vsInstall !== undefined) profile.toolchain.vsInstall = target.vsInstall;
     if (target.jomPath !== undefined) profile.toolchain.jomPath = target.jomPath;
     if (target.qmakeTarget !== undefined) profile.toolchain.qmakeTarget = target.qmakeTarget;
+    if (target.qtVersion !== undefined) profile.toolchain.qtVersion = target.qtVersion;
 
     saveWorkspaceConfig(config);
+    return true;
 }
 
 export function requireActiveTarget(cwd: string): { target: ActiveTarget } | { error: string; nextAction?: string } {

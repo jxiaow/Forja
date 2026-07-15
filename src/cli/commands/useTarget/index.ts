@@ -440,13 +440,12 @@ export async function runUpdateModeArch(workspace: string, args: {
     }
 
     if (changed.length > 0) {
-        try {
-            setActiveTarget(workspace, updated);
-        } catch (e) {
+        const saved = setActiveTarget(workspace, updated);
+        if (!saved) {
             return {
                 ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: `${T('use.failedToSaveActiveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
-                nextAction: 'forja doctor',
+                diagnostics: [{ level: 'error', message: T('use.failedToSaveActiveTarget') }],
+                nextAction: 'forja init',
             };
         }
     }
@@ -503,13 +502,12 @@ export async function runUpdateToolchain(workspace: string, args: {
     }
 
     if (changed.length > 0) {
-        try {
-            setActiveTarget(workspace, updated);
-        } catch (e) {
+        const saved = setActiveTarget(workspace, updated);
+        if (!saved) {
             return {
                 ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: `${T('use.failedToSaveActiveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
-                nextAction: 'forja doctor',
+                diagnostics: [{ level: 'error', message: T('use.failedToSaveActiveTarget') }],
+                nextAction: 'forja init',
             };
         }
     }
