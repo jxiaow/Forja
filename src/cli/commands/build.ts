@@ -78,20 +78,25 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 nextAction: 'forja list targets',
             };
         }
-        if (!fs.existsSync(projectPath)) {
+        // Resolve to absolute for existence check, then store as relative for remote compatibility
+        const absolutePath = path.isAbsolute(projectPath) ? projectPath : path.join(workspace, projectPath);
+        if (!fs.existsSync(absolutePath)) {
             return {
                 ok: false, action: 'build', buildAction, workspace,
                 diagnostics: [diag('error', `${T('cmd.projectNotFound')}: ${projectPath}`)],
                 nextAction: 'forja list targets',
             };
         }
+        const relativeProject = path.isAbsolute(projectPath)
+            ? path.relative(workspace, absolutePath).replace(/\\/g, '/')
+            : projectPath;
         const earlyWorkroot = resolveWorkroot(workspace);
         const wsConfigEarly = earlyWorkroot ? loadWorkspaceConfig(earlyWorkroot) : null;
         const savedProfile = wsConfigEarly ? Object.values(wsConfigEarly.targets).find(t => t.kind === kind) : null;
         targetResult = {
             target: {
                 kind,
-                project: projectPath,
+                project: relativeProject,
                 mode: savedProfile?.mode || 'debug',
                 arch: savedProfile?.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
                 runAt: savedProfile?.runAt || 'local',

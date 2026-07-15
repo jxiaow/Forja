@@ -134,9 +134,32 @@ export function loadWorkspacesRegistry(): WorkspacesRegistry {
             }
         }
     } catch {
-        // corrupted — treat as empty
+        // corrupted — try recovery from per-workspace files
     }
-    return { workroots: [] };
+    // Recovery: scan workspaces/ directory for orphan config files
+    return recoverRegistry();
+}
+
+function recoverRegistry(): WorkspacesRegistry {
+    const dir = workspacesDir();
+    if (!fs.existsSync(dir)) { return { workroots: [] }; }
+    const workroots: string[] = [];
+    try {
+        for (const file of fs.readdirSync(dir)) {
+            if (!file.endsWith('.json')) continue;
+            try {
+                const raw = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+                if (typeof raw.workroot === 'string' && raw.workroot) {
+                    workroots.push(raw.workroot);
+                }
+            } catch { /* skip corrupted */ }
+        }
+    } catch { /* dir unreadable */ }
+    if (workroots.length > 0) {
+        // Persist recovered registry
+        saveWorkspacesRegistry({ workroots });
+    }
+    return { workroots };
 }
 
 export function saveWorkspacesRegistry(registry: WorkspacesRegistry): void {
