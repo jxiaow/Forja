@@ -688,8 +688,24 @@ Options:
     'init.selectTargetToModify':        { en: 'Select target to modify',              zh: '选择要修改的目标' },
     'init.configurationCancelled':      { en: 'Configuration cancelled',              zh: '配置已取消' },
     'init.existingAction':              { en: 'Action for existing workroot',         zh: '对已注册工作根目录的操作' },
-    'help.init':                        { en: 'Usage: forja init [--workroot <path>]\n\nRegister a work root and configure the initial target.\n\nOptions:\n  --workroot <path>   Specify work root directory (default: current directory)\n  --answers <file>    JSON file with pre-configured answers (for automation)',
-                                          zh: '用法: forja init [--workroot <path>]\n\n注册工作根目录并配置初始目标。\n\n选项:\n  --workroot <path>   指定工作根目录（默认：当前目录）\n  --answers <file>    预配置答案的 JSON 文件（用于自动化）' },
+    'help.init': {
+        en: `Usage:
+  forja init                     Register work root and configure initial target
+  forja init --workroot <path>   Specify work root directory
+
+Options:
+  --workroot <path>       Work root directory (default: current directory)
+  --answers <file>        JSON file with pre-configured answers (for automation)
+  --json                  Output as JSON`,
+        zh: `用法:
+  forja init                     注册工作根目录并配置初始目标
+  forja init --workroot <path>   指定工作根目录
+
+选项:
+  --workroot <path>       工作根目录（默认当前目录）
+  --answers <file>        预配置答案的 JSON 文件（用于自动化）
+  --json                  JSON 格式输出`,
+    },
     // index.ts dispatcher messages
     'idx.noCommand':                    { en: 'No command specified. Run `forja --help` for usage.', zh: '未指定命令。运行 `forja --help` 查看用法。' },
     'idx.unknownCommand':               { en: 'Unknown command',                    zh: '未知命令' },
