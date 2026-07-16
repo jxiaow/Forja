@@ -1,15 +1,15 @@
 /**
- * SDK 模块日志 — 委托给 core/logger。
+ * C++ 模块日志 — 委托给 core/logger。
  * 保持与已有调用方的 API 兼容（initLogger、log、logError、getOutputChannel）。
  */
 import type * as vscode from 'vscode';
 import { initLogger as _coreInit, createLogger } from '../../vscode/logger';
 
-const cppLogger = createLogger('SDK');
+const cppLogger = createLogger('C++');
 
 /**
  * 初始化日志通道。返回共享的 OutputChannel（由 core/logger 管理）。
- * SDK 模块调用此函数以确保 channel 已创建。
+ * C++ 模块调用此函数以确保 channel 已创建。
  */
 export function initLogger(): vscode.OutputChannel {
     const channel = _coreInit();

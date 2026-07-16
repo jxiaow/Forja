@@ -14,7 +14,7 @@ export class ProjectScanner {
     return this._projects;
   }
 
-  /** 扫描工作区中的 SDK 项目入口文件 */
+  /** 扫描工作区中的 C++ 项目入口文件 */
   async scan(): Promise<CppProjectInfo[]> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -101,8 +101,8 @@ export class ProjectScanner {
     }));
 
     const selected = await vscode.window.showQuickPick(items, {
-      placeHolder: '检测到多个 SDK 项目，请选择一个作为当前编译目标',
-      title: 'Forja SDK: 选择项目'
+      placeHolder: '检测到多个 C++ 项目，请选择一个作为当前编译目标',
+      title: 'Forja C++: 选择项目'
     });
 
     if (selected) {

@@ -21,7 +21,7 @@ export function buildSyncPage(data: TemplateData): string {
     let h = '<div class="page-title">远程同步</div>';
     h += '<div class="page-desc">将变更文件同步到远程服务器</div>';
 
-    if (!data.qtActive && !data.sdkActive) {
+    if (!data.qtActive && !data.cppActive) {
         h += '<div class="section-inactive">';
         h += '<div class="section-inactive-hint">未检测到项目，远程同步不可用</div>';
         h += '</div>';

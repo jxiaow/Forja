@@ -1,5 +1,5 @@
 /**
- * SDK CLI entry point — called by the forja dispatcher.
+ * C++ CLI entry point — called by the forja dispatcher.
  * Provides init/env/projects/status/build/rebuild/clean operations for .sln and Makefile projects.
  */
 
@@ -12,7 +12,7 @@ import { getCppDefaultArch, getCppAvailableArch, buildCppEnvCurrent, getCppPlatf
 import { loadCppSettings, saveCppSettings, cppSettingsFilePath } from './settings';
 import { detectVsInstallations, detectMake } from './envDetector';
 
-interface SdkCliOptions {
+interface CppCliOptions {
     action: string;
     workspace: string;
     project: string | null;
@@ -23,17 +23,17 @@ interface SdkCliOptions {
     json: boolean;
 }
 
-interface EffectiveSdkCliOptions extends Omit<SdkCliOptions, 'mode' | 'arch'> {
+interface EffectiveCppCliOptions extends Omit<CppCliOptions, 'mode' | 'arch'> {
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';
 }
 
-interface SdkDiagnostic {
+interface CppDiagnostic {
     level: 'info' | 'warning' | 'error';
     message: string;
 }
 
-function parseArgs(argv: string[]): SdkCliOptions {
+function parseArgs(argv: string[]): CppCliOptions {
     const VALID_ACTIONS = ['init', 'use', 'env', 'projects', 'status', 'build', 'rebuild', 'clean'];
     const knownFlags = new Set(['--workspace', '--project', '--mode', '--arch', '--vs-dev-cmd', '--plan', '--json']);
     const commonFlags = ['--workspace', '--json'];
@@ -51,7 +51,7 @@ function parseArgs(argv: string[]): SdkCliOptions {
     };
 
     const action = argv[0] && !argv[0].startsWith('--') ? argv[0] : 'status';
-    const options: SdkCliOptions = {
+    const options: CppCliOptions = {
         action,
         workspace: process.cwd(),
         project: null,
@@ -218,7 +218,7 @@ export function scanProjects(workspace: string, depth: number = DEFAULT_SCAN_DEP
     return results;
 }
 
-function buildCommand(options: EffectiveSdkCliOptions, projectPath: string, vsDevCmdPath: string): string[] {
+function buildCommand(options: EffectiveCppCliOptions, projectPath: string, vsDevCmdPath: string): string[] {
     const isWindows = os.platform() === 'win32';
     const commands: string[] = [];
 
@@ -263,7 +263,7 @@ export function extractErrors(output: string): string[] {
     return output.split(/\r?\n/).filter(l => errorPattern.test(l)).slice(0, 20);
 }
 
-function appendDiagnosticsAndNextAction(lines: string[], diagnostics?: SdkDiagnostic[], nextAction?: string): void {
+function appendDiagnosticsAndNextAction(lines: string[], diagnostics?: CppDiagnostic[], nextAction?: string): void {
     if (diagnostics && diagnostics.length > 0) {
         lines.push('');
         for (const diagnostic of diagnostics) {
@@ -277,9 +277,9 @@ function appendDiagnosticsAndNextAction(lines: string[], diagnostics?: SdkDiagno
     }
 }
 
-function formatSdkInitText(resolved: Record<string, unknown>, diagnostics: SdkDiagnostic[], nextAction?: string): string {
+function formatCppInitText(resolved: Record<string, unknown>, diagnostics: CppDiagnostic[], nextAction?: string): string {
     const lines = [
-        `SDK 配置已保存: mode=${resolved.mode}, arch=${resolved.arch}`
+        `C++ 配置已保存: mode=${resolved.mode}, arch=${resolved.arch}`
     ];
     if (resolved.project) { lines.push(`项目: ${resolved.project}`); }
     if (resolved.vsDevCmdPath) { lines.push(`VS Dev Cmd: ${resolved.vsDevCmdPath}`); }
@@ -287,8 +287,8 @@ function formatSdkInitText(resolved: Record<string, unknown>, diagnostics: SdkDi
     return lines.join('\n');
 }
 
-function formatSdkProjectsText(available: Array<Record<string, string>>, currentProject: string | null, configHints: Record<string, string>): string {
-    const lines: string[] = ['SDK 项目列表:'];
+function formatCppProjectsText(available: Array<Record<string, string>>, currentProject: string | null, configHints: Record<string, string>): string {
+    const lines: string[] = ['C++ 项目列表:'];
     if (available.length === 0) {
         lines.push('  未检测到项目文件');
     } else {
@@ -304,10 +304,10 @@ function formatSdkProjectsText(available: Array<Record<string, string>>, current
     return lines.join('\n');
 }
 
-function formatSdkFailureText(action: string, diagnostics: SdkDiagnostic[], nextAction?: string, errors: string[] = [], exitCode?: number): string {
+function formatCppFailureText(action: string, diagnostics: CppDiagnostic[], nextAction?: string, errors: string[] = [], exitCode?: number): string {
     const lines = exitCode === undefined
-        ? [`SDK ${action} 失败`]
-        : [`SDK ${action} 失败 (退出码: ${exitCode})`];
+        ? [`C++ ${action} 失败`]
+        : [`C++ ${action} 失败 (退出码: ${exitCode})`];
     if (errors.length > 0) {
         lines.push('错误:');
         for (const error of errors) {
@@ -320,14 +320,14 @@ function formatSdkFailureText(action: string, diagnostics: SdkDiagnostic[], next
 
 function getHelpText(): string {
     return `
-Forja SDK CLI
+Forja C++ CLI
 
 用法:
-  forja <action> [options]    (SDK 项目)
+  forja <action> [options]    (C++ 项目)
 
 动作:
   init      初始化本地配置（检测 VS 环境、保存可自动确定的配置）
-  use       确认/切换当前 workspace 使用的 SDK 项目和构建配置
+  use       确认/切换当前 workspace 使用的 C++ 项目和构建配置
   env       查看构建环境（VS 版本、make 等）
   projects  查看 workspace 下的项目文件
   status    显示项目就绪状态
@@ -368,7 +368,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
         const effectiveMode = options.mode || settings.mode || 'debug';
         const settingsArch = getCppAvailableArch().includes(settings.arch) ? settings.arch : getCppDefaultArch();
         const effectiveArch = options.arch || settingsArch;
-        const effectiveOptions: EffectiveSdkCliOptions = {
+        const effectiveOptions: EffectiveCppCliOptions = {
             ...options,
             mode: effectiveMode,
             arch: effectiveArch
@@ -388,7 +388,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
             const newSettings = { mode, arch, vsDevCmdPath: vsDevCmd, pinnedProject: project };
             saveCppSettings(options.workspace, newSettings);
 
-            const diagnostics: SdkDiagnostic[] = [];
+            const diagnostics: CppDiagnostic[] = [];
             const autoSelected: string[] = [];
             if (!options.vsDevCmd && vsInstallations.length > 1) { autoSelected.push('vsDevCmd'); }
             if (!settings.pinnedProject && project) { autoSelected.push('project'); }
@@ -415,7 +415,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
             if (diagnostics.length > 0) { out.diagnostics = diagnostics; }
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else { console.log(formatSdkInitText(resolved, diagnostics, nextAction)); }
+            else { console.log(formatCppInitText(resolved, diagnostics, nextAction)); }
             return;
         }
 
@@ -439,7 +439,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
             };
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else { console.log('SDK 配置已更新，可执行 forja status 查看状态'); }
+            else { console.log('C++ 配置已更新，可执行 forja status 查看状态'); }
             return;
         }
 
@@ -468,7 +468,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
-                console.log('SDK 构建环境:');
+                console.log('C++ 构建环境:');
                 const cur = out.current as Record<string, unknown>;
                 console.log(`  mode: ${cur.mode}`);
                 console.log(`  arch: ${cur.arch}`);
@@ -507,7 +507,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
-                console.log(formatSdkProjectsText(available, currentProject, out.configHints as Record<string, string>));
+                console.log(formatCppProjectsText(available, currentProject, out.configHints as Record<string, string>));
             }
             return;
         }
@@ -553,7 +553,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
             else if (!projectExists) { nextAction = 'init'; }
             else { nextAction = 'build'; }
 
-            const diagnostics: SdkDiagnostic[] = [];
+            const diagnostics: CppDiagnostic[] = [];
             if (!hasSettings) { diagnostics.push({ level: 'warning', message: '尚未初始化' }); }
             if (!projectExists) {
                 if (candidates.length > 1) {
@@ -581,7 +581,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
 
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
-                console.log(`SDK 项目状态: ${ready ? '就绪' : '未就绪'}`);
+                console.log(`C++ 项目状态: ${ready ? '就绪' : '未就绪'}`);
                 console.log(`  项目: ${projectRel || '未选择'}`);
                 console.log(`  模式: ${effectiveMode}/${effectiveArch}`);
                 console.log('');
@@ -599,7 +599,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
 
         const hasSettings = fs.existsSync(cppSettingsFilePath(options.workspace));
         if (!hasSettings) {
-            const diagnostics: SdkDiagnostic[] = [{ level: 'error', message: '尚未初始化' }];
+            const diagnostics: CppDiagnostic[] = [{ level: 'error', message: '尚未初始化' }];
             const nextAction = 'forja status --json';
             const out = {
                 ok: false,
@@ -608,7 +608,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
                 nextAction
             };
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-            else { console.error(formatSdkFailureText(options.action, diagnostics, nextAction)); }
+            else { console.error(formatCppFailureText(options.action, diagnostics, nextAction)); }
             process.exitCode = 1;
             return;
         }
@@ -639,9 +639,9 @@ export async function runCppCli(argv: string[]): Promise<void> {
                 process.exitCode = 1;
                 return;
             } else {
-                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未选择 SDK 项目' }], nextAction: 'forja status --json' };
+                const out = { ok: false, action: options.action, diagnostics: [{ level: 'error', message: '未选择 C++ 项目' }], nextAction: 'forja status --json' };
                 if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
-                else { console.error('未选择 SDK 项目，请先执行 forja status'); }
+                else { console.error('未选择 C++ 项目，请先执行 forja status'); }
                 process.exitCode = 1;
                 return;
             }
@@ -658,7 +658,7 @@ export async function runCppCli(argv: string[]): Promise<void> {
             const out = { ok: true, action: options.action, project: projectRel, shellCommand, resolved: { mode: effectiveMode, arch: effectiveArch } };
             if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
             else {
-                console.log(`SDK ${options.action} 命令:`);
+                console.log(`C++ ${options.action} 命令:`);
                 commands.forEach(c => console.log(`  ${c}`));
             }
             return;
@@ -685,11 +685,11 @@ export async function runCppCli(argv: string[]): Promise<void> {
 
         if (wantsJson) { console.log(JSON.stringify(out, null, 2)); }
         else {
-            if (out.ok) { console.log(`SDK ${options.action} 成功 (${durationMs}ms)`); }
+            if (out.ok) { console.log(`C++ ${options.action} 成功 (${durationMs}ms)`); }
             else {
-                console.error(formatSdkFailureText(
+                console.error(formatCppFailureText(
                     options.action,
-                    out.diagnostics as SdkDiagnostic[],
+                    out.diagnostics as CppDiagnostic[],
                     out.nextAction as string,
                     errors,
                     executed.exitCode

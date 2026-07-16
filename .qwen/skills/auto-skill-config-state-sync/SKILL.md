@@ -31,7 +31,7 @@ interface WorkspaceConfig {
     activeTarget: string | null;
     targets: Record<string, TargetProfile>;
     qtModulePrefs: QtModulePrefs;    // workspace-level: qmakeArgs, cStandard, etc.
-    sdkModulePrefs: SdkModulePrefs;  // workspace-level: scanDepth
+    cppModulePrefs: CppModulePrefs;  // workspace-level: scanDepth
 }
 ```
 
@@ -41,7 +41,7 @@ interface WorkspaceConfig {
 interface TargetProfile {
     id: string;
     name: string;
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';

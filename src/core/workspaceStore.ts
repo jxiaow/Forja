@@ -82,7 +82,7 @@ export const DEFAULT_QT_MODULE_PREFS: Readonly<QtModulePrefs> = {
     qmakeReminderEnabled: true,
 };
 
-export const DEFAULT_SDK_MODULE_PREFS: Readonly<CppModulePrefs> = {
+export const DEFAULT_CPP_MODULE_PREFS: Readonly<CppModulePrefs> = {
     scanDepth: 8,
 };
 
@@ -188,7 +188,7 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
                 targets[id] = {
                     id: typeof obj.id === 'string' ? obj.id : id,
                     name: typeof obj.name === 'string' ? obj.name : id,
-                    kind: obj.kind === 'cpp' ? 'cpp' : 'qt',
+                    kind: obj.kind === 'cpp' || obj.kind === 'sdk' ? 'cpp' : 'qt',
                     project: typeof obj.project === 'string' ? obj.project : '',
                     mode: obj.mode === 'release' ? 'release' : 'debug',
                     arch: obj.arch === 'x64' ? 'x64' : 'x86',
@@ -248,7 +248,7 @@ export function loadWorkspaceConfig(workroot: string): WorkspaceConfig {
         activeTarget: null,
         targets: {},
         qtModulePrefs: { ...DEFAULT_QT_MODULE_PREFS },
-        cppModulePrefs: { ...DEFAULT_SDK_MODULE_PREFS },
+        cppModulePrefs: { ...DEFAULT_CPP_MODULE_PREFS },
     };
 }
 
@@ -321,6 +321,6 @@ export function createEmptyWorkspaceConfig(workroot: string): WorkspaceConfig {
         activeTarget: null,
         targets: {},
         qtModulePrefs: { ...DEFAULT_QT_MODULE_PREFS },
-        cppModulePrefs: { ...DEFAULT_SDK_MODULE_PREFS },
+        cppModulePrefs: { ...DEFAULT_CPP_MODULE_PREFS },
     };
 }

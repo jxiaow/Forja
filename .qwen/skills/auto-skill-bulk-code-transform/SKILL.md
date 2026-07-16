@@ -109,8 +109,45 @@ Each agent reads its files, fixes all patterns, writes back. Then final compile 
 - **Test assertions need special handling**: `assert.deepEqual(x.nextActions, ['val'])` → `assert.equal(x.nextAction, 'val')`. `assert.ok(x.nextActions.some(a => regex.test(a)))` → `assert.ok(x.nextAction && regex.test(x.nextAction))`.
 - **Multi-item arrays**: When collapsing `['a', 'b', 'c']` → single value, take the first item. Document this decision.
 
+## Pattern C: Bulk Identifier Rename with Exceptions
+
+When renaming identifiers across the entire codebase (e.g., `sdk` → `cpp`), some occurrences must NOT be renamed (false positives). Build an exception list:
+
+```javascript
+// Patterns that must NOT be renamed
+const SKIP_PATTERNS = [
+  /detectSdkVersion/i,   // Windows SDK, not project type
+  /sdkRoot/i,            // Windows SDK path
+  /NemoSDK/,             // Third-party library
+];
+
+function shouldSkipLine(line) {
+  return SKIP_PATTERNS.some(p => p.test(line));
+}
+
+// Process line-by-line, skipping exception lines
+for (const line of lines) {
+  if (shouldSkipLine(line)) { result.push(line); continue; }
+  let processed = line;
+  for (const [from, to] of REPLACEMENTS) {
+    while (processed.includes(from)) processed = processed.replace(from, to);
+  }
+  result.push(processed);
+}
+```
+
+### Rename checklist:
+1. **Enumerate all identifiers**: types, functions, fields, variables, string literals, file names, directory names
+2. **Build exception list**: grep for the term, identify false positives (third-party, OS-level, different concept)
+3. **Order replacements**: longer/more-specific first to avoid partial matches (`sdkModulePrefs` before `sdk`)
+4. **Handle import paths**: `'../sdk/...'` → `'../cpp/...'`
+5. **Rename files/directories**: after content changes, `fs.renameSync` for files and directories
+6. **Watch for collisions**: two different symbols may map to the same name after rename — compile to catch
+7. **Update build scripts**: `scripts/build-cli.js` file lists, glob patterns, keywords
+
 ## Examples from this project
 
 - **Diagnostic `code` removal**: 131 occurrences across 6 files + type definition + tests (Pattern A)
 - **i18n conversion**: 93 hardcoded English messages → T() calls + 88 translation keys (Pattern A)
 - **nextActions: string[] → nextAction: string**: 244 occurrences across 41 files, 10+ pattern categories (Pattern B)
+- **SDK → CPP rename**: ~905 occurrences across 45 files + 7 file renames + directory rename, with Windows SDK exception list (Pattern C)

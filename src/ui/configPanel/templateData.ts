@@ -84,12 +84,12 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         syncPendingCount: pendingInfo.count,
         syncLastTime: pendingInfo.lastTime,
         syncReadinessIssues: buildSyncReadinessIssues(sync, remote, servers),
-        // SDK
+        // C++
         cppProjectName: getCppSetting('pinnedProject') || '未选择',
-        sdkMode: getCppSetting('mode'),
-        sdkArch: getCppSetting('arch'),
-        sdkVsInstall: getCppSetting('vsInstall') || '',
+        cppMode: getCppSetting('mode'),
+        cppArch: getCppSetting('arch'),
+        cppVsInstall: getCppSetting('vsInstall') || '',
         qtActive: !!resolveProjectRoot('qt'),
-        sdkActive: !!resolveProjectRoot('cpp'),
+        cppActive: !!resolveProjectRoot('cpp'),
     };
 }

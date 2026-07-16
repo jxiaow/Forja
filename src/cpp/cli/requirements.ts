@@ -1,5 +1,5 @@
 /**
- * SDK 平台需求：架构检测、环境字段。
+ * C++ 平台需求：架构检测、环境字段。
  */
 
 const isWin = process.platform === 'win32';

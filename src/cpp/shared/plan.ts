@@ -1,5 +1,5 @@
 /**
- * SDK build plan creation — extracts core logic from sdk/cli/index.ts
+ * C++ build plan creation — extracts core logic from cpp/cli/index.ts
  * Returns CliResult format to reuse Qt's runCliResult execution engine.
  */
 import * as os from 'os';
@@ -65,8 +65,8 @@ function resolveSolutionPlatform(projectPath: string, configuration: string, arc
 }
 
 /**
- * Build shell commands for SDK project (MSBuild on Windows, make on POSIX).
- * Single source of truth for SDK build command assembly.
+ * Build shell commands for C++ project (MSBuild on Windows, make on POSIX).
+ * Single source of truth for C++ build command assembly.
  */
 export function buildCommand(options: CppPlanOptions): string[] {
     const isWindows = os.platform() === 'win32';
@@ -110,7 +110,7 @@ export function buildCommand(options: CppPlanOptions): string[] {
 }
 
 /**
- * Create SDK build plan in CliResult format.
+ * Create C++ build plan in CliResult format.
  * This allows reusing Qt's runCliResult execution engine.
  */
 export function createCppPlan(options: CppPlanOptions): CliResult {

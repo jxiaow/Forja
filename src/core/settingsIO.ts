@@ -94,7 +94,7 @@ export interface RemoteSettings {
 
 export interface ForjaSettings {
     qt: QtSettings;
-    sdk: CppSettings;
+    cpp: CppSettings;
     sync: SyncSettings;
     remote: RemoteSettings;
 }
@@ -123,7 +123,7 @@ export const DEFAULT_QT: Readonly<QtSettings> = {
     qmakeReminderEnabled: true
 };
 
-export const DEFAULT_SDK: Readonly<CppSettings> = {
+export const DEFAULT_CPP: Readonly<CppSettings> = {
     mode: 'debug',
     arch: 'x86',
     vsInstall: '',
@@ -149,7 +149,7 @@ export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
 
 export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
     qt: DEFAULT_QT,
-    sdk: DEFAULT_SDK,
+    cpp: DEFAULT_CPP,
     sync: DEFAULT_SYNC,
     remote: DEFAULT_REMOTE
 };
@@ -295,7 +295,7 @@ export function loadCppSettings(workspace: string): CppSettings {
         if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
         warnSettingsLoadFailure('cpp', filePath, e);
     }
-    return { ...DEFAULT_SDK };
+    return { ...DEFAULT_CPP };
 }
 
 export function saveCppSettings(workspace: string, settings: CppSettings): void {
@@ -478,7 +478,7 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
     };
 }
 function sanitizeCpp(raw: Record<string, unknown>): CppSettings {
-    const d = DEFAULT_SDK;
+    const d = DEFAULT_CPP;
     return {
         mode: (raw.mode === 'debug' || raw.mode === 'release') ? raw.mode : d.mode,
         arch: (raw.arch === 'x86' || raw.arch === 'x64') ? raw.arch : d.arch,

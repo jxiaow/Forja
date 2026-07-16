@@ -1,6 +1,6 @@
 /**
- * SDK Module extension entry point.
- * Called by the Forja extension.ts when SDK projects are detected.
+ * C++ Module extension entry point.
+ * Called by the Forja extension.ts when C++ projects are detected.
  */
 import * as vscode from 'vscode';
 import { StateManager } from './modules/stateManager';
@@ -14,7 +14,7 @@ import { setCppState, activateCppModuleIfNoQtProject, onCppUpdate } from '../ui/
 import { setCppProjectRoot } from '../vscode/workspaceResolver';
 import { onSettingsChange } from '../vscode/settingsStore';
 
-// SDK 模块级实例（激活后初始化）
+// C++ 模块级实例（激活后初始化）
 let cppBuilder: CppBuilder | null = null;
 let stateManager: StateManager | null = null;
 let projectScanner: ProjectScanner | null = null;
@@ -24,48 +24,48 @@ let _cppReadyResolve: (() => void) | null = null;
 const cppReady = new Promise<void>(resolve => { _cppReadyResolve = resolve; });
 
 /**
- * SDK 构建操作（供 vscode/commands.ts 调用）
+ * C++ 构建操作（供 vscode/commands.ts 调用）
  */
 export async function buildCpp(): Promise<void> {
     await cppReady;
     if (!cppBuilder) {
-        vscode.window.showErrorMessage('SDK 模块未激活');
+        vscode.window.showErrorMessage('C++ 模块未激活');
         return;
     }
-    log('执行 SDK Build');
+    log('执行 C++ Build');
     await cppBuilder.build();
 }
 
 export async function rebuildCpp(): Promise<void> {
     await cppReady;
     if (!cppBuilder) {
-        vscode.window.showErrorMessage('SDK 模块未激活');
+        vscode.window.showErrorMessage('C++ 模块未激活');
         return;
     }
-    log('执行 SDK Rebuild');
+    log('执行 C++ Rebuild');
     await cppBuilder.rebuild();
 }
 
 export async function cleanCpp(): Promise<void> {
     await cppReady;
     if (!cppBuilder) {
-        vscode.window.showErrorMessage('SDK 模块未激活');
+        vscode.window.showErrorMessage('C++ 模块未激活');
         return;
     }
-    log('执行 SDK Clean');
+    log('执行 C++ Clean');
     await cppBuilder.clean();
 }
 
 export async function selectCppProject(): Promise<void> {
     await cppReady;
     if (!projectScanner || !stateManager) {
-        vscode.window.showErrorMessage('SDK 模块未激活');
+        vscode.window.showErrorMessage('C++ 模块未激活');
         return;
     }
-    log('执行 SDK Select Project');
+    log('执行 C++ Select Project');
     const projects = projectScanner.projects;
     if (projects.length === 0) {
-        vscode.window.showInformationMessage('Forja SDK: 未找到可用的 SDK 项目');
+        vscode.window.showInformationMessage('Forja C++: 未找到可用的 C++ 项目');
         return;
     }
     const currentPath = stateManager.currentProject?.path;
@@ -75,7 +75,7 @@ export async function selectCppProject(): Promise<void> {
         project: p
     }));
     const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: '选择 SDK 项目'
+        placeHolder: '选择 C++ 项目'
     });
     if (selected) {
         stateManager.currentProject = (selected as typeof items[0]).project;
@@ -88,7 +88,7 @@ export async function activateCpp(context: vscode.ExtensionContext): Promise<voi
     // 0. 初始化日志
     const outputChannel = initLogger();
     context.subscriptions.push(outputChannel);
-    log('Forja SDK 模块开始激活...');
+    log('Forja C++ 模块开始激活...');
     log(`平台: ${isWindows ? 'Windows' : 'Linux'}`);
     log(`工作区: ${vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath).join(', ') ?? '无'}`);
 
@@ -97,7 +97,7 @@ export async function activateCpp(context: vscode.ExtensionContext): Promise<voi
     const sm = new StateManager();
     const ps = new ProjectScanner();
 
-    // 2. 扫描工作区项目，确定 SDK workspace root
+    // 2. 扫描工作区项目，确定 C++ workspace root
     log('开始扫描工作区项目...');
     const projects = await ps.scan();
     log(`扫描完成，找到 ${projects.length} 个项目:`);
@@ -106,12 +106,12 @@ export async function activateCpp(context: vscode.ExtensionContext): Promise<voi
     const cppWorkspaceRoot = resolveCppWorkspaceRoot(projects);
     if (cppWorkspaceRoot) {
         setCppProjectRoot(cppWorkspaceRoot);
-        log(`SDK workspace root: ${cppWorkspaceRoot}`);
+        log(`C++ workspace root: ${cppWorkspaceRoot}`);
     }
 
-    // 3. 无 SDK 项目时，跳过项目初始化
+    // 3. 无 C++ 项目时，跳过项目初始化
     if (projects.length === 0) {
-        log('未找到 SDK 项目');
+        log('未找到 C++ 项目');
         sm.currentProject = null;
     } else {
         // 4. 从配置恢复状态（在 workspace root 确定之后，确保读取正确的配置文件）
@@ -167,17 +167,17 @@ export async function activateCpp(context: vscode.ExtensionContext): Promise<voi
     };
     sm.onStateChanged(() => updateCppStatusBar());
     updateCppStatusBar();
-    // 状态栏切换 SDK mode/arch 时，通过 stateManager 持久化到正确的 workspace 配置
+    // 状态栏切换 C++ mode/arch 时，通过 stateManager 持久化到正确的 workspace 配置
     onCppUpdate(({ mode, arch }) => {
         sm.mode = mode as import('./types').BuildMode;
         sm.arch = arch as import('./types').Arch;
         sm.persistToConfig()
-            .catch((e: Error) => logError('状态栏更新后保存 SDK 配置失败', e));
+            .catch((e: Error) => logError('状态栏更新后保存 C++ 配置失败', e));
     });
     let cppSettingsDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     context.subscriptions.push(onSettingsChange((section) => {
         if (section !== 'cpp') { return; }
-        // 防抖：连续多次 SDK settings 变更只触发一次 VS 检测
+        // 防抖：连续多次 C++ settings 变更只触发一次 VS 检测
         if (cppSettingsDebounceTimer) { clearTimeout(cppSettingsDebounceTimer); }
         cppSettingsDebounceTimer = setTimeout(() => {
             cppSettingsDebounceTimer = undefined;
@@ -188,10 +188,10 @@ export async function activateCpp(context: vscode.ExtensionContext): Promise<voi
                     }
                     updateCppStatusBar();
                 })
-                .catch((e: Error) => logError('settingsStore 变更后重新加载 SDK 配置失败', e));
+                .catch((e: Error) => logError('settingsStore 变更后重新加载 C++ 配置失败', e));
         }, 300);
     }));
-    // 有 SDK 项目时激活 SDK 模块
+    // 有 C++ 项目时激活 C++ 模块
     if (sm.currentProject) {
         const wsRoot = cppWorkspaceRoot || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         activateCppModuleIfNoQtProject(wsRoot);
@@ -210,7 +210,7 @@ export async function activateCpp(context: vscode.ExtensionContext): Promise<voi
             if (e.exitCode !== undefined && e.exitCode !== 0) {
                 logError(`编译失败，退出码: ${e.exitCode}`);
                 vscode.window.showWarningMessage(
-                    `Forja SDK: 编译失败，退出码 ${e.exitCode}`
+                    `Forja C++: 编译失败，退出码 ${e.exitCode}`
                 );
             } else {
                 log('编译任务完成，退出码: 0');
@@ -225,15 +225,15 @@ export async function activateCpp(context: vscode.ExtensionContext): Promise<voi
     // 11. 注册 Disposables
     context.subscriptions.push(sm, configService);
 
-    log('Forja SDK 模块激活完成!');
+    log('Forja C++ 模块激活完成!');
     } finally {
         _cppReadyResolve!();
     }
 }
 
 /**
- * 根据扫描到的 SDK 项目，确定 SDK 项目所在的 workspace folder。
- * 优先选择包含最多 SDK 项目的 folder。
+ * 根据扫描到的 C++ 项目，确定 C++ 项目所在的 workspace folder。
+ * 优先选择包含最多 C++ 项目的 folder。
  */
 function resolveCppWorkspaceRoot(projects: import('./types').CppProjectInfo[]): string {
     const folders = vscode.workspace.workspaceFolders;
@@ -241,7 +241,7 @@ function resolveCppWorkspaceRoot(projects: import('./types').CppProjectInfo[]): 
     if (projects.length === 0) { return ''; }
     if (folders.length === 1) { return folders[0].uri.fsPath; }
 
-    // 统计每个 folder 包含的 SDK 项目数
+    // 统计每个 folder 包含的 C++ 项目数
     const counts = new Map<string, number>();
     for (const folder of folders) {
         counts.set(folder.uri.fsPath, 0);
@@ -260,7 +260,7 @@ function resolveCppWorkspaceRoot(projects: import('./types').CppProjectInfo[]): 
         }
     }
 
-    // 返回包含最多 SDK 项目的 folder
+    // 返回包含最多 C++ 项目的 folder
     let best = folders[0].uri.fsPath;
     let bestCount = 0;
     for (const [folderPath, count] of counts) {

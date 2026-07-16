@@ -5,9 +5,9 @@ import * as path from 'path';
 
 test('runtime-facing source and packaging comments use Forja branding', () => {
     const files = [
-        'src/sdk/cppExtension.ts',
-        'src/sdk/modules/cppBuilder.ts',
-        'src/sdk/modules/projectScanner.ts',
+        'src/cpp/cppExtension.ts',
+        'src/cpp/modules/cppBuilder.ts',
+        'src/cpp/modules/projectScanner.ts',
         'scripts/build-cli.js',
         'scripts/package-vs.js'
     ];
@@ -121,7 +121,7 @@ test('Qt environment source and docs do not keep legacy Qt Pilot env aliases', (
 test('current CLI surfaces do not document removed --dry-run alias', () => {
     const files = [
         'src/qt/cli/args.ts',
-        'src/sdk/cli/index.ts',
+        'src/cpp/cli/index.ts',
         'src/sync/cli.ts',
         'docs/cli-interface-spec.md',
         'docs/README-cli.md',

@@ -67,7 +67,7 @@ export class StateManager implements vscode.Disposable {
     this._onStateChanged.fire({ field: 'isBuilding', oldValue: old, newValue: value });
   }
 
-  /** 从统一配置的 sdk 部分恢复状态 */
+  /** 从统一配置的 cpp 部分恢复状态 */
   async restoreFromConfig(): Promise<void> {
     const mode = getCppSetting('mode');
     if (mode === 'debug' || mode === 'release') {
@@ -102,11 +102,11 @@ export class StateManager implements vscode.Disposable {
     this._currentProject = { name, path: resolvedPath, type } as CppProjectInfo;
   }
 
-  /** 将当前状态持久化到统一配置的 sdk 部分 */
+  /** 将当前状态持久化到统一配置的 cpp 部分 */
   async persistToConfig(): Promise<void> {
     const ws = resolveProjectRoot('cpp');
 
-    // 计算相对路径（相对于 SDK 项目所在的 workspace folder）
+    // 计算相对路径（相对于 C++ 项目所在的 workspace folder）
     let projectValue: string | null = null;
     if (this._currentProject?.path && ws) {
       const relative = path.relative(ws, this._currentProject.path);

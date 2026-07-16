@@ -134,13 +134,13 @@ function buildQtEnvSection(data: TemplateData): string {
 
 function buildCppEnvSection(data: TemplateData): string {
     const env = data.env;
-    const open = data.sdkActive ? ' open' : '';
-    const summary = data.sdkActive ? 'C++ 工具链' : 'C++ 工具链 <span class="section-badge">未检测到</span>';
+    const open = data.cppActive ? ' open' : '';
+    const summary = data.cppActive ? 'C++ 工具链' : 'C++ 工具链 <span class="section-badge">未检测到</span>';
 
     let h = `<details class="section-collapse"${open}>`;
     h += `<summary class="section-header">${summary}</summary>`;
 
-    if (!data.sdkActive) {
+    if (!data.cppActive) {
         h += '<div class="section-inactive">';
         h += '<div class="section-inactive-hint">未检测到 C++ 项目，C++ 环境配置不可用</div>';
         h += '</div></details>';
@@ -148,9 +148,9 @@ function buildCppEnvSection(data: TemplateData): string {
     }
 
     const detectedVs = env?.vs ? `VS ${env.vs.version} ${env.vs.edition}` : '';
-    const sdkVsEffective = data.sdkVsInstall || env?.vs?.installPath || '';
-    const sdkVsBadge = data.sdkVsInstall ? '已配置' : (env?.vs ? '自动检测' : '未配置');
-    const sdkVsTitle = detectedVs || (data.sdkVsInstall ? 'Visual Studio' : '未检测到');
+    const sdkVsEffective = data.cppVsInstall || env?.vs?.installPath || '';
+    const sdkVsBadge = data.cppVsInstall ? '已配置' : (env?.vs ? '自动检测' : '未配置');
+    const sdkVsTitle = detectedVs || (data.cppVsInstall ? 'Visual Studio' : '未检测到');
 
     h += '<div class="cs"><div class="cst">Visual Studio (C++)</div>';
     h += '<div class="env-card" id="sdkVsEnvCard"><div class="ech">';
@@ -164,10 +164,10 @@ function buildCppEnvSection(data: TemplateData): string {
     h += " onclick=\"togglePanel('sdkVsPanel',this)\">";
     h += '<span class="env-toggle-arrow">▾</span> 选择版本</button></div>';
     h += '<div id="sdkVsPanel" class="env-expand">';
-    h += buildCppVsCandidateSelect(env, data.sdkVsInstall);
+    h += buildCppVsCandidateSelect(env, data.cppVsInstall);
     h += '<div class="ef-row"><span class="ef-label">VS 安装目录或 VsDevCmd</span>';
     h += '<div class="input-row">';
-    h += `<input id="sdkVsInstall" class="ef-input" value="${esc(data.sdkVsInstall)}"`;
+    h += `<input id="sdkVsInstall" class="ef-input" value="${esc(data.cppVsInstall)}"`;
     h += ' placeholder="留空使用自动检测；可填 VS 安装目录或 VsDevCmd.bat"';
     h += " onblur=\"vscode.postMessage({command:'saveSdkVsInstall',value:this.value.trim()})\"/>";
     h += '<button class="btn btn-sm" onclick="vscode.postMessage(';

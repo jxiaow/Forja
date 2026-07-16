@@ -24,7 +24,7 @@ import {
 } from '../core/workspaceStore';
 
 export type { ForjaSettings, QtSettings, CppSettings, SyncSettings } from '../core/settingsIO';
-export { DEFAULT_SETTINGS, DEFAULT_QT, DEFAULT_SDK, DEFAULT_SYNC, resolveVsDevShellPath, resolveVsDevCmdPath } from '../core/settingsIO';
+export { DEFAULT_SETTINGS, DEFAULT_QT, DEFAULT_CPP, DEFAULT_SYNC, resolveVsDevShellPath, resolveVsDevCmdPath } from '../core/settingsIO';
 
 const logger = createLogger('SettingsStore');
 
@@ -33,7 +33,7 @@ type CppKey = keyof CppSettings;
 type SyncKey = keyof SyncSettings;
 type SettingsListener = (section: 'qt' | 'cpp' | 'sync' | 'remote', key: string, settings: ForjaSettings) => void;
 
-let _settings: ForjaSettings = { ...DEFAULT_SETTINGS, qt: { ...DEFAULT_SETTINGS.qt }, sdk: { ...DEFAULT_SETTINGS.sdk }, sync: { ...DEFAULT_SETTINGS.sync }, remote: { ...DEFAULT_SETTINGS.remote } };
+let _settings: ForjaSettings = { ...DEFAULT_SETTINGS, qt: { ...DEFAULT_SETTINGS.qt }, cpp: { ...DEFAULT_SETTINGS.cpp }, sync: { ...DEFAULT_SETTINGS.sync }, remote: { ...DEFAULT_SETTINGS.remote } };
 let _loaded = false;
 let _watcher: vscode.FileSystemWatcher | null = null;
 const _listeners: SettingsListener[] = [];
@@ -89,7 +89,7 @@ function _buildQtSettings(config: WorkspaceConfig, target: TargetProfile | null)
 
 function _buildCppSettings(config: WorkspaceConfig, target: TargetProfile | null): CppSettings {
     const prefs = config.cppModulePrefs;
-    const d = DEFAULT_SETTINGS.sdk;
+    const d = DEFAULT_SETTINGS.cpp;
 
     return {
         mode: target ? target.mode : d.mode,
@@ -249,18 +249,18 @@ function _load(): ForjaSettings {
         qt = { ...DEFAULT_SETTINGS.qt };
     }
 
-    let sdk: CppSettings;
+    let cpp: CppSettings;
     if (cppWorkroot) {
         const config = loadWorkspaceConfig(cppWorkroot);
         const target = getActiveTarget(config);
-        sdk = _buildCppSettings(config, target);
+        cpp = _buildCppSettings(config, target);
     } else {
-        sdk = { ...DEFAULT_SETTINGS.sdk };
+        cpp = { ...DEFAULT_SETTINGS.cpp };
     }
 
     return {
         qt,
-        sdk,
+        cpp,
         sync: syncWs ? loadSyncSettings(syncWs) : { ...DEFAULT_SETTINGS.sync },
         remote: syncWs ? loadRemoteSettings(syncWs) : { ...DEFAULT_SETTINGS.remote },
     };
@@ -306,17 +306,17 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
 
     const qtWs = _getWorkspace('qt');
     const cppWs = _getWorkspace('cpp');
-    logger.info(`配置存储已初始化 (qt: ${qtWs || 'none'}, sdk: ${cppWs || 'none'})`);
+    logger.info(`配置存储已初始化 (qt: ${qtWs || 'none'}, cpp: ${cppWs || 'none'})`);
 }
 
 function _reload(): void {
     const oldQt = JSON.stringify(_settings.qt);
-    const oldCpp = JSON.stringify(_settings.sdk);
+    const oldCpp = JSON.stringify(_settings.cpp);
     const oldSync = JSON.stringify(_settings.sync);
     const oldRemote = JSON.stringify(_settings.remote);
     _settings = _load();
     const newQt = JSON.stringify(_settings.qt);
-    const newCpp = JSON.stringify(_settings.sdk);
+    const newCpp = JSON.stringify(_settings.cpp);
     const newSync = JSON.stringify(_settings.sync);
     const newRemote = JSON.stringify(_settings.remote);
     if (oldQt === newQt && oldCpp === newCpp && oldSync === newSync && oldRemote === newRemote) { return; }
@@ -332,8 +332,8 @@ function _reload(): void {
     }
     if (oldCpp !== newCpp) {
         const oldCppParsed = JSON.parse(oldCpp) as CppSettings;
-        for (const key of Object.keys(_settings.sdk) as CppKey[]) {
-            if (JSON.stringify(oldCppParsed[key]) !== JSON.stringify(_settings.sdk[key])) {
+        for (const key of Object.keys(_settings.cpp) as CppKey[]) {
+            if (JSON.stringify(oldCppParsed[key]) !== JSON.stringify(_settings.cpp[key])) {
                 _listeners.forEach(fn => fn('cpp', key, _settings));
             }
         }
@@ -379,18 +379,18 @@ export function setQtSetting<K extends QtKey>(key: K, value: QtSettings[K]): voi
 
 export function getCppSetting<K extends CppKey>(key: K): CppSettings[K] {
     if (!_loaded) { _settings = _load(); _loaded = true; }
-    return _settings.sdk[key];
+    return _settings.cpp[key];
 }
 
 export function setCppSetting<K extends CppKey>(key: K, value: CppSettings[K]): void {
-    if (JSON.stringify(_settings.sdk[key]) === JSON.stringify(value)) { return; }
-    _settings.sdk[key] = value;
+    if (JSON.stringify(_settings.cpp[key]) === JSON.stringify(value)) { return; }
+    _settings.cpp[key] = value;
     try {
         _saveCppToStore(key, value);
         _listeners.forEach(fn => fn('cpp', key, _settings));
     } catch (e) {
         logger.warn(`写入 C++ 配置失败，内存状态已回滚: ${e instanceof Error ? e.message : e}`);
-        _settings.sdk = _load().sdk;
+        _settings.cpp = _load().cpp;
     }
 }
 

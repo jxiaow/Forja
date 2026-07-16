@@ -46,8 +46,8 @@ export class ConfigPageManager {
                 if (projectPanel) {
                     projectPanel.webview.postMessage({
                         command: 'cppSettingsUpdated',
-                        sdkMode: getCppSetting('mode'),
-                        sdkArch: getCppSetting('arch'),
+                        cppMode: getCppSetting('mode'),
+                        cppArch: getCppSetting('arch'),
                         cppProjectName: getCppSetting('pinnedProject') || '未选择'
                     });
                 }

@@ -155,11 +155,11 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                 };
             })(),
             cppProjectName: getCppSetting('pinnedProject') || '未选择',
-            sdkMode: getCppSetting('mode'),
-            sdkArch: getCppSetting('arch'),
-            sdkVsInstall: getCppSetting('vsInstall') || '',
+            cppMode: getCppSetting('mode'),
+            cppArch: getCppSetting('arch'),
+            cppVsInstall: getCppSetting('vsInstall') || '',
             qtActive: !!resolveProjectRoot('qt'),
-            sdkActive: !!resolveProjectRoot('cpp')
+            cppActive: !!resolveProjectRoot('cpp')
         };
         this._view.webview.html = getHtml(data);
     }

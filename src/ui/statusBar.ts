@@ -1,8 +1,8 @@
 /**
- * 状态栏 — Qt 和 SDK 共用一套 status bar item。
+ * 状态栏 — Qt 和 C++ 共用一套 status bar item。
  *
  * 显示当前活跃模块的项目名 + 构建模式，点击弹出 quick menu。
- * play 按钮根据活跃模块执行 run（Qt）或 build（SDK）。
+ * play 按钮根据活跃模块执行 run（Qt）或 build（C++）。
  */
 import * as vscode from 'vscode';
 import { getState, setState, onStateChange, BuildMode, Arch } from '../vscode/qtState';
@@ -18,7 +18,7 @@ let _projectModeItem: vscode.StatusBarItem;
 let _runItem: vscode.StatusBarItem;
 let _debugItem: vscode.StatusBarItem;
 
-// SDK state references (set by SDK module after init)
+// C++ state references (set by C++ module after init)
 let _cppProjectName: string = '';
 let _cppMode: string = 'debug';
 let _cppArch: string = 'x86';
@@ -56,7 +56,7 @@ export function activateCppModuleIfNoQtProject(_workspace?: string): void {
 
 export function getRunStatusBarItem(): vscode.StatusBarItem { return _runItem; }
 
-// SDK 模块调用这些函数来更新状态栏
+// C++ 模块调用这些函数来更新状态栏
 export function setCppState(opts: { projectName?: string; mode?: string; arch?: string; isBuilding?: boolean }): void {
     if (opts.projectName !== undefined) { _cppProjectName = opts.projectName; }
     if (opts.mode !== undefined) { _cppMode = opts.mode; }
@@ -171,7 +171,7 @@ function _updateCppDisplay(): void {
         : undefined;
     _projectModeItem.show();
 
-    // SDK 没有 debug 按钮
+    // C++ 没有 debug 按钮
     _debugItem.hide();
 }
 
@@ -215,13 +215,13 @@ export async function showActions(): Promise<void> {
         ];
     } else {
         modeItems = isWin ? [
-            { label: '$(bug) Debug x86',       description: _cppMode === 'debug' && _cppArch === 'x86' ? '当前' : '', action: 'sdk:mode:debug:x86' },
-            { label: '$(bug) Debug x64',       description: _cppMode === 'debug' && _cppArch === 'x64' ? '当前' : '', action: 'sdk:mode:debug:x64' },
-            { label: '$(package) Release x86', description: _cppMode === 'release' && _cppArch === 'x86' ? '当前' : '', action: 'sdk:mode:release:x86' },
-            { label: '$(package) Release x64', description: _cppMode === 'release' && _cppArch === 'x64' ? '当前' : '', action: 'sdk:mode:release:x64' }
+            { label: '$(bug) Debug x86',       description: _cppMode === 'debug' && _cppArch === 'x86' ? '当前' : '', action: 'cpp:mode:debug:x86' },
+            { label: '$(bug) Debug x64',       description: _cppMode === 'debug' && _cppArch === 'x64' ? '当前' : '', action: 'cpp:mode:debug:x64' },
+            { label: '$(package) Release x86', description: _cppMode === 'release' && _cppArch === 'x86' ? '当前' : '', action: 'cpp:mode:release:x86' },
+            { label: '$(package) Release x64', description: _cppMode === 'release' && _cppArch === 'x64' ? '当前' : '', action: 'cpp:mode:release:x64' }
         ] : [
-            { label: '$(bug) Debug',     description: _cppMode === 'debug' ? '当前' : '', action: 'sdk:mode:debug:x64' },
-            { label: '$(package) Release', description: _cppMode === 'release' ? '当前' : '', action: 'sdk:mode:release:x64' }
+            { label: '$(bug) Debug',     description: _cppMode === 'debug' ? '当前' : '', action: 'cpp:mode:debug:x64' },
+            { label: '$(package) Release', description: _cppMode === 'release' ? '当前' : '', action: 'cpp:mode:release:x64' }
         ];
     }
 
@@ -232,9 +232,9 @@ export async function showActions(): Promise<void> {
         { label: '$(package) RCC',  description: '', action: 'qt:rcc' },
         { label: '$(trash) Clean',  description: '', action: 'qt:clean' }
     ] : [
-        { label: '$(tools) Build',    description: '', action: 'sdk:build' },
-        { label: '$(tools) Rebuild',  description: '', action: 'sdk:rebuild' },
-        { label: '$(trash) Clean',    description: '', action: 'sdk:clean' }
+        { label: '$(tools) Build',    description: '', action: 'cpp:build' },
+        { label: '$(tools) Rebuild',  description: '', action: 'cpp:rebuild' },
+        { label: '$(trash) Clean',    description: '', action: 'cpp:clean' }
     ];
 
     // 自定义命令（仅 Qt）
@@ -246,11 +246,11 @@ export async function showActions(): Promise<void> {
     // 项目选择 + 模块切换（合并为一个分组）
     const projectItems: Item[] = _activeModule === 'qt'
         ? [{ label: '$(list-tree) 选择 Qt 项目...', description: '', action: 'qt:selectProject' }]
-        : [{ label: '$(list-tree) 选择 SDK 项目...', description: '', action: 'sdk:selectProject' }];
+        : [{ label: '$(list-tree) 选择 C++ 项目...', description: '', action: 'cpp:selectProject' }];
 
     const moduleItems: Item[] = [
         { label: '$(folder) 切换到 Qt 模块',  description: _activeModule === 'qt' ? '当前' : '', action: 'switch:qt' },
-        { label: '$(folder) 切换到 SDK 模块', description: _activeModule === 'cpp' ? '当前' : '', action: 'switch:sdk' }
+        { label: '$(folder) 切换到 C++ 模块', description: _activeModule === 'cpp' ? '当前' : '', action: 'switch:cpp' }
     ];
 
     const currentName = _activeModule === 'qt'
@@ -271,7 +271,7 @@ export async function showActions(): Promise<void> {
         ...moduleItems
     ];
 
-    const moduleLabel = _activeModule === 'qt' ? 'Qt' : 'SDK';
+    const moduleLabel = _activeModule === 'qt' ? 'Qt' : 'C++';
 
     const selected = await vscode.window.showQuickPick(
         pickItems,
@@ -291,21 +291,21 @@ export async function showActions(): Promise<void> {
             _syncActiveTargetModeArch(m as BuildMode, a as Arch);
             await vscode.commands.executeCommand('forja.build', 'qmake');
         }
-    } else if (selected.action.startsWith('sdk:mode:')) {
+    } else if (selected.action.startsWith('cpp:mode:')) {
         const [, , m, a] = selected.action.split(':');
         setActiveModule('cpp');
         _cppMode = m;
         _cppArch = a;
-        // 通过回调通知 SDK 模块持久化（由 SDK 模块使用正确的 workspace 路径写入）
+        // 通过回调通知 C++ 模块持久化（由 C++ 模块使用正确的 workspace 路径写入）
         _cppUpdateListeners.forEach(fn => fn({ mode: m, arch: a }));
         _updateDisplay();
     } else if (selected.action === 'qt:qmake') { vscode.commands.executeCommand('forja.build', 'qmake'); }
     else if (selected.action === 'qt:build') { vscode.commands.executeCommand('forja.build'); }
     else if (selected.action === 'qt:rcc') { vscode.commands.executeCommand('forja.build', 'rcc'); }
     else if (selected.action === 'qt:clean') { vscode.commands.executeCommand('forja.clean'); }
-    else if (selected.action === 'sdk:build') { vscode.commands.executeCommand('forja.build'); }
-    else if (selected.action === 'sdk:rebuild') { vscode.commands.executeCommand('forja.build', 'fresh'); }
-    else if (selected.action === 'sdk:clean') { vscode.commands.executeCommand('forja.clean'); }
+    else if (selected.action === 'cpp:build') { vscode.commands.executeCommand('forja.build'); }
+    else if (selected.action === 'cpp:rebuild') { vscode.commands.executeCommand('forja.build', 'fresh'); }
+    else if (selected.action === 'cpp:clean') { vscode.commands.executeCommand('forja.clean'); }
     else if (selected.action.startsWith('qt:custom:')) {
         const idx = parseInt(selected.action.split(':')[2], 10);
         const cmd = customCmds[idx];
@@ -315,16 +315,16 @@ export async function showActions(): Promise<void> {
         if (ch) { ch.appendLine('[DEBUG] qt:selectProject → forja._selectTarget qt'); }
         vscode.commands.executeCommand('forja._selectTarget', 'qt');
     }
-    else if (selected.action === 'sdk:selectProject') {
+    else if (selected.action === 'cpp:selectProject') {
         const ch = require('../vscode/logger').getOutputChannel();
-        if (ch) { ch.appendLine('[DEBUG] sdk:selectProject → forja._selectTarget sdk'); }
+        if (ch) { ch.appendLine('[DEBUG] cpp:selectProject → forja._selectTarget cpp'); }
         vscode.commands.executeCommand('forja._selectTarget', 'cpp');
     }
     else if (selected.action === 'switch:qt') {
         if (_syncActiveTarget('qt')) { setActiveModule('qt'); }
         else { vscode.commands.executeCommand('forja.list'); }
     }
-    else if (selected.action === 'switch:sdk') {
+    else if (selected.action === 'switch:cpp') {
         if (_syncActiveTarget('cpp')) { setActiveModule('cpp'); }
         else { vscode.commands.executeCommand('forja.list'); }
     }

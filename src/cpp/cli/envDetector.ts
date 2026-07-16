@@ -1,5 +1,5 @@
 /**
- * SDK CLI 环境检测 — VS 和 make 工具检测。
+ * C++ CLI 环境检测 — VS 和 make 工具检测。
  * 不依赖 vscode。
  */
 import * as fs from 'fs';

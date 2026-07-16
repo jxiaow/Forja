@@ -36,11 +36,11 @@ function createTemplateData(): TemplateData {
         syncPendingCount: 0,
         syncLastTime: '',
         cppProjectName: '',
-        sdkMode: 'debug',
-        sdkArch: 'x86',
-        sdkVsInstall: '',
+        cppMode: 'debug',
+        cppArch: 'x86',
+        cppVsInstall: '',
         qtActive: true,
-        sdkActive: false
+        cppActive: false
     };
 }
 

@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import {
     DEFAULT_QT,
-    DEFAULT_SDK,
+    DEFAULT_CPP,
     DEFAULT_SYNC,
     loadQtSettings,
     saveQtSettings,
@@ -237,7 +237,7 @@ test('saveQtSettings overwrites existing file', () => {
 test('loadCppSettings returns defaults when no config exists', () => {
     const workspace = makeWorkspace();
     const settings = loadCppSettings(workspace);
-    assert.deepEqual(settings, DEFAULT_SDK);
+    assert.deepEqual(settings, DEFAULT_CPP);
 });
 
 test('loadCppSettings warns and returns defaults when file is malformed', () => {
@@ -250,10 +250,10 @@ test('loadCppSettings warns and returns defaults when file is malformed', () => 
     fs.writeFileSync(filePath, '{ invalid json !!!', 'utf8');
 
     const { result: settings, lines } = captureOutputLines(() => loadCppSettings(workspace));
-    assert.deepEqual(settings, DEFAULT_SDK);
+    assert.deepEqual(settings, DEFAULT_CPP);
     assert.equal(lines.length, 1);
     assert.match(lines[0], /\[WARN\]/);
-    assert.match(lines[0], /sdk 配置读取失败/);
+    assert.match(lines[0], /cpp 配置读取失败/);
     assert.match(lines[0], /invalid json/i);
     assert.match(lines[0], new RegExp(escapeRegExp(filePath)));
     fs.rmSync(filePath, { force: true });
@@ -263,7 +263,7 @@ test('saveCppSettings round-trips with loadCppSettings', () => {
     const workspace = makeWorkspace();
     trackFile(projectConfigPath(workspace, 'cpp'));
 
-    saveCppSettings(workspace, { ...DEFAULT_SDK, vsInstall: 'C:/VS/2022', pinnedProject: 'my.sln' });
+    saveCppSettings(workspace, { ...DEFAULT_CPP, vsInstall: 'C:/VS/2022', pinnedProject: 'my.sln' });
     const loaded = loadCppSettings(workspace);
 
     assert.equal(loaded.vsInstall, 'C:/VS/2022');

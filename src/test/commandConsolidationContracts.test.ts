@@ -51,15 +51,15 @@ test('doctor and list env expose POSIX make through typed imports and blocking d
     const doctor = source('src/cli/commands/doctor.ts');
     const list = source('src/cli/commands/list.ts');
 
-    assert.match(doctor, /import\s+\{\s*detectMake\s*\}\s+from\s+'..\/..\/sdk\/cli\/envDetector'/);
-    assert.doesNotMatch(doctor, /require\('..\/..\/sdk\/cli\/envDetector'\)/);
+    assert.match(doctor, /import\s+\{\s*detectMake\s*\}\s+from\s+'..\/..\/cpp\/cli\/envDetector'/);
+    assert.doesNotMatch(doctor, /require\('..\/..\/cpp\/cli\/envDetector'\)/);
     assert.doesNotMatch(doctor, /check\('toolchain-make',\s*'warning'/);
     assert.doesNotMatch(doctor, /check\('toolchain-make',\s*'warning'/);
     assert.match(doctor, /check\('toolchain-make',\s*'blocked'/);
     assert.match(doctor, /diag\('error',\s*T\('doctorMakeNotFound'\)\)/);
 
-    assert.match(list, /import\s+\{[^}]*detectMake[^}]*\}\s+from\s+'..\/..\/sdk\/cli\/envDetector'/);
-    assert.doesNotMatch(list, /require\('..\/..\/sdk\/cli\/envDetector'\)/);
+    assert.match(list, /import\s+\{[^}]*detectMake[^}]*\}\s+from\s+'..\/..\/cpp\/cli\/envDetector'/);
+    assert.doesNotMatch(list, /require\('..\/..\/cpp\/cli\/envDetector'\)/);
     assert.match(list, /env\.make/);
 });
 

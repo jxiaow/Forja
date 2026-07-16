@@ -202,12 +202,12 @@ function buildQtScript(data: TemplateData): string {
     h += 'var aIdx=d.arch==="x64"?1:0;if(aBtns[aIdx])aBtns[aIdx].classList.add("active")}';
     h += '}';
     h += 'else if(d.command==="cppSettingsUpdated"){';
-    h += 'if(d.sdkMode!==undefined){var sBtns=document.querySelectorAll("#sdkMG .bgi");';
+    h += 'if(d.cppMode!==undefined){var sBtns=document.querySelectorAll("#sdkMG .bgi");';
     h += 'sBtns.forEach(function(b){b.classList.remove("active")});';
-    h += 'var sIdx=d.sdkMode==="release"?1:0;if(sBtns[sIdx])sBtns[sIdx].classList.add("active")}';
-    h += 'if(d.sdkArch!==undefined){var saBtns=document.querySelectorAll("#sdkAG .bgi");';
+    h += 'var sIdx=d.cppMode==="release"?1:0;if(sBtns[sIdx])sBtns[sIdx].classList.add("active")}';
+    h += 'if(d.cppArch!==undefined){var saBtns=document.querySelectorAll("#sdkAG .bgi");';
     h += 'saBtns.forEach(function(b){b.classList.remove("active")});';
-    h += 'var saIdx=d.sdkArch==="x64"?1:0;if(saBtns[saIdx])saBtns[saIdx].classList.add("active")}';
+    h += 'var saIdx=d.cppArch==="x64"?1:0;if(saBtns[saIdx])saBtns[saIdx].classList.add("active")}';
     h += '}});';
     h += '</script>';
     return h;
@@ -216,14 +216,14 @@ function buildQtScript(data: TemplateData): string {
 // ── SDK Section ──
 
 function buildCppSection(data: TemplateData): string {
-    const open = data.sdkActive ? ' open' : '';
-    const summary = data.sdkActive ? 'C++ 项目' : 'C++ 项目 <span class="section-badge">未检测到</span>';
+    const open = data.cppActive ? ' open' : '';
+    const summary = data.cppActive ? 'C++ 项目' : 'C++ 项目 <span class="section-badge">未检测到</span>';
 
     let h = `<details class="section-collapse"${open}>`;
     h += `<summary class="section-header">${summary}</summary>`;
 
     // 未激活时只显示提示和项目选择
-    if (!data.sdkActive) {
+    if (!data.cppActive) {
         h += '<div class="section-inactive">';
         h += '<div class="section-inactive-hint">未检测到 C++ 项目（.sln / Makefile）</div>';
         h += '<button class="btn btn-sm" onclick="vscode.postMessage({command:\'selectCppProject\'})">选择项目</button>';
@@ -249,16 +249,16 @@ function buildCppSection(data: TemplateData): string {
     h += '<div class="ci"><div class="cii"><div class="cil">构建模式</div>';
     h += '<div class="cid">Debug 含调试符号，Release 启用优化</div></div>';
     h += '<div class="cic"><div class="btn-group" id="sdkMG">';
-    const mDebug = data.sdkMode !== 'release' ? ' active' : '';
-    const mRelease = data.sdkMode === 'release' ? ' active' : '';
+    const mDebug = data.cppMode !== 'release' ? ' active' : '';
+    const mRelease = data.cppMode === 'release' ? ' active' : '';
     h += `<button class="bgi${mDebug}" onclick="setSdkM('debug')">debug</button>`;
     h += `<button class="bgi${mRelease}" onclick="setSdkM('release')">release</button>`;
     h += '</div></div></div>';
     if (data.isWin) {
         h += '<div class="ci"><div class="cii"><div class="cil">目标架构</div></div>';
         h += '<div class="cic"><div class="btn-group" id="sdkAG">';
-        const aX86 = data.sdkArch !== 'x64' ? ' active' : '';
-        const aX64 = data.sdkArch === 'x64' ? ' active' : '';
+        const aX86 = data.cppArch !== 'x64' ? ' active' : '';
+        const aX64 = data.cppArch === 'x64' ? ' active' : '';
         h += `<button class="bgi${aX86}" onclick="setSdkA('x86')">x86</button>`;
         h += `<button class="bgi${aX64}" onclick="setSdkA('x64')">x64</button>`;
         h += '</div></div></div>';

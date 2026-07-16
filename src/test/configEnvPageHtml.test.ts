@@ -63,11 +63,11 @@ function createTemplateData(): TemplateData {
         syncPendingCount: 0,
         syncLastTime: '',
         cppProjectName: '',
-        sdkMode: 'debug',
-        sdkArch: 'x86',
-        sdkVsInstall: '',
+        cppMode: 'debug',
+        cppArch: 'x86',
+        cppVsInstall: '',
         qtActive: true,
-        sdkActive: false
+        cppActive: false
     };
 }
 
@@ -83,7 +83,7 @@ test('environment page updates Qt title immediately after selecting a candidate 
 
 test('environment page updates Visual Studio and SDK titles from detected candidates', () => {
     const data = createTemplateData();
-    data.sdkActive = true;
+    data.cppActive = true;
     const html = getPageHtml('env', data);
 
     assert.match(html, /vsCandidateLabels/);
@@ -97,7 +97,7 @@ test('environment page updates Visual Studio and SDK titles from detected candid
 
 test('environment page keeps selected toolchain titles after env refresh', () => {
     const data = createTemplateData();
-    data.sdkActive = true;
+    data.cppActive = true;
     const html = getPageHtml('env', data);
 
     assert.match(html, /function currentValue\(id\)/);
@@ -113,7 +113,7 @@ test('environment page keeps selected toolchain titles after env refresh', () =>
 
 test('environment page shows toolchain selectors when one candidate is available', () => {
     const data = createTemplateData();
-    data.sdkActive = true;
+    data.cppActive = true;
     data.env!.vsCandidates = [data.env!.vsCandidates[0]];
     data.env!.qtCandidates = [data.env!.qtCandidates[0]];
     const html = getPageHtml('env', data);

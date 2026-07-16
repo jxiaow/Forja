@@ -1,8 +1,8 @@
 /** Context key */
-export const CTX_ACTIVATED = 'forja.sdk.activated';
+export const CTX_ACTIVATED = 'forja.cpp.activated';
 
 /** Task source */
-export const TASK_SOURCE = 'Forja SDK';
+export const TASK_SOURCE = 'Forja C++';
 
 /** 排除目录 */
 export const EXCLUDE_DIRS = [

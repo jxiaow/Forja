@@ -13,7 +13,7 @@ export const SDK_EXCLUDE_DIRS = [
 
 export const SDK_EXCLUDE_PATH_SEGMENTS = ['build/output'];
 
-export const DEFAULT_SDK_SCAN_DEPTH = 8;
+export const DEFAULT_CPP_SCAN_DEPTH = 8;
 
 export interface CppScanOptions {
     workspace: string;
@@ -29,7 +29,7 @@ export interface CppScanOptions {
 export function scanCppProjects(options: CppScanOptions): string[] {
     const {
         workspace,
-        maxDepth = DEFAULT_SDK_SCAN_DEPTH,
+        maxDepth = DEFAULT_CPP_SCAN_DEPTH,
         excludeDirs = SDK_EXCLUDE_DIRS,
         excludePathSegments = SDK_EXCLUDE_PATH_SEGMENTS,
         skipQtProjectDirs = false,
