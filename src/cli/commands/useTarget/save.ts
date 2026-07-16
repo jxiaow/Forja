@@ -13,9 +13,13 @@ import type { ResolvedConfig } from './types';
  * Build a TargetProfile from resolved config (for result output).
  */
 export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
+    const mode = (config.mode || 'debug') as 'debug' | 'release';
+    const arch = (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64';
+    const id = generateTargetId(config.kind, config.project, mode, arch, new Set());
+    const basename = config.project.split('/').pop()?.replace(/\.\w+$/, '') || config.project;
     return {
-        id: '',
-        name: '',
+        id,
+        name: `${basename} ${mode} ${arch}`,
         kind: config.kind,
         project: config.project,
         mode: (config.mode || 'debug') as 'debug' | 'release',

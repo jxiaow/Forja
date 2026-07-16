@@ -199,7 +199,9 @@ export function runStatus(workspace: string): StatusResult {
             t.toolchain.qtPath || t.toolchain.vsInstall
         ) : false;
         readiness.toolchain = hasAnyToolchain ? 'configured' : 'unknown';
-        if (!hasAnyToolchain) {
+        if (!hasAnyToolchain && workroot) {
+            // Only push toolchain diagnostic when workroot exists;
+            // the target block already reports "not initialized" when !workroot
             diagnostics.push({
                 level: 'warning',
                 message: T('notInitialized'),
@@ -334,8 +336,11 @@ export function runStatus(workspace: string): StatusResult {
     // Next action — running process takes priority, then first diagnostic fix, then default to build
     if (result.runtime?.running) {
         result.nextAction = 'forja stop';
+    } else if (!workroot) {
+        // Workroot not registered — must init before anything else
+        result.nextAction = 'forja init';
     } else if (!activeTarget && readiness.toolchain === 'unknown') {
-        // Not initialized — AI should ask user to choose; text mode shows both options
+        // Workroot exists but no target configured
         result.nextAction = undefined;
         result.choices = [
             { label: 'forja use target', command: 'forja use target', description: T('statusSetupLocal') },

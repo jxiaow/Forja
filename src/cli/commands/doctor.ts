@@ -15,6 +15,7 @@ import { resolveRemoteConfig, resolveRemoteActionPath } from '../../remote/core/
 import { executeRemoteBootstrap, findBootstrapArtifact, findPackageRoot } from '../../remote/core/bootstrap';
 import { executeRemoteReleaseLock } from '../../remote/core/lock';
 import { detectMake } from '../../cpp/cli/envDetector';
+import { setSilent } from '../../core/loggerBase';
 import { ServerConfig } from '../../core/serverStore';
 
 function resolveSshPassword(server: ServerConfig): string | null {
@@ -206,7 +207,9 @@ export async function runDoctor(workspace: string, options: {
         } else {
             checkedToolchain.add('toolchain-make');
             // POSIX: check make
+            setSilent(true);
             const makePath = detectMake();
+            setSilent(false);
             if (makePath) {
                 checks.push(check('toolchain-make', 'ready', `make: ${makePath}`));
             } else {
@@ -237,7 +240,9 @@ export async function runDoctor(workspace: string, options: {
         } else {
             if (!checkedToolchain.has('toolchain-make')) {
                 // POSIX: check make
+                setSilent(true);
                 const makePath = detectMake();
+                setSilent(false);
                 if (makePath) {
                     checks.push(check('toolchain-make', 'ready', `make: ${makePath}`));
                 } else {
@@ -258,7 +263,7 @@ export async function runDoctor(workspace: string, options: {
                 checks.push(check('sync', 'ready', `${T('readinessSync')}: ${server.name}:${remotePath}`));
             } else {
                 checks.push(check('sync', 'blocked', T('doctorSyncRemote'),
-                    [diag('warning', T('doctorSyncRemote'))],
+                    [diag('error', T('doctorSyncRemote'))],
                     'forja remote set'));
             }
         } else {

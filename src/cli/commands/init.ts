@@ -117,7 +117,7 @@ async function handleExistingWorkroot(workroot: string, options: InitOptions): P
         return {
             ok: false, action: 'init', workroot,
             diagnostics: [{ level: 'error', message: T('init.workrootAlreadyRegistered') }],
-            nextAction: 'forja init',
+            nextAction: 'forja use target',
         };
     }
 

@@ -19,6 +19,7 @@ export interface SyncResult extends ForjaJsonResult {
     uploaded?: string[];
     deleted?: string[];
     skipped?: string[];
+    skippedDetails?: Array<{ file: string; reason: string }>;
     // status fields
     enabled?: boolean;
     serverDetail?: { name: string; host: string; username: string; port: number };
@@ -156,7 +157,7 @@ export async function runSyncPlan(workspace: string, fileFilters: string[] = [])
             server: plan.server,
             remotePath: plan.remotePath,
             diagnostics: plan.ok ? undefined : plan.failed.map(f => diag('error', `${T('sync.planFailed')}: ${f.error}`)),
-            nextAction: plan.ok ? 'forja sync' : (plan.nextAction || 'forja doctor --remote'),
+            nextAction: plan.ok ? 'forja sync' : (plan.nextAction || 'forja doctor fix --remote'),
         };
     } catch (e) {
         return syncCatchResult('plan', workspace, e);
@@ -176,8 +177,9 @@ export async function runSyncExecute(workspace: string, fileFilters: string[] = 
             uploaded: result.uploaded,
             deleted: result.deleted,
             skipped: result.skipped,
+            skippedDetails: result.skippedDetails?.length ? result.skippedDetails : undefined,
             diagnostics: result.ok ? undefined : result.failed.map(f => diag('error', `${T('sync.syncFailed')}: ${f.error}`)),
-            nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja doctor --remote'),
+            nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja doctor fix --remote'),
         };
     } catch (e) {
         return syncCatchResult('run', workspace, e);
@@ -322,6 +324,6 @@ function syncCatchResult(syncAction: SyncAction, workspace: string, e: unknown):
     return {
         ok: false, action: 'sync', syncAction, workspace,
         diagnostics: [diag('error', `${T('sync.remoteBlocked')}: ${message}`)],
-        nextAction: 'forja doctor --remote',
+        nextAction: 'forja doctor fix --remote',
     };
 }

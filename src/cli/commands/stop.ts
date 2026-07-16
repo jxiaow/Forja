@@ -72,6 +72,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
             target: 'qt',
             action: 'stop',
             json: options.json ?? false,
+            activeProject: target.project,
         });
 
         return {
@@ -79,7 +80,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
             action: 'stop',
             workspace,
             activeTarget: target,
-            state: remoteResult.ok ? 'stopped' : 'not-running',
+            state: remoteResult.ok ? 'stopped' : 'running',
             diagnostics: remoteResult.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
             nextAction: remoteResult.nextAction,
         };

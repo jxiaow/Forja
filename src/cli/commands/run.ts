@@ -238,7 +238,7 @@ export async function runRun(workspace: string, options: {
             exitCode: executed.runtimeExitCode ?? executed.exitCode ?? undefined,
             logFile: executed.logFile ?? undefined,
             diagnostics: appExitedNonZero
-                ? [diag('warning', `${T('cmd.appExitedWithError')}: ${executed.runtimeExitCode}`)]
+                ? [diag('error', `${T('cmd.appExitedWithError')}: ${executed.runtimeExitCode}`)]
                 : (executed.ok ? undefined : [diag('error', T('cmd.qtRunFailed'))]),
             nextAction: appExitedNonZero
                 ? 'forja build'

@@ -52,7 +52,7 @@ export function formatUseText(result: UseResult, locale: Locale): string {
         lines.push(T('setupTitle'));
         if (result.activeTarget) {
             const t = result.activeTarget;
-            lines.push(`  ${T('target')}${t.project}`);
+            lines.push(`  ${T('target')} ${t.project}`);
             if (t.toolchain.qtPath) lines.push(`  ${T('setupSummaryQt')}: ${t.toolchain.qtPath}`);
             if (t.toolchain.vsInstall) lines.push(`  ${T('setupSummaryVs')}: ${t.toolchain.vsInstall}`);
             if (t.toolchain.jomPath) lines.push(`  ${T('init.currentJom')}: ${t.toolchain.jomPath}`);
@@ -136,7 +136,7 @@ export function runSuppressWarnings(workspace: string, codes: string[], add: boo
     if (!workroot) {
         return {
             ok: false, action: 'use', useScope: 'target', workspace, changed: [],
-            diagnostics: [{ level: 'error', message: T('use.noActiveTargetSelected') }],
+            diagnostics: [{ level: 'error', message: T('notInitialized') }],
             nextAction: 'forja init',
         };
     }
@@ -210,7 +210,7 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
     // No flags: interactive picker if saved targets exist, otherwise full flow
     const { resolveWorkroot, loadWorkspaceConfig } = await import('../../core/workspaceStore');
     const workroot = resolveWorkroot(workspace);
-    if (workroot && args.interactive !== false && !args.json) {
+    if (workroot && args.interactive === true && !args.json) {
         const wsConfig = loadWorkspaceConfig(workroot);
         const savedTargets = Object.values(wsConfig.targets);
         if (savedTargets.length > 0) {
@@ -325,7 +325,7 @@ export function runUseShow(workspace: string): UseResult {
     const target = getActiveTarget(workspace);
     if (!target) {
         return {
-            ok: false, action: 'use', useScope: 'show', changed: [],
+            ok: true, action: 'use', useScope: 'show', changed: [],
             diagnostics: [{ level: 'info', message: T('use.noActiveTargetSelected') }],
             nextAction: 'forja use target',
         };

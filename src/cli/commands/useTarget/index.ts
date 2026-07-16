@@ -153,21 +153,49 @@ export async function runSwitchTarget(workspace: string, args: {
     // First: try to match against saved targets by ID or name (quick switch)
     const workroot = (await import('../../../core/workspaceStore')).resolveWorkroot(workspace);
     if (workroot) {
-        const wsConfig = (await import('../../../core/workspaceStore')).loadWorkspaceConfig(workroot);
+        const wsMod = await import('../../../core/workspaceStore');
+        const wsConfig = wsMod.loadWorkspaceConfig(workroot);
         const savedTargets = Object.values(wsConfig.targets);
         const inputLower = args.project.toLowerCase();
+
+        const finalizeSwitch = (matched: TargetProfile): UseTargetResult => {
+            const changed: string[] = ['activeTarget'];
+            const oldId = wsConfig.activeTarget;
+            let target = matched;
+
+            if (args.mode && args.mode !== matched.mode) {
+                matched.mode = args.mode;
+                changed.push('mode');
+            }
+            if (args.arch && args.arch !== matched.arch) {
+                matched.arch = args.arch;
+                changed.push('arch');
+            }
+
+            if (changed.length > 1) {
+                const newId = wsMod.generateTargetId(matched.kind, matched.project, matched.mode, matched.arch, new Set(Object.keys(wsConfig.targets)));
+                if (newId !== matched.id) {
+                    matched.id = newId;
+                    matched.name = `${matched.project.split('/').pop()?.replace(/\.\w+$/, '')} ${matched.mode} ${matched.arch}`;
+                    if (oldId && oldId !== newId) { delete wsConfig.targets[oldId]; }
+                }
+                wsConfig.targets[newId] = matched;
+                target = matched;
+            }
+
+            wsConfig.activeTarget = target.id;
+            wsMod.saveWorkspaceConfig(wsConfig);
+            return {
+                ok: true, action: 'use', useScope: 'target',
+                workspace, activeTarget: target, changed,
+                nextAction: 'forja status',
+            };
+        };
 
         // Exact ID match
         const exactId = savedTargets.find(t => t.id === args.project);
         if (exactId) {
-            // Quick switch: just update activeTarget pointer
-            wsConfig.activeTarget = exactId.id;
-            (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
-            return {
-                ok: true, action: 'use', useScope: 'target',
-                workspace, activeTarget: exactId, changed: ['activeTarget'],
-                nextAction: 'forja status',
-            };
+            return finalizeSwitch({ ...exactId, toolchain: { ...exactId.toolchain } });
         }
 
         // ID prefix match or name match
@@ -176,13 +204,7 @@ export async function runSwitchTarget(workspace: string, args: {
             t.name.toLowerCase().includes(inputLower)
         );
         if (prefixMatches.length === 1) {
-            wsConfig.activeTarget = prefixMatches[0].id;
-            (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
-            return {
-                ok: true, action: 'use', useScope: 'target',
-                workspace, activeTarget: prefixMatches[0], changed: ['activeTarget'],
-                nextAction: 'forja status',
-            };
+            return finalizeSwitch({ ...prefixMatches[0], toolchain: { ...prefixMatches[0].toolchain } });
         }
         if (prefixMatches.length > 1) {
             if (args.interactive) {
@@ -192,13 +214,7 @@ export async function runSwitchTarget(workspace: string, args: {
                     t => `${t.id}  ${t.name}  [${t.kind}]`,
                 );
                 if (chosen) {
-                    wsConfig.activeTarget = chosen.id;
-                    (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
-                    return {
-                        ok: true, action: 'use', useScope: 'target',
-                        workspace, activeTarget: chosen, changed: ['activeTarget'],
-                        nextAction: 'forja status',
-                    };
+                    return finalizeSwitch({ ...chosen, toolchain: { ...chosen.toolchain } });
                 }
             } else {
                 const ids = prefixMatches.map(t => t.id).join('\n    ');

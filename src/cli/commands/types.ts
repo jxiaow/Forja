@@ -685,6 +685,8 @@ Options:
     'idx.runDesignerHint':              { en: "Use 'forja run designer <ui-file>' for UI designer.", zh: '使用 \'forja run designer <ui文件>\' 打开 UI 设计器。' },
     'idx.unexpectedArgument':           { en: 'Unexpected argument',                zh: '意外参数' },
     'idx.didYouMean':                   { en: 'Did you mean',                       zh: '你是否想' },
+    'idx.unknownSubcommand':            { en: 'Unknown subcommand',                 zh: '未知子命令' },
+    'idx.doctorSubcommands':            { en: 'Usage: forja doctor [check|fix|unlock]', zh: '用法: forja doctor [check|fix|unlock]' },
     // server diagnostics
     'srv.missingName':                  { en: 'Missing required: --name',           zh: '缺少必填参数：--name' },
     'srv.missingHost':                  { en: 'Missing required: --host',           zh: '缺少必填参数：--host' },

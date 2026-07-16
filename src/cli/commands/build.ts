@@ -124,7 +124,8 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         };
     }
     const target = targetResult.target;
-    const earlyWsConfig = resolveWorkroot(workspace) ? loadWorkspaceConfig(resolveWorkroot(workspace)!) : null;
+    const _wr = resolveWorkroot(workspace);
+    const earlyWsConfig = _wr ? loadWorkspaceConfig(_wr) : null;
     const suppressedWarnings = earlyWsConfig?.qtModulePrefs.suppressedWarnings ?? [];
 
     // Print build header before execution (text mode only)

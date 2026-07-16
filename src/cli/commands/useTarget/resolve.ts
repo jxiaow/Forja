@@ -25,6 +25,10 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
     const resolvedTarget = await resolveTarget(ctx, options, needTarget);
     if (resolvedTarget.questions) return { questions: resolvedTarget.questions, diagnostics };
     if (!resolvedTarget.value) {
+        if (resolvedTarget.notFound && options.project) {
+            diagnostics.push({ level: 'error', message: `${T('use.projectNotFound')}: ${options.project}` });
+            return { diagnostics };
+        }
         if (ctx.candidates.length > 1 && needTarget) {
             return { ambiguous: true, diagnostics: ambiguousDiag(ctx) };
         }
@@ -108,12 +112,12 @@ interface ResolveResult<T> {
     questions?: Question[];
 }
 
-async function resolveTarget(ctx: DetectContext, options: ResolveOptions, needTarget: boolean): Promise<ResolveResult<typeof ctx.candidates[0]>> {
+async function resolveTarget(ctx: DetectContext, options: ResolveOptions, needTarget: boolean): Promise<ResolveResult<typeof ctx.candidates[0]> & { notFound?: boolean }> {
     // Flag
     if (options.project) {
         const match = ctx.candidates.find(c => c.project === options.project) || ctx.candidates.find(c => c.label === options.project);
         if (match) return { value: match };
-        return { value: undefined }; // caller handles not-found
+        return { value: undefined, notFound: true };
     }
 
     // Answers

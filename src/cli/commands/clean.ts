@@ -114,7 +114,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             ok: false,
             action: 'clean',
             workspace,
-            diagnostics: [diag('error', `${T('cmd.targetNotSelected')}: ${targetResult.error}`)],
+            diagnostics: [diag('error', targetResult.error)],
             nextAction: targetResult.nextAction,
         };
     }

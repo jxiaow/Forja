@@ -112,7 +112,7 @@ export function formatUseTargetText(result: UseTargetResult): string {
 
     const t = result.activeTarget;
     if (t) {
-        lines.push(`  ${T('target')}${t.project}`);
+        lines.push(`  ${T('target')} ${t.project}`);
         if (t.toolchain.qtPath) {
             const ver = result.config?.qt?.qtVersion ? ` (${result.config.qt.qtVersion})` : '';
             lines.push(`  ${T('setupSummaryQt')}${ver}: ${t.toolchain.qtPath}`);
@@ -129,7 +129,7 @@ export function formatUseTargetText(result: UseTargetResult): string {
     }
 
     if (result.changed && result.changed.length > 0) {
-        lines.push(`  ${T('changed')}${result.changed.join(', ')}`);
+        lines.push(`  ${T('changed')} ${result.changed.join(', ')}`);
     }
 
     if (result.diagnostics?.length) {

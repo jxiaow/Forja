@@ -4,7 +4,7 @@
 import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSummary, Diagnostic, Locale, T } from './types';
 import { collectTargetCandidates } from './candidates';
 import { listServers, getServerDetail } from './server';
-import { loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
+import { loadRemoteSettings } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget as getActiveTargetFromStore } from '../../core/workspaceStore';
 import { detectMake } from '../../cpp/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
@@ -268,8 +268,7 @@ function listTargets(workspace: string): ListResult {
         diagnostics.push({ level: 'warning', message: T('lst.vsInstallNotConfigured') });
     }
 
-    // Strip internal 'kind' field from output
-    const targets = rawTargets.map(({ kind: _kind, ...rest }) => rest as TargetCandidate);
+    const targets = rawTargets;
 
     const nextAction = savedTargets.length > 0
         ? 'forja use target --project <name|path>'
@@ -306,7 +305,6 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
             servers: detail,
         };
     }
-    const sync = loadSyncSettings(workspace);
     const remote = loadRemoteSettings(workspace);
     const selectedId = remote.selectedServer || undefined;
     const servers = listServers(selectedId);
@@ -314,12 +312,12 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
     if (servers.length === 0) {
         nextAction = 'forja server add --name <name> --host <host> --username <name>';
     } else if (servers.length === 1) {
-        nextAction = `forja remote set --server ${servers[0].name}`;
+        nextAction = `forja remote set --server ${servers[0].id}`;
     } else if (servers.length <= 5) {
-        const names = servers.map(s => s.name).join('|');
-        nextAction = `forja remote set --server <${names}>`;
+        const ids = servers.map(s => s.id).join('|');
+        nextAction = `forja remote set --server <${ids}>`;
     } else {
-        nextAction = 'forja remote set --server <name>';
+        nextAction = 'forja remote set --server <id>';
     }
     return {
         ok: true,

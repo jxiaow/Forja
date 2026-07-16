@@ -34,6 +34,7 @@ export function isCommand(cmd: string): cmd is Command {
 
 // Track --workspace value errors
 let workspaceError: string | null = null;
+let langError: string | null = null;
 
 function getTopLevelHelp(): string { return T('help.toplevel'); }
 
@@ -59,13 +60,24 @@ export async function runCli(argv: string[]): Promise<void> {
     const wantsJson = argv.includes('--json');
     const workspace = extractWorkspace(argv);
     const globalConfig = loadGlobalConfig();
-    const locale = resolveLocale(extractFlag(argv, '--lang'), globalConfig.lang);
+    const langIdx = argv.indexOf('--lang');
+    let langValue: string | undefined;
+    if (langIdx >= 0) {
+        const next = argv[langIdx + 1];
+        if (!next || next.startsWith('--')) {
+            langError = '--lang requires a value. Usage: forja <command> --lang zh|en';
+        } else {
+            langValue = next;
+        }
+    }
+    const locale = resolveLocale(langValue, globalConfig.lang);
     setGlobalLocale(locale);
 
-    // Report --workspace value error before any command execution
-    if (workspaceError) {
-        const msg = workspaceError;
+    // Report --workspace / --lang value errors before any command execution
+    if (workspaceError || langError) {
+        const msg = [workspaceError, langError].filter(Boolean).join('\n');
         workspaceError = null;
+        langError = null;
         if (wantsJson) {
             outputResult({ ok: false, action: 'cli', diagnostics: [{ level: 'error', message: msg }] }, wantsJson);
         } else {
@@ -643,7 +655,7 @@ async function handleRemote(argv: string[], workspace: string, wantsJson: boolea
 
 async function handleServer(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
     const srvKnown = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password','--strict-host-key-checking','--no-strict-host-key-checking','--detail']);
-    const srvWithVal = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password','--detail']);
+    const srvWithVal = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password']);
     const srvUnknown = findUnknownFlags(argv, srvKnown, srvWithVal);
     if (srvUnknown.length > 0) {
         outputResult({ ok: false, action: 'server', serverAction: 'add', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(srvUnknown, srvKnown) }], nextAction: 'forja server add' }, wantsJson);
@@ -940,6 +952,10 @@ async function handleDoctor(argv: string[], workspace: string, wantsJson: boolea
     if (subArg === 'fix') { fix = true; }
     else if (subArg === 'unlock') {
         unlockId = argv[2] && !argv[2].startsWith('--') ? argv[2] : undefined;
+    } else if (subArg && subArg !== 'check') {
+        outputResult({ ok: false, action: 'doctor', diagnostics: [{ level: 'error', message: `${T('idx.unknownSubcommand')}: ${subArg}. ${T('idx.doctorSubcommands')}` }] }, wantsJson);
+        process.exitCode = 1;
+        return;
     }
 
     const result = await runDoctor(workspace, {
