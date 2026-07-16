@@ -175,7 +175,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
         };
     }
 
-    // SDK local
+    // C++ local
     if (target.kind === 'cpp') {
         const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
         const plan = createCppPlan({

@@ -234,7 +234,7 @@ export async function handleMessage(
             const activeTarget = getActiveTarget(cppWs) || getActiveTarget(qtWs) || getActiveTarget(getWorkspaceRoot() || '');
 
             if (activeTarget?.kind === 'cpp') {
-                // SDK 项目：从 .sln 解析 .vcxproj 生成
+                // C++ 项目：从 .sln 解析 .vcxproj 生成
                 const slnAbsPath = require('path').isAbsolute(activeTarget.project)
                     ? activeTarget.project
                     : require('path').join(cppWs, activeTarget.project);
@@ -452,8 +452,8 @@ export async function handleMessage(
             }
             break;
         }
-        // ── SDK 配置消息 ──
-        case 'saveSdkMode': {
+        // ── C++ 配置消息 ──
+        case 'saveCppMode': {
             const val = String(msg.value || '');
             if (val !== 'debug' && val !== 'release') { break; }
             logger.info(`保存 C++ 构建模式: "${val}"`);
@@ -469,7 +469,7 @@ export async function handleMessage(
             }
             break;
         }
-        case 'saveSdkArch': {
+        case 'saveCppArch': {
             const val = String(msg.value || '');
             if (!isWindows) {
                 setCppSetting('arch', getDefaultArch());
@@ -489,10 +489,10 @@ export async function handleMessage(
             }
             break;
         }
-        case 'saveSdkVsInstall': {
+        case 'saveCppVsInstall': {
             logger.info(`保存 C++ VS 路径: "${msg.value}"`);
-            const sdkVsInstall = inferVsInstall(String(msg.value || '')) || String(msg.value || '');
-            setCppSetting('vsInstall', sdkVsInstall);
+            const cppVsInstall = inferVsInstall(String(msg.value || '')) || String(msg.value || '');
+            setCppSetting('vsInstall', cppVsInstall);
             break;
         }
         case 'selectCppProject': {

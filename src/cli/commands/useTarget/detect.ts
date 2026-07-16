@@ -37,7 +37,7 @@ export async function detectContext(workspace: string): Promise<DetectContext> {
             arch: profile?.arch || '',
             target: profile?.toolchain.qmakeTarget || '',
         },
-        existingSdk: {
+        existingCpp: {
             pinnedProject: profile && profile.kind === 'cpp' ? profile.project : null,
             vsInstall: profile?.toolchain.vsInstall || '',
             mode: profile?.mode || '',

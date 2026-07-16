@@ -129,7 +129,7 @@ function buildQtSection(data: TemplateData): string {
         { value: 'c++23', label: 'C++23' }
     ], data.cppStandard);
     h += '</div></div>';
-    // 排除目录 — 仅 Qt 目录扫描模式需要，SDK 从 .vcxproj 解析不需要
+    // 排除目录 — 仅 Qt 目录扫描模式需要，C++ 从 .vcxproj 解析不需要
     if (data.qtActive) {
         h += '<div class="ci" style="flex-direction:column;align-items:stretch"><div class="cii"><div class="cil">排除目录</div>';
         h += '<div class="cid">Qt IntelliSense 目录扫描时跳过，已内置 build*, debug, release</div></div>';
@@ -202,10 +202,10 @@ function buildQtScript(data: TemplateData): string {
     h += 'var aIdx=d.arch==="x64"?1:0;if(aBtns[aIdx])aBtns[aIdx].classList.add("active")}';
     h += '}';
     h += 'else if(d.command==="cppSettingsUpdated"){';
-    h += 'if(d.cppMode!==undefined){var sBtns=document.querySelectorAll("#sdkMG .bgi");';
+    h += 'if(d.cppMode!==undefined){var sBtns=document.querySelectorAll("#cppMG .bgi");';
     h += 'sBtns.forEach(function(b){b.classList.remove("active")});';
     h += 'var sIdx=d.cppMode==="release"?1:0;if(sBtns[sIdx])sBtns[sIdx].classList.add("active")}';
-    h += 'if(d.cppArch!==undefined){var saBtns=document.querySelectorAll("#sdkAG .bgi");';
+    h += 'if(d.cppArch!==undefined){var saBtns=document.querySelectorAll("#cppAG .bgi");';
     h += 'saBtns.forEach(function(b){b.classList.remove("active")});';
     h += 'var saIdx=d.cppArch==="x64"?1:0;if(saBtns[saIdx])saBtns[saIdx].classList.add("active")}';
     h += '}});';
@@ -213,7 +213,7 @@ function buildQtScript(data: TemplateData): string {
     return h;
 }
 
-// ── SDK Section ──
+// ── C++ Section ──
 
 function buildCppSection(data: TemplateData): string {
     const open = data.cppActive ? ' open' : '';
@@ -248,36 +248,36 @@ function buildCppSection(data: TemplateData): string {
     h += '<div class="cs"><div class="cst">构建参数</div>';
     h += '<div class="ci"><div class="cii"><div class="cil">构建模式</div>';
     h += '<div class="cid">Debug 含调试符号，Release 启用优化</div></div>';
-    h += '<div class="cic"><div class="btn-group" id="sdkMG">';
+    h += '<div class="cic"><div class="btn-group" id="cppMG">';
     const mDebug = data.cppMode !== 'release' ? ' active' : '';
     const mRelease = data.cppMode === 'release' ? ' active' : '';
-    h += `<button class="bgi${mDebug}" onclick="setSdkM('debug')">debug</button>`;
-    h += `<button class="bgi${mRelease}" onclick="setSdkM('release')">release</button>`;
+    h += `<button class="bgi${mDebug}" onclick="setCppM('debug')">debug</button>`;
+    h += `<button class="bgi${mRelease}" onclick="setCppM('release')">release</button>`;
     h += '</div></div></div>';
     if (data.isWin) {
         h += '<div class="ci"><div class="cii"><div class="cil">目标架构</div></div>';
-        h += '<div class="cic"><div class="btn-group" id="sdkAG">';
+        h += '<div class="cic"><div class="btn-group" id="cppAG">';
         const aX86 = data.cppArch !== 'x64' ? ' active' : '';
         const aX64 = data.cppArch === 'x64' ? ' active' : '';
-        h += `<button class="bgi${aX86}" onclick="setSdkA('x86')">x86</button>`;
-        h += `<button class="bgi${aX64}" onclick="setSdkA('x64')">x64</button>`;
+        h += `<button class="bgi${aX86}" onclick="setCppA('x86')">x86</button>`;
+        h += `<button class="bgi${aX64}" onclick="setCppA('x64')">x64</button>`;
         h += '</div></div></div>';
     }
     h += '</div>';
 
-    // SDK script
+    // C++ script
     h += '<script>';
-    h += 'function setSdkM(m){document.querySelectorAll("#sdkMG .bgi")';
+    h += 'function setCppM(m){document.querySelectorAll("#cppMG .bgi")';
     h += '.forEach(b=>b.classList.remove("active"));';
     h += 'event.currentTarget.classList.add("active");';
-    h += 'vscode.postMessage({command:"saveSdkMode",value:m})}';
-    h += 'function setSdkA(a){document.querySelectorAll("#sdkAG .bgi")';
+    h += 'vscode.postMessage({command:"saveCppMode",value:m})}';
+    h += 'function setCppA(a){document.querySelectorAll("#cppAG .bgi")';
     h += '.forEach(b=>b.classList.remove("active"));';
     h += 'event.currentTarget.classList.add("active");';
-    h += 'vscode.postMessage({command:"saveSdkArch",value:a})}';
+    h += 'vscode.postMessage({command:"saveCppArch",value:a})}';
     h += '</script>';
 
-    // SDK IntelliSense 生成按钮
+    // C++ IntelliSense 生成按钮
     h += '<div class="ci" style="margin-top:12px">';
     h += '<button class="btn btn-primary"';
     h += " onclick=\"vscode.postMessage({command:'generateIntelliSense',";

@@ -1,10 +1,10 @@
 /**
- * 统一配置存储 — Qt/SDK 从 workspaceStore 读写，Sync/Remote 仍走 settingsIO。
+ * 统一配置存储 — Qt/C++ 从 workspaceStore 读写，Sync/Remote 仍走 settingsIO。
  *
- * Qt / SDK 配置已迁移到 workroot-based workspaceStore（~/.forja/workspaces/<hash>.json）。
+ * Qt / C++ 配置已迁移到 workroot-based workspaceStore（~/.forja/workspaces/<hash>.json）。
  * Sync / Remote 配置仍使用 settingsIO（~/.forja/projects/<hash>.json）。
  *
- * 对外暴露 Qt / SDK / Sync 三个子模块的读写 API，消费方无需感知底层存储差异。
+ * 对外暴露 Qt / C++ / Sync 三个子模块的读写 API，消费方无需感知底层存储差异。
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
@@ -193,7 +193,7 @@ function _saveQtToStore(key: QtKey, value: QtSettings[QtKey]): void {
     saveWorkspaceConfig(config);
 }
 
-// ── Write SDK setting back to workspaceStore ──
+// ── Write C++ setting back to workspaceStore ──
 
 function _saveCppToStore(key: CppKey, value: CppSettings[CppKey]): void {
     const workroot = _resolveWorkrootForModule('cpp');
@@ -289,7 +289,7 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
     projectsWatcher.onDidCreate(() => _reload());
     context.subscriptions.push(projectsWatcher);
 
-    // 2. ~/.forja/workspaces/ — Qt/SDK 配置（workspaceStore）
+    // 2. ~/.forja/workspaces/ — Qt/C++ 配置（workspaceStore）
     const wsDir = workspacesDir();
     if (!fs.existsSync(wsDir)) {
         fs.mkdirSync(wsDir, { recursive: true });
@@ -375,7 +375,7 @@ export function setQtSetting<K extends QtKey>(key: K, value: QtSettings[K]): voi
     }
 }
 
-// ── SDK API ──
+// ── C++ API ──
 
 export function getCppSetting<K extends CppKey>(key: K): CppSettings[K] {
     if (!_loaded) { _settings = _load(); _loaded = true; }

@@ -1,6 +1,6 @@
 /**
  * Core types shared across all modules.
- * Extracted here to avoid core/ depending on qt/ or sdk/.
+ * Extracted here to avoid core/ depending on qt/ or cpp/.
  */
 
 export interface ProjectInfo {
@@ -33,7 +33,7 @@ export interface EnvInfo {
     jom: string | null;
 }
 
-// ── CLI execution result types (shared by qt/cli, sdk/shared, cli/commands) ──
+// ── CLI execution result types (shared by qt/cli, cpp/shared, cli/commands) ──
 
 export type CliAction = 'init' | 'use' | 'status' | 'env' | 'projects' | 'qmake' | 'build' | 'clean' | 'run' | 'ps' | 'rcc';
 export type CliExecutionMode = 'dryRun' | 'execute';

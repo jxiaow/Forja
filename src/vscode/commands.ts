@@ -1,7 +1,7 @@
 /**
  * VSCode command registration for v2 command surface.
  * Qt build/run/stop/clean delegate to buildManager (VSCode task system) or remote pipeline.
- * SDK build/clean delegate to SDK VSCode commands.
+ * C++ build/clean delegate to C++ VSCode commands.
  * Other commands delegate to CLI handlers.
  */
 import * as vscode from 'vscode';
@@ -136,7 +136,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja._selectTarget — internal: select target filtered by kind (qt|sdk)
+    // forja._selectTarget — internal: select target filtered by kind (qt|cpp)
     context.subscriptions.push(
         vscode.commands.registerCommand('forja._selectTarget', async (kindFilter?: string) => {
             try {
@@ -154,10 +154,10 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 if (ch) { ch.appendLine(`[DEBUG] qtWs=${qtWs}, cppWs=${cppWs}`); }
                 const qtResult = (!kindFilter || kindFilter === 'qt') ? await runList(qtWs, 'targets') : { targets: [] };
                 const cppResult = (!kindFilter || kindFilter === 'cpp') ? await runList(cppWs, 'targets') : { targets: [] };
-                if (ch) { ch.appendLine(`[DEBUG] qtTargets=${qtResult.targets?.length ?? 0}, sdkTargets=${cppResult.targets?.length ?? 0}`); }
+                if (ch) { ch.appendLine(`[DEBUG] qtTargets=${qtResult.targets?.length ?? 0}, cppTargets=${cppResult.targets?.length ?? 0}`); }
                 if (ch) {
                     (qtResult.targets || []).forEach((t, i) => { ch.appendLine(`[DEBUG]   qt[${i}] ${t.kind}: ${t.project}`); });
-                    (cppResult.targets || []).forEach((t, i) => { ch.appendLine(`[DEBUG]   sdk[${i}] ${t.kind}: ${t.project}`); });
+                    (cppResult.targets || []).forEach((t, i) => { ch.appendLine(`[DEBUG]   cpp[${i}] ${t.kind}: ${t.project}`); });
                 }
                 const seen = new Set<string>();
                 const allTargets = [...(qtResult.targets || []), ...(cppResult.targets || [])].filter(t => {
@@ -340,7 +340,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         break;
                     }
                     case '__build_order__': {
-                        vscode.window.showInformationMessage('Use "forja remote set --build-order qt:build sdk:build" in terminal to configure build order.');
+                        vscode.window.showInformationMessage('Use "forja remote set --build-order qt:build cpp:build" in terminal to configure build order.');
                         break;
                     }
                     case '__transfer__': {
@@ -402,12 +402,12 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.build — Qt: buildManager (VSCode task); SDK: buildCpp(); Remote: executeRemotePlan
+    // forja.build — Qt: buildManager (VSCode task); C++: buildCpp(); Remote: executeRemotePlan
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.build', async (action?: string) => {
             let target = await resolveActiveTarget();
 
-            // Fallback: if no activeTarget but SDK module is active, synthesize from SDK state
+            // Fallback: if no activeTarget but C++ module is active, synthesize from C++ state
             if (!target) {
                 const { getActiveModule } = await import('../ui/statusBar');
                 if (getActiveModule() === 'cpp') {
@@ -445,7 +445,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             }
 
             if (target?.kind === 'cpp') {
-                // SDK doesn't support qmake/rcc
+                // C++ doesn't support qmake/rcc
                 if (action === 'qmake' || action === 'rcc') {
                     vscode.window.showErrorMessage(`C++ target does not support '${action}' action`);
                     return;
@@ -510,7 +510,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             }
             const target = await resolveActiveTarget();
 
-            // SDK doesn't support run - check before remote dispatch
+            // C++ doesn't support run - check before remote dispatch
             if (target?.kind === 'cpp') {
                 vscode.window.showWarningMessage('C++ target does not support run. Use Build instead.');
                 return;
@@ -594,12 +594,12 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.clean — Qt: buildManager.clean() (VSCode task); SDK: cleanCpp(); Remote: executeRemotePlan
+    // forja.clean — Qt: buildManager.clean() (VSCode task); C++: cleanCpp(); Remote: executeRemotePlan
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.clean', async () => {
             let target = await resolveActiveTarget();
 
-            // Fallback: if no activeTarget but SDK module is active, synthesize from SDK state
+            // Fallback: if no activeTarget but C++ module is active, synthesize from C++ state
             if (!target) {
                 const { getActiveModule } = await import('../ui/statusBar');
                 if (getActiveModule() === 'cpp') {

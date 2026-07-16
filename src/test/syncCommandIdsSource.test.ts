@@ -24,7 +24,7 @@ test('package contributes only v2 commands', () => {
 
     // Old commands should not exist
     assert.ok(!commands.includes('forja.qt.build'));
-    assert.ok(!commands.includes('forja.sdk.build'));
+    assert.ok(!commands.includes('forja.cpp.build'));
     assert.ok(!commands.includes('forja.remote.status'));
     assert.ok(!commands.includes('forja.syncChangedFiles'));
 

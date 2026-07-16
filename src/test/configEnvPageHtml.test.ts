@@ -81,7 +81,7 @@ test('environment page updates Qt title immediately after selecting a candidate 
     assert.match(html, /d\.command==="qtPathUpdated"/);
 });
 
-test('environment page updates Visual Studio and SDK titles from detected candidates', () => {
+test('environment page updates Visual Studio and C++ titles from detected candidates', () => {
     const data = createTemplateData();
     data.cppActive = true;
     const html = getPageHtml('env', data);
@@ -89,10 +89,10 @@ test('environment page updates Visual Studio and SDK titles from detected candid
     assert.match(html, /vsCandidateLabels/);
     assert.match(html, /function updateVsDisplayFromPath\(path/);
     assert.match(html, /vsT\.textContent=label/);
-    assert.match(html, /function updateSdkVsDisplayFromPath\(path/);
-    assert.match(html, /sdkVsT\.textContent=label/);
-    assert.match(html, /id="sdkVsSelect"/);
-    assert.match(html, /saveSdkVsInstall/);
+    assert.match(html, /function updateCppVsDisplayFromPath\(path/);
+    assert.match(html, /cppVsT\.textContent=label/);
+    assert.match(html, /id="cppVsSelect"/);
+    assert.match(html, /saveCppVsInstall/);
 });
 
 test('environment page keeps selected toolchain titles after env refresh', () => {
@@ -102,12 +102,12 @@ test('environment page keeps selected toolchain titles after env refresh', () =>
 
     assert.match(html, /function currentValue\(id\)/);
     assert.match(html, /updateVsDisplayFromPath\(currentValue\("vsDevShellPath"\),d\.env\.vs/);
-    assert.match(html, /updateSdkVsDisplayFromPath\(currentValue\("sdkVsInstall"\),d\.env\.vs/);
+    assert.match(html, /updateCppVsDisplayFromPath\(currentValue\("cppVsInstall"\),d\.env\.vs/);
     assert.match(html, /updateQtDisplayFromPath\(currentValue\("qtPath"\),d\.env\.qt/);
     assert.match(html, /label=vsCandidateLabels\[path\]\|\|label/);
     assert.match(html, /label=qtCandidateLabels\[path\]\|\|label/);
     assert.doesNotMatch(html, /vsT\)\{vsT\.textContent=d\.env\.vs/);
-    assert.doesNotMatch(html, /sdkVsT\)\{sdkVsT\.textContent=d\.env\.vs/);
+    assert.doesNotMatch(html, /cppVsT\)\{cppVsT\.textContent=d\.env\.vs/);
     assert.doesNotMatch(html, /qtT\)\{qtT\.textContent=d\.env\.qt/);
 });
 
@@ -119,7 +119,7 @@ test('environment page shows toolchain selectors when one candidate is available
     const html = getPageHtml('env', data);
 
     assert.match(html, /id="vsSelect"/);
-    assert.match(html, /id="sdkVsSelect"/);
+    assert.match(html, /id="cppVsSelect"/);
     assert.match(html, /id="qtSelect"/);
     assert.doesNotMatch(html, /candidates\.length <= 1/);
 });

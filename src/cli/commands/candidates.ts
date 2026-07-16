@@ -39,7 +39,7 @@ export function aggregateCandidates(
         });
     }
 
-    // SDK candidates — uses shared scanner, then auto-detect type
+    // C++ candidates — uses shared scanner, then auto-detect type
     const cppFiles = scanCppProjects({ workspace });
 
     for (const cppFile of cppFiles) {

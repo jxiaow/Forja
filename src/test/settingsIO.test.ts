@@ -232,7 +232,7 @@ test('saveQtSettings overwrites existing file', () => {
     assert.equal(loaded.qtPath, 'second');
 });
 
-// ── SDK ──
+// ── C++ ──
 
 test('loadCppSettings returns defaults when no config exists', () => {
     const workspace = makeWorkspace();
@@ -453,11 +453,11 @@ test('projectConfigPath honors FORJA_CONFIG_DIR for test isolation', () => {
 
 test('projectConfigPath generates different hashes for different types', () => {
     const qtPath = projectConfigPath('C:/workspace', 'qt');
-    const sdkPath = projectConfigPath('C:/workspace', 'cpp');
+    const cppPath = projectConfigPath('C:/workspace', 'cpp');
     const syncPath = projectConfigPath('C:/workspace', 'sync');
-    assert.notEqual(qtPath, sdkPath);
+    assert.notEqual(qtPath, cppPath);
     assert.notEqual(qtPath, syncPath);
-    assert.notEqual(sdkPath, syncPath);
+    assert.notEqual(cppPath, syncPath);
 });
 
 test('projectConfigPath is case-insensitive on path', () => {

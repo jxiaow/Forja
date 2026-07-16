@@ -65,7 +65,7 @@ export function setProjectRoot(root: string): void {
     _resolvedQt = root;
 }
 
-/** 当 SDK 项目变化后，更新缓存 */
+/** 当 C++ 项目变化后，更新缓存 */
 export function setCppProjectRoot(root: string): void {
     _resolvedCpp = root;
 }

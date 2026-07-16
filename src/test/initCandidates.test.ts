@@ -42,10 +42,10 @@ test('aggregateCandidates: detects .pro files as qt candidates', () => {
     assert.equal(result[0].label, 'myapp');
 });
 
-test('aggregateCandidates: detects Makefile as sdk candidate on POSIX', () => {
+test('aggregateCandidates: detects Makefile as cpp candidate on POSIX', () => {
     if (os.platform() === 'win32') { return; }
     const { aggregateCandidates } = require('../cli/commands/candidates');
-    const workspace = path.join(TEST_DIR, 'sdk-ws');
+    const workspace = path.join(TEST_DIR, 'cpp-ws');
     fs.mkdirSync(workspace, { recursive: true });
     fs.writeFileSync(path.join(workspace, 'Makefile'), 'all:\n');
     const result = aggregateCandidates(workspace, null, []);
@@ -53,7 +53,7 @@ test('aggregateCandidates: detects Makefile as sdk candidate on POSIX', () => {
     assert.equal(result[0].kind, 'cpp');
 });
 
-test('aggregateCandidates: detects CMakeLists.txt as sdk candidate', () => {
+test('aggregateCandidates: detects CMakeLists.txt as cpp candidate', () => {
     const { aggregateCandidates } = require('../cli/commands/candidates');
     const workspace = path.join(TEST_DIR, 'cmake-ws');
     fs.mkdirSync(workspace, { recursive: true });

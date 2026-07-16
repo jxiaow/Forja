@@ -97,8 +97,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     // 启动时优先恢复手动指定项目，其次再走工作区扫描/记忆选择
-    // 必须在 SDK 激活之前完成，否则 SDK 扫描完成时 qtState.currentProject 还没设置，
-    // 会导致混合 workspace 中状态栏错误切到 SDK 模块
+    // 必须在 C++ 激活之前完成，否则 C++ 扫描完成时 qtState.currentProject 还没设置，
+    // 会导致混合 workspace 中状态栏错误切到 C++ 模块
     let project: import('./core/types').ProjectInfo | null = null;
     const manualProPath = getManualProPath();
     if (manualProPath && fs.existsSync(manualProPath)) {
@@ -111,7 +111,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     setState('currentProject', project);
 
-    // SDK 模块激活（异步，不阻塞 Qt 启动；在 Qt 项目恢复之后，避免竞态）
+    // C++ 模块激活（异步，不阻塞 Qt 启动；在 Qt 项目恢复之后，避免竞态）
     activateCpp(context).catch((e: Error) => logger.error(`C++ 模块激活失败: ${e.message}`));
 
     // 环境检测（一次，全量扫描获取完整候选列表）

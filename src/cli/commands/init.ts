@@ -310,7 +310,7 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
         });
     }
 
-    // Scan SDK projects
+    // Scan C++ projects
     setSilent(true);
     let cppFiles;
     try { cppFiles = scanCppProjects({ workspace: workroot, relativePaths: true }); } finally { setSilent(false); }
@@ -385,7 +385,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
 
         if (env.jom) jomPath = env.jom;
     } else {
-        // SDK project — need VS only
+        // C++ project — need VS only
         if (options.answers?.vsInstall) {
             vsInstall = options.answers.vsInstall;
         } else if (options.interactive && env.vsCandidates.length > 1) {

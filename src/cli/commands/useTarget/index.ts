@@ -274,7 +274,7 @@ export async function runSwitchTarget(workspace: string, args: {
     const currentTarget = ctx.existingTarget;
     const mode = args.mode ?? currentTarget?.mode ?? 'debug';
     const arch = args.arch ?? currentTarget?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
-    // SDK targets don't support remote execution — force local when switching to SDK
+    // C++ targets don't support remote execution — force local when switching to C++
     const runAt = (kind === 'cpp') ? 'local' : (currentTarget?.runAt ?? 'local');
 
     let qtPath: string | undefined;
@@ -392,7 +392,7 @@ export async function runSwitchTarget(workspace: string, args: {
     }
 
     if (qtPath || vsInstall) changed.push('toolchain');
-    changed.push(kind === 'qt' ? 'qt.pinnedProject' : 'sdk.pinnedProject');
+    changed.push(kind === 'qt' ? 'qt.pinnedProject' : 'cpp.pinnedProject');
     changed.push('activeTarget');
 
     const target = buildTargetProfile(config);
@@ -402,7 +402,7 @@ export async function runSwitchTarget(workspace: string, args: {
         workspace, activeTarget: target,
         config: kind === 'qt'
             ? { qt: { configured: true, project: canonicalProject, mode, arch, qtPath, vsInstall, qtVersion: config.qtVersion, vsVersion } }
-            : { sdk: { configured: true, project: canonicalProject, mode, arch, vsInstall } },
+            : { cpp: { configured: true, project: canonicalProject, mode, arch, vsInstall } },
         changed,
         nextAction: 'forja status',
     };

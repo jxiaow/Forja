@@ -18,7 +18,7 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
     diagnostics?: Array<{ level: 'info' | 'warning' | 'error'; message: string }>;
 }> {
     const diagnostics: Array<{ level: 'info' | 'warning' | 'error'; message: string }> = [];
-    const hasExisting = !!ctx.existingTarget || !!ctx.existingQt.pinnedProject || !!ctx.existingSdk.pinnedProject;
+    const hasExisting = !!ctx.existingTarget || !!ctx.existingQt.pinnedProject || !!ctx.existingCpp.pinnedProject;
     const needTarget = !hasExisting || !!options.project || options.reset;
 
     // ── Resolve target ──
@@ -124,7 +124,7 @@ async function resolveTarget(ctx: DetectContext, options: ResolveOptions, needTa
 
     // Existing config (not reset)
     if (!needTarget) {
-        const existingProject = ctx.existingTarget?.project || ctx.existingQt.pinnedProject?.relative || ctx.existingSdk.pinnedProject;
+        const existingProject = ctx.existingTarget?.project || ctx.existingQt.pinnedProject?.relative || ctx.existingCpp.pinnedProject;
         if (existingProject) {
             const match = ctx.candidates.find(c => c.project === existingProject);
             if (match) {
@@ -217,7 +217,7 @@ async function resolveVsPath(ctx: DetectContext, options: ResolveOptions, stored
     const candidates = candidatesOverride ?? ctx.toolchain.vsCandidates;
     if (options.vsInstall) return { value: options.vsInstall };
     if (options.answers?.vsInstall) return { value: options.answers.vsInstall };
-    if (!options.reset && (ctx.existingQt.vsInstall || ctx.existingSdk.vsInstall)) return { value: ctx.existingQt.vsInstall || ctx.existingSdk.vsInstall };
+    if (!options.reset && (ctx.existingQt.vsInstall || ctx.existingCpp.vsInstall)) return { value: ctx.existingQt.vsInstall || ctx.existingCpp.vsInstall };
     if (stored?.vsInstall) return { value: stored.vsInstall };
     if (candidates.length === 1 && !forceInteractive) return { value: candidates[0].installPath };
     if (options.interactive && candidates.length >= 1) {

@@ -254,7 +254,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     serverDeleted:                 { en: 'Server was deleted, please re-select', zh: '服务器已被删除，请重新选择' },
     qtReconfigure:                 { en: 'Qt installation may have changed, reconfigure with forja use', zh: 'Qt 安装可能已变更，请用 forja use 重新配置' },
     installVs:                     { en: 'Install Visual Studio and configure vcvarsall.bat', zh: '安装 Visual Studio 并配置 vcvarsall.bat' },
-    installVsSdk:                  { en: 'Install Visual Studio and configure with forja use target --vs', zh: '安装 Visual Studio 并用 forja use target --vs 配置' },
+    installVsCpp:                  { en: 'Install Visual Studio and configure with forja use target --vs', zh: '安装 Visual Studio 并用 forja use target --vs 配置' },
     installBuildEssential:         { en: 'Install build-essential or equivalent', zh: '安装 build-essential 或同等工具' },
     deployRemote:                  { en: 'Run forja doctor fix --remote to deploy, or configure with forja remote forja-bin --path <path>', zh: '运行 forja doctor fix --remote 部署，或用 forja remote forja-bin --path <path> 配置' },
     langMissingValue:              { en: 'Language required: zh or en. View current: forja use', zh: '请指定语言: zh 或 en。查看当前语言: forja use' },

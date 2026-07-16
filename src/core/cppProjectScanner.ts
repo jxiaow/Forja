@@ -1,17 +1,17 @@
 /**
- * Shared SDK project scanner — finds .sln (Windows) / Makefile (POSIX) files.
- * No vscode dependency. Used by both CLI (candidates.ts) and SDK module (ProjectScanner).
+ * Shared C++ project scanner — finds .sln (Windows) / Makefile (POSIX) files.
+ * No vscode dependency. Used by both CLI (candidates.ts) and C++ module (ProjectScanner).
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-export const SDK_EXCLUDE_DIRS = [
+export const CPP_EXCLUDE_DIRS = [
     'node_modules', 'out', 'dist', '.git', '.work', '.forja',
     'debug', 'release',
 ];
 
-export const SDK_EXCLUDE_PATH_SEGMENTS = ['build/output'];
+export const CPP_EXCLUDE_PATH_SEGMENTS = ['build/output'];
 
 export const DEFAULT_CPP_SCAN_DEPTH = 8;
 
@@ -30,8 +30,8 @@ export function scanCppProjects(options: CppScanOptions): string[] {
     const {
         workspace,
         maxDepth = DEFAULT_CPP_SCAN_DEPTH,
-        excludeDirs = SDK_EXCLUDE_DIRS,
-        excludePathSegments = SDK_EXCLUDE_PATH_SEGMENTS,
+        excludeDirs = CPP_EXCLUDE_DIRS,
+        excludePathSegments = CPP_EXCLUDE_PATH_SEGMENTS,
         skipQtProjectDirs = false,
         relativePaths = true,
     } = options;

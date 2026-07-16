@@ -225,10 +225,10 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
 
     if (target.kind === 'cpp') {
         try {
-            const sdkAction = buildAction === 'fresh' ? 'rebuild' : 'build';
+            const cppAction = buildAction === 'fresh' ? 'rebuild' : 'build';
             const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
             const plan = createCppPlan({
-                action: sdkAction as 'build' | 'rebuild' | 'clean',
+                action: cppAction as 'build' | 'rebuild' | 'clean',
                 workspace,
                 project: path.isAbsolute(target.project) ? target.project : path.join(workspace, target.project),
                 mode: target.mode,

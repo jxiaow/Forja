@@ -4,7 +4,7 @@
  * 配置存储在用户数据目录 ~/.forja/projects/ 下，
  * 文件名为 workspace 路径的 hash，内容平铺不加前缀分组。
  *
- * 每个 workspace 目录对应一个配置文件，只存一种配置（qt 或 sdk 或 sync）。
+ * 每个 workspace 目录对应一个配置文件，只存一种配置（qt 或 cpp 或 sync）。
  * 配置类型通过文件内的 `type` 字段区分。
  */
 import * as fs from 'fs';
@@ -282,7 +282,7 @@ export function saveQtSettings(workspace: string, settings: QtSettings): void {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
 }
 
-// ── SDK 配置读写 ──
+// ── C++ 配置读写 ──
 
 export function loadCppSettings(workspace: string): CppSettings {
     const filePath = resolveConfigPath(workspace, 'cpp');

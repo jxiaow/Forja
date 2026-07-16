@@ -39,7 +39,7 @@ export function buildConfigSummary(config: ResolvedConfig, toolchain: ToolchainI
         };
     }
     return {
-        sdk: {
+        cpp: {
             configured: true,
             project: config.project,
             mode: config.mode,

@@ -36,7 +36,7 @@ export interface DetectContext {
         arch: string;
         target: string;
     };
-    existingSdk: {
+    existingCpp: {
         pinnedProject: string | null;
         vsInstall: string;
         mode: string;
@@ -85,7 +85,7 @@ export interface UseTargetResult extends ForjaJsonResult {
     questions?: Question[];
     config?: {
         qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qtVersion?: string; vsVersion?: string; qmakeTarget?: string };
-        sdk?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
+        cpp?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
     };
     changed: string[];
     nextActions?: string[];

@@ -678,7 +678,7 @@ function remoteSupportMessage(target: RemoteBridgeTarget): string {
     if (target === 'qt') {
         return 'remote qt 仅支持 status/init/use/build/clean/qmake/run/stop/ps/restore/reset/clean-untracked';
     }
-    return 'remote sdk 仅支持 status/init/use/build/rebuild/clean/restore/reset/clean-untracked';
+    return 'remote cpp 仅支持 status/init/use/build/rebuild/clean/restore/reset/clean-untracked';
 }
 
 function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'cleanUntracked' | 'preparedAction' | 'transfer', diagnostics: RemoteDiagnostic[], nextAction?: string): Record<string, unknown> {
@@ -924,8 +924,8 @@ function helpText(): string {
         '  forja remote qt status|init|use|build|clean|qmake|run|stop|ps [--json]',
         '  forja remote qt restore|reset --repo <repo> -- <paths...> [--json]',
         '  forja remote qt clean-untracked --repo <repo> [--recursive] -- <paths...> [--json]',
-        '  forja remote sdk status|init|use|build|rebuild|clean [--json]',
-        '  forja remote sdk restore|reset --repo <repo> -- <paths...> [--json]',
-        '  forja remote sdk clean-untracked --repo <repo> [--recursive] -- <paths...> [--json]'
+        '  forja remote cpp status|init|use|build|rebuild|clean [--json]',
+        '  forja remote cpp restore|reset --repo <repo> -- <paths...> [--json]',
+        '  forja remote cpp clean-untracked --repo <repo> [--recursive] -- <paths...> [--json]'
     ].join('\n');
 }

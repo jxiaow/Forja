@@ -100,14 +100,14 @@ test('saveWorkspaceConfig + loadWorkspaceConfig round-trip', () => {
     assert.equal(loaded.targets['qt-app-debug-x64'].toolchain.qtPath, '/qt/6.5');
 });
 
-test('saveWorkspaceConfig sdk kind round-trip', () => {
+test('saveWorkspaceConfig cpp kind round-trip', () => {
     const ws = makeWorkspace();
     const config = createEmptyWorkspaceConfig(ws);
     const profile: TargetProfile = {
-        id: 'sdk-lib-release-x86',
+        id: 'cpp-lib-release-x86',
         name: 'lib release x86',
         kind: 'cpp',
-        project: 'sdk/NemoSDK.sln',
+        project: 'cpp/NemoSDK.sln',
         mode: 'release',
         arch: 'x86',
         runAt: 'remote',
@@ -118,8 +118,8 @@ test('saveWorkspaceConfig sdk kind round-trip', () => {
     saveWorkspaceConfig(config);
 
     const loaded = loadWorkspaceConfig(ws);
-    assert.equal(loaded.targets['sdk-lib-release-x86'].kind, 'cpp');
-    assert.equal(loaded.targets['sdk-lib-release-x86'].runAt, 'remote');
+    assert.equal(loaded.targets['cpp-lib-release-x86'].kind, 'cpp');
+    assert.equal(loaded.targets['cpp-lib-release-x86'].runAt, 'remote');
 });
 
 test('loadWorkspaceConfig sanitizes invalid data', () => {
@@ -234,8 +234,8 @@ test('requireActiveTarget returns error when none', () => {
 test('requireActiveTarget returns target when exists', () => {
     const ws = makeRegisteredWorkspace();
     const config = loadWorkspaceConfig(ws);
-    config.targets['sdk-b-release-x86'] = {
-        id: 'sdk-b-release-x86',
+    config.targets['cpp-b-release-x86'] = {
+        id: 'cpp-b-release-x86',
         name: 'b release x86',
         kind: 'cpp',
         project: 'b.sln',
@@ -244,7 +244,7 @@ test('requireActiveTarget returns target when exists', () => {
         runAt: 'local',
         toolchain: {},
     };
-    config.activeTarget = 'sdk-b-release-x86';
+    config.activeTarget = 'cpp-b-release-x86';
     saveWorkspaceConfig(config);
 
     const result = requireActiveTarget(ws);

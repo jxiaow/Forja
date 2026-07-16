@@ -26,7 +26,7 @@ export type { UseTargetResult } from './useTarget';
 
 export interface ConfigSummary {
     qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; target?: string; qmakeArgs?: string };
-    sdk?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
+    cpp?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
     sync?: { configured: boolean; enabled: boolean; selectedServer?: string; remotePath?: string };
 }
 

@@ -12,7 +12,7 @@ test('runtime-facing source and packaging comments use Forja branding', () => {
         'scripts/package-vs.js'
     ];
     const forbidden = [
-        /\bSDK Pilot\b/,
+        /\bC\+\+ Pilot\b/,
         /\bCompilot\b/,
         /\bcompilot\b/
     ];
@@ -52,7 +52,7 @@ test('current examples do not use legacy client project names', () => {
     assert.deepEqual(offenders, []);
 });
 
-test('current SDK CLI design docs use Forja command names', () => {
+test('current C++ CLI design docs use Forja command names', () => {
     const files = [
         'docs/superpowers/specs/2026-05-22-sdk-cli-use-design.md',
         'docs/superpowers/plans/2026-05-22-sdk-cli-use.md'

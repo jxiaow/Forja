@@ -86,7 +86,7 @@ test('use command supports all documented subcommands', () => {
         'runUseRemoteBuildOrder',
         'runUseRemoteTransfer',
         'runUseQt',
-        'runUseSdk',
+        'runUseCpp',
     ];
     for (const fn of removedSubcommands) {
         assert.ok(!useSrc.includes(`export function ${fn}`) && !useSrc.includes(`export async function ${fn}`),

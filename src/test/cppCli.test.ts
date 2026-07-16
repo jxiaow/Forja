@@ -31,9 +31,9 @@ function captureConsole(fn: () => Promise<void>): Promise<string> {
     });
 }
 
-describe('SDK CLI', { concurrency: false }, () => {
+describe('C++ CLI', { concurrency: false }, () => {
 
-test('SDK CLI rejects unknown flags with error', async () => {
+test('C++ CLI rejects unknown flags with error', async () => {
     const output = await captureOutput(() => runCppCli(['build', '--json', '--unknown-flag']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
@@ -41,13 +41,13 @@ test('SDK CLI rejects unknown flags with error', async () => {
     assert.ok(parsed.diagnostics[0].message.includes('未知参数'));
 });
 
-test('SDK CLI extracts MSBuild solution-level errors', () => {
+test('C++ CLI extracts MSBuild solution-level errors', () => {
     const output = 'C:\\Code\\workspace\\dev\\cpp-sdk\\build\\win\\NemoSDK\\NemoSDK.sln.metaproj : error MSB4126: 指定的解决方案配置“Release|Win32”无效。 [C:\\Code\\workspace\\dev\\cpp-sdk\\build\\win\\NemoSDK\\NemoSDK.sln]';
 
     assert.deepEqual(extractErrors(output), [output]);
 });
 
-test('SDK CLI rejects invalid --mode value', async () => {
+test('C++ CLI rejects invalid --mode value', async () => {
     const output = await captureOutput(() => runCppCli(['build', '--json', '--mode', 'fast']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
@@ -55,7 +55,7 @@ test('SDK CLI rejects invalid --mode value', async () => {
     assert.ok(parsed.diagnostics[0].message.includes('--mode'));
 });
 
-test('SDK CLI rejects invalid --arch value', async () => {
+test('C++ CLI rejects invalid --arch value', async () => {
     const output = await captureOutput(() => runCppCli(['build', '--json', '--arch', 'arm64']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
@@ -63,7 +63,7 @@ test('SDK CLI rejects invalid --arch value', async () => {
     assert.ok(parsed.diagnostics[0].message.includes('--arch'));
 });
 
-test('SDK CLI rejects unsupported --arch value on single-arch platforms', async () => {
+test('C++ CLI rejects unsupported --arch value on single-arch platforms', async () => {
     if (os.platform() === 'win32') { return; }
 
     const output = await captureOutput(() => runCppCli(['status', '--json', '--arch', 'x86']));
@@ -73,7 +73,7 @@ test('SDK CLI rejects unsupported --arch value on single-arch platforms', async 
     assert.ok(parsed.diagnostics[0].message.includes('--arch'));
 });
 
-test('SDK CLI rejects extra positional arguments', async () => {
+test('C++ CLI rejects extra positional arguments', async () => {
     const output = await captureOutput(() => runCppCli(['status', '--json', 'extra']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
@@ -81,7 +81,7 @@ test('SDK CLI rejects extra positional arguments', async () => {
     assert.ok(parsed.diagnostics[0].message.includes('extra'));
 });
 
-test('SDK CLI rejects unknown run action', async () => {
+test('C++ CLI rejects unknown run action', async () => {
     const output = await captureOutput(() => runCppCli(['run', '--json']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
@@ -89,11 +89,11 @@ test('SDK CLI rejects unknown run action', async () => {
     assert.ok(parsed.diagnostics[0].message.includes('未知动作'));
 });
 
-test('SDK CLI accepts use config options', async () => {
+test('C++ CLI accepts use config options', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-use-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-use-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -130,7 +130,7 @@ test('SDK CLI accepts use config options', async () => {
     }
 });
 
-test('SDK CLI rejects config options on non-use actions', async () => {
+test('C++ CLI rejects config options on non-use actions', async () => {
     const restrictedFlags = ['--project', '--mode', '--arch', '--vs-dev-cmd'];
     for (const action of ['init', 'status', 'env', 'projects', 'build', 'rebuild', 'clean']) {
         for (const flag of restrictedFlags) {
@@ -149,7 +149,7 @@ test('SDK CLI rejects config options on non-use actions', async () => {
     }
 });
 
-test('SDK CLI build accepts --plan and routes missing config to status', async () => {
+test('C++ CLI build accepts --plan and routes missing config to status', async () => {
     const output = await captureOutput(() => runCppCli(['build', '--json', '--plan']));
     const parsed = JSON.parse(output);
     assert.equal(process.exitCode, 1);
@@ -158,7 +158,7 @@ test('SDK CLI build accepts --plan and routes missing config to status', async (
     assert.equal(parsed.nextAction, 'forja status --json');
 });
 
-test('SDK CLI rejects removed --dry-run alias', async () => {
+test('C++ CLI rejects removed --dry-run alias', async () => {
     const output = await captureOutput(() => runCppCli(['build', '--json', '--dry-run']));
     const parsed = JSON.parse(output);
 
@@ -167,11 +167,11 @@ test('SDK CLI rejects removed --dry-run alias', async () => {
     assert.ok(parsed.diagnostics[0].message.includes('未知参数: --dry-run'));
 });
 
-test('SDK CLI build plan inherits mode and arch saved by use', async () => {
+test('C++ CLI build plan inherits mode and arch saved by use', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-config-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-config-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -217,22 +217,22 @@ test('SDK CLI build plan inherits mode and arch saved by use', async () => {
     }
 });
 
-test('SDK CLI projects text includes use hint', async () => {
+test('C++ CLI projects text includes use hint', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-projects-text-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-projects-text-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
     process.env.USERPROFILE = tempHome;
 
     try {
-        createSdkProjectFile(ws, 'app');
+        createCppProjectFile(ws, 'app');
 
         const output = await captureOutput(() => runCppCli(['projects', '--workspace', ws]));
 
-        assert.match(output, /SDK 项目列表:/);
+        assert.match(output, /C\+\+ 项目列表:/);
         assert.match(output, /修改: forja use target --project <path> --json/);
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
@@ -242,11 +242,11 @@ test('SDK CLI projects text includes use hint', async () => {
     }
 });
 
-test('SDK CLI init text includes default warnings and next action', async () => {
+test('C++ CLI init text includes default warnings and next action', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-init-text-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-init-text-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -255,7 +255,7 @@ test('SDK CLI init text includes default warnings and next action', async () => 
     try {
         const output = await captureOutput(() => runCppCli(['init', '--workspace', ws]));
 
-        assert.match(output, /SDK 配置已保存/);
+        assert.match(output, /C\+\+ 配置已保存/);
         assert.match(output, /warning: mode\/arch 使用默认值/);
         assert.match(output, /下一步:/);
         assert.match(output, /forja status --json/);
@@ -267,11 +267,11 @@ test('SDK CLI init text includes default warnings and next action', async () => 
     }
 });
 
-test('SDK CLI build text includes next action when config is missing', async () => {
+test('C++ CLI build text includes next action when config is missing', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-build-text-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-build-text-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -292,13 +292,13 @@ test('SDK CLI build text includes next action when config is missing', async () 
     }
 });
 
-test('SDK CLI build plan uses x86 solution platform when sln declares x86', async () => {
+test('C++ CLI build plan uses x86 solution platform when sln declares x86', async () => {
     if (os.platform() !== 'win32') { return; }
 
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-sln-platform-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-sln-platform-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -343,11 +343,11 @@ test('SDK CLI build plan uses x86 solution platform when sln declares x86', asyn
     }
 });
 
-test('SDK CLI use updates only explicit fields and build plan inherits saved settings', async () => {
+test('C++ CLI use updates only explicit fields and build plan inherits saved settings', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-use-inherit-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-use-inherit-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -396,11 +396,11 @@ test('SDK CLI use updates only explicit fields and build plan inherits saved set
     }
 });
 
-test('SDK CLI use rejects a missing project', async () => {
+test('C++ CLI use rejects a missing project', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-use-missing-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-use-missing-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -428,13 +428,13 @@ test('SDK CLI use rejects a missing project', async () => {
     }
 });
 
-test('SDK CLI init uses the platform default arch when no SDK config exists', async () => {
+test('C++ CLI init uses the platform default arch when no C++ config exists', async () => {
     if (os.platform() === 'win32') { return; }
 
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-default-arch-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-default-arch-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -454,11 +454,11 @@ test('SDK CLI init uses the platform default arch when no SDK config exists', as
     }
 });
 
-test('SDK CLI use resolves relative --project from workspace', async () => {
+test('C++ CLI use resolves relative --project from workspace', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-project-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-project-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -497,11 +497,11 @@ test('SDK CLI use resolves relative --project from workspace', async () => {
     }
 });
 
-test('SDK CLI init rejects explicit project options', async () => {
+test('C++ CLI init rejects explicit project options', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-missing-init-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-missing-init-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -529,11 +529,11 @@ test('SDK CLI init rejects explicit project options', async () => {
     }
 });
 
-test('SDK CLI build plan rejects a stale pinned project instead of building another candidate', async () => {
+test('C++ CLI build plan rejects a stale pinned project instead of building another candidate', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-stale-project-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-stale-project-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -562,7 +562,7 @@ test('SDK CLI build plan rejects a stale pinned project instead of building anot
         assert.equal(JSON.parse(useOutput).ok, true);
 
         fs.unlinkSync(pinnedProject);
-        createSdkProjectFile(ws, 'other');
+        createCppProjectFile(ws, 'other');
 
         const output = await captureOutput(() => runCppCli(['build', '--json', '--plan', '--workspace', ws]));
         const parsed = JSON.parse(output);
@@ -579,11 +579,11 @@ test('SDK CLI build plan rejects a stale pinned project instead of building anot
     }
 });
 
-test('SDK CLI build plan requires saved SDK config even when one candidate exists', async () => {
+test('C++ CLI build plan requires saved C++ config even when one candidate exists', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-no-config-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-no-config-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
@@ -607,18 +607,18 @@ test('SDK CLI build plan requires saved SDK config even when one candidate exist
     }
 });
 
-test('SDK CLI status requires a saved project after init even when one candidate exists', async () => {
+test('C++ CLI status requires a saved project after init even when one candidate exists', async () => {
     const oldHome = process.env.HOME;
     const oldUserProfile = process.env.USERPROFILE;
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-home-'));
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-status-one-unsaved-'));
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-status-one-unsaved-'));
     _tmpDirs.push(tempHome);
     _tmpDirs.push(ws);
     process.env.HOME = tempHome;
     process.env.USERPROFILE = tempHome;
 
     try {
-        createSdkProjectFile(ws, '.');
+        createCppProjectFile(ws, '.');
 
         const initOutput = await captureOutput(() => runCppCli(['init', '--json', '--workspace', ws]));
         assert.equal(JSON.parse(initOutput).ok, true);
@@ -644,7 +644,7 @@ test('SDK CLI status requires a saved project after init even when one candidate
     }
 });
 
-function createSdkProjectFile(workspace: string, relativeDir: string): string {
+function createCppProjectFile(workspace: string, relativeDir: string): string {
     const dir = path.join(workspace, relativeDir);
     fs.mkdirSync(dir, { recursive: true });
     const filename = os.platform() === 'win32' ? 'App.sln' : 'Makefile';
@@ -653,8 +653,8 @@ function createSdkProjectFile(workspace: string, relativeDir: string): string {
     return filePath;
 }
 
-test('SDK CLI status reports missing project without failing', async () => {
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-status-empty-'));
+test('C++ CLI status reports missing project without failing', async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-status-empty-'));
     _tmpDirs.push(ws);
 
     const output = await captureOutput(() => runCppCli(['status', '--json', '--workspace', ws]));
@@ -667,11 +667,11 @@ test('SDK CLI status reports missing project without failing', async () => {
     assert.ok(parsed.missing.includes('project'));
 });
 
-test('SDK CLI status reports candidate projects when workspace has multiple projects', async () => {
-    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-status-multi-'));
+test('C++ CLI status reports candidate projects when workspace has multiple projects', async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-cpp-status-multi-'));
     _tmpDirs.push(ws);
-    createSdkProjectFile(ws, 'app');
-    createSdkProjectFile(ws, 'lib');
+    createCppProjectFile(ws, 'app');
+    createCppProjectFile(ws, 'lib');
 
     const output = await captureOutput(() => runCppCli(['status', '--json', '--workspace', ws]));
     const parsed = JSON.parse(output);

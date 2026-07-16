@@ -188,7 +188,7 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
                 targets[id] = {
                     id: typeof obj.id === 'string' ? obj.id : id,
                     name: typeof obj.name === 'string' ? obj.name : id,
-                    kind: obj.kind === 'cpp' || obj.kind === 'sdk' ? 'cpp' : 'qt',
+                    kind: obj.kind === 'cpp' ? 'cpp' : 'qt',
                     project: typeof obj.project === 'string' ? obj.project : '',
                     mode: obj.mode === 'release' ? 'release' : 'debug',
                     arch: obj.arch === 'x64' ? 'x64' : 'x86',

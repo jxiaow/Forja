@@ -217,18 +217,18 @@ export async function runDoctor(workspace: string, options: {
     }
 
     if (activeTarget?.kind === 'cpp' || !activeTarget) {
-        // Use activeTarget toolchain fields for SDK
-        const sdkVsInstall = activeTarget?.toolchain.vsInstall;
+        // Use activeTarget toolchain fields for C++
+        const cppVsInstall = activeTarget?.toolchain.vsInstall;
 
-        // Platform-specific toolchain checks for SDK (skip if already checked for Qt)
+        // Platform-specific toolchain checks for C++ (skip if already checked for Qt)
         if (process.platform === 'win32') {
             if (!checkedToolchain.has('toolchain-vs')) {
                 // Windows: check VS
-                if (sdkVsInstall && fs.existsSync(sdkVsInstall)) {
-                    checks.push(check('toolchain-vs', 'ready', `VS: ${sdkVsInstall}`));
-                } else if (sdkVsInstall) {
-                    checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${sdkVsInstall}`,
-                        [diag('error', T('doctorVsNotFoundAtInstall', [sdkVsInstall]))]));
+                if (cppVsInstall && fs.existsSync(cppVsInstall)) {
+                    checks.push(check('toolchain-vs', 'ready', `VS: ${cppVsInstall}`));
+                } else if (cppVsInstall) {
+                    checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${cppVsInstall}`,
+                        [diag('error', T('doctorVsNotFoundAtInstall', [cppVsInstall]))]));
                 } else {
                     checks.push(check('toolchain-vs', 'warning', T('doctorVsNotConfigured'),
                         [diag('warning', T('doctorVsNotConfigured'))]));

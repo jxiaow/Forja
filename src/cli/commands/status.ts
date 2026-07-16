@@ -431,20 +431,20 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: TargetProfi
         }
         return 'ready';
     }
-    // SDK
+    // C++
     if (process.platform === 'win32') {
-        // On Windows, SDK requires VS
+        // On Windows, C++ requires VS
         if (!target.toolchain.vsInstall) {
             diagnostics.push({
                 level: 'error',
                 message: T('vsNotFound'),
-                hint: T('installVsSdk'),
+                hint: T('installVsCpp'),
                 fix: 'forja use target --vs <path>',
             });
             return 'missing';
         }
     } else {
-        // On POSIX, SDK requires make
+        // On POSIX, C++ requires make
         if (!summary.make) {
             diagnostics.push({
                 level: 'error',
