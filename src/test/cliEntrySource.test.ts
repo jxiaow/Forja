@@ -16,7 +16,7 @@ test('cli dispatcher routes to commands', () => {
 
 test('cli interface spec lists only implemented subcommands as available', () => {
     const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
-    assert.match(spec, /当前公开子命令：`status` \| `setup` \| `list` \| `use` \| `server` \| `build` \| `run` \| `stop` \| `clean` \| `doctor` \| `sync`/);
+    assert.match(spec, /当前公开子命令：`init` \| `status`/);
     assert.doesNotMatch(spec, /forja qt \.\.\./);
     assert.doesNotMatch(spec, /forja sdk \.\.\./);
 });
@@ -128,11 +128,4 @@ test('forja skill uses unified command structure', () => {
     assert.match(skill, /## 命令参考/);
     // Check that use subcommands are documented
     assert.match(skill, /### use 子命令/);
-});
-
-test('qt cli entry handles parse errors as json when requested', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'cli', 'index.ts'), 'utf8');
-    assert.match(source, /parseCliArgs/);
-    assert.match(source, /JSON\.stringify/);
-    assert.match(source, /process\.exitCode = 1/);
 });

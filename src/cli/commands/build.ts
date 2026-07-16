@@ -35,7 +35,7 @@ export interface BuildResult {
     nextAction?: string;
 }
 
-function buildQtCliOptions(workspace: string, target: ActiveTarget, action: BuildAction, plan: boolean, qmakeArgs?: string): CliOptions {
+function buildQtCliOptions(workspace: string, target: ActiveTarget, action: BuildAction, plan: boolean, qmakeArgs?: string, rccProjectPath?: string): CliOptions {
     let qtAction: CliOptions['action'];
     switch (action) {
         case 'qmake': qtAction = 'qmake'; break;
@@ -54,6 +54,8 @@ function buildQtCliOptions(workspace: string, target: ActiveTarget, action: Buil
         vsDevShell: vsDevShell,
         target: target.toolchain.qmakeTarget || null,
         qmakeArgs: qmakeArgs || null,
+        jomPath: target.toolchain.jomPath || null,
+        rccProjectPath: rccProjectPath || null,
         detach: false,
         saveLocal: false,
         json: false,
@@ -285,12 +287,13 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     const workroot = resolveWorkroot(workspace);
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
-    const cliOptions = buildQtCliOptions(workspace, target, buildAction, options.plan ?? false, qmakeArgs);
+    const rccProjectPath = wsConfig?.qtModulePrefs.rccProjectPath || undefined;
+    const cliOptions = buildQtCliOptions(workspace, target, buildAction, options.plan ?? false, qmakeArgs, rccProjectPath);
 
     try {
         // fresh = clean first, then build
         if (buildAction === 'fresh' && !options.plan) {
-            const cleanOpts = buildQtCliOptions(workspace, target, 'default', false, qmakeArgs);
+            const cleanOpts = buildQtCliOptions(workspace, target, 'default', false, qmakeArgs, rccProjectPath);
             cleanOpts.action = 'clean';
             const cleanPlan = await createActionPlan(cleanOpts);
             if (cleanPlan.ok && cleanPlan.commands.length > 0) {
@@ -325,7 +328,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
 
         if (options.plan) {
             if (buildAction === 'fresh') {
-                const cleanOpts = buildQtCliOptions(workspace, target, 'default', true, qmakeArgs);
+                const cleanOpts = buildQtCliOptions(workspace, target, 'default', true, qmakeArgs, rccProjectPath);
                 cleanOpts.action = 'clean';
                 const cleanPlan = await createActionPlan(cleanOpts);
                 const combinedCommands = [...(cleanPlan.ok ? cleanPlan.commands : []), ...planned.commands];

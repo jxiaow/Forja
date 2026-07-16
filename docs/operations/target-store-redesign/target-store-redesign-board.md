@@ -1,5 +1,7 @@
 # Execution Board
 
+> **状态：deferred / superseded。** 本 initiative 已并入 `docs/operations/workroot-redesign/`。新版本不做旧配置迁移或兼容，以下工作包仅保留为历史决策记录，不再单独执行。
+
 > Status date: 2026-07-09
 
 This file is the single source of truth for the current initiative's backlog and status.
@@ -25,29 +27,22 @@ This file is the single source of truth for the current initiative's backlog and
 
 | ID | Priority | Status | Goal | Scope | Risk | Completion criteria | Dependencies | Next step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| TS-01 | P1 | todo | 建立 workspace 级 TargetStore schema 和纯 IO API | `src/core/settingsIO.ts` 或 `src/core/targetStore.ts` | high | 可读写 `targets` store；sanitize 不信任 JSON；导出 active target helper | none | 写接口和测试计划 |
-| TS-02 | P1 | todo | 从旧配置合成新 store | `core/settingsIO`、旧 `activeTarget`、Qt/SDK settings、`targetToolchains` | high | 旧用户配置首次读取能得到等价 active target 和 profiles | TS-01 | 定义迁移优先级 |
-| TS-03 | P1 | todo | CLI 改读 TargetStore | `src/cli/commands/*`、`useTarget/*` | high | `list/use/status/build/run` 不再以 pinnedProject 作为当前项目来源 | TS-01, TS-02 | 从 `requireActiveTarget` 收口 |
-| TS-04 | P2 | todo | VSCode UI 改读 TargetStore | `src/ui/statusBar.ts`、`src/ui/configPanel/*`、settingsStore watcher | high | 状态栏切换、配置面板保存 mode/arch/qmakeTarget 都写 target profile | TS-03 | 找 UI 写旧字段入口 |
-| TS-05 | P2 | todo | 清理旧 target 写入路径 | Qt/SDK settings writers、fallback helpers | medium | 不再新增写入 `activeTarget`、`pinnedProject`、`targetToolchains` | TS-04 | 标记兼容入口 |
-| TS-06 | P1 | todo | 完整验证和文档同步 | tests、README、CLI spec | medium | 迁移、CLI、UI 数据流都有测试或明确手工验证记录 | TS-05 | 补测试矩阵 |
+| TS-01 | P2 | deferred | 建立 workspace 级 TargetStore schema 和纯 IO API | 已并入 `workroot-redesign/WS-01` | — | 由 canonical workspace store 验收 | — | 不单独执行 |
+| TS-02 | P2 | deferred | 从旧配置合成新 store | 不再执行 | — | 明确不做迁移 | — | 不执行 |
+| TS-03 | P2 | deferred | CLI 改读 TargetStore | 已并入 `workroot-redesign/WS-04` | — | 由 canonical workspace store 验收 | — | 不单独执行 |
+| TS-04 | P2 | deferred | VSCode UI 改读 TargetStore | 已并入 `workroot-redesign/WS-06` | — | 由 WorkspaceContext 验收 | — | 不单独执行 |
+| TS-05 | P2 | deferred | 清理旧 target 写入路径 | 已并入 `workroot-redesign/WS-10` | — | 旧格式不读、不写 | — | 不单独执行 |
+| TS-06 | P2 | deferred | 完整验证和文档同步 | 已并入 `workroot-redesign/WS-09` | — | 新契约验证通过 | — | 不单独执行 |
 
 ## Current Work Package Details
 
-### TS-01
+### TS-01（历史记录）
 
-- Goal: 新增 `TargetStore` schema、load/save/sanitize、active target accessor、target ID helper。
-- Not doing this round: 不迁移所有 CLI/UI 调用点。
-- Current progress: 方案已落盘，尚未实现。
+- Goal: 新增 target schema、load/save/sanitize、active target accessor、target ID helper。
+- Current progress: 方案已并入 `workroot-redesign/WS-01`，不单独执行。
 
-### TS-02
+### TS-02（明确取消）
 
-- Goal: 定义并实现旧数据迁移优先级。
-- Migration priority:
-  1. 旧 `activeTarget` 生成 active profile。
-  2. Qt `pinnedProject` 生成 Qt profile。
-  3. SDK `pinnedProject` 生成 SDK profile。
-  4. `targetToolchains[project]` 补充对应 profile 的 toolchain。
-  5. 若多个旧来源指向同一 project/mode/arch，合并为一个 profile。
-- Not doing this round: 不删除旧 JSON 文件。
-- Current progress: 方案已确定，尚未实现。
+- Goal: 取消旧数据迁移。
+- Decision: 新版本完全忽略旧 `activeTarget`、`pinnedProject`、`targetToolchains` 和旧 `projects/` 文件。
+- Current progress: 已取消，保留本节作为决策记录。

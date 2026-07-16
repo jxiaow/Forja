@@ -70,7 +70,7 @@ function getBuildOutputDir(projectPath: string, kind: 'qt' | 'cpp'): string {
 
 // ── CLI options builder ──
 
-function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: boolean, qmakeArgs?: string): CliOptions {
+function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: boolean, qmakeArgs?: string, rccProjectPath?: string): CliOptions {
     const vsDevShell = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
     return {
         action: 'clean',
@@ -83,6 +83,8 @@ function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: b
         vsDevShell: vsDevShell,
         target: target.toolchain.qmakeTarget || null,
         qmakeArgs: qmakeArgs || null,
+        jomPath: target.toolchain.jomPath || null,
+        rccProjectPath: rccProjectPath || null,
         detach: false,
         saveLocal: false,
         json: false,
@@ -232,7 +234,8 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     const workroot = resolveWorkroot(workspace);
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
-    const cliOptions = buildCleanQtCliOptions(workspace, target, options.plan ?? false, qmakeArgs);
+    const rccProjectPath = wsConfig?.qtModulePrefs.rccProjectPath || undefined;
+    const cliOptions = buildCleanQtCliOptions(workspace, target, options.plan ?? false, qmakeArgs, rccProjectPath);
 
     try {
         const planned = await createActionPlan(cliOptions);

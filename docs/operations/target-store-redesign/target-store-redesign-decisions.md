@@ -1,6 +1,8 @@
 # Decision Log
 
-> Status date: 2026-07-09
+> Status date: 2026-07-16
+
+> **状态：superseded。** 有效的数据模型决策已并入 workroot-redesign；任何 migration/compatibility 描述均已取消。
 
 This file records key conclusions, deferral reasons, and reopen conditions during the current initiative.
 
@@ -17,7 +19,7 @@ This file records key conclusions, deferral reasons, and reopen conditions durin
 - Date: 2026-07-09
 - Conclusion: Store many target profiles under `targets`, but keep a single `activeTargetId`.
 - Reason: 用户需要保留多个 target，但 build/run/status 必须有唯一当前目标，避免 Qt/SDK 双当前状态互相覆盖。
-- Impact: `activeTarget`, Qt `pinnedProject`, SDK `pinnedProject`, and `targetToolchains` become legacy migration sources, not long-term target facts.
+- Impact: `activeTarget`, Qt `pinnedProject`, SDK `pinnedProject`, and `targetToolchains` are legacy-only fields. New code does not read, merge, migrate, or write them.
 - Reopen condition: Product requirement changes to parallel active targets or per-module active target semantics.
 
 ## DEC-003 Explicit saved profiles, scanned candidates stay transient
@@ -33,5 +35,5 @@ This file records key conclusions, deferral reasons, and reopen conditions durin
 - Date: 2026-07-09
 - Conclusion: `project`, `mode`, `arch`, `runAt`, target-specific toolchain, and `qmakeTarget` belong to TargetStore.
 - Reason: These fields define a target profile. Keeping them in Qt/SDK settings duplicates state and causes stale reads.
-- Impact: Qt/SDK settings keep module preferences only. Existing fields are migrated and then deprecated.
+- Impact: Qt/SDK settings keep module preferences only. Existing target fields are ignored rather than migrated.
 - Reopen condition: A target field is proven to be global module preference rather than profile-specific state.

@@ -1,5 +1,5 @@
 /**
- * C++ build plan creation — extracts core logic from cpp/cli/index.ts
+ * C++ build plan creation — shared build command assembly.
  * Returns CliResult format to reuse Qt's runCliResult execution engine.
  */
 import * as os from 'os';

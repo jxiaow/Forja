@@ -127,18 +127,27 @@ function atomicWriteFileSync(filePath: string, data: string): void {
 
 export function loadWorkspacesRegistry(): WorkspacesRegistry {
     const filePath = workspacesRegistryPath();
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            if (Array.isArray(raw.workroots)) {
-                return { workroots: raw.workroots.filter((r: unknown) => typeof r === 'string') };
-            }
-        }
-    } catch {
-        // corrupted — try recovery from per-workspace files
+    if (!fs.existsSync(filePath)) {
+        // No registry yet — try recovery from per-workspace files
+        return recoverRegistry();
     }
-    // Recovery: scan workspaces/ directory for orphan config files
-    return recoverRegistry();
+    let raw: string;
+    try {
+        raw = fs.readFileSync(filePath, 'utf8');
+    } catch {
+        // Unreadable — treat as empty
+        return recoverRegistry();
+    }
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.workroots)) {
+            return { workroots: parsed.workroots.filter((r: unknown) => typeof r === 'string') };
+        }
+        // Valid JSON but unexpected shape — recover
+        return recoverRegistry();
+    } catch {
+        throw new Error(`workspaces.json 损坏，请运行 forja init 重新配置: ${filePath}`);
+    }
 }
 
 function recoverRegistry(): WorkspacesRegistry {
@@ -235,21 +244,24 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
 
 export function loadWorkspaceConfig(workroot: string): WorkspaceConfig {
     const filePath = workspaceConfigPath(workroot);
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            return sanitizeWorkspaceConfig(raw);
-        }
-    } catch {
-        // corrupted — return empty
+    if (!fs.existsSync(filePath)) {
+        // File doesn't exist — not initialized, return empty
+        return {
+            workroot: normalizePath(workroot),
+            activeTarget: null,
+            targets: {},
+            qtModulePrefs: { ...DEFAULT_QT_MODULE_PREFS },
+            cppModulePrefs: { ...DEFAULT_CPP_MODULE_PREFS },
+        };
     }
-    return {
-        workroot: normalizePath(workroot),
-        activeTarget: null,
-        targets: {},
-        qtModulePrefs: { ...DEFAULT_QT_MODULE_PREFS },
-        cppModulePrefs: { ...DEFAULT_CPP_MODULE_PREFS },
-    };
+    const raw = fs.readFileSync(filePath, 'utf8');
+    let parsed: Record<string, unknown>;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        throw new Error(`workspace 配置损坏，请运行 forja init 重新配置: ${filePath}`);
+    }
+    return sanitizeWorkspaceConfig(parsed);
 }
 
 export function saveWorkspaceConfig(config: WorkspaceConfig): void {

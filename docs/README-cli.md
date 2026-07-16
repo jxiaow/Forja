@@ -86,10 +86,10 @@ forja run --detach                            # 后台运行
 forja server add --name dev --host 192.168.1.10 --username dev
 
 # 配置远程执行
-forja remote --server dev --remote-path /home/dev/workspace
+forja remote set --server dev --remote-path /home/dev/workspace
 
 # 远程初始化（通过 SSH 在远端执行 init）
-forja init --remote
+forja use execution --remote
 
 # 远程构建
 forja build
@@ -118,7 +118,7 @@ forja build
 
 ## VSCode 扩展与 CLI 的关系
 
-VSCode 扩展和 CLI 共享同一套配置存储（`~/.forja/projects/<hash>.json`）。在任一侧做的配置变更（选项目、切 mode/arch、配远程）在另一侧立即可见。
+VSCode 扩展和 CLI 共享同一套新配置存储（`~/.forja/workspaces/<hash>.json`）。旧 `~/.forja/projects/` 不读取、不迁移、不兼容。
 
 | 操作 | VSCode | CLI |
 |------|--------|-----|
@@ -134,7 +134,7 @@ VSCode 扩展和 CLI 共享同一套配置存储（`~/.forja/projects/<hash>.jso
 | 命令 | 用途 | 常用示例 |
 |------|------|----------|
 | `status` | 查看就绪状态 | `forja status` |
-| `init` | 首次初始化 | `forja init`、`forja init --remote` |
+| `init` | 首次初始化 | `forja init` |
 | `list` | 列出候选项 | `forja list targets`、`forja list env` |
 | `use` | 写入配置 | `forja use target --project`、`forja use execution --remote` |
 | `server` | 管理服务器 | `forja server add`、`forja server remove` |
@@ -167,7 +167,7 @@ forja status
 forja status --json
 ```
 
-`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `list targets` / `use target --project`；缺工具链时提示 `list env` / `use qt/sdk`；配置齐全后再提示 `build` 或 `run`。
+`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `list targets` / `use target --project`；缺工具链时提示 `list env` / `use target --qt/--vs/--jom`；配置齐全后再提示 `build` 或 `run`。
 
 ### `forja init`
 
@@ -204,23 +204,14 @@ forja use target --mode release --arch x64
 forja use execution --remote
 forja use execution --local
 
-# 配置同步
-forja setup remote --server server-1 --remote-path /home/dev/workspace
+# 当前支持的远程操作
+forja remote
+forja remote set --server server-1 --remote-path /home/dev/workspace
+forja remote restore <repo> <path>...
+forja remote reset <repo> <path>... --all
 
-# 配置远程执行
-forja remote --server server-1 --remote-path /home/dev/workspace
-
-# 配置远程高级选项
-forja remote repo set --local qt_client --remote qt_client --role primary
-forja remote forja-bin set --path /home/dev/.forja/bin/forja
-forja remote build-order set qt:build sdk:rebuild
-forja remote transfer set --server server-2 --path /deploy/app
-
-# 配置 Qt 工具链
-forja setup --qt-path /path/to/Qt --vs-dev-shell /path/to/Launch-VsDevShell.ps1
-
-# 配置 SDK 工具链
-forja setup --vs-dev-cmd "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/Tools/VsDevCmd.bat"
+# 配置 Qt/SDK(C++) 工具链
+forja use target --qt /path/to/Qt --vs "C:/Program Files/Microsoft Visual Studio/2022/Community" --jom /path/to/jom
 ```
 
 ### `forja server`
@@ -305,7 +296,7 @@ forja sync plan                         # 预览待同步文件
 | `--yes` | 跳过确认直接执行同步 |
 | `--reset` | 清除同步状态 |
 
-服务器列表存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/projects/<hash>.json`。
+服务器列表存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/workspaces/<hash>.json`。
 
 ## Remote 配置
 
@@ -313,22 +304,13 @@ forja sync plan                         # 预览待同步文件
 
 ```bash
 # 配置远程执行目标
-forja remote --server server-1 --remote-path /home/dev/workspace
+forja remote set --server server-1 --remote-path /home/dev/workspace
 
-# 配置远程仓库映射（staged 模式）
-forja remote repo set --local qt_client --remote qt_client --role primary --baseline auto --overlay true
-
-# 配置远程 forja 二进制路径
-forja remote forja-bin set --path /home/dev/.forja/bin/forja-with-env
-
-# 配置构建顺序
-forja remote build-order set qt:build sdk:rebuild
-
-# 配置部署传输
-forja remote transfer set --server server-2 --path /deploy/app --artifact out/app
 ```
 
-`--local` 和 `--remote` 是仓库名称，不是路径；它们必须是单段名称，不能包含 `/`、`\`、`.` 或 `..`。如果 Linux 侧依赖仓库不是 staged workspace 下的子目录，用 `--remote-path /absolute/remote/repo` 表达真实路径。
+当前版本的 repo/build-order/transfer 高级配置尚未纳入公开 CLI 契约，不能在脚本中使用。
+
+远程 repo/build-order/transfer 的公开参数尚未冻结；在契约冻结前不要依赖这些字段。
 
 如果远端无法安装或执行 forja CLI，staged 模式会对执行类动作尝试 shell fallback：Qt 支持 `qmake/build/clean/run/stop/ps`，SDK 支持 `build/rebuild/clean`。`init/use/status` 等远端持久配置或诊断动作仍依赖远端 forja。
 
@@ -362,7 +344,8 @@ forja remote transfer set --server server-2 --path /deploy/app --artifact out/ap
 
 ```text
 ~/.forja/
-├── projects/<hash>.json  # 当前 workspace 的 Qt/SDK/sync/remote 配置
+├── workspaces.json       # 已注册 workroot
+├── workspaces/<hash>.json # 当前 workspace 的 Qt/SDK/sync/remote 配置
 └── servers.json          # 服务器列表
 
 .forja/

@@ -586,7 +586,7 @@ async function handleRemote(argv: string[], workspace: string, wantsJson: boolea
             return;
         }
         case 'reset': {
-            const resetKnown = new Set(['--all', '--server']);
+            const resetKnown = new Set(['--all', '--server', '--force']);
             const resetWithVal = new Set(['--server']);
             const resetUnknown = findUnknownFlags(argv.slice(1), resetKnown, resetWithVal);
             if (resetUnknown.length > 0) {
@@ -608,7 +608,22 @@ async function handleRemote(argv: string[], workspace: string, wantsJson: boolea
                 process.exitCode = 1;
                 return;
             }
-            const result = await runRemoteReset(workspace, { repo, paths, all: hasFlag(argv, '--all'), server: extractFlag(argv, '--server') });
+            // Destructive action: require confirmation
+            const isAll = hasFlag(argv, '--all');
+            const forceFlag = hasFlag(argv, '--force');
+            if (!wantsJson && !forceFlag) {
+                const desc = isAll ? `reset ALL files in repo '${repo}'` : `reset ${paths.length} path(s) in repo '${repo}'`;
+                const yes = await confirm(`Remote reset: ${desc}. Continue?`, false);
+                if (!yes) {
+                    outputResult({ ok: false, action: 'remote', remoteAction: 'reset', changed: [], diagnostics: [{ level: 'info', message: 'Cancelled' }] }, wantsJson);
+                    return;
+                }
+            } else if (wantsJson && !forceFlag) {
+                outputResult({ ok: false, action: 'remote', remoteAction: 'reset', changed: [], diagnostics: [{ level: 'error', message: 'Destructive action requires --force in JSON mode' }], nextAction: 'forja remote reset <repo> <paths...> --force' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const result = await runRemoteReset(workspace, { repo, paths, all: isAll, server: extractFlag(argv, '--server') });
             outputResult(result, wantsJson, fmt);
             return;
         }
@@ -654,7 +669,7 @@ async function handleRemote(argv: string[], workspace: string, wantsJson: boolea
 // ── Server ──
 
 async function handleServer(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const srvKnown = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password','--strict-host-key-checking','--no-strict-host-key-checking','--detail']);
+    const srvKnown = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password','--strict-host-key-checking','--no-strict-host-key-checking','--detail','--force']);
     const srvWithVal = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password']);
     const srvUnknown = findUnknownFlags(argv, srvKnown, srvWithVal);
     if (srvUnknown.length > 0) {
@@ -751,6 +766,19 @@ async function handleServer(argv: string[], workspace: string, wantsJson: boolea
                     diagnostics: [{ level: 'error', message:`${T('idx.serverIdRequired')}: forja server remove <id>` }],
                     nextAction: 'forja server',
                 }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            // Destructive action: require confirmation
+            const forceFlag = hasFlag(argv, '--force');
+            if (!wantsJson && !forceFlag) {
+                const yes = await confirm(`Remove server '${id}'?`, false);
+                if (!yes) {
+                    outputResult({ ok: false, action: 'server', serverAction: 'remove', changed: [], diagnostics: [{ level: 'info', message: 'Cancelled' }] }, wantsJson);
+                    return;
+                }
+            } else if (wantsJson && !forceFlag) {
+                outputResult({ ok: false, action: 'server', serverAction: 'remove', changed: [], diagnostics: [{ level: 'error', message: 'Destructive action requires --force in JSON mode' }], nextAction: `forja server remove ${id} --force` }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
@@ -1038,7 +1066,7 @@ async function interactiveSyncSetup(workspace: string): Promise<{ ok: true } | {
 // ── Sync ──
 
 async function handleSync(argv: string[], workspace: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const syncUnknown = findUnknownFlags(argv, new Set(['--yes', '--file']), new Set(['--file']));
+    const syncUnknown = findUnknownFlags(argv, new Set(['--yes', '--file', '--force']), new Set(['--file']));
     if (syncUnknown.length > 0) {
         outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `${T('sync.unknownFlag')}: ${syncUnknown.join(', ')}` }], nextAction: 'forja sync' }, wantsJson);
         process.exitCode = 1;
@@ -1066,8 +1094,20 @@ async function handleSync(argv: string[], workspace: string, wantsJson: boolean,
         return;
     }
 
-    // reset subcommand: clear sync state
+    // reset subcommand: clear sync state (destructive — requires confirmation)
     if (subArg === 'reset') {
+        const forceFlag = hasFlag(argv, '--force');
+        if (!wantsJson && !forceFlag) {
+            const yes = await confirm('Sync reset: 清除所有同步状态。继续？', false);
+            if (!yes) {
+                outputResult({ ok: false, action: 'sync', syncAction: 'reset', diagnostics: [{ level: 'info', message: 'Cancelled' }] }, wantsJson);
+                return;
+            }
+        } else if (wantsJson && !forceFlag) {
+            outputResult({ ok: false, action: 'sync', syncAction: 'reset', diagnostics: [{ level: 'error', message: 'Destructive action requires --force in JSON mode' }], nextAction: 'forja sync reset --force' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
         const result = runSyncReset(workspace);
         outputResult(result, wantsJson, fmt);
         return;

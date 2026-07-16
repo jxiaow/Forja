@@ -10,7 +10,7 @@
 forja <subcommand> [action] [options]
 ```
 
-- 当前公开子命令：`status` | `setup` | `list` | `use` | `server` | `build` | `run` | `stop` | `clean` | `doctor` | `sync`
+- 当前公开子命令：`init` | `status` | `list` | `use` | `server` | `remote` | `build` | `run` | `stop` | `clean` | `doctor` | `sync`
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -35,17 +35,13 @@ forja <subcommand> [action] [options]
 
 无额外参数。runtime 信息始终包含在输出中。
 
-### `forja setup`
+### `forja init`
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `--plan` | boolean | 预览，不写入配置 |
-
-子命令：`forja setup remote`（远程初始化，自动探测服务器、部署、init）
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `--plan` | boolean | 预览，不执行 |
+| `--workroot <path>` | string | 指定并注册 workroot |
+| `--answers <path>` | string | 使用答案文件完成全新初始化 |
+| `--json` | boolean | 输出初始化问题或结果，不读取旧配置 |
 
 ### `forja list`
 
@@ -68,16 +64,18 @@ forja <subcommand> [action] [options]
 |--------|------|------|
 | `target` | `--project`, `--mode`, `--arch` | 选择项目和构建配置 |
 | `execution` | `--local`, `--remote` | 切换执行端 |
-| `sync` | `--server`, `--remote-path`, `--enable`, `--disable` | 配置同步 |
-| `remote` | `--server`, `--remote-path` | 快捷设置远程 |
-| `remote workspace` | `--mode`, `--path`, `--clear` | 远程 workspace |
-| `remote repo` | `--local`, `--remote`, `--role`, `--path`, `--clear`, `--remove` | 远程 repo 映射 |
-| `remote forja-bin` | `--path`, `--clear` | 远端 Forja 路径 |
-| `remote build-order` | 位置参数 `qt:build` 等, `--clear` | 构建顺序 |
-| `remote transfer` | `--server`, `--path`, `--artifact`, `--clear` | Artifact transfer |
-| `qt` | `--qt-path`, `--vs-dev-shell`, `--qmake-target`, `--qmake-args` | Qt 工具链 |
-| `sdk` | `--vs-dev-cmd` | SDK 工具链 |
 | `lang` | 位置参数 `zh\|en` | 界面语言 |
+
+### `forja remote`
+
+| 子命令 | 参数 | 说明 |
+|--------|------|------|
+| 无 | `--json` | 查看当前远程配置 |
+| `set` | `--server <id>`, `--remote-path <path>` | 设置远程服务器和路径 |
+| `restore <repo> <path...>` | `--server <id>` | 恢复远程工作区文件 |
+| `reset <repo> <path...>` | `--all`, `--server <id>` | 重置远程工作区文件；破坏性操作必须确认 |
+
+repo/build-order/transfer 高级配置不属于当前公开 CLI 契约，待后续工作包冻结后再补充。
 
 ### `forja server`
 
@@ -158,7 +156,7 @@ interface ForjaJsonResult {
 
 ```typescript
 interface ActiveTarget {
-  kind: 'qt' | 'sdk';
+  kind: 'qt' | 'cpp';
   project: string;
   mode: 'debug' | 'release';
   arch: 'x86' | 'x64';
@@ -201,26 +199,14 @@ interface StatusResult extends ForjaJsonResult {
   runtime?: RuntimeState;
 }
 
-interface SetupResult extends ForjaJsonResult {
-  action: 'setup';
+interface InitResult extends ForjaJsonResult {
+  action: 'init';
   local: {
     qtTargets: number;
     sdkTargets: number;
     toolchain: { qt?: boolean; vs?: boolean; jom?: boolean; make?: boolean };
     configured: boolean;
   };
-  remote?: {
-    serverId: string;
-    serverName: string;
-    host: string;
-    remotePath: string;
-    syncEnabled: boolean;
-    forjaDeployed: boolean;
-    forjaVersion?: string;
-    executionMode: 'local' | 'remote';
-    configured: boolean;
-  };
-  steps: Record<string, 'done' | 'skipped' | 'failed'>;
 }
 
 interface ListResult extends ForjaJsonResult {
@@ -302,59 +288,25 @@ interface SyncResult extends ForjaJsonResult {
 
 ## 配置文件格式
 
-### `~/.forja/projects/<hash>.json`
+### `~/.forja/workspaces.json`
 
-项目级配置由 `src/core/settingsIO.ts` 管理，按 workspace hash 存储。文件通过 `type` 区分配置域。
+新版本 workroot 注册表，只保存已确认的 workroot 路径。旧 `~/.forja/projects/` 不读取。
+
+### `~/.forja/workspaces/<hash>.json`
+
+项目级配置由 canonical workspace store 管理。新版本首次运行必须先执行 `forja init`；不读取、不迁移旧格式。
 
 ```jsonc
-// Qt 配置
+// Workspace 配置
 {
-  "type": "qt",
-  "mode": "debug",
-  "arch": "x86",
-  "qtPath": "",
-  "vsDevShellPath": "",
-  "pinnedProject": "",
-  "qmakeTarget": "",
-  "rccProjectPath": "",
-  "designerPath": "",
-  "customCommands": []
-}
-
-// SDK 配置
-{
-  "type": "sdk",
-  "mode": "debug",
-  "arch": "x86",
-  "vsDevCmdPath": ""
-}
-
-// Sync 配置
-{
-  "type": "sync",
-  "syncEnabled": true,
-  "syncSelectedServer": "server-uuid",
-  "syncRemotePath": "/home/dev/project",
-  "syncIgnore": "node_modules, build"
-}
-
-// Remote 配置
-{
-  "type": "remote",
-  "remoteWorkspace": "",
-  "remoteForjaBin": "",
-  "buildOrder": [],
-  "transfer": {}
-}
-
-// ActiveTarget 配置
-{
-  "type": "activeTarget",
-  "kind": "qt",
-  "project": "app/app.pro",
-  "mode": "debug",
-  "arch": "x64",
-  "runAt": "local"
+  "schemaVersion": 1,
+  "workroot": "C:/Code/myapp",
+  "activeTarget": "qt-app-debug-x64",
+  "targets": {},
+  "qtModulePrefs": {},
+  "cppModulePrefs": {},
+  "remote": {},
+  "sync": {}
 }
 ```
 

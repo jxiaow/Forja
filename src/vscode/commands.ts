@@ -39,7 +39,15 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     async function promptToolchainIfNeeded(kind: string) {
         const { getQtPath, getVsDevShellPath } = await import('../qt/services/configService');
         const { detectEnv } = await import('../qt/env/envDetector');
-        const { inferVsInstall, loadQtSettings, saveQtSettings, loadCppSettings, saveCppSettings } = await import('../core/settingsIO');
+        const { inferVsInstall } = await import('../core/settingsIO');
+        const { setQtSetting, setCppSetting } = await import('./settingsStore');
+        const { getActiveTarget } = await import('../core/workspaceStore');
+        const { resolveWorkroot, loadWorkspaceConfig } = await import('../core/workspaceStore');
+
+        const ws = workspace();
+        const workroot = resolveWorkroot(ws);
+        const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+        const hasActiveTarget = wsConfig ? getActiveTarget(wsConfig) !== null : false;
 
         if (kind === 'qt' && !getQtPath()) {
             const env = await detectEnv();
@@ -53,10 +61,10 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     placeHolder: '检测到多个 Qt 版本，请选择一个',
                 });
                 if (picked) {
-                    const ws = workspace();
-                    const current = loadQtSettings(ws);
-                    saveQtSettings(ws, { ...current, qtPath: picked.path });
-                    vscode.window.showInformationMessage(`Qt 路径已设置: ${picked.path}`);
+                    if (hasActiveTarget) {
+                        setQtSetting('qtPath', picked.path);
+                    }
+                    vscode.window.showInformationMessage(`Qt 路径已选择: ${picked.path}${hasActiveTarget ? '' : '（选择目标后将自动应用）'}`);
                 }
             }
         }
@@ -73,10 +81,10 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     placeHolder: '检测到多个 Visual Studio 版本，请选择一个',
                 });
                 if (picked) {
-                    const ws = workspace();
-                    const current = loadCppSettings(ws);
-                    saveCppSettings(ws, { ...current, vsInstall: inferVsInstall(picked.devShellPath) });
-                    vscode.window.showInformationMessage(`VS 路径已设置: ${picked.label}`);
+                    if (hasActiveTarget) {
+                        setCppSetting('vsInstall', inferVsInstall(picked.devShellPath));
+                    }
+                    vscode.window.showInformationMessage(`VS 路径已选择: ${picked.label}${hasActiveTarget ? '' : '（选择目标后将自动应用）'}`);
                 }
             }
         }
@@ -407,23 +415,23 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('forja.build', async (action?: string) => {
             let target = await resolveActiveTarget();
 
-            // Fallback: if no activeTarget but C++ module is active, synthesize from C++ state
+            // Fallback: if no activeTarget but C++ module is active, synthesize from workspaceStore
             if (!target) {
                 const { getActiveModule } = await import('../ui/statusBar');
                 if (getActiveModule() === 'cpp') {
-                    const { loadCppSettings } = await import('../core/settingsIO');
-                    const cppSettings = loadCppSettings(workspace());
-                    if (cppSettings.pinnedProject) {
+                    const { getCppSetting } = await import('./settingsStore');
+                    const pinnedProject = getCppSetting('pinnedProject');
+                    if (pinnedProject) {
                         target = {
                             id: '',
                             name: '',
                             kind: 'cpp' as const,
-                            project: cppSettings.pinnedProject,
-                            mode: (cppSettings.mode || 'debug') as 'debug' | 'release',
-                            arch: (cppSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+                            project: pinnedProject as string,
+                            mode: (getCppSetting('mode') || 'debug') as 'debug' | 'release',
+                            arch: (getCppSetting('arch') || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
                             runAt: 'local' as const,
                             toolchain: {
-                                vsInstall: cppSettings.vsInstall,
+                                vsInstall: getCppSetting('vsInstall') as string,
                             },
                         };
                     }
@@ -599,23 +607,23 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('forja.clean', async () => {
             let target = await resolveActiveTarget();
 
-            // Fallback: if no activeTarget but C++ module is active, synthesize from C++ state
+            // Fallback: if no activeTarget but C++ module is active, synthesize from workspaceStore
             if (!target) {
                 const { getActiveModule } = await import('../ui/statusBar');
                 if (getActiveModule() === 'cpp') {
-                    const { loadCppSettings } = await import('../core/settingsIO');
-                    const cppSettings = loadCppSettings(workspace());
-                    if (cppSettings.pinnedProject) {
+                    const { getCppSetting } = await import('./settingsStore');
+                    const pinnedProject = getCppSetting('pinnedProject');
+                    if (pinnedProject) {
                         target = {
                             id: '',
                             name: '',
                             kind: 'cpp' as const,
-                            project: cppSettings.pinnedProject,
-                            mode: (cppSettings.mode || 'debug') as 'debug' | 'release',
-                            arch: (cppSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+                            project: pinnedProject as string,
+                            mode: (getCppSetting('mode') || 'debug') as 'debug' | 'release',
+                            arch: (getCppSetting('arch') || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
                             runAt: 'local' as const,
                             toolchain: {
-                                vsInstall: cppSettings.vsInstall,
+                                vsInstall: getCppSetting('vsInstall') as string,
                             },
                         };
                     }

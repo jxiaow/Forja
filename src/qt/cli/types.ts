@@ -17,6 +17,8 @@ export interface CliOptions {
     vsDevShell: string | null;
     target: string | null;
     qmakeArgs?: string | null;
+    jomPath?: string | null;
+    rccProjectPath?: string | null;
     detach?: boolean;
     saveLocal: boolean;
     json: boolean;

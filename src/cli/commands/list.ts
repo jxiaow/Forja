@@ -312,12 +312,12 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
     if (servers.length === 0) {
         nextAction = 'forja server add --name <name> --host <host> --username <name>';
     } else if (servers.length === 1) {
-        nextAction = `forja remote set --server ${servers[0].id}`;
+        nextAction = `forja remote set --server ${servers[0].name}`;
     } else if (servers.length <= 5) {
-        const ids = servers.map(s => s.id).join('|');
-        nextAction = `forja remote set --server <${ids}>`;
+        const names = servers.map(s => s.name).join('|');
+        nextAction = `forja remote set --server <${names}>`;
     } else {
-        nextAction = 'forja remote set --server <id>';
+        nextAction = 'forja remote set --server <name>';
     }
     return {
         ok: true,

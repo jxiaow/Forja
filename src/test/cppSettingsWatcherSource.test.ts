@@ -84,6 +84,6 @@ test('C++ builder refuses to build when current project file no longer exists', 
 test('developer docs describe unified sync settings storage', () => {
     const docs = fs.readFileSync(path.join(process.cwd(), 'docs', 'development.md'), 'utf8');
 
-    assert.match(docs, /~\/\.forja\/projects\/<hash>\.json/);
+    assert.match(docs, /~\/\.forja\/workspaces\/<hash>\.json/);
     assert.doesNotMatch(docs, /\.forja\/settings\.json/);
 });

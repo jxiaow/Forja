@@ -370,14 +370,12 @@ const UI: Record<string, { en: string; zh: string }> = {
     makeLabel:                     { en: 'make:',                        zh: 'make：' },
     roleLabel:                     { en: 'role:',                        zh: '角色：' },
     // setup summary labels (used by use.ts / report.ts)
-    setupTitle:                    { en: 'Forja Setup',                  zh: 'Forja 初始化' },
-    setupSummaryTarget:            { en: 'Target',                       zh: '目标' },
+    setupTitle:                    { en: 'Target Configuration',          zh: 'Forja 初始化' },
     setupSummaryQt:                { en: 'Qt',                           zh: 'Qt' },
     setupSummaryVs:                { en: 'VS',                           zh: 'VS' },
     setupSummaryModeArch:          { en: 'Mode/Arch',                    zh: '模式/架构' },
     // server selection (used by index.ts)
     setupSelectServer:             { en: 'Select a server:',                zh: '选择服务器：' },
-    setupCancelServerSelection:    { en: 'Cancel',                          zh: '取消' },
     setupRemotePathPrompt:         { en: 'Remote path',                     zh: '远程路径' },
     // server creation (used by index.ts)
     setupServerCreated:            { en: 'Server created',                zh: '已创建服务器' },
@@ -471,8 +469,50 @@ const UI: Record<string, { en: string; zh: string }> = {
     doctorCheckCleanUntracked:     { en: 'clean-untracked',              zh: '清理未跟踪' },
     // help texts
     'help.toplevel': {
-        en: 'Usage: forja <command> [action] [options]\n\nCommands:\n  init       Register work root and configure initial target\n  status     Show workspace readiness\n  list       List targets, env\n  use        Select target and execution mode\n  server     Manage remote servers (add/update/remove)\n  remote     Manage remote configuration\n  build      Build the active target\n  run        Run the built application\n  stop       Stop a running application\n  clean      Clean build artifacts\n  doctor     Deep diagnostics and recovery\n  sync       Sync files with remote server\n\nGlobal options:\n  --help, -h       Show help\n  --version, -v    Show version\n  --json           JSON output\n  --lang <locale>  Language: zh or en\n  --workspace <p>  Specify workspace (default: cwd)',
-        zh: '用法: forja <命令> [动作] [选项]\n\n命令:\n  init       注册工作根目录并配置初始目标\n  status     查看工作区就绪状态\n  list       列出目标、环境\n  use        选择目标和执行模式\n  server     管理远程服务器（添加/更新/删除）\n  remote     管理远程配置\n  build      构建当前目标\n  run        运行已构建的应用\n  stop       停止运行中的应用\n  clean      清理构建产物\n  doctor     深度诊断与修复\n  sync       与远程服务器同步文件\n\n全局选项:\n  --help, -h       显示帮助\n  --version, -v    显示版本\n  --json           JSON 输出\n  --lang <locale>  语言: zh 或 en\n  --workspace <p>  指定工作区（默认当前目录）',
+        en: `Usage: forja <command> [action] [options]
+
+Commands:
+  init       Register work root and configure initial target
+  status     Show workspace readiness
+  list       List targets, env
+  use        Select target and execution mode
+  server     Manage remote servers (add/update/remove)
+  remote     Manage remote configuration
+  build      Build the active target
+  run        Run the built application
+  stop       Stop a running application
+  clean      Clean build artifacts
+  doctor     Deep diagnostics and recovery
+  sync       Sync files with remote server
+
+Global options:
+  --help, -h       Show help
+  --version, -v    Show version
+  --json           JSON output
+  --lang <locale>  Language: zh or en
+  --workspace <p>  Specify workspace (default: cwd)`,
+        zh: `用法: forja <命令> [动作] [选项]
+
+命令:
+  init       注册工作根目录并配置初始目标
+  status     查看工作区就绪状态
+  list       列出目标、环境
+  use        选择目标和执行模式
+  server     管理远程服务器（添加/更新/删除）
+  remote     管理远程配置
+  build      构建当前目标
+  run        运行已构建的应用
+  stop       停止运行中的应用
+  clean      清理构建产物
+  doctor     深度诊断与修复
+  sync       与远程服务器同步文件
+
+全局选项:
+  --help, -h       显示帮助
+  --version, -v    显示版本
+  --json           JSON 输出
+  --lang <locale>  语言: zh 或 en
+  --workspace <p>  指定工作区（默认当前目录）`,
     },
     'help.status': {
         en: `Usage:
@@ -543,8 +583,22 @@ Target 选项:
     --rm <代码>                 从列表删除`,
     },
     'help.remote': {
-        en: 'Usage: forja remote [action] [options] [--json]\n\n  forja remote                                    Show remote configuration\n  forja remote set --server <name> --remote-path <path>\n                                                  Set remote server and path\n  forja remote restore <repo> <paths...>          Restore remote workspace\n  forja remote reset <repo> <paths...> [--all]    Reset remote workspace',
-        zh: '用法: forja remote [动作] [选项] [--json]\n\n  forja remote                                    显示远程配置\n  forja remote set --server <名称> --remote-path <路径>\n                                                  设置远程服务器和路径\n  forja remote restore <仓库> <路径...>            恢复远程工作区\n  forja remote reset <仓库> <路径...> [--all]      重置远程工作区',
+        en: `Usage: forja remote [action] [options] [--json]
+
+  forja remote                                    Show remote configuration
+  forja remote set --server <name> --remote-path <path>
+                                                  Set remote server and path
+  forja remote restore <repo> <paths...>          Restore remote workspace
+  forja remote reset <repo> <paths...> [--all] [--force]
+                                                  Reset remote workspace (--force for non-interactive)`,
+        zh: `用法: forja remote [动作] [选项] [--json]
+
+  forja remote                                    显示远程配置
+  forja remote set --server <名称> --remote-path <路径>
+                                                  设置远程服务器和路径
+  forja remote restore <仓库> <路径...>            恢复远程工作区
+  forja remote reset <仓库> <路径...> [--all] [--force]
+                                                  重置远程工作区（非交互模式需 --force）`,
     },
     'help.build': {
         en: `Usage:
@@ -573,8 +627,26 @@ Options:
   --workspace <路径>      工作区目录（默认当前目录）`,
     },
     'help.run': {
-        en: 'Usage: forja run [subcommand] [options] [--json]\n\nSubcommands:\n  designer <ui-file>                       Open Qt Designer with UI file\n  custom <name>                            Run custom command\n\nOptions:\n  --detach                                 Run in background\n  --plan                                   Dry run, show commands without executing\n  --json                                   Output as JSON',
-        zh: '用法: forja run [子命令] [选项] [--json]\n\n子命令:\n  designer <ui文件>                        打开 Qt Designer 加载 UI 文件\n  custom <名称>                            运行自定义命令\n\n选项:\n  --detach                                 后台运行\n  --plan                                   预演模式，只显示命令不执行\n  --json                                   JSON 输出',
+        en: `Usage: forja run [subcommand] [options] [--json]
+
+Subcommands:
+  designer <ui-file>                       Open Qt Designer with UI file
+  custom <name>                            Run custom command
+
+Options:
+  --detach                                 Run in background
+  --plan                                   Dry run, show commands without executing
+  --json                                   Output as JSON`,
+        zh: `用法: forja run [子命令] [选项] [--json]
+
+子命令:
+  designer <ui文件>                        打开 Qt Designer 加载 UI 文件
+  custom <名称>                            运行自定义命令
+
+选项:
+  --detach                                 后台运行
+  --plan                                   预演模式，只显示命令不执行
+  --json                                   JSON 输出`,
     },
     'help.stop': {
         en: 'Usage: forja stop [--json]',
@@ -629,6 +701,9 @@ Options:
     'init.modifyAction':                { en: 'Modify an existing target',            zh: '修改现有目标' },
     'init.exitAction':                  { en: 'Exit',                                 zh: '退出' },
     'init.newWorkroot':                 { en: 'Initializing new workspace',           zh: '初始化新工作区' },
+    'init.confirmWorkroot':             { en: 'Use this directory as work root?',      zh: '使用此目录作为工作根目录？' },
+    'init.workrootHint':                { en: 'The work root is the top-level directory under which all build targets are managed.', zh: '工作根目录是管理所有构建目标的最顶层目录。' },
+    'init.workrootSuggestion':          { en: 'Choose the root that contains all project files — not a subdirectory (e.g. src/, build/) — otherwise targets outside it will be inaccessible.', zh: '应选择包含所有项目文件的顶层目录，而非子目录（如 src/、build/），否则后续无法访问上级目录中的其他目标。' },
     'init.foundProjects':               { en: 'Found projects',                       zh: '找到项目' },
     'init.noProjectsFound':             { en: 'No projects found in work root',       zh: '工作根目录下未找到项目' },
     'init.selectProject':               { en: 'Select a project',                     zh: '选择项目' },
@@ -815,8 +890,20 @@ Options:
     },
     // server help — document no-arg list behavior
     'help.server.full': {
-        en: 'Usage: forja server [<add|update|remove>] [options] [--json]\n\n  forja server                  List all servers\n  forja server add              Add a new server\n  forja server update <id>      Update an existing server\n  forja server remove <id>      Remove a server',
-        zh: '用法: forja server [<add|update|remove>] [选项] [--json]\n\n  forja server                  列出所有服务器\n  forja server add              添加新服务器\n  forja server update <id>      更新已有服务器\n  forja server remove <id>      删除服务器',
+        en: `Usage: forja server [<add|update|remove>] [options] [--json]
+
+  forja server                  List all servers
+  forja server add              Add a new server
+  forja server update <id>      Update an existing server
+  forja server remove <id> [--force]
+                                Remove a server (--force for non-interactive)`,
+        zh: `用法: forja server [<add|update|remove>] [选项] [--json]
+
+  forja server                  列出所有服务器
+  forja server add              添加新服务器
+  forja server update <id>      更新已有服务器
+  forja server remove <id> [--force]
+                                删除服务器（非交互模式需 --force）`,
     },
 };
 

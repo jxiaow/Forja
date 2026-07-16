@@ -260,6 +260,22 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
     // Interactive flow
     console.log(T('init.newWorkroot'));
     console.log(`  ${T('init.workroot')}: ${workroot}`);
+    console.log(`  ${T('init.workrootHint')}`);
+    console.log(`  ${T('init.workrootSuggestion')}`);
+
+    // Confirm or change workroot before scanning
+    const confirmed = await confirm(T('init.confirmWorkroot'), true);
+    if (!confirmed) {
+        const newRoot = await prompt(`${T('init.workroot')}: `);
+        if (!newRoot) {
+            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.configurationCancelled') }] };
+        }
+        workroot = path.resolve(newRoot);
+        if (!fs.existsSync(workroot)) {
+            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('init.workrootNotFound')}: ${workroot}` }] };
+        }
+        console.log(`  ${T('init.workroot')}: ${workroot}`);
+    }
 
     const candidates = await scanProjects(workroot);
     if (candidates.length === 0) {

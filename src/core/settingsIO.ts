@@ -255,32 +255,9 @@ export function clearCorruptedConfigs(): void {
     _corruptedConfigs.length = 0;
 }
 
-// ── Qt 配置读写 ──
-
-export function loadQtSettings(workspace: string): QtSettings {
-    const filePath = resolveConfigPath(workspace, 'qt');
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            return sanitizeQt(raw);
-        }
-    } catch (e) {
-        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
-        warnSettingsLoadFailure('qt', filePath, e);
-    }
-    return { ...DEFAULT_QT };
-}
-
-export function saveQtSettings(workspace: string, settings: QtSettings): void {
-    const filePath = projectConfigPath(workspace, 'qt');
-    _ensureDir(filePath);
-    const data: Record<string, unknown> = {
-        workspace,
-        type: 'qt',
-        ...settings
-    };
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
-}
+// ── Qt 配置读写（已废弃 — workroot 模型下由 workspaceStore 替代） ──
+// loadQtSettings / saveQtSettings 已移除，无生产代码引用。
+// 旧配置 ~/.forja/projects/<hash>.json 不再被读取。
 
 // ── C++ 配置读写 ──
 

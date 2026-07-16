@@ -30,8 +30,9 @@ const cleanup = () => {
 };
 
 function run(args: string, cwd?: string): { code: number; out: string; err: string } {
+    const cliPath = path.join(process.cwd(), 'out', 'cli', 'index.js');
     try {
-        const out = execSync(`forja ${args}`, {
+        const out = execSync(`node ${cliPath} ${args}`, {
             cwd: cwd || TEST_DIR,
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'pipe'],
@@ -216,7 +217,7 @@ test('server add → list servers 能看到', () => {
     assert.equal(found.host, '127.0.0.1');
 
     // 清理
-    run(`server remove ${found.id}`);
+    run(`server remove ${found.id} --force`);
 });
 
 test('server update 实际修改了数据', () => {
@@ -231,7 +232,7 @@ test('server update 实际修改了数据', () => {
     const found = listResult.servers?.find((s: any) => s.id === addResult.server.id);
     assert.equal(found?.host, '2.2.2.2', 'host 必须已更新');
 
-    run(`server remove ${addResult.server.id}`);
+    run(`server remove ${addResult.server.id} --force`);
 });
 
 test('use lang → 配置持久化一致', () => {
@@ -265,7 +266,7 @@ test('status nextAction: 有 server 时显示实际名称', () => {
         }
     }
 
-    run(`server remove ${addResult.server.id}`);
+    run(`server remove ${addResult.server.id} --force`);
 });
 
 test('server nextActions: <=5 个显示名字列表', () => {
@@ -294,7 +295,7 @@ test('server nextActions: <=5 个显示名字列表', () => {
         assert.match(remoteAction, /--server <name>/, '超过 5 个应显示 <name>');
     }
 
-    for (const id of ids) { run(`server remove ${id}`); }
+    for (const id of ids) { run(`server remove ${id} --force`); }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -382,7 +383,7 @@ test('server 完整 CRUD 流程', () => {
     assert.equal(updated.port, 3333, 'port 必须已更新');
 
     // Delete
-    const removeResult = json(`server remove ${serverId}`);
+    const removeResult = json(`server remove ${serverId} --force`);
     assert.ok(removeResult.ok, 'remove 必须成功');
     assert.equal(removeResult.serverAction, 'remove');
 
@@ -400,7 +401,7 @@ test('server add 缺少必填参数报错', () => {
 });
 
 test('server remove 不存在的 ID 报错', () => {
-    const r = json('server remove nonexistent-id-12345');
+    const r = json('server remove nonexistent-id-12345 --force');
     assert.ok(r);
     assert.equal(r.ok, false);
 });
@@ -456,16 +457,16 @@ test('remote --server 设置服务器', () => {
     assert.ok(addResult.ok);
 
     // 设置远程
-    const r = json(`remote --server ${name}`);
+    const r = json(`remote set --server ${name}`);
     assert.ok(r);
     assert.equal(r.ok, true);
 
     // 清理
-    run(`server remove ${addResult.server.id}`);
+    run(`server remove ${addResult.server.id} --force`);
 });
 
 test('remote --server 不存在的服务器报错', () => {
-    const r = json('remote --server nonexistent-server');
+    const r = json('remote set --server nonexistent-server');
     assert.ok(r);
     assert.equal(r.ok, false);
 });
@@ -488,7 +489,7 @@ test('server --detail 显示服务器详情', () => {
     assert.match(r.out, /detailuser/, '必须包含 username');
 
     // 清理
-    run(`server remove ${addResult.server.id}`);
+    run(`server remove ${addResult.server.id} --force`);
 });
 
 test('list targets 显示项目信息', () => {
@@ -550,7 +551,7 @@ test('server add 后配置持久化', () => {
     assert.equal(found.host, '9.9.9.9');
 
     // 清理
-    run(`server remove ${found.id}`);
+    run(`server remove ${found.id} --force`);
 });
 
 // ═══════════════════════════════════════════════════════════════

@@ -39,10 +39,10 @@ test('COMMANDS array includes all implemented commands', () => {
 
 test('`forja init` is a valid command for workroot registration', () => { const activeTargetSrc = source('src/cli/commands/activeTarget.ts'); assert.ok(activeTargetSrc.includes("'forja init'"), 'activeTarget.ts should suggest forja init when workroot not registered'); });
 
-test('qtCore.ts nextActions reference `forja use target` not `forja init`', () => {
+test('qtCore.ts is a pure build plan builder (no settingsIO fallback)', () => {
     const qtCore = source('src/qt/shared/qtCore.ts');
-    assert.ok(!qtCore.includes('forja init'), 'qtCore.ts must not reference `forja init`');
-    assert.ok(qtCore.includes('forja use target'), 'qtCore.ts must reference `forja use target`');
+    assert.ok(!qtCore.includes('loadQtSettings'), 'qtCore.ts must not import loadQtSettings');
+    assert.ok(!qtCore.includes('saveQtSettings'), 'qtCore.ts must not import saveQtSettings');
 });
 
 // ── List categories ──

@@ -54,7 +54,7 @@ forja sync        — 同步变更文件到远程
 interface TargetProfile {
     id: string;               // 如 "qt-app-debug-x64"
     name: string;
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;          // workroot 相对路径
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';
@@ -74,7 +74,7 @@ interface TargetProfile {
 
 ```ts
 interface ActiveTarget {
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';

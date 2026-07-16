@@ -20,6 +20,7 @@ let _resolvedQt: string | null = null;
 let _resolvedCpp: string | null = null;
 let _resolvedSync: string | null = null;
 let _watcherRegistered = false;
+let _activeFolderIndex: number = -1;
 
 function _resetResolvedRoots(): void {
     _resolvedQt = null;
@@ -32,7 +33,26 @@ export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void
     if (_watcherRegistered) { return; }
     _watcherRegistered = true;
     context.subscriptions.push(
-        vscode.workspace.onDidChangeWorkspaceFolders(() => _resetResolvedRoots())
+        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            _resetResolvedRoots();
+            _activeFolderIndex = -1;
+        })
+    );
+
+    // 监听活跃编辑器变化，更新 active folder
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(editor => {
+            if (!editor) { return; }
+            const folders = vscode.workspace.workspaceFolders;
+            if (!folders || folders.length <= 1) { return; }
+            const fileUri = editor.document.uri;
+            if (fileUri.scheme !== 'file') { return; }
+            const idx = vscode.workspace.getWorkspaceFolder(fileUri);
+            if (idx && idx.index !== _activeFolderIndex) {
+                _activeFolderIndex = idx.index;
+                _resetResolvedRoots();
+            }
+        })
     );
 
     // 监听 workspaces.json 变化，重置缓存
@@ -85,11 +105,28 @@ function _resolveFromRegistry(_module: ModuleType): string {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) { return ''; }
 
-    const registry = loadWorkspacesRegistry();
+    let registry;
+    try {
+        registry = loadWorkspacesRegistry();
+    } catch {
+        // workspaces.json 损坏 — 返回空，命令执行时会报错
+        return '';
+    }
     if (registry.workroots.length === 0) { return ''; }
 
+    // 如果有 active folder（multi-root 场景下跟随活跃编辑器），优先尝试该 folder
+    const orderedFolders: vscode.WorkspaceFolder[] = [];
+    if (_activeFolderIndex >= 0 && _activeFolderIndex < folders.length) {
+        orderedFolders.push(folders[_activeFolderIndex]);
+        for (let i = 0; i < folders.length; i++) {
+            if (i !== _activeFolderIndex) { orderedFolders.push(folders[i]); }
+        }
+    } else {
+        orderedFolders.push(...folders);
+    }
+
     // 对每个 folder，查找匹配的 workroot（最深前缀匹配）
-    for (const folder of folders) {
+    for (const folder of orderedFolders) {
         const folderNorm = normalizePath(folder.uri.fsPath);
         let bestMatch: string | null = null;
         let bestLen = -1;

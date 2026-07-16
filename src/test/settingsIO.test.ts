@@ -4,11 +4,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-    DEFAULT_QT,
     DEFAULT_CPP,
     DEFAULT_SYNC,
-    loadQtSettings,
-    saveQtSettings,
     loadCppSettings,
     saveCppSettings,
     loadSyncSettings,
@@ -59,178 +56,7 @@ function captureOutputLines<T>(fn: () => T): { result: T; lines: string[] } {
     }
 }
 
-// ── loadQtSettings ──
-
-test('loadQtSettings returns defaults when no config exists', () => {
-    const workspace = makeWorkspace();
-    const settings = loadQtSettings(workspace);
-    assert.deepEqual(settings, DEFAULT_QT);
-});
-
-test('loadQtSettings reads from ~/.forja/projects/<hash>.json', () => {
-    const workspace = makeWorkspace();
-    const filePath = projectConfigPath(workspace, 'qt');
-    trackFile(filePath);
-
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
-    fs.writeFileSync(filePath, JSON.stringify({
-        workspace,
-        type: 'qt',
-        qtPath: 'D:/Qt/5.15',
-        mode: 'release'
-    }), 'utf8');
-
-    const settings = loadQtSettings(workspace);
-    assert.equal(settings.qtPath, 'D:/Qt/5.15');
-    assert.equal(settings.mode, 'release');
-    // 未指定的字段使用默认值
-    assert.equal(settings.arch, '');
-    assert.equal(settings.cStandard, 'c11');
-    assert.equal(settings.fileSyncPromptEnabled, true);
-    assert.equal(settings.pinnedProject, null);
-    assert.equal(settings.qmakeArgs, '');
-});
-
-test('loadQtSettings preserves all field types correctly', () => {
-    const workspace = makeWorkspace();
-    const filePath = projectConfigPath(workspace, 'qt');
-    trackFile(filePath);
-
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
-    fs.writeFileSync(filePath, JSON.stringify({
-        workspace,
-        type: 'qt',
-        qtPath: 'D:/Qt',
-        arch: 'x64',
-        mode: 'release',
-        qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug',
-        scanExcludeDirs: ['vendor'],
-        pinnedProject: { root: 'C:/ws', relative: 'app.pro' },
-        fileSyncPromptEnabled: false,
-        qmakeReminderEnabled: false
-    }), 'utf8');
-
-    const settings = loadQtSettings(workspace);
-    assert.equal(settings.qtPath, 'D:/Qt');
-    assert.equal(settings.arch, 'x64');
-    assert.equal(settings.mode, 'release');
-    assert.equal(settings.qmakeArgs, 'DEFINES+=FEATURE_X CONFIG+=qml_debug');
-    assert.deepEqual(settings.scanExcludeDirs, ['vendor']);
-    assert.deepEqual(settings.pinnedProject, { root: 'C:/ws', relative: 'app.pro' });
-    assert.equal(settings.fileSyncPromptEnabled, false);
-    assert.equal(settings.qmakeReminderEnabled, false);
-});
-
-test('loadQtSettings returns defaults when file is malformed', () => {
-    const workspace = makeWorkspace();
-    const filePath = projectConfigPath(workspace, 'qt');
-    trackFile(filePath);
-
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
-    fs.writeFileSync(filePath, '{ invalid json !!!', 'utf8');
-
-    const { result: settings, lines } = captureOutputLines(() => loadQtSettings(workspace));
-    assert.deepEqual(settings, DEFAULT_QT);
-    assert.equal(lines.length, 1);
-    assert.match(lines[0], /\[WARN\]/);
-    assert.match(lines[0], /qt 配置读取失败/);
-    assert.match(lines[0], /invalid json/i);
-    assert.match(lines[0], new RegExp(escapeRegExp(filePath)));
-    fs.rmSync(filePath, { force: true });
-});
-
-test('loadQtSettings uses unique child workspace config from parent directory', () => {
-    const parent = makeWorkspace();
-    const child = path.join(parent, 'qt_client');
-    fs.mkdirSync(child, { recursive: true });
-    trackFile(projectConfigPath(child, 'qt'));
-
-    saveQtSettings(child, {
-        ...DEFAULT_QT,
-        qtPath: 'D:/Qt/5.15',
-        mode: 'release',
-        arch: 'x86',
-        pinnedProject: { root: child, relative: 'client.pro' }
-    });
-
-    const loaded = loadQtSettings(parent);
-    assert.equal(loaded.qtPath, 'D:/Qt/5.15');
-    assert.equal(loaded.mode, 'release');
-    assert.deepEqual(loaded.pinnedProject, { root: child, relative: 'client.pro' });
-});
-
-test('loadQtSettings does not guess when parent directory has multiple child configs', () => {
-    const parent = makeWorkspace();
-    const first = path.join(parent, 'qt_client');
-    const second = path.join(parent, 'qt_tool');
-    fs.mkdirSync(first, { recursive: true });
-    fs.mkdirSync(second, { recursive: true });
-    trackFile(projectConfigPath(first, 'qt'));
-    trackFile(projectConfigPath(second, 'qt'));
-
-    saveQtSettings(first, { ...DEFAULT_QT, qtPath: 'D:/Qt/first' });
-    saveQtSettings(second, { ...DEFAULT_QT, qtPath: 'D:/Qt/second' });
-
-    const loaded = loadQtSettings(parent);
-    assert.deepEqual(loaded, DEFAULT_QT);
-});
-
-// ── saveQtSettings ──
-
-test('saveQtSettings writes to ~/.forja/projects/ with workspace and type fields', () => {
-    const workspace = makeWorkspace();
-    const filePath = projectConfigPath(workspace, 'qt');
-    trackFile(filePath);
-
-    saveQtSettings(workspace, { ...DEFAULT_QT, qtPath: 'C:/Qt/6.5', mode: 'release', arch: 'x64' });
-
-    assert.equal(fs.existsSync(filePath), true);
-    const loaded = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    assert.equal(loaded.workspace, workspace);
-    assert.equal(loaded.type, 'qt');
-    assert.equal(loaded.qtPath, 'C:/Qt/6.5');
-    assert.equal(loaded.mode, 'release');
-    assert.equal(loaded.arch, 'x64');
-});
-
-test('saveQtSettings round-trips with loadQtSettings', () => {
-    const workspace = makeWorkspace();
-    trackFile(projectConfigPath(workspace, 'qt'));
-
-    const original = {
-        ...DEFAULT_QT,
-        qtPath: 'D:/Qt',
-        pinnedProject: { root: 'C:/workspace', relative: 'app/demo.pro' },
-        scanExcludeDirs: ['vendor', 'third_party'],
-        qmakeArgs: 'DEFINES+=FEATURE_X',
-        fileSyncPromptEnabled: false,
-        qmakeReminderEnabled: false
-    };
-
-    saveQtSettings(workspace, original);
-    const loaded = loadQtSettings(workspace);
-
-    assert.equal(loaded.qtPath, 'D:/Qt');
-    assert.deepEqual(loaded.pinnedProject, { root: 'C:/workspace', relative: 'app/demo.pro' });
-    assert.deepEqual(loaded.scanExcludeDirs, ['vendor', 'third_party']);
-    assert.equal(loaded.qmakeArgs, 'DEFINES+=FEATURE_X');
-    assert.equal(loaded.fileSyncPromptEnabled, false);
-    assert.equal(loaded.qmakeReminderEnabled, false);
-});
-
-test('saveQtSettings overwrites existing file', () => {
-    const workspace = makeWorkspace();
-    trackFile(projectConfigPath(workspace, 'qt'));
-
-    saveQtSettings(workspace, { ...DEFAULT_QT, qtPath: 'first' });
-    saveQtSettings(workspace, { ...DEFAULT_QT, qtPath: 'second' });
-
-    const loaded = loadQtSettings(workspace);
-    assert.equal(loaded.qtPath, 'second');
-});
+// ── loadQtSettings / saveQtSettings — 已移除（workroot 模型下由 workspaceStore 替代） ──
 
 // ── C++ ──
 
@@ -470,9 +296,10 @@ test('projectConfigPath is case-insensitive on path', () => {
 
 test('listProjectConfigs returns saved configs', () => {
     const workspace = makeWorkspace();
-    trackFile(projectConfigPath(workspace, 'qt'));
-
-    saveQtSettings(workspace, { ...DEFAULT_QT, qtPath: 'test' });
+    const filePath = projectConfigPath(workspace, 'qt');
+    trackFile(filePath);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify({ workspace, type: 'qt', qtPath: 'test' }), 'utf8');
     const configs = listProjectConfigs();
     const found = configs.find(c => c.workspace === workspace && c.type === 'qt');
     assert.ok(found, 'should find the saved qt config');

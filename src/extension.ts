@@ -19,6 +19,7 @@ import { registerWorkspaceWatcher } from './vscode/workspaceResolver';
 import { ConfigPageManager } from './ui/configPanel/configPagePanel';
 import { activateCpp } from './cpp/cppExtension';
 import { TASK_SOURCE_QT } from './qt/constants';
+import { resolveWorkroot } from './core/workspaceStore';
 
 import { listProjectConfigs } from './core/settingsIO';
 import { listSyncStates } from './core/syncState';
@@ -43,6 +44,31 @@ function autoCleanupStaleConfigs(): void {
     }
 }
 
+/** 检查当前 workspace folders 是否有匹配的 workroot，未注册时提示用户 */
+function checkWorkrootRegistration(): void {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) { return; }
+
+    let hasMatch = false;
+    try {
+        hasMatch = folders.some(f => resolveWorkroot(f.uri.fsPath) !== null);
+    } catch {
+        // workspaces.json 损坏 — 跳过检查，用户会在命令执行时看到错误
+        return;
+    }
+    if (hasMatch) { return; }
+
+    const action = '运行 forja init';
+    vscode.window.showInformationMessage(
+        '当前工作区尚未初始化 Forja 配置。运行 forja init 以注册工作区并配置构建目标。',
+        action
+    ).then(selected => {
+        if (selected === action) {
+            vscode.commands.executeCommand('forja.status');
+        }
+    });
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const channel = initLogger();
     if (channel) { context.subscriptions.push(channel); }
@@ -54,6 +80,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 初始化配置存储（必须在其他模块使用配置之前）
     initSettingsStore(context);
     loadPersistedState();
+
+    // 检查 workroot 是否已注册，未注册时提示用户初始化
+    checkWorkrootRegistration();
 
     // 后台清理残留配置（不阻塞启动）
     setTimeout(() => { try { autoCleanupStaleConfigs(); } catch { /* ignore */ } }, 5000);

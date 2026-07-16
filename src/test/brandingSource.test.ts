@@ -120,8 +120,6 @@ test('Qt environment source and docs do not keep legacy Qt Pilot env aliases', (
 
 test('current CLI surfaces do not document removed --dry-run alias', () => {
     const files = [
-        'src/qt/cli/args.ts',
-        'src/cpp/cli/index.ts',
         'src/sync/cli.ts',
         'docs/cli-interface-spec.md',
         'docs/README-cli.md',

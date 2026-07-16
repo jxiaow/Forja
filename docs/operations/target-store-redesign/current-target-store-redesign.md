@@ -1,6 +1,8 @@
 # Target Store Redesign: 多 target 数据模型整改
 
-> Status date: 2026-07-09
+> Status date: 2026-07-16
+
+> **状态：已并入 workroot-redesign。** 本文保留数据模型讨论，但不再作为独立执行计划。新版本采用全新的 workspace store，不读取、不迁移、不兼容旧 target 配置。
 
 This document serves as the overview for the current initiative. Granular backlog, verification records, and decision status are split into the following operations documents:
 
@@ -12,7 +14,7 @@ This document serves as the overview for the current initiative. Granular backlo
 
 - Primary goal: 将当前分散的 target 状态收敛为 workspace 级 `targets` store，支持多个已保存 target，但同一时间只有一个激活 target。
 - Current assessment: 现状里 `activeTarget`、Qt `pinnedProject`、SDK `pinnedProject`、`targetToolchains`、配置面板状态都能影响当前 target，事实源过多，导致 list/use/status/build/run 之间容易不一致。
-- Current biggest issue: target 相关事实被拆散保存，且读写入口不统一。后续整改必须先建立 `TargetStore` 作为唯一事实源，再让 CLI、VSCode UI、Qt/SDK 构建入口逐步迁移到同一读写 API。
+- Current biggest issue: target 相关事实被拆散保存，且读写入口不统一。后续整改并入 workroot-redesign，由 canonical workspace store 作为唯一事实源。
 
 ## 2. Target Data Model
 
@@ -23,7 +25,7 @@ This document serves as the overview for the current initiative. Granular backlo
   "workspace": "C:/Code/my-workspace",
   "type": "targets",
   "version": 1,
-  "activeTargetId": "qt-app-debug-x64",
+    "activeTargetId": "qt-app-debug-x64",
   "targets": {
     "qt-app-debug-x64": {
       "id": "qt-app-debug-x64",
@@ -44,7 +46,7 @@ This document serves as the overview for the current initiative. Granular backlo
     "sdk-core-release-x64": {
       "id": "sdk-core-release-x64",
       "name": "SDK Core Release x64",
-      "kind": "sdk",
+      "kind": "cpp",
       "project": "core/Core.sln",
       "mode": "release",
       "arch": "x64",
@@ -74,7 +76,7 @@ This document serves as the overview for the current initiative. Granular backlo
 - target 相关字段只写入 `targets` store：`project`、`mode`、`arch`、`runAt`、`toolchain`、`qmakeTarget`。
 - Qt settings 只保留 Qt 模块偏好：`qmakeArgs`、语言标准、designer、source path、RCC path、scan exclude、自定义命令、提醒开关。
 - SDK settings 只保留 SDK 模块偏好：例如 `scanDepth`。
-- `activeTarget`、Qt `pinnedProject`、SDK `pinnedProject`、`targetToolchains` 进入兼容迁移期，不再作为长期写入目标。
+- `activeTarget`、Qt `pinnedProject`、SDK `pinnedProject`、`targetToolchains` 不再读取，也不进入迁移流程；它们只属于旧版本遗留格式。
 
 ## 3. Workspace Resolution Rule
 
@@ -89,17 +91,17 @@ This document serves as the overview for the current initiative. Granular backlo
 
 ## 4. Stage-Level Todo
 
-### Stage 1: TargetStore core
+### Stage 1: TargetStore core（并入 WS-01）
 
-- Goal: 在 `core/settingsIO` 附近新增纯 Node.js `TargetStore` 读写 API，包含 schema sanitize、active target helper、ID 生成和旧配置迁移读取。
-- Non-goal: 不改 VSCode 命令 ID，不改 `extension.ts` activate 签名，不改 package activationEvents。
-- Completion criteria: 能从新 `targets` store 读写多个 target，并能从旧 `activeTarget` / `pinnedProject` / `targetToolchains` 合成一次性 v1 store。
+- Goal: 在 canonical workspace store 中新增纯 Node.js target 读写 API，包含 schema sanitize、active target helper 和 ID 生成。
+- Non-goal: 不读取旧配置，不做旧配置迁移，不改 `extension.ts` activate 签名。
+- Completion criteria: 能从新 workspace 文件读写多个 target，旧 `projects/` 存在时行为不变。
 
-### Stage 2: CLI target command migration
+### Stage 2: CLI target command migration（并入 WS-04）
 
 - Goal: `list targets`、`use target`、`status`、`build`、`run` 改为通过 TargetStore 获取当前 target 和保存 target profile。
 - Non-goal: 不新增复杂 profile 管理命令；先保持现有 `use target --project/mode/arch` 语义。
-- Completion criteria: CLI 不再依赖 Qt/SDK `pinnedProject` 判定当前项目；旧配置 workspace 首次运行能迁移后继续工作。
+- Completion criteria: CLI 不再依赖 Qt/SDK `pinnedProject` 判定当前项目；全新 workspace 首次运行经 `forja init` 后可继续工作。
 
 ### Stage 3: VSCode UI migration
 
@@ -107,11 +109,11 @@ This document serves as the overview for the current initiative. Granular backlo
 - Non-goal: 不重做配置面板 UI，只收敛数据流。
 - Completion criteria: UI 切 Qt/SDK 或切项目时只修改 `activeTargetId` 或对应 target profile，不再写旧 pinned 字段。
 
-### Stage 4: Cleanup and compatibility removal
+### Stage 4: Cleanup and legacy isolation（并入 WS-10）
 
-- Goal: 清理 fallback 和旧字段写入路径，保留只读迁移或 cleanup 提示。
-- Non-goal: 不自动删除用户旧配置文件，除非用户执行 cleanup。
-- Completion criteria: 代码里没有新的 target 状态写入旧 `activeTarget` / `pinnedProject` / `targetToolchains`；测试覆盖旧配置迁移。
+- Goal: 清理 fallback 和旧字段读写路径，确保旧格式不会被新版本读取。
+- Non-goal: 不自动删除用户旧配置文件，也不提供迁移命令。
+- Completion criteria: 代码里没有新的 target 状态写入或读取旧 `activeTarget` / `pinnedProject` / `targetToolchains`；测试覆盖旧格式隔离。
 
 ## 5. Execution Order
 

@@ -33,7 +33,7 @@ export interface RunResult {
     nextAction?: string;
 }
 
-function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: { detach?: boolean; plan?: boolean }, qmakeArgs?: string): CliOptions {
+function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: { detach?: boolean; plan?: boolean }, qmakeArgs?: string, rccProjectPath?: string): CliOptions {
     const vsDevShell = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
     return {
         action: 'run',
@@ -46,6 +46,8 @@ function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: 
         vsDevShell: vsDevShell,
         target: target.toolchain.qmakeTarget || null,
         qmakeArgs: qmakeArgs || null,
+        jomPath: target.toolchain.jomPath || null,
+        rccProjectPath: rccProjectPath || null,
         detach: options.detach ?? false,
         saveLocal: false,
         json: false,
@@ -188,7 +190,8 @@ export async function runRun(workspace: string, options: {
     const workroot = resolveWorkroot(workspace);
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
-    const cliOptions = buildRunQtCliOptions(workspace, target, options, qmakeArgs);
+    const rccProjectPath = wsConfig?.qtModulePrefs.rccProjectPath || undefined;
+    const cliOptions = buildRunQtCliOptions(workspace, target, options, qmakeArgs, rccProjectPath);
 
     try {
         const planned = await createActionPlan(cliOptions);

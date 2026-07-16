@@ -12,7 +12,7 @@ code --install-extension forja-<version>.vsix
 code --install-extension forja-<version>-dev.vsix
 ```
 
-扩展和 CLI 共享配置存储（`~/.forja/projects/<hash>.json`），在任一侧做的变更在另一侧立即可见。
+扩展和 CLI 共享新配置存储（`~/.forja/workspaces/<hash>.json`），在任一侧做的变更在另一侧立即可见。旧 `~/.forja/projects/` 不读取、不迁移、不兼容。
 
 ## 快速开始
 
@@ -120,7 +120,8 @@ forja doctor fix --remote   # 自动修复：部署/更新远程 Forja
 
 | 文件 | 内容 |
 |------|------|
-| `~/.forja/projects/<hash>.json` | 当前 workspace 的 Qt/SDK/sync/remote 配置 |
+| `~/.forja/workspaces.json` | 已注册 workroot |
+| `~/.forja/workspaces/<hash>.json` | 当前 workspace 的 Qt/SDK/sync/remote 配置 |
 | `~/.forja/servers.json` | 服务器列表 |
 | `.forja/sync-state.json` | 同步运行状态 |
 
