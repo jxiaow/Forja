@@ -115,7 +115,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
     if (!saveResult.ok) {
         return {
             ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveActiveTarget')}: ${saveResult.error}` }],
+            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${saveResult.error}` }],
             nextAction: 'forja doctor',
         };
     }
@@ -386,7 +386,7 @@ export async function runSwitchTarget(workspace: string, args: {
     if (!saveResult.ok) {
         return {
             ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveActiveTarget')}: ${saveResult.error}` }],
+            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${saveResult.error}` }],
             nextAction: 'forja doctor',
         };
     }
@@ -441,7 +441,7 @@ export async function runUpdateModeArch(workspace: string, args: {
         if (!saved) {
             return {
                 ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: T('use.failedToSaveActiveTarget') }],
+                diagnostics: [{ level: 'error', message: T('use.failedToSaveTarget') }],
                 nextAction: 'forja init',
             };
         }
@@ -503,7 +503,7 @@ export async function runUpdateToolchain(workspace: string, args: {
         if (!saved) {
             return {
                 ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: T('use.failedToSaveActiveTarget') }],
+                diagnostics: [{ level: 'error', message: T('use.failedToSaveTarget') }],
                 nextAction: 'forja init',
             };
         }

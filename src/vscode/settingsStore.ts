@@ -150,10 +150,16 @@ function _saveQtToStore(key: QtKey, value: QtSettings[QtKey]): void {
 
     // Target-specific fields — require active target
     const targetId = config.activeTarget;
-    if (!targetId) { return; }
+    if (!targetId) {
+        logger.warn(`Qt setting '${key}' not persisted: no active target`);
+        return;
+    }
 
     const target = config.targets[targetId];
-    if (!target || target.kind !== 'qt') { return; }
+    if (!target || target.kind !== 'qt') {
+        logger.warn(`Qt setting '${key}' not persisted: active target kind mismatch`);
+        return;
+    }
 
     switch (key) {
         case 'mode':
@@ -195,10 +201,16 @@ function _saveSdkToStore(key: SdkKey, value: SdkSettings[SdkKey]): void {
 
     const config = loadWorkspaceConfig(workroot);
     const targetId = config.activeTarget;
-    if (!targetId) { return; }
+    if (!targetId) {
+        logger.warn(`SDK setting '${key}' not persisted: no active target`);
+        return;
+    }
 
     const target = config.targets[targetId];
-    if (!target || target.kind !== 'sdk') { return; }
+    if (!target || target.kind !== 'sdk') {
+        logger.warn(`SDK setting '${key}' not persisted: active target kind mismatch`);
+        return;
+    }
 
     switch (key) {
         case 'mode':

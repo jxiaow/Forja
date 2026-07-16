@@ -722,7 +722,7 @@ Options:
     'use.projectNotFound':              { en: 'Project file not found',            zh: '项目文件未找到' },
     'use.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
     'use.expectedExtensions':            { en: 'Expected .pro, .sln, Makefile, or CMakeLists.txt',  zh: '期望 .pro、.sln、Makefile 或 CMakeLists.txt' },
-    'use.failedToSaveActiveTarget':      { en: 'Failed to save activeTarget',       zh: '保存活动目标失败' },
+    'use.failedToSaveTarget':              { en: 'Failed to save target',              zh: '保存目标失败' },
     'use.failedToSaveExecMode':          { en: 'Failed to save execution mode',     zh: '保存执行模式失败' },
     'use.cannotSpecifyBothLocalRemote':  { en: 'Cannot specify both --local and --remote', zh: '不能同时指定 --local 和 --remote' },
     'use.mustSpecifyLocalOrRemote':      { en: 'Must specify --local or --remote',  zh: '必须指定 --local 或 --remote' },
