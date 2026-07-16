@@ -121,11 +121,12 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
         };
     }
     const target = targetResult.target;
+    const workroot = resolveWorkroot(workspace);
 
     // Validate project file exists
     const projectPath = path.isAbsolute(target.project)
         ? target.project
-        : path.join(workspace, target.project);
+        : path.join(workroot || workspace, target.project);
     if (!fs.existsSync(projectPath)) {
         return {
             ok: false,
@@ -231,7 +232,6 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     }
 
     // Qt local
-    const workroot = resolveWorkroot(workspace);
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
     const rccProjectPath = wsConfig?.qtModulePrefs.rccProjectPath || undefined;

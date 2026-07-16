@@ -80,6 +80,7 @@ export async function runRun(workspace: string, options: {
         };
     }
     const target = targetResult.target;
+    const workroot = resolveWorkroot(workspace);
 
     // Print run header before execution (text mode only)
     if (!options.json && !options.plan) {
@@ -99,7 +100,7 @@ export async function runRun(workspace: string, options: {
     // Validate project file exists
     const runProjectPath = path.isAbsolute(target.project)
         ? target.project
-        : path.join(workspace, target.project);
+        : path.join(workroot || workspace, target.project);
     if (!fs.existsSync(runProjectPath)) {
         return {
             ok: false,
@@ -187,7 +188,6 @@ export async function runRun(workspace: string, options: {
 
     // Qt local
     const wantsJson = options.json ?? false;
-    const workroot = resolveWorkroot(workspace);
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
     const rccProjectPath = wsConfig?.qtModulePrefs.rccProjectPath || undefined;
@@ -327,7 +327,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
     try {
         const projectDir = path.isAbsolute(target.project)
             ? path.dirname(target.project)
-            : path.join(workspace, path.dirname(target.project));
+            : path.join(workroot || workspace, path.dirname(target.project));
 
         // Inject Qt bin into PATH so custom commands can find Qt tools
         const env = { ...process.env };

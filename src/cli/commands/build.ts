@@ -82,7 +82,8 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             };
         }
         // Resolve to absolute for existence check, then store as relative for remote compatibility
-        const absolutePath = path.isAbsolute(projectPath) ? projectPath : path.join(workspace, projectPath);
+        const earlyWorkroot = resolveWorkroot(workspace);
+        const absolutePath = path.isAbsolute(projectPath) ? projectPath : path.join(earlyWorkroot || workspace, projectPath);
         if (!fs.existsSync(absolutePath)) {
             return {
                 ok: false, action: 'build', buildAction, workspace,
@@ -93,7 +94,6 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         const relativeProject = path.isAbsolute(projectPath)
             ? path.relative(workspace, absolutePath).replace(/\\/g, '/')
             : projectPath;
-        const earlyWorkroot = resolveWorkroot(workspace);
         const wsConfigEarly = earlyWorkroot ? loadWorkspaceConfig(earlyWorkroot) : null;
         const allTargets = wsConfigEarly ? Object.values(wsConfigEarly.targets) : [];
         const savedProfile = allTargets.find(t => t.kind === kind && t.id === wsConfigEarly?.activeTarget)
@@ -148,7 +148,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     // Validate project file exists
     const buildProjectPath = path.isAbsolute(target.project)
         ? target.project
-        : path.join(workspace, target.project);
+        : path.join(_wr || workspace, target.project);
     if (!fs.existsSync(buildProjectPath)) {
         return {
             ok: false,
@@ -233,7 +233,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             const plan = createCppPlan({
                 action: cppAction as 'build' | 'rebuild' | 'clean',
                 workspace,
-                project: path.isAbsolute(target.project) ? target.project : path.join(workspace, target.project),
+                project: path.isAbsolute(target.project) ? target.project : path.join(_wr || workspace, target.project),
                 mode: target.mode,
                 arch: target.arch,
                 vsDevCmdPath: vsDevCmdPath || undefined,
@@ -353,7 +353,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
 
         // Pre-kill: terminate running instance before building (prevents LNK1104)
         if (target.kind === 'qt' && (buildAction === 'default' || buildAction === 'fresh')) {
-            const projectDir = path.dirname(path.isAbsolute(target.project) ? target.project : path.join(workspace, target.project));
+            const projectDir = path.dirname(path.isAbsolute(target.project) ? target.project : path.join(workroot || workspace, target.project));
             const runtimeInfo = resolveRuntimeTarget(projectDir, target.mode, target.arch);
             if (runtimeInfo?.exePath) {
                 terminateExecutable(runtimeInfo.exePath);

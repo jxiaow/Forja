@@ -137,9 +137,10 @@ export function runStatus(workspace: string): StatusResult {
             }
         }
     } else {
+        const basePath = workroot || workspace;
         const projectPath = path.isAbsolute(activeTarget.project)
             ? activeTarget.project
-            : path.join(workspace, activeTarget.project);
+            : path.join(basePath, activeTarget.project);
         if (!fs.existsSync(projectPath)) {
             readiness.target = 'missing';
             diagnostics.push({
@@ -305,7 +306,7 @@ export function runStatus(workspace: string): StatusResult {
     const result: StatusResult = {
         ok: assessOk(readiness),
         action: 'status',
-        workspace,
+        workspace: workroot || workspace,
         readiness,
         diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
         activeTarget: targetForOutput,

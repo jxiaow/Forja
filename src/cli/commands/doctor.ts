@@ -7,6 +7,7 @@ import * as path from 'path';
 import { getActiveTarget } from './activeTarget';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { listProjectConfigs } from '../../core/settingsIO';
+import { resolveWorkroot } from '../../core/workspaceStore';
 import { listSyncStates } from '../../core/syncState';
 import { getServerById } from '../../core/serverStore';
 import { Diagnostic, CheckResult, CheckStatus, CommandPlan, diag, Locale, T } from './types';
@@ -138,6 +139,7 @@ export async function runDoctor(workspace: string, options: {
     const checks: CheckResult[] = [];
     const diagnostics: Diagnostic[] = [];
     const activeTarget = getActiveTarget(workspace);
+    const workroot = resolveWorkroot(workspace);
     const isRemote = options.remote || (activeTarget?.runAt === 'remote');
 
     let doctorAction: DoctorAction = 'check';
@@ -149,7 +151,7 @@ export async function runDoctor(workspace: string, options: {
         // Handle absolute paths correctly
         const projectPath = path.isAbsolute(activeTarget.project)
             ? activeTarget.project
-            : path.join(workspace, activeTarget.project);
+            : path.join(workroot || workspace, activeTarget.project);
         if (fs.existsSync(projectPath)) {
             checks.push(check('target', 'ready', `${T('doctorActiveTarget')}: ${activeTarget.project}`));
         } else {
