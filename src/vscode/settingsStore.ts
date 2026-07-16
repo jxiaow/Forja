@@ -202,13 +202,13 @@ function _saveSdkToStore(key: SdkKey, value: SdkSettings[SdkKey]): void {
     const config = loadWorkspaceConfig(workroot);
     const targetId = config.activeTarget;
     if (!targetId) {
-        logger.warn(`SDK setting '${key}' not persisted: no active target`);
+        logger.warn(`C++ setting '${key}' not persisted: no active target`);
         return;
     }
 
     const target = config.targets[targetId];
     if (!target || target.kind !== 'sdk') {
-        logger.warn(`SDK setting '${key}' not persisted: active target kind mismatch`);
+        logger.warn(`C++ setting '${key}' not persisted: active target kind mismatch`);
         return;
     }
 
@@ -389,7 +389,7 @@ export function setSdkSetting<K extends SdkKey>(key: K, value: SdkSettings[K]): 
         _saveSdkToStore(key, value);
         _listeners.forEach(fn => fn('sdk', key, _settings));
     } catch (e) {
-        logger.warn(`写入 SDK 配置失败，内存状态已回滚: ${e instanceof Error ? e.message : e}`);
+        logger.warn(`写入 C++ 配置失败，内存状态已回滚: ${e instanceof Error ? e.message : e}`);
         _settings.sdk = _load().sdk;
     }
 }

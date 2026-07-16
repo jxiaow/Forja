@@ -159,10 +159,10 @@ function _updateSdkDisplay(): void {
         _projectModeItem.tooltip = '编译中...';
         _runItem.hide();
     } else {
-        _projectModeItem.text = `$(tools) [SDK] ${name} · ${mode}${isWin ? ' ' + _sdkArch : ''}`;
-        _projectModeItem.tooltip = 'Forja SDK 模式 — 点击切换模块/模式/项目';
+        _projectModeItem.text = `$(tools) [C++] ${name} · ${mode}${isWin ? ' ' + _sdkArch : ''}`;
+        _projectModeItem.tooltip = 'Forja C++ 模式 — 点击切换模块/模式/项目';
         _runItem.text = '$(play)';
-        _runItem.tooltip = 'Forja SDK: Build';
+        _runItem.tooltip = 'Forja C++: Build';
         _runItem.command = 'forja.build';
         _runItem.show();
     }

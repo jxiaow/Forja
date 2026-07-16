@@ -280,7 +280,7 @@ function ambiguousDiag(ctx: DetectContext): Array<{ level: 'info' | 'warning' | 
     if (ctx.qtCandidates.length > 0 && ctx.sdkCandidates.length > 0) {
         return [{
             level: 'info',
-            message: `${T('init.foundQtSdkNotAutoSelecting')}: ${ctx.qtCandidates.length} Qt (${ctx.qtCandidates.map(c => c.label).join(', ')}), ${ctx.sdkCandidates.length} SDK (${ctx.sdkCandidates.map(c => c.label).join(', ')})`,
+            message: `${T('init.foundQtSdkNotAutoSelecting')}: ${ctx.qtCandidates.length} Qt (${ctx.qtCandidates.map(c => c.label).join(', ')}), ${ctx.sdkCandidates.length} C++ (${ctx.sdkCandidates.map(c => c.label).join(', ')})`,
         }];
     }
     return [{

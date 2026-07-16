@@ -135,14 +135,14 @@ function buildQtEnvSection(data: TemplateData): string {
 function buildSdkEnvSection(data: TemplateData): string {
     const env = data.env;
     const open = data.sdkActive ? ' open' : '';
-    const summary = data.sdkActive ? 'SDK 工具链' : 'SDK 工具链 <span class="section-badge">未检测到</span>';
+    const summary = data.sdkActive ? 'C++ 工具链' : 'C++ 工具链 <span class="section-badge">未检测到</span>';
 
     let h = `<details class="section-collapse"${open}>`;
     h += `<summary class="section-header">${summary}</summary>`;
 
     if (!data.sdkActive) {
         h += '<div class="section-inactive">';
-        h += '<div class="section-inactive-hint">未检测到 SDK 项目，SDK 环境配置不可用</div>';
+        h += '<div class="section-inactive-hint">未检测到 C++ 项目，C++ 环境配置不可用</div>';
         h += '</div></details>';
         return h;
     }
@@ -152,7 +152,7 @@ function buildSdkEnvSection(data: TemplateData): string {
     const sdkVsBadge = data.sdkVsInstall ? '已配置' : (env?.vs ? '自动检测' : '未配置');
     const sdkVsTitle = detectedVs || (data.sdkVsInstall ? 'Visual Studio' : '未检测到');
 
-    h += '<div class="cs"><div class="cst">Visual Studio (SDK)</div>';
+    h += '<div class="cs"><div class="cst">Visual Studio (C++)</div>';
     h += '<div class="env-card" id="sdkVsEnvCard"><div class="ech">';
     h += `<span class="sd ${sdkVsEffective ? 'dok' : 'dwn'}"></span>`;
     h += `<span class="ect" id="sdkVsTitle">${esc(sdkVsTitle)}</span>`;

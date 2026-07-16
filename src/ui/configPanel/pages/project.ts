@@ -217,7 +217,7 @@ function buildQtScript(data: TemplateData): string {
 
 function buildSdkSection(data: TemplateData): string {
     const open = data.sdkActive ? ' open' : '';
-    const summary = data.sdkActive ? 'SDK 项目' : 'SDK 项目 <span class="section-badge">未检测到</span>';
+    const summary = data.sdkActive ? 'C++ 项目' : 'C++ 项目 <span class="section-badge">未检测到</span>';
 
     let h = `<details class="section-collapse"${open}>`;
     h += `<summary class="section-header">${summary}</summary>`;
@@ -225,7 +225,7 @@ function buildSdkSection(data: TemplateData): string {
     // 未激活时只显示提示和项目选择
     if (!data.sdkActive) {
         h += '<div class="section-inactive">';
-        h += '<div class="section-inactive-hint">未检测到 SDK 项目（.sln / Makefile）</div>';
+        h += '<div class="section-inactive-hint">未检测到 C++ 项目（.sln / Makefile）</div>';
         h += '<button class="btn btn-sm" onclick="vscode.postMessage({command:\'selectSdkProject\'})">选择项目</button>';
         h += '</div>';
         h += '</details>';
@@ -283,7 +283,7 @@ function buildSdkSection(data: TemplateData): string {
     h += " onclick=\"vscode.postMessage({command:'generateIntelliSense',";
     h += "cStandard:document.querySelector('#cStd .csel-trigger')?.dataset.value,";
     h += "cppStandard:document.querySelector('#cppStd .csel-trigger')?.dataset.value})\">";
-    h += '生成 SDK IntelliSense 配置</button></div>';
+    h += '生成 C++ IntelliSense 配置</button></div>';
 
     h += '</details>';
     return h;

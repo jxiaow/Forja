@@ -2,7 +2,7 @@
   "name": "forja",
   "displayName": "Forja (Dev)",
   "publisher": "forja",
-  "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
+  "description": "Build, run, debug C++ projects — Qt (qmake) and C++ (.sln/Makefile) in one extension",
   "version": "0.7.55.dev",
   "icon": "media/icon.png",
   "engines": {

@@ -113,7 +113,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 const validCategories = ['targets', 'env'];
                 if (!category || !validCategories.includes(category)) {
                     const descMap: Record<string, [string, string]> = {
-                        targets: ['Qt/SDK projects', 'Qt/SDK 项目'],
+                        targets: ['Qt/C++ projects', 'Qt/C++ 项目'],
                         env: ['Toolchain environment', '工具链环境'],
                     };
                     const picked = await vscode.window.showQuickPick(validCategories.map(c => ({
@@ -230,7 +230,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         }
                     }
                 } else {
-                    const kindLabel = kindFilter === 'sdk' ? 'SDK' : kindFilter === 'qt' ? 'Qt' : '';
+                    const kindLabel = kindFilter === 'sdk' ? 'C++' : kindFilter === 'qt' ? 'Qt' : '';
                     vscode.window.showInformationMessage(`No ${kindLabel} targets found. Run "Forja: Init" first.`);
                 }
             } catch (e: any) {
@@ -447,7 +447,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             if (target?.kind === 'sdk') {
                 // SDK doesn't support qmake/rcc
                 if (action === 'qmake' || action === 'rcc') {
-                    vscode.window.showErrorMessage(`SDK target does not support '${action}' action`);
+                    vscode.window.showErrorMessage(`C++ target does not support '${action}' action`);
                     return;
                 }
                 const { buildSdk, rebuildSdk } = await import('../sdk/sdkExtension');
@@ -512,7 +512,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
 
             // SDK doesn't support run - check before remote dispatch
             if (target?.kind === 'sdk') {
-                vscode.window.showWarningMessage('SDK target does not support run. Use Build instead.');
+                vscode.window.showWarningMessage('C++ target does not support run. Use Build instead.');
                 return;
             }
 
@@ -536,7 +536,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('forja.debug', async () => {
             const target = await resolveActiveTarget();
             if (target?.kind === 'sdk') {
-                vscode.window.showWarningMessage('SDK target does not support debug. Use Build instead.');
+                vscode.window.showWarningMessage('C++ target does not support debug. Use Build instead.');
                 return;
             }
             if (target?.runAt === 'remote') {

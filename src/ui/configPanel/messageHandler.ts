@@ -456,7 +456,7 @@ export async function handleMessage(
         case 'saveSdkMode': {
             const val = String(msg.value || '');
             if (val !== 'debug' && val !== 'release') { break; }
-            logger.info(`保存 SDK 构建模式: "${val}"`);
+            logger.info(`保存 C++ 构建模式: "${val}"`);
             setSdkSetting('mode', val);
             // Sync to activeTarget so CLI build/run use the updated value
             const ws = getWorkspaceRoot();
@@ -476,7 +476,7 @@ export async function handleMessage(
                 break;
             }
             if (val !== 'x86' && val !== 'x64') { break; }
-            logger.info(`保存 SDK 目标架构: "${val}"`);
+            logger.info(`保存 C++ 目标架构: "${val}"`);
             setSdkSetting('arch', val);
             // Sync to activeTarget so CLI build/run use the updated value
             const wsArch = getWorkspaceRoot();
@@ -490,7 +490,7 @@ export async function handleMessage(
             break;
         }
         case 'saveSdkVsInstall': {
-            logger.info(`保存 SDK VS 路径: "${msg.value}"`);
+            logger.info(`保存 C++ VS 路径: "${msg.value}"`);
             const sdkVsInstall = inferVsInstall(String(msg.value || '')) || String(msg.value || '');
             setSdkSetting('vsInstall', sdkVsInstall);
             break;
