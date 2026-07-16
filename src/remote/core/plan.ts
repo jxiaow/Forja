@@ -10,7 +10,7 @@ import { getServerById } from '../../core/serverStore';
 
 export interface RemotePlanOptions {
     workspace: string;
-    target: 'qt' | 'sdk';
+    target: 'qt' | 'cpp';
     action: 'build' | 'rebuild' | 'clean' | 'qmake' | 'run' | 'stop' | 'status';
     args?: string[];
     json?: boolean;

@@ -8,7 +8,7 @@ import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
-import { createSdkPlan } from '../../sdk/shared/plan';
+import { createCppPlan } from '../../cpp/shared/plan';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, diag, T } from './types';
 import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
@@ -59,10 +59,10 @@ function hasBuildArtifacts(dir: string, maxFiles = 2000): boolean {
     return scan(dir, 0);
 }
 
-function getBuildOutputDir(projectPath: string, kind: 'qt' | 'sdk'): string {
+function getBuildOutputDir(projectPath: string, kind: 'qt' | 'cpp'): string {
     const projectDir = path.dirname(projectPath);
     const basename = path.basename(projectPath).toLowerCase();
-    if (kind === 'sdk' && basename === 'cmakelists.txt') {
+    if (kind === 'cpp' && basename === 'cmakelists.txt') {
         return path.join(projectDir, 'build');
     }
     return projectDir;
@@ -176,9 +176,9 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     }
 
     // SDK local
-    if (target.kind === 'sdk') {
+    if (target.kind === 'cpp') {
         const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
-        const plan = createSdkPlan({
+        const plan = createCppPlan({
             action: 'clean',
             workspace,
             project: projectPath,
@@ -197,7 +197,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             };
         }
 
-        const buildDir = getBuildOutputDir(projectPath, 'sdk');
+        const buildDir = getBuildOutputDir(projectPath, 'cpp');
         if (!hasBuildArtifacts(buildDir)) {
             return {
                 ok: true,
@@ -223,7 +223,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             exitCode: executed.exitCode ?? undefined,
             durationMs: executed.durationMs > 0 ? executed.durationMs : durationMs,
             changed,
-            diagnostics: ok ? undefined : [diag('error', `${T('cmd.sdkCleanFailed')}: ${extractCleanError(executed) || 'unknown error'}`)],
+            diagnostics: ok ? undefined : [diag('error', `${T('cmd.cppCleanFailed')}: ${extractCleanError(executed) || 'unknown error'}`)],
             nextAction: ok ? 'forja build' : 'forja doctor',
         };
     }

@@ -1,7 +1,7 @@
 import { remoteCommand } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
-export type RemoteBridgeTarget = 'qt' | 'sdk';
+export type RemoteBridgeTarget = 'qt' | 'cpp';
 export type RemoteBridgeAction = 'status' | 'init' | 'use' | 'build' | 'rebuild' | 'clean' | 'qmake' | 'run' | 'stop' | 'ps';
 
 export interface ExecuteRemoteBridgeOptions {
@@ -33,7 +33,7 @@ export interface ExecuteRemoteBridgeResult {
 
 export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): Promise<ExecuteRemoteBridgeResult> {
     // New unified CLI: commands are top-level (build, run, status, etc.)
-    // No more 'qt'/'sdk' subcommand prefix
+    // No more 'qt'/'cpp' subcommand prefix
     const remoteArgs = [options.action, '--workspace', options.remotePath, ...options.args];
     if (options.json && !remoteArgs.includes('--json')) {
         remoteArgs.push('--json');

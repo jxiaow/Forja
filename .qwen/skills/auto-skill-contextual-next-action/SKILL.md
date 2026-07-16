@@ -64,7 +64,9 @@ if (initResult.ambiguous) {
 
 5. **The "retry" pattern** — when the user was in interactive mode and didn't complete (cancelled a prompt, didn't choose), the nextAction should be the same command they just ran, so they can try again.
 
-6. **The "toggle" pattern for list/view commands** — when showing a current setting value, nextAction should suggest the opposite/alternative, not a hardcoded value. Example: `listLang()` showing current language `zh` should suggest `forja use lang en` (switch to the other option), not always `forja use lang zh` regardless of current state.
+6. **Don't suggest diagnostic commands when errors are already visible** — if a command (e.g., build) already extracted and displayed errors to the user, nextAction should be `undefined` (user has what they need to fix the issue). Only suggest diagnostic commands (e.g., `doctor`) when the failure produced no actionable error output — the user might need environment checks.
+
+7. **The "toggle" pattern for list/view commands** — when showing a current setting value, nextAction should suggest the opposite/alternative, not a hardcoded value. Example: `listLang()` showing current language `zh` should suggest `forja use lang en` (switch to the other option), not always `forja use lang zh` regardless of current state.
 
 ```typescript
 // BUG: always suggests zh regardless of current lang
@@ -132,6 +134,7 @@ Subcommand status views are **informational** — they show config state. They s
 |-------------|---------------|-----------------|
 | `forja list targets` for all ambiguous cases | Redundant in interactive mode (user just saw the list); wrong for incomplete answers | Match to mode: retry for interactive, fix answers for --json |
 | `forja build` when there are errors | Misleads user into running a command that will fail | No nextAction, or the fix command |
+| `forja doctor` when build has compilation errors | Doctor checks environment config, not source code — errors are already visible to user | `undefined` when `errors.length > 0`; only suggest `doctor` when no errors extracted (might be env issue) |
 | `forja setup remote` after local setup succeeds | Pushes optional features the user didn't ask for | `forja build` (verify local works first) |
 | Generic `forja status` for all failures | Doesn't tell the user what to FIX | Use diagnostic `fix` field or specific command |
 | Hardcoded nextAction in list/view commands | Suggests same action regardless of current state | Toggle: suggest the alternative to current value |

@@ -165,6 +165,33 @@ if (!saveQtConfig(...)) { return initWriteFailed(error, detected); }
 
 **Why:** If Qt config write fails but execution continues to save SDK config and target, you get partial-write state. The original code had early returns — don't lose them during refactoring.
 
+## Skip Validation Diagnostics When Config Is Unchanged
+
+When a configuration command (e.g. `use target`) is re-run and the user keeps existing values, skip validation diagnostics that were already acknowledged. Only run validation when a value is **newly selected**.
+
+### Bug Pattern
+
+```typescript
+// WRONG — VS version check runs every time, even when Qt path is unchanged
+if (kind === 'qt' && qtPath.value) {
+    const vsYear = extractVsYearFromQtPath(qtPath.value);
+    const filtered = vsCandidates.filter(v => v.version === vsYear);
+    if (filtered.length === 0) console.log('⚠ VS version mismatch');
+}
+```
+
+### Fix
+
+```typescript
+// CORRECT — only validate when Qt path is newly selected
+const isQtFromExisting = qtPath.value === existingQt.qtPath;
+if (kind === 'qt' && qtPath.value && !isQtFromExisting) {
+    // VS version matching + warning
+}
+```
+
+**Why:** If the user said 'n' to keep existing target and Qt path, they already accepted this configuration. Showing a new warning about VS mismatch is noise — it wasn't a problem before, it isn't now.
+
 ## Anti-Pattern: Piecemeal Guards
 
 ```typescript

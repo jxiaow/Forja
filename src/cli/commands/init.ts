@@ -12,7 +12,7 @@ import {
     type WorkspaceConfig, type TargetProfile,
 } from '../../core/workspaceStore';
 import { scanProFiles } from '../../qt/shared/projectScanner';
-import { scanSdkProjects } from '../../core/sdkProjectScanner';
+import { scanCppProjects } from '../../core/cppProjectScanner';
 import { detectProjectType } from '../../core/projectTypeDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 import { setSilent } from '../../core/loggerBase';
@@ -290,7 +290,7 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
 // ── Shared helpers ──
 
 interface ProjectCandidate {
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     label: string;
 }
@@ -312,18 +312,18 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
 
     // Scan SDK projects
     setSilent(true);
-    let sdkFiles;
-    try { sdkFiles = scanSdkProjects({ workspace: workroot, relativePaths: true }); } finally { setSilent(false); }
-    for (const sdkFile of sdkFiles) {
-        const fullPath = path.join(workroot, sdkFile);
+    let cppFiles;
+    try { cppFiles = scanCppProjects({ workspace: workroot, relativePaths: true }); } finally { setSilent(false); }
+    for (const cppFile of cppFiles) {
+        const fullPath = path.join(workroot, cppFile);
         const typeInfo = detectProjectType(fullPath);
-        const kind = typeInfo.usesQt ? 'qt' : 'sdk';
+        const kind = typeInfo.usesQt ? 'qt' : 'cpp';
         // Skip if already found as .pro
-        if (!candidates.some(c => c.project === sdkFile)) {
+        if (!candidates.some(c => c.project === cppFile)) {
             candidates.push({
                 kind,
-                project: sdkFile,
-                label: `${path.basename(sdkFile, path.extname(sdkFile))} (${sdkFile})`,
+                project: cppFile,
+                label: `${path.basename(cppFile, path.extname(cppFile))} (${cppFile})`,
             });
         }
     }

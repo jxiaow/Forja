@@ -20,7 +20,7 @@ import type { TargetProfile } from '../../core/workspaceStore';
 import { readRunState, resolveRunProcessStatus } from '../../qt/shared/localState';
 import { getServerById } from '../../core/serverStore';
 import { resolveRemoteConfigFrom } from '../../remote/core/config';
-import { detectMake } from '../../sdk/cli/envDetector';
+import { detectMake } from '../../cpp/cli/envDetector';
 import { validateMakefile } from '../../qt/shared/runtimeTarget';
 
 export interface StatusResult extends ForjaJsonResult {
@@ -113,13 +113,13 @@ export function runStatus(workspace: string): StatusResult {
             if (hasAnyConfig) {
                 const candidates = collectTargetCandidates(workspace);
                 const qtCount = candidates.filter(c => c.kind === 'qt').length;
-                const sdkCount = candidates.filter(c => c.kind === 'sdk').length;
-                if (qtCount > 0 || sdkCount > 0) {
+                const cppCount = candidates.filter(c => c.kind === 'cpp').length;
+                if (qtCount > 0 || cppCount > 0) {
                     diagnostics.push({
                         level: 'info',
-                        message: T('sts.targetsFound', [String(qtCount), String(sdkCount)]),
+                        message: T('sts.targetsFound', [String(qtCount), String(cppCount)]),
                         fix: 'forja list targets',
-                        params: { qtCount: String(qtCount), sdkCount: String(sdkCount) },
+                        params: { qtCount: String(qtCount), cppCount: String(cppCount) },
                     });
                 } else {
                     diagnostics.push({

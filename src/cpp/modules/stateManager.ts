@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { SdkProjectInfo, BuildMode, Arch, StateChangeEvent } from '../types';
+import { CppProjectInfo, BuildMode, Arch, StateChangeEvent } from '../types';
 import { getDefaultArch, isLinux } from '../platform';
-import { getSdkSetting, setSdkSetting } from '../../vscode/settingsStore';
+import { getCppSetting, setCppSetting } from '../../vscode/settingsStore';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 
 export class StateManager implements vscode.Disposable {
-  private _currentProject: SdkProjectInfo | null = null;
+  private _currentProject: CppProjectInfo | null = null;
   private _mode: BuildMode = 'debug';
   private _arch: Arch = getDefaultArch();
   private _isBuilding: boolean = false;
@@ -15,11 +15,11 @@ export class StateManager implements vscode.Disposable {
   private readonly _onStateChanged = new vscode.EventEmitter<StateChangeEvent>();
   readonly onStateChanged: vscode.Event<StateChangeEvent> = this._onStateChanged.event;
 
-  get currentProject(): SdkProjectInfo | null {
+  get currentProject(): CppProjectInfo | null {
     return this._currentProject;
   }
 
-  set currentProject(value: SdkProjectInfo | null) {
+  set currentProject(value: CppProjectInfo | null) {
     const old = this._currentProject;
     this._currentProject = value;
     this._onStateChanged.fire({ field: 'currentProject', oldValue: old, newValue: value });
@@ -69,25 +69,25 @@ export class StateManager implements vscode.Disposable {
 
   /** 从统一配置的 sdk 部分恢复状态 */
   async restoreFromConfig(): Promise<void> {
-    const mode = getSdkSetting('mode');
+    const mode = getCppSetting('mode');
     if (mode === 'debug' || mode === 'release') {
       this._mode = mode;
     }
 
-    const arch = getSdkSetting('arch');
+    const arch = getCppSetting('arch');
     if (!isLinux && (arch === 'x86' || arch === 'x64')) {
       this._arch = arch;
     } else {
       this._arch = getDefaultArch();
     }
 
-    const pinnedProject = getSdkSetting('pinnedProject');
+    const pinnedProject = getCppSetting('pinnedProject');
     if (!pinnedProject) {
       this._currentProject = null;
       return;
     }
 
-    const wsRoot = resolveProjectRoot('sdk');
+    const wsRoot = resolveProjectRoot('cpp');
     let resolvedPath = pinnedProject;
     if (wsRoot && !path.isAbsolute(resolvedPath)) {
       resolvedPath = path.join(wsRoot, resolvedPath);
@@ -99,12 +99,12 @@ export class StateManager implements vscode.Disposable {
 
     const name = path.basename(resolvedPath, path.extname(resolvedPath));
     const type = resolvedPath.endsWith('.sln') ? 'sln' : 'makefile';
-    this._currentProject = { name, path: resolvedPath, type } as SdkProjectInfo;
+    this._currentProject = { name, path: resolvedPath, type } as CppProjectInfo;
   }
 
   /** 将当前状态持久化到统一配置的 sdk 部分 */
   async persistToConfig(): Promise<void> {
-    const ws = resolveProjectRoot('sdk');
+    const ws = resolveProjectRoot('cpp');
 
     // 计算相对路径（相对于 SDK 项目所在的 workspace folder）
     let projectValue: string | null = null;
@@ -115,9 +115,9 @@ export class StateManager implements vscode.Disposable {
         : relative.replace(/\\/g, '/');
     }
 
-    setSdkSetting('mode', this._mode);
-    setSdkSetting('arch', this._arch);
-    setSdkSetting('pinnedProject', projectValue);
+    setCppSetting('mode', this._mode);
+    setCppSetting('arch', this._arch);
+    setCppSetting('pinnedProject', projectValue);
   }
 
   dispose(): void {

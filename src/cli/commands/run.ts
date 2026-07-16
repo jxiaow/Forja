@@ -131,14 +131,14 @@ export async function runRun(workspace: string, options: {
     let runAction: RunAction = 'default';
     if (options.detach) { runAction = 'detach'; }
 
-    if (target.kind === 'sdk') {
+    if (target.kind === 'cpp') {
         return {
             ok: false,
             action: 'run',
             runAction,
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', T('cmd.sdkRunUnsupported'))],
+            diagnostics: [diag('error', T('cmd.cppRunUnsupported'))],
             nextAction: 'forja build',
         };
     }
@@ -292,14 +292,14 @@ async function handleDesigner(workspace: string, uiFile: string): Promise<RunRes
 }
 
 function handleCustom(workspace: string, target: ActiveTarget, customName: string, json: boolean): RunResult {
-    if (target.kind === 'sdk') {
+    if (target.kind === 'cpp') {
         return {
             ok: false,
             action: 'run',
             runAction: 'custom',
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', T('cmd.sdkCustomUnsupported'))],
+            diagnostics: [diag('error', T('cmd.cppCustomUnsupported'))],
             nextAction: 'forja build',
         };
     }

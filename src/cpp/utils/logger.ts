@@ -5,7 +5,7 @@
 import type * as vscode from 'vscode';
 import { initLogger as _coreInit, createLogger } from '../../vscode/logger';
 
-const sdkLogger = createLogger('SDK');
+const cppLogger = createLogger('SDK');
 
 /**
  * 初始化日志通道。返回共享的 OutputChannel（由 core/logger 管理）。
@@ -18,12 +18,12 @@ export function initLogger(): vscode.OutputChannel {
 }
 
 export function log(message: string): void {
-    sdkLogger.info(message);
+    cppLogger.info(message);
 }
 
 export function logError(message: string, error?: unknown): void {
     const errStr = error instanceof Error ? error.message : String(error ?? '');
-    sdkLogger.error(`${message}${errStr ? ' - ' + errStr : ''}`);
+    cppLogger.error(`${message}${errStr ? ' - ' + errStr : ''}`);
 }
 
 export function getOutputChannel(): vscode.OutputChannel | undefined {

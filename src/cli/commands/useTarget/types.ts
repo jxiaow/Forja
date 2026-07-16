@@ -24,7 +24,7 @@ export interface DetectContext {
     workspace: string;
     candidates: TargetCandidate[];
     qtCandidates: TargetCandidate[];
-    sdkCandidates: TargetCandidate[];
+    cppCandidates: TargetCandidate[];
     toolchain: ToolchainInfo;
     existingTarget: TargetProfile | null;
     existingQt: {
@@ -63,7 +63,7 @@ export interface ResolveOptions {
 // ── Resolved config ──
 
 export interface ResolvedConfig {
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     mode?: 'debug' | 'release';
     arch?: 'x86' | 'x64';

@@ -59,6 +59,19 @@ In `runSwitchTarget` (index.ts), the mismatch case sets `vsCandidates = []` + `v
 
 When 0 VS candidates matched the Qt compiler tag, the old code printed a warning but left `vsCandidatesOverride` as `undefined`. This caused `resolveVsPath` to fall back to the full candidate list, where `candidates.length === 1` auto-selected the wrong VS without prompting. The fix: pass `forceInteractive = true` to bypass auto-select, or set `vsCandidates = []` and prompt separately with the full list.
 
+## Skip Check When Qt Is From Existing Config (fixed 2026-07-09)
+
+When user runs `forja use target` and keeps the existing target (says 'n' to "是否更换目标？"), the VS version mismatch check must be **skipped entirely**. The Qt path came from existing config — the user didn't choose it now, so showing a VS mismatch warning is confusing noise.
+
+```typescript
+const isQtFromExisting = !!(qtPath.value && ctx.existingQt.qtPath && qtPath.value === ctx.existingQt.qtPath);
+if (kind === 'qt' && qtPath.value && !isQtFromExisting) {
+    // VS version matching + mismatch warning
+}
+```
+
+Rule: VS mismatch warning only fires when Qt path is **newly selected** (user picked a different Qt, or first-time setup). Existing config → silent pass-through.
+
 ## Why This Matters
 
 - Qt 5.15.2 (msvc2019) + VS 2022 = `stdext` removed → hard compile error

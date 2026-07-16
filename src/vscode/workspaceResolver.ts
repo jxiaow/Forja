@@ -14,16 +14,16 @@ import * as fs from 'fs';
 import { loadWorkspacesRegistry, normalizePath, workspacesRegistryPath } from '../core/workspaceStore';
 import { forjaConfigDir } from '../core/settingsIO';
 
-export type ModuleType = 'qt' | 'sdk' | 'sync';
+export type ModuleType = 'qt' | 'cpp' | 'sync';
 
 let _resolvedQt: string | null = null;
-let _resolvedSdk: string | null = null;
+let _resolvedCpp: string | null = null;
 let _resolvedSync: string | null = null;
 let _watcherRegistered = false;
 
 function _resetResolvedRoots(): void {
     _resolvedQt = null;
-    _resolvedSdk = null;
+    _resolvedCpp = null;
     _resolvedSync = null;
 }
 
@@ -55,7 +55,7 @@ export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void
  * @param module 模块类型（保留参数以兼容调用方，实际不再区分）
  */
 export function resolveProjectRoot(module: ModuleType = 'qt'): string {
-    if (module === 'sdk') { return _resolveFromRegistry('sdk'); }
+    if (module === 'cpp') { return _resolveFromRegistry('cpp'); }
     if (module === 'sync') { return _resolveFromRegistry('sync'); }
     return _resolveFromRegistry('qt');
 }
@@ -66,8 +66,8 @@ export function setProjectRoot(root: string): void {
 }
 
 /** 当 SDK 项目变化后，更新缓存 */
-export function setSdkProjectRoot(root: string): void {
-    _resolvedSdk = root;
+export function setCppProjectRoot(root: string): void {
+    _resolvedCpp = root;
 }
 
 /** 重置缓存（用于测试或 workspace 变化时） */
@@ -78,8 +78,8 @@ export function resetProjectRoot(): void {
 // ── 从 workspaces.json 注册表匹配 ──
 
 function _resolveFromRegistry(_module: ModuleType): string {
-    const cacheKey = _module === 'sdk' ? '_resolvedSdk' : _module === 'sync' ? '_resolvedSync' : '_resolvedQt';
-    const cached = cacheKey === '_resolvedSdk' ? _resolvedSdk : cacheKey === '_resolvedSync' ? _resolvedSync : _resolvedQt;
+    const cacheKey = _module === 'cpp' ? '_resolvedCpp' : _module === 'sync' ? '_resolvedSync' : '_resolvedQt';
+    const cached = cacheKey === '_resolvedCpp' ? _resolvedCpp : cacheKey === '_resolvedSync' ? _resolvedSync : _resolvedQt;
     if (cached) { return cached; }
 
     const folders = vscode.workspace.workspaceFolders;
@@ -107,7 +107,7 @@ function _resolveFromRegistry(_module: ModuleType): string {
         if (bestMatch) {
             // 返回原始 folder 路径（保持大小写）
             const result = folder.uri.fsPath;
-            if (cacheKey === '_resolvedSdk') { _resolvedSdk = result; }
+            if (cacheKey === '_resolvedCpp') { _resolvedCpp = result; }
             else if (cacheKey === '_resolvedSync') { _resolvedSync = result; }
             else { _resolvedQt = result; }
             return result;

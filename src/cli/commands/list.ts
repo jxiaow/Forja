@@ -6,7 +6,7 @@ import { collectTargetCandidates } from './candidates';
 import { listServers, getServerDetail } from './server';
 import { loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget as getActiveTargetFromStore } from '../../core/workspaceStore';
-import { detectMake } from '../../sdk/cli/envDetector';
+import { detectMake } from '../../cpp/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 import { setSilent } from '../../core/loggerBase';
 
@@ -22,7 +22,7 @@ export type EnvSubCategory = 'qt' | 'vs' | 'jom' | 'make';
 export interface SavedTargetInfo {
     id: string;
     name: string;
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     mode: string;
     arch: string;

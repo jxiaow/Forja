@@ -277,10 +277,10 @@ async function resolveArch(ctx: DetectContext, options: ResolveOptions): Promise
 // ── Helpers ──
 
 function ambiguousDiag(ctx: DetectContext): Array<{ level: 'info' | 'warning' | 'error'; message: string }> {
-    if (ctx.qtCandidates.length > 0 && ctx.sdkCandidates.length > 0) {
+    if (ctx.qtCandidates.length > 0 && ctx.cppCandidates.length > 0) {
         return [{
             level: 'info',
-            message: `${T('init.foundQtSdkNotAutoSelecting')}: ${ctx.qtCandidates.length} Qt (${ctx.qtCandidates.map(c => c.label).join(', ')}), ${ctx.sdkCandidates.length} C++ (${ctx.sdkCandidates.map(c => c.label).join(', ')})`,
+            message: `${T('init.foundQtCppNotAutoSelecting')}: ${ctx.qtCandidates.length} Qt (${ctx.qtCandidates.map(c => c.label).join(', ')}), ${ctx.cppCandidates.length} C++ (${ctx.cppCandidates.map(c => c.label).join(', ')})`,
         }];
     }
     return [{

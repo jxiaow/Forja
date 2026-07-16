@@ -11,7 +11,7 @@ import {
     getDesignerPath, getQtSourcePath, getFileSyncPromptEnabled,
     getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot
 } from '../../qt/services/configService';
-import { getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
+import { getQtSetting, getCppSetting } from '../../vscode/settingsStore';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { loadRemoteSettings } from '../../core/settingsIO';
@@ -85,11 +85,11 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         syncLastTime: pendingInfo.lastTime,
         syncReadinessIssues: buildSyncReadinessIssues(sync, remote, servers),
         // SDK
-        sdkProjectName: getSdkSetting('pinnedProject') || '未选择',
-        sdkMode: getSdkSetting('mode'),
-        sdkArch: getSdkSetting('arch'),
-        sdkVsInstall: getSdkSetting('vsInstall') || '',
+        cppProjectName: getCppSetting('pinnedProject') || '未选择',
+        sdkMode: getCppSetting('mode'),
+        sdkArch: getCppSetting('arch'),
+        sdkVsInstall: getCppSetting('vsInstall') || '',
         qtActive: !!resolveProjectRoot('qt'),
-        sdkActive: !!resolveProjectRoot('sdk'),
+        sdkActive: !!resolveProjectRoot('cpp'),
     };
 }

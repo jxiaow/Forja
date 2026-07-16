@@ -22,7 +22,7 @@ test('VSCode foreground remote run keeps SDK rejection before remote dispatch an
     const runBlock = between(commands, "registerCommand('forja.run'", "registerCommand('forja.debug'");
     const normalRunBlock = runBlock.slice(runBlock.indexOf("// SDK doesn't support run - check before remote dispatch"));
 
-    const sdkGuard = normalRunBlock.indexOf("target?.kind === 'sdk'");
+    const sdkGuard = normalRunBlock.indexOf("target?.kind === 'cpp'");
     const remoteDispatch = normalRunBlock.indexOf("target?.runAt === 'remote'");
     assert.ok(sdkGuard >= 0, 'forja.run must keep the SDK unsupported guard');
     assert.ok(remoteDispatch >= 0, 'forja.run must keep remote dispatch');

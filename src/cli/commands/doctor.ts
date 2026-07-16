@@ -14,7 +14,7 @@ import { createSshRunner, createScpUploader } from '../../remote/core/shell';
 import { resolveRemoteConfig, resolveRemoteActionPath } from '../../remote/core/config';
 import { executeRemoteBootstrap, findBootstrapArtifact, findPackageRoot } from '../../remote/core/bootstrap';
 import { executeRemoteReleaseLock } from '../../remote/core/lock';
-import { detectMake } from '../../sdk/cli/envDetector';
+import { detectMake } from '../../cpp/cli/envDetector';
 import { ServerConfig } from '../../core/serverStore';
 
 function resolveSshPassword(server: ServerConfig): string | null {
@@ -216,7 +216,7 @@ export async function runDoctor(workspace: string, options: {
         }
     }
 
-    if (activeTarget?.kind === 'sdk' || !activeTarget) {
+    if (activeTarget?.kind === 'cpp' || !activeTarget) {
         // Use activeTarget toolchain fields for SDK
         const sdkVsInstall = activeTarget?.toolchain.vsInstall;
 

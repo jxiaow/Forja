@@ -6,58 +6,58 @@ import * as vscode from 'vscode';
 import { StateManager } from './modules/stateManager';
 import { ConfigService } from './modules/configService';
 import { ProjectScanner } from './modules/projectScanner';
-import { SdkBuilder } from './modules/sdkBuilder';
+import { CppBuilder } from './modules/cppBuilder';
 import { CTX_ACTIVATED, TASK_SOURCE } from './constants';
 import { isWindows } from './platform';
 import { initLogger, log, logError } from './utils/logger';
-import { setSdkState, activateSdkModuleIfNoQtProject, onSdkUpdate } from '../ui/statusBar';
-import { setSdkProjectRoot } from '../vscode/workspaceResolver';
+import { setCppState, activateCppModuleIfNoQtProject, onCppUpdate } from '../ui/statusBar';
+import { setCppProjectRoot } from '../vscode/workspaceResolver';
 import { onSettingsChange } from '../vscode/settingsStore';
 
 // SDK 模块级实例（激活后初始化）
-let sdkBuilder: SdkBuilder | null = null;
+let cppBuilder: CppBuilder | null = null;
 let stateManager: StateManager | null = null;
 let projectScanner: ProjectScanner | null = null;
 
-// 激活完成信号 — 防止在 activateSdk 完成前调用 buildSdk 等函数
-let _sdkReadyResolve: (() => void) | null = null;
-const sdkReady = new Promise<void>(resolve => { _sdkReadyResolve = resolve; });
+// 激活完成信号 — 防止在 activateCpp 完成前调用 buildCpp 等函数
+let _cppReadyResolve: (() => void) | null = null;
+const cppReady = new Promise<void>(resolve => { _cppReadyResolve = resolve; });
 
 /**
  * SDK 构建操作（供 vscode/commands.ts 调用）
  */
-export async function buildSdk(): Promise<void> {
-    await sdkReady;
-    if (!sdkBuilder) {
+export async function buildCpp(): Promise<void> {
+    await cppReady;
+    if (!cppBuilder) {
         vscode.window.showErrorMessage('SDK 模块未激活');
         return;
     }
     log('执行 SDK Build');
-    await sdkBuilder.build();
+    await cppBuilder.build();
 }
 
-export async function rebuildSdk(): Promise<void> {
-    await sdkReady;
-    if (!sdkBuilder) {
+export async function rebuildCpp(): Promise<void> {
+    await cppReady;
+    if (!cppBuilder) {
         vscode.window.showErrorMessage('SDK 模块未激活');
         return;
     }
     log('执行 SDK Rebuild');
-    await sdkBuilder.rebuild();
+    await cppBuilder.rebuild();
 }
 
-export async function cleanSdk(): Promise<void> {
-    await sdkReady;
-    if (!sdkBuilder) {
+export async function cleanCpp(): Promise<void> {
+    await cppReady;
+    if (!cppBuilder) {
         vscode.window.showErrorMessage('SDK 模块未激活');
         return;
     }
     log('执行 SDK Clean');
-    await sdkBuilder.clean();
+    await cppBuilder.clean();
 }
 
-export async function selectSdkProject(): Promise<void> {
-    await sdkReady;
+export async function selectCppProject(): Promise<void> {
+    await cppReady;
     if (!projectScanner || !stateManager) {
         vscode.window.showErrorMessage('SDK 模块未激活');
         return;
@@ -83,7 +83,7 @@ export async function selectSdkProject(): Promise<void> {
     }
 }
 
-export async function activateSdk(context: vscode.ExtensionContext): Promise<void> {
+export async function activateCpp(context: vscode.ExtensionContext): Promise<void> {
     try {
     // 0. 初始化日志
     const outputChannel = initLogger();
@@ -103,10 +103,10 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     log(`扫描完成，找到 ${projects.length} 个项目:`);
     projects.forEach(p => log(`  - ${p.name} (${p.type}): ${p.path}`));
 
-    const sdkWorkspaceRoot = resolveSdkWorkspaceRoot(projects);
-    if (sdkWorkspaceRoot) {
-        setSdkProjectRoot(sdkWorkspaceRoot);
-        log(`SDK workspace root: ${sdkWorkspaceRoot}`);
+    const cppWorkspaceRoot = resolveCppWorkspaceRoot(projects);
+    if (cppWorkspaceRoot) {
+        setCppProjectRoot(cppWorkspaceRoot);
+        log(`SDK workspace root: ${cppWorkspaceRoot}`);
     }
 
     // 3. 无 SDK 项目时，跳过项目初始化
@@ -156,50 +156,50 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     }
 
     // 6. 初始化 UI 组件（使用统一状态栏）
-    const updateSdkStatusBar = () => {
+    const updateCppStatusBar = () => {
         const project = sm.currentProject;
-        setSdkState({
+        setCppState({
             projectName: project?.name || '',
             mode: sm.mode,
             arch: sm.arch,
             isBuilding: sm.isBuilding
         });
     };
-    sm.onStateChanged(() => updateSdkStatusBar());
-    updateSdkStatusBar();
+    sm.onStateChanged(() => updateCppStatusBar());
+    updateCppStatusBar();
     // 状态栏切换 SDK mode/arch 时，通过 stateManager 持久化到正确的 workspace 配置
-    onSdkUpdate(({ mode, arch }) => {
+    onCppUpdate(({ mode, arch }) => {
         sm.mode = mode as import('./types').BuildMode;
         sm.arch = arch as import('./types').Arch;
         sm.persistToConfig()
             .catch((e: Error) => logError('状态栏更新后保存 SDK 配置失败', e));
     });
-    let sdkSettingsDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let cppSettingsDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     context.subscriptions.push(onSettingsChange((section) => {
-        if (section !== 'sdk') { return; }
+        if (section !== 'cpp') { return; }
         // 防抖：连续多次 SDK settings 变更只触发一次 VS 检测
-        if (sdkSettingsDebounceTimer) { clearTimeout(sdkSettingsDebounceTimer); }
-        sdkSettingsDebounceTimer = setTimeout(() => {
-            sdkSettingsDebounceTimer = undefined;
+        if (cppSettingsDebounceTimer) { clearTimeout(cppSettingsDebounceTimer); }
+        cppSettingsDebounceTimer = setTimeout(() => {
+            cppSettingsDebounceTimer = undefined;
             sm.restoreFromConfig()
                 .then(async () => {
                     if (isWindows) {
                         await configService.getVsDevCmdPath();
                     }
-                    updateSdkStatusBar();
+                    updateCppStatusBar();
                 })
                 .catch((e: Error) => logError('settingsStore 变更后重新加载 SDK 配置失败', e));
         }, 300);
     }));
     // 有 SDK 项目时激活 SDK 模块
     if (sm.currentProject) {
-        const wsRoot = sdkWorkspaceRoot || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        activateSdkModuleIfNoQtProject(wsRoot);
+        const wsRoot = cppWorkspaceRoot || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        activateCppModuleIfNoQtProject(wsRoot);
     }
     log('状态栏已初始化（统一模式）');
 
     // 7. 初始化 Builder 并赋值给模块级变量
-    sdkBuilder = new SdkBuilder(sm, configService);
+    cppBuilder = new CppBuilder(sm, configService);
     stateManager = sm;
     projectScanner = ps;
 
@@ -227,7 +227,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
 
     log('Forja SDK 模块激活完成!');
     } finally {
-        _sdkReadyResolve!();
+        _cppReadyResolve!();
     }
 }
 
@@ -235,7 +235,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
  * 根据扫描到的 SDK 项目，确定 SDK 项目所在的 workspace folder。
  * 优先选择包含最多 SDK 项目的 folder。
  */
-function resolveSdkWorkspaceRoot(projects: import('./types').SdkProjectInfo[]): string {
+function resolveCppWorkspaceRoot(projects: import('./types').CppProjectInfo[]): string {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) { return ''; }
     if (projects.length === 0) { return ''; }

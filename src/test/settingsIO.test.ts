@@ -9,8 +9,8 @@ import {
     DEFAULT_SYNC,
     loadQtSettings,
     saveQtSettings,
-    loadSdkSettings,
-    saveSdkSettings,
+    loadCppSettings,
+    saveCppSettings,
     loadSyncSettings,
     saveSyncSettings,
     DEFAULT_REMOTE,
@@ -234,22 +234,22 @@ test('saveQtSettings overwrites existing file', () => {
 
 // ── SDK ──
 
-test('loadSdkSettings returns defaults when no config exists', () => {
+test('loadCppSettings returns defaults when no config exists', () => {
     const workspace = makeWorkspace();
-    const settings = loadSdkSettings(workspace);
+    const settings = loadCppSettings(workspace);
     assert.deepEqual(settings, DEFAULT_SDK);
 });
 
-test('loadSdkSettings warns and returns defaults when file is malformed', () => {
+test('loadCppSettings warns and returns defaults when file is malformed', () => {
     const workspace = makeWorkspace();
-    const filePath = projectConfigPath(workspace, 'sdk');
+    const filePath = projectConfigPath(workspace, 'cpp');
     trackFile(filePath);
 
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
     fs.writeFileSync(filePath, '{ invalid json !!!', 'utf8');
 
-    const { result: settings, lines } = captureOutputLines(() => loadSdkSettings(workspace));
+    const { result: settings, lines } = captureOutputLines(() => loadCppSettings(workspace));
     assert.deepEqual(settings, DEFAULT_SDK);
     assert.equal(lines.length, 1);
     assert.match(lines[0], /\[WARN\]/);
@@ -259,12 +259,12 @@ test('loadSdkSettings warns and returns defaults when file is malformed', () => 
     fs.rmSync(filePath, { force: true });
 });
 
-test('saveSdkSettings round-trips with loadSdkSettings', () => {
+test('saveCppSettings round-trips with loadCppSettings', () => {
     const workspace = makeWorkspace();
-    trackFile(projectConfigPath(workspace, 'sdk'));
+    trackFile(projectConfigPath(workspace, 'cpp'));
 
-    saveSdkSettings(workspace, { ...DEFAULT_SDK, vsInstall: 'C:/VS/2022', pinnedProject: 'my.sln' });
-    const loaded = loadSdkSettings(workspace);
+    saveCppSettings(workspace, { ...DEFAULT_SDK, vsInstall: 'C:/VS/2022', pinnedProject: 'my.sln' });
+    const loaded = loadCppSettings(workspace);
 
     assert.equal(loaded.vsInstall, 'C:/VS/2022');
     assert.equal(loaded.pinnedProject, 'my.sln');
@@ -411,11 +411,11 @@ test('loadRemoteSettings looks up parent directory', () => {
 
     saveRemoteSettings(parent, {
         ...DEFAULT_REMOTE,
-        buildOrder: [{ target: 'sdk', action: 'build', args: [] }]
+        buildOrder: [{ target: 'cpp', action: 'build', args: [] }]
     });
     const loaded = loadRemoteSettings(child);
 
-    assert.deepEqual(loaded.buildOrder, [{ target: 'sdk', action: 'build', args: [] }]);
+    assert.deepEqual(loaded.buildOrder, [{ target: 'cpp', action: 'build', args: [] }]);
 });
 
 // ── projectConfigPath ──
@@ -453,7 +453,7 @@ test('projectConfigPath honors FORJA_CONFIG_DIR for test isolation', () => {
 
 test('projectConfigPath generates different hashes for different types', () => {
     const qtPath = projectConfigPath('C:/workspace', 'qt');
-    const sdkPath = projectConfigPath('C:/workspace', 'sdk');
+    const sdkPath = projectConfigPath('C:/workspace', 'cpp');
     const syncPath = projectConfigPath('C:/workspace', 'sync');
     assert.notEqual(qtPath, sdkPath);
     assert.notEqual(qtPath, syncPath);

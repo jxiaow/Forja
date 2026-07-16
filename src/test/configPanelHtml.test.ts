@@ -35,7 +35,7 @@ function createTemplateData(): TemplateData {
         syncRemotePath: '',
         syncPendingCount: 0,
         syncLastTime: '',
-        sdkProjectName: '',
+        cppProjectName: '',
         sdkMode: 'debug',
         sdkArch: 'x86',
         sdkVsInstall: '',

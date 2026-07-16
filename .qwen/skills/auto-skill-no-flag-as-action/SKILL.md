@@ -63,6 +63,23 @@ When converting flag-as-action to subcommand:
 5. **Update nextAction references** — Grep for the old syntax in fix/nextAction fields across all files
 6. **Update tests** — Fix assertions that use the old flag syntax
 
+## Flag That Needs View/Add/Delete → Subcommand
+
+When a flag only supports overwrite (set value), but the setting also needs **view**, **add**, and **delete** operations, convert it to a subcommand. A flag can only set — it can't express "show current", "append", or "remove".
+
+```bash
+# WRONG: can only overwrite, no way to view or incrementally modify
+forja use target --suppress-warnings C4819,C5297   # overwrite only
+
+# RIGHT: subcommand supports all operations
+forja use target suppress-warnings              # view
+forja use target suppress-warnings C4819,C5297  # replace
+forja use target suppress-warnings --add C4819  # append
+forja use target suppress-warnings --rm C4819   # remove
+```
+
+**Scope matters:** The subcommand should live under the same parent as the original flag to preserve scoping. `suppress-warnings` is per-target, so it stays under `use target`, not promoted to `use suppress-warnings` (which would be global).
+
 ## Real Examples from This Project
 
 | Before | After | Files Changed |
@@ -71,3 +88,4 @@ When converting flag-as-action to subcommand:
 | `sync --reset` | `sync reset` | index.ts, types.ts (help) |
 | `run --custom <name>` | `run custom <name>` | index.ts, types.ts (help) |
 | `run --debug` | deleted | index.ts, types.ts (help) — was CLI dead code |
+| `use target --suppress-warnings <codes>` | `use target suppress-warnings [--add\|--rm] [codes]` | index.ts, use.ts, types.ts (help) |

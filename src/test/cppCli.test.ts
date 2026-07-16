@@ -1,7 +1,7 @@
 import test, { afterEach, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractErrors, runSdkCli } from '../sdk/cli/index';
-import { getSdkDefaultArch } from '../sdk/cli/requirements';
+import { extractErrors, runCppCli } from '../cpp/cli/index';
+import { getCppDefaultArch } from '../cpp/cli/requirements';
 
 afterEach(() => { process.exitCode = undefined; });
 
@@ -34,7 +34,7 @@ function captureConsole(fn: () => Promise<void>): Promise<string> {
 describe('SDK CLI', { concurrency: false }, () => {
 
 test('SDK CLI rejects unknown flags with error', async () => {
-    const output = await captureOutput(() => runSdkCli(['build', '--json', '--unknown-flag']));
+    const output = await captureOutput(() => runCppCli(['build', '--json', '--unknown-flag']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
     assert.equal(parsed.ok, false);
@@ -48,7 +48,7 @@ test('SDK CLI extracts MSBuild solution-level errors', () => {
 });
 
 test('SDK CLI rejects invalid --mode value', async () => {
-    const output = await captureOutput(() => runSdkCli(['build', '--json', '--mode', 'fast']));
+    const output = await captureOutput(() => runCppCli(['build', '--json', '--mode', 'fast']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
     assert.equal(parsed.ok, false);
@@ -56,7 +56,7 @@ test('SDK CLI rejects invalid --mode value', async () => {
 });
 
 test('SDK CLI rejects invalid --arch value', async () => {
-    const output = await captureOutput(() => runSdkCli(['build', '--json', '--arch', 'arm64']));
+    const output = await captureOutput(() => runCppCli(['build', '--json', '--arch', 'arm64']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
     assert.equal(parsed.ok, false);
@@ -66,7 +66,7 @@ test('SDK CLI rejects invalid --arch value', async () => {
 test('SDK CLI rejects unsupported --arch value on single-arch platforms', async () => {
     if (os.platform() === 'win32') { return; }
 
-    const output = await captureOutput(() => runSdkCli(['status', '--json', '--arch', 'x86']));
+    const output = await captureOutput(() => runCppCli(['status', '--json', '--arch', 'x86']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
     assert.equal(parsed.ok, false);
@@ -74,7 +74,7 @@ test('SDK CLI rejects unsupported --arch value on single-arch platforms', async 
 });
 
 test('SDK CLI rejects extra positional arguments', async () => {
-    const output = await captureOutput(() => runSdkCli(['status', '--json', 'extra']));
+    const output = await captureOutput(() => runCppCli(['status', '--json', 'extra']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
     assert.equal(parsed.ok, false);
@@ -82,7 +82,7 @@ test('SDK CLI rejects extra positional arguments', async () => {
 });
 
 test('SDK CLI rejects unknown run action', async () => {
-    const output = await captureOutput(() => runSdkCli(['run', '--json']));
+    const output = await captureOutput(() => runCppCli(['run', '--json']));
     assert.equal(process.exitCode, 1);
     const parsed = JSON.parse(output);
     assert.equal(parsed.ok, false);
@@ -102,7 +102,7 @@ test('SDK CLI accepts use config options', async () => {
     try {
         fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
 
-        const output = await captureOutput(() => runSdkCli([
+        const output = await captureOutput(() => runCppCli([
             'use',
             '--json',
             '--workspace',
@@ -138,7 +138,7 @@ test('SDK CLI rejects config options on non-use actions', async () => {
                 : flag === '--arch' ? 'x64'
                     : flag === '--vs-dev-cmd' ? '/tmp/VsDevCmd.bat'
                         : 'Makefile';
-            const output = await captureOutput(() => runSdkCli([action, '--json', flag, value]));
+            const output = await captureOutput(() => runCppCli([action, '--json', flag, value]));
             const parsed = JSON.parse(output);
 
             assert.equal(process.exitCode, 1);
@@ -150,7 +150,7 @@ test('SDK CLI rejects config options on non-use actions', async () => {
 });
 
 test('SDK CLI build accepts --plan and routes missing config to status', async () => {
-    const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan']));
+    const output = await captureOutput(() => runCppCli(['build', '--json', '--plan']));
     const parsed = JSON.parse(output);
     assert.equal(process.exitCode, 1);
     assert.equal(parsed.ok, false);
@@ -159,7 +159,7 @@ test('SDK CLI build accepts --plan and routes missing config to status', async (
 });
 
 test('SDK CLI rejects removed --dry-run alias', async () => {
-    const output = await captureOutput(() => runSdkCli(['build', '--json', '--dry-run']));
+    const output = await captureOutput(() => runCppCli(['build', '--json', '--dry-run']));
     const parsed = JSON.parse(output);
 
     assert.equal(process.exitCode, 1);
@@ -180,7 +180,7 @@ test('SDK CLI build plan inherits mode and arch saved by use', async () => {
     try {
         fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
 
-        const initOutput = await captureOutput(() => runSdkCli([
+        const initOutput = await captureOutput(() => runCppCli([
             'init',
             '--json',
             '--workspace',
@@ -189,7 +189,7 @@ test('SDK CLI build plan inherits mode and arch saved by use', async () => {
         const initParsed = JSON.parse(initOutput);
         assert.equal(initParsed.ok, true);
 
-        const useOutput = await captureOutput(() => runSdkCli([
+        const useOutput = await captureOutput(() => runCppCli([
             'use',
             '--json',
             '--workspace',
@@ -203,7 +203,7 @@ test('SDK CLI build plan inherits mode and arch saved by use', async () => {
         ]));
         assert.equal(JSON.parse(useOutput).ok, true);
 
-        const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const output = await captureOutput(() => runCppCli(['build', '--json', '--plan', '--workspace', ws]));
         const parsed = JSON.parse(output);
 
         assert.equal(parsed.ok, true);
@@ -230,7 +230,7 @@ test('SDK CLI projects text includes use hint', async () => {
     try {
         createSdkProjectFile(ws, 'app');
 
-        const output = await captureOutput(() => runSdkCli(['projects', '--workspace', ws]));
+        const output = await captureOutput(() => runCppCli(['projects', '--workspace', ws]));
 
         assert.match(output, /SDK 项目列表:/);
         assert.match(output, /修改: forja use target --project <path> --json/);
@@ -253,7 +253,7 @@ test('SDK CLI init text includes default warnings and next action', async () => 
     process.env.USERPROFILE = tempHome;
 
     try {
-        const output = await captureOutput(() => runSdkCli(['init', '--workspace', ws]));
+        const output = await captureOutput(() => runCppCli(['init', '--workspace', ws]));
 
         assert.match(output, /SDK 配置已保存/);
         assert.match(output, /warning: mode\/arch 使用默认值/);
@@ -278,7 +278,7 @@ test('SDK CLI build text includes next action when config is missing', async () 
     process.env.USERPROFILE = tempHome;
 
     try {
-        const output = await captureConsole(() => runSdkCli(['build', '--workspace', ws]));
+        const output = await captureConsole(() => runCppCli(['build', '--workspace', ws]));
 
         assert.equal(process.exitCode, 1);
         assert.match(output, /error: 尚未初始化/);
@@ -315,7 +315,7 @@ test('SDK CLI build plan uses x86 solution platform when sln declares x86', asyn
             ''
         ].join('\n'), 'utf-8');
 
-        const useOutput = await captureOutput(() => runSdkCli([
+        const useOutput = await captureOutput(() => runCppCli([
             'use',
             '--json',
             '--workspace',
@@ -329,7 +329,7 @@ test('SDK CLI build plan uses x86 solution platform when sln declares x86', asyn
         ]));
         assert.equal(JSON.parse(useOutput).ok, true);
 
-        const planOutput = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const planOutput = await captureOutput(() => runCppCli(['build', '--json', '--plan', '--workspace', ws]));
         const planParsed = JSON.parse(planOutput);
 
         assert.equal(planParsed.ok, true);
@@ -358,7 +358,7 @@ test('SDK CLI use updates only explicit fields and build plan inherits saved set
         fs.mkdirSync(path.join(ws, 'app'));
         fs.writeFileSync(path.join(ws, 'app', 'Makefile'), 'all:\n\t@echo app\n', 'utf-8');
 
-        const initOutput = await captureOutput(() => runSdkCli([
+        const initOutput = await captureOutput(() => runCppCli([
             'init',
             '--json',
             '--workspace',
@@ -366,7 +366,7 @@ test('SDK CLI use updates only explicit fields and build plan inherits saved set
         ]));
         assert.equal(JSON.parse(initOutput).ok, true);
 
-        const useOutput = await captureOutput(() => runSdkCli([
+        const useOutput = await captureOutput(() => runCppCli([
             'use',
             '--json',
             '--workspace',
@@ -380,14 +380,14 @@ test('SDK CLI use updates only explicit fields and build plan inherits saved set
         assert.equal(useParsed.ok, true);
         assert.equal(useParsed.resolved.project, path.join('app', 'Makefile'));
         assert.equal(useParsed.resolved.mode, 'release');
-        assert.equal(useParsed.resolved.arch, getSdkDefaultArch());
+        assert.equal(useParsed.resolved.arch, getCppDefaultArch());
 
-        const planOutput = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const planOutput = await captureOutput(() => runCppCli(['build', '--json', '--plan', '--workspace', ws]));
         const planParsed = JSON.parse(planOutput);
         assert.equal(planParsed.ok, true);
         assert.equal(planParsed.project, path.join('app', 'Makefile'));
         assert.equal(planParsed.resolved.mode, 'release');
-        assert.equal(planParsed.resolved.arch, getSdkDefaultArch());
+        assert.equal(planParsed.resolved.arch, getCppDefaultArch());
     } finally {
         if (oldHome === undefined) { delete process.env.HOME; }
         else { process.env.HOME = oldHome; }
@@ -407,7 +407,7 @@ test('SDK CLI use rejects a missing project', async () => {
     process.env.USERPROFILE = tempHome;
 
     try {
-        const output = await captureOutput(() => runSdkCli([
+        const output = await captureOutput(() => runCppCli([
             'use',
             '--json',
             '--workspace',
@@ -441,7 +441,7 @@ test('SDK CLI init uses the platform default arch when no SDK config exists', as
     process.env.USERPROFILE = tempHome;
 
     try {
-        const output = await captureOutput(() => runSdkCli(['init', '--json', '--workspace', ws]));
+        const output = await captureOutput(() => runCppCli(['init', '--json', '--workspace', ws]));
         const parsed = JSON.parse(output);
 
         assert.equal(parsed.ok, true);
@@ -467,7 +467,7 @@ test('SDK CLI use resolves relative --project from workspace', async () => {
     try {
         fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
 
-        const useOutput = await captureOutput(() => runSdkCli([
+        const useOutput = await captureOutput(() => runCppCli([
             'use',
             '--json',
             '--workspace',
@@ -479,7 +479,7 @@ test('SDK CLI use resolves relative --project from workspace', async () => {
         assert.equal(useParsed.ok, true);
         assert.equal(useParsed.resolved.project, 'Makefile');
 
-        const planOutput = await captureOutput(() => runSdkCli([
+        const planOutput = await captureOutput(() => runCppCli([
             'build',
             '--json',
             '--plan',
@@ -508,7 +508,7 @@ test('SDK CLI init rejects explicit project options', async () => {
     process.env.USERPROFILE = tempHome;
 
     try {
-        const output = await captureOutput(() => runSdkCli([
+        const output = await captureOutput(() => runCppCli([
             'init',
             '--json',
             '--workspace',
@@ -543,7 +543,7 @@ test('SDK CLI build plan rejects a stale pinned project instead of building anot
         const pinnedProject = path.join(ws, 'Makefile');
         fs.writeFileSync(pinnedProject, 'all:\n\t@echo old\n', 'utf-8');
 
-        const initOutput = await captureOutput(() => runSdkCli([
+        const initOutput = await captureOutput(() => runCppCli([
             'init',
             '--json',
             '--workspace',
@@ -551,7 +551,7 @@ test('SDK CLI build plan rejects a stale pinned project instead of building anot
         ]));
         assert.equal(JSON.parse(initOutput).ok, true);
 
-        const useOutput = await captureOutput(() => runSdkCli([
+        const useOutput = await captureOutput(() => runCppCli([
             'use',
             '--json',
             '--workspace',
@@ -564,7 +564,7 @@ test('SDK CLI build plan rejects a stale pinned project instead of building anot
         fs.unlinkSync(pinnedProject);
         createSdkProjectFile(ws, 'other');
 
-        const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const output = await captureOutput(() => runCppCli(['build', '--json', '--plan', '--workspace', ws]));
         const parsed = JSON.parse(output);
 
         assert.equal(process.exitCode, 1);
@@ -592,7 +592,7 @@ test('SDK CLI build plan requires saved SDK config even when one candidate exist
     try {
         fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
 
-        const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const output = await captureOutput(() => runCppCli(['build', '--json', '--plan', '--workspace', ws]));
         const parsed = JSON.parse(output);
 
         assert.equal(process.exitCode, 1);
@@ -620,10 +620,10 @@ test('SDK CLI status requires a saved project after init even when one candidate
     try {
         createSdkProjectFile(ws, '.');
 
-        const initOutput = await captureOutput(() => runSdkCli(['init', '--json', '--workspace', ws]));
+        const initOutput = await captureOutput(() => runCppCli(['init', '--json', '--workspace', ws]));
         assert.equal(JSON.parse(initOutput).ok, true);
 
-        const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
+        const output = await captureOutput(() => runCppCli(['status', '--json', '--workspace', ws]));
         const parsed = JSON.parse(output);
 
         assert.equal(parsed.ok, true);
@@ -632,7 +632,7 @@ test('SDK CLI status requires a saved project after init even when one candidate
         assert.equal(parsed.project, projectName);
         assert.equal(parsed.nextAction, 'build');
 
-        const planOutput = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const planOutput = await captureOutput(() => runCppCli(['build', '--json', '--plan', '--workspace', ws]));
         const planParsed = JSON.parse(planOutput);
         assert.equal(planParsed.ok, true);
         assert.equal(planParsed.project, projectName);
@@ -657,7 +657,7 @@ test('SDK CLI status reports missing project without failing', async () => {
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-sdk-status-empty-'));
     _tmpDirs.push(ws);
 
-    const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
+    const output = await captureOutput(() => runCppCli(['status', '--json', '--workspace', ws]));
     const parsed = JSON.parse(output);
 
     assert.equal(parsed.ok, true);
@@ -673,7 +673,7 @@ test('SDK CLI status reports candidate projects when workspace has multiple proj
     createSdkProjectFile(ws, 'app');
     createSdkProjectFile(ws, 'lib');
 
-    const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
+    const output = await captureOutput(() => runCppCli(['status', '--json', '--workspace', ws]));
     const parsed = JSON.parse(output);
 
     assert.equal(parsed.ok, true);
@@ -691,7 +691,7 @@ test('SDK CLI status reports candidate projects when workspace has multiple proj
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { scanProjects } from '../sdk/cli/index';
+import { scanProjects } from '../cpp/cli/index';
 
 const _tmpDirs: string[] = [];
 import { after } from 'node:test';

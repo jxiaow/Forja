@@ -41,7 +41,7 @@ export interface Readiness {
 // ── Candidates ──
 
 export interface TargetCandidate {
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     label: string;
     current: boolean;
@@ -352,7 +352,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     processStopped:                { en: 'Process stopped',              zh: '进程已停止' },
     noRunningProcess:              { en: 'No running process',           zh: '没有运行中的进程' },
     stopNotSupported:              { en: 'Stop not supported for this target', zh: '此目标不支持停止' },
-    stopSdkUnsupported:            { en: 'C++ target does not support stop. C++ builds are not long-running.', zh: 'C++ 目标不支持停止。C++ 构建不是长运行进程。' },
+    stopCppUnsupported:            { en: 'C++ target does not support stop. C++ builds are not long-running.', zh: 'C++ 目标不支持停止。C++ 构建不是长运行进程。' },
     stopTerminateFailed:           { en: 'Failed to terminate process',  zh: '终止进程失败' },
     stopStillRunning:              { en: 'Process still running',        zh: '进程仍在运行' },
     // list extras
@@ -590,7 +590,7 @@ Options:
     },
     // init diagnostics
     'init.projectNotFound':              { en: 'Project not found in workspace',      zh: '工作区中未找到项目' },
-    'init.foundQtSdkNotAutoSelecting':   { en: 'Found Qt and C++ targets, not auto-selecting', zh: '找到 Qt 和 C++ 目标，未自动选择' },
+    'init.foundQtCppNotAutoSelecting':   { en: 'Found Qt and C++ targets, not auto-selecting', zh: '找到 Qt 和 C++ 目标，未自动选择' },
     'init.foundTargetsNotAutoSelecting': { en: 'Found targets, not auto-selecting',          zh: '找到多个目标，未自动选择' },
     'init.noTargetsToolchainOnly':       { en: 'No Qt or C++ targets found, only toolchain defaults saved', zh: '未找到 Qt 或 C++ 目标，仅保存了工具链默认值' },
     'init.qtMissing':                    { en: 'Qt installation not detected',        zh: '未检测到 Qt 安装' },
@@ -761,19 +761,19 @@ Options:
     'cmd.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
     'cmd.projectNotFound':               { en: 'Project file not found',             zh: '项目文件未找到' },
     'cmd.targetProjectMissing':          { en: 'Target project missing',             zh: '目标项目缺失' },
-    'cmd.sdkNoQmakeRcc':                 { en: 'C++ target does not support',        zh: 'C++ 目标不支持' },
+    'cmd.cppNoQmakeRcc':                 { en: 'C++ target does not support',        zh: 'C++ 目标不支持' },
     'cmd.rccNotRemote':                  { en: 'RCC is not supported on remote targets', zh: 'RCC 不支持远程目标' },
-    'cmd.sdkBuildFailed':                { en: 'C++ build failed',                   zh: 'C++ 构建失败' },
+    'cmd.cppBuildFailed':                { en: 'C++ build failed',                   zh: 'C++ 构建失败' },
     'cmd.qtBuildFailed':                 { en: 'Qt build failed',                    zh: 'Qt 构建失败' },
-    'cmd.sdkRunUnsupported':             { en: 'C++ target does not support run. Build first.', zh: 'C++ 目标不支持运行。请先构建。' },
+    'cmd.cppRunUnsupported':             { en: 'C++ target does not support run. Build first.', zh: 'C++ 目标不支持运行。请先构建。' },
     'cmd.debugVscodeOnly':               { en: 'Debug is only available in VSCode. Use the "Forja: Debug" command from the Command Palette, or click the debug button in the status bar.', zh: '调试仅在 VSCode 中可用。使用命令面板中的 "Forja: Debug" 命令，或点击状态栏中的调试按钮。' },
-    'cmd.sdkCustomUnsupported':          { en: 'C++ target does not support custom commands', zh: 'C++ 目标不支持自定义命令' },
+    'cmd.cppCustomUnsupported':          { en: 'C++ target does not support custom commands', zh: 'C++ 目标不支持自定义命令' },
     'cmd.customNotFound':                { en: 'Custom command not found',           zh: '自定义命令未找到' },
     'cmd.customFailed':                  { en: 'Custom command failed',              zh: '自定义命令失败' },
     'cmd.qtRunFailed':                   { en: 'Qt run failed',                      zh: 'Qt 运行失败' },
     'cmd.appExitedWithError':            { en: 'Application exited with error',      zh: '应用程序异常退出' },
     'cmd.targetNotSelected':             { en: 'Target not selected',                zh: '目标未选择' },
-    'cmd.sdkCleanFailed':                { en: 'C++ clean failed',                   zh: 'C++ 清理失败' },
+    'cmd.cppCleanFailed':                { en: 'C++ clean failed',                   zh: 'C++ 清理失败' },
     'cmd.qtCleanFailed':                 { en: 'Qt clean failed',                    zh: 'Qt 清理失败' },
     'cmd.stopFailedDetail':              { en: 'Failed to terminate process',        zh: '终止进程失败' },
     'cmd.stopStillRunningDetail':        { en: 'Process still running',              zh: '进程仍在运行' },

@@ -106,6 +106,38 @@ if (!pkg.displayName.includes(`(${ChannelLabel})`)) {
 }
 ```
 
+## Restore From Original, Not Regex Reverse
+
+When a packaging script temporarily patches `package.json` (version, displayName), the `finally` block must restore from **saved original values** — never use regex to reverse the patch.
+
+### Bug Pattern
+
+```js
+// WRONG — regex reverse assumes the patch always added " (Dev)"
+// If the original was already "Forja (Dev)", the regex strips it to "Forja"
+pkg.displayName = pkg.displayName.replace(/ \(Dev\)$/, '');
+pkg.version = version; // `version` may already be polluted from a previous failed run
+```
+
+### Fix
+
+```js
+// CORRECT — save originals before any patching
+const origDisplayName = pkg.displayName;
+const origVersion = pkg.version;
+try {
+    // ... patch and package ...
+} finally {
+    if (patchedPkg) {
+        pkg.displayName = origDisplayName;  // exact original
+        pkg.version = origVersion;           // exact original
+        fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
+    }
+}
+```
+
+**Why:** Regex reverse is fragile — it can't distinguish "patch added this" from "original already had this". Saved originals are always correct.
+
 ## Where to Apply
 
 - `scripts/package-vs.js` — VSCode extension packaging
@@ -119,3 +151,4 @@ if (!pkg.displayName.includes(`(${ChannelLabel})`)) {
 3. Does the date stamp function use the local date or UTC? → Use local date (consistent with developer expectation)
 4. Does the remote version comparison handle both `-` and `.` pre-release formats? → Use regex to extract `x.y.z` numeric part
 5. Does the displayName patch check for existing channel label? → Check before appending
+6. Does the finally block restore from saved originals? → Never use regex to reverse patches

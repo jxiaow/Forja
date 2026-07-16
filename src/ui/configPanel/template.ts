@@ -37,7 +37,7 @@ export interface TemplateData {
     syncLastTime: string;
     syncReadinessIssues?: string[];
     // SDK
-    sdkProjectName: string;
+    cppProjectName: string;
     sdkMode: string;
     sdkArch: string;
     sdkVsInstall: string;

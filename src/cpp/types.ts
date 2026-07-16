@@ -1,5 +1,5 @@
 /** SDK 项目信息 */
-export interface SdkProjectInfo {
+export interface CppProjectInfo {
   /** 显示名称（取自文件名） */
   name: string;
   /** 入口文件绝对路径 */

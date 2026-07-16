@@ -38,7 +38,7 @@ export interface QtSettings {
     suppressedWarnings?: string[];
 }
 
-export interface SdkSettings {
+export interface CppSettings {
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';
     vsInstall: string;
@@ -52,7 +52,7 @@ export interface SyncSettings {
 }
 
 export interface RemoteBuildOrderItem {
-    target: 'qt' | 'sdk';
+    target: 'qt' | 'cpp';
     action: 'build' | 'rebuild' | 'clean' | 'qmake';
     args: string[];
 }
@@ -94,7 +94,7 @@ export interface RemoteSettings {
 
 export interface ForjaSettings {
     qt: QtSettings;
-    sdk: SdkSettings;
+    sdk: CppSettings;
     sync: SyncSettings;
     remote: RemoteSettings;
 }
@@ -123,7 +123,7 @@ export const DEFAULT_QT: Readonly<QtSettings> = {
     qmakeReminderEnabled: true
 };
 
-export const DEFAULT_SDK: Readonly<SdkSettings> = {
+export const DEFAULT_SDK: Readonly<CppSettings> = {
     mode: 'debug',
     arch: 'x86',
     vsInstall: '',
@@ -199,7 +199,7 @@ export function saveGlobalConfig(config: Partial<GlobalConfig>): void {
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
-export type ConfigType = 'qt' | 'sdk' | 'sync' | 'remote' | 'activeTarget' | 'targetToolchains';
+export type ConfigType = 'qt' | 'cpp' | 'sync' | 'remote' | 'activeTarget' | 'targetToolchains';
 
 export function projectConfigPath(workspace: string, type: ConfigType): string {
     const normalized = workspace.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
@@ -235,7 +235,7 @@ function isDescendantWorkspace(parentWorkspace: string, childWorkspace: string):
     return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
-function resolveUniqueDescendantConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string | null {
+function resolveUniqueDescendantConfigPath(workspace: string, type: 'qt' | 'cpp' | 'sync'): string | null {
     const matches = listProjectConfigs()
         .filter(config => config.type === type && isDescendantWorkspace(workspace, config.workspace));
     return matches.length === 1 ? matches[0].filePath : null;
@@ -284,26 +284,26 @@ export function saveQtSettings(workspace: string, settings: QtSettings): void {
 
 // ── SDK 配置读写 ──
 
-export function loadSdkSettings(workspace: string): SdkSettings {
-    const filePath = resolveConfigPath(workspace, 'sdk');
+export function loadCppSettings(workspace: string): CppSettings {
+    const filePath = resolveConfigPath(workspace, 'cpp');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            return sanitizeSdk(raw);
+            return sanitizeCpp(raw);
         }
     } catch (e) {
         if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
-        warnSettingsLoadFailure('sdk', filePath, e);
+        warnSettingsLoadFailure('cpp', filePath, e);
     }
     return { ...DEFAULT_SDK };
 }
 
-export function saveSdkSettings(workspace: string, settings: SdkSettings): void {
-    const filePath = projectConfigPath(workspace, 'sdk');
+export function saveCppSettings(workspace: string, settings: CppSettings): void {
+    const filePath = projectConfigPath(workspace, 'cpp');
     _ensureDir(filePath);
     const data: Record<string, unknown> = {
         workspace,
-        type: 'sdk',
+        type: 'cpp',
         ...settings
     };
     fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
@@ -477,7 +477,7 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
         suppressedWarnings: isStringArray(raw.suppressedWarnings) ? raw.suppressedWarnings : undefined
     };
 }
-function sanitizeSdk(raw: Record<string, unknown>): SdkSettings {
+function sanitizeCpp(raw: Record<string, unknown>): CppSettings {
     const d = DEFAULT_SDK;
     return {
         mode: (raw.mode === 'debug' || raw.mode === 'release') ? raw.mode : d.mode,
@@ -504,7 +504,7 @@ function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
             const entry = item as Record<string, unknown>;
             const target = entry.target;
             const action = entry.action;
-            if ((target !== 'qt' && target !== 'sdk') || !isRemoteBuildOrderAction(target, action)) { continue; }
+            if ((target !== 'qt' && target !== 'cpp') || !isRemoteBuildOrderAction(target, action)) { continue; }
             buildOrder.push({
                 target,
                 action,
@@ -575,7 +575,7 @@ function sanitizeRemoteRepoAssets(raw: unknown): RemoteRepoAssetSettings[] {
     return assets;
 }
 
-function isRemoteBuildOrderAction(target: 'qt' | 'sdk', action: unknown): action is RemoteBuildOrderItem['action'] {
+function isRemoteBuildOrderAction(target: 'qt' | 'cpp', action: unknown): action is RemoteBuildOrderItem['action'] {
     if (target === 'qt') {
         return action === 'build' || action === 'clean' || action === 'qmake';
     }

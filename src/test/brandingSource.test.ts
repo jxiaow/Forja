@@ -5,8 +5,8 @@ import * as path from 'path';
 
 test('runtime-facing source and packaging comments use Forja branding', () => {
     const files = [
-        'src/sdk/sdkExtension.ts',
-        'src/sdk/modules/sdkBuilder.ts',
+        'src/sdk/cppExtension.ts',
+        'src/sdk/modules/cppBuilder.ts',
         'src/sdk/modules/projectScanner.ts',
         'scripts/build-cli.js',
         'scripts/package-vs.js'

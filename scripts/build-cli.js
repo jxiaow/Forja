@@ -64,7 +64,7 @@ const coreFiles = [
     'core/gitChangedFiles.js',
     'core/gitRepoResolver.js',
     'core/syncFileSelection.js',
-    'core/sdkProjectScanner.js',
+    'core/cppProjectScanner.js',
     'core/projectTypeDetector.js',
     'core/workspaceStore.js'
 ];
@@ -80,7 +80,7 @@ const platformFiles = [
 const rootFiles = ['version.js'];
 
 // Individual files needed from sdk/ (non-vscode ones)
-const sdkFiles = ['sdk/constants.js'];
+const cppFiles = ['sdk/constants.js'];
 
 // Individual files needed from qt/build/ (non-vscode ones)
 const qtBuildFiles = ['qt/build/designer.js'];
@@ -181,7 +181,7 @@ for (const file of platformFiles) {
 }
 
 // Copy individual sdk files (non-vscode only)
-for (const file of sdkFiles) {
+for (const file of cppFiles) {
     const srcFile = path.join(srcOut, file);
     const dstFile = path.join(tmpBuild, file);
     if (fs.existsSync(srcFile)) {
@@ -237,7 +237,7 @@ const cliPkg = {
     engines: {
         node: '>=18.0.0'
     },
-    keywords: ['qt', 'qmake', 'sdk', 'cpp', 'build', 'forja']
+    keywords: ['qt', 'qmake', 'cpp', 'cpp', 'build', 'forja']
 };
 fs.writeFileSync(path.join(tmpBuild, 'package.json'), JSON.stringify(cliPkg, null, 2) + '\n');
 

@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { CliResult } from '../../core/types';
 
-export interface SdkPlanOptions {
+export interface CppPlanOptions {
     action: 'build' | 'rebuild' | 'clean';
     workspace: string;
     project: string;
@@ -68,7 +68,7 @@ function resolveSolutionPlatform(projectPath: string, configuration: string, arc
  * Build shell commands for SDK project (MSBuild on Windows, make on POSIX).
  * Single source of truth for SDK build command assembly.
  */
-export function buildCommand(options: SdkPlanOptions): string[] {
+export function buildCommand(options: CppPlanOptions): string[] {
     const isWindows = os.platform() === 'win32';
     const commands: string[] = [];
 
@@ -113,7 +113,7 @@ export function buildCommand(options: SdkPlanOptions): string[] {
  * Create SDK build plan in CliResult format.
  * This allows reusing Qt's runCliResult execution engine.
  */
-export function createSdkPlan(options: SdkPlanOptions): CliResult {
+export function createCppPlan(options: CppPlanOptions): CliResult {
     const commands = buildCommand(options);
     const shellCommand = commands.join(' && ');
 

@@ -106,7 +106,7 @@ test('saveWorkspaceConfig sdk kind round-trip', () => {
     const profile: TargetProfile = {
         id: 'sdk-lib-release-x86',
         name: 'lib release x86',
-        kind: 'sdk',
+        kind: 'cpp',
         project: 'sdk/NemoSDK.sln',
         mode: 'release',
         arch: 'x86',
@@ -118,7 +118,7 @@ test('saveWorkspaceConfig sdk kind round-trip', () => {
     saveWorkspaceConfig(config);
 
     const loaded = loadWorkspaceConfig(ws);
-    assert.equal(loaded.targets['sdk-lib-release-x86'].kind, 'sdk');
+    assert.equal(loaded.targets['sdk-lib-release-x86'].kind, 'cpp');
     assert.equal(loaded.targets['sdk-lib-release-x86'].runAt, 'remote');
 });
 
@@ -237,7 +237,7 @@ test('requireActiveTarget returns target when exists', () => {
     config.targets['sdk-b-release-x86'] = {
         id: 'sdk-b-release-x86',
         name: 'b release x86',
-        kind: 'sdk',
+        kind: 'cpp',
         project: 'b.sln',
         mode: 'release',
         arch: 'x86',
@@ -249,7 +249,7 @@ test('requireActiveTarget returns target when exists', () => {
 
     const result = requireActiveTarget(ws);
     assert.ok('target' in result);
-    assert.equal(result.target.kind, 'sdk');
+    assert.equal(result.target.kind, 'cpp');
 });
 
 // ── Candidates ──
@@ -294,12 +294,12 @@ test('collectTargetCandidates marks current target from workspaceStore', () => {
 test('collectTargetCandidates finds .sln files on Windows', () => {
     if (os.platform() !== 'win32') { return; }
     const ws = makeWorkspace();
-    const slnDir = path.join(ws, 'sdk');
+    const slnDir = path.join(ws, 'cpp');
     fs.mkdirSync(slnDir, { recursive: true });
     fs.writeFileSync(path.join(slnDir, 'test.sln'), '');
     const candidates = collectTargetCandidates(ws);
-    const sdkCandidates = candidates.filter(c => c.kind === 'sdk');
-    assert.ok(sdkCandidates.length >= 1);
+    const cppCandidates = candidates.filter(c => c.kind === 'cpp');
+    assert.ok(cppCandidates.length >= 1);
 });
 
 // ── Locale ──

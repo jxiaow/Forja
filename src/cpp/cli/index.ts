@@ -8,8 +8,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as cp from 'child_process';
 import { EXCLUDE_DIRS, EXCLUDE_PATH_SEGMENTS, DEFAULT_SCAN_DEPTH } from '../constants';
-import { getSdkDefaultArch, getSdkAvailableArch, buildSdkEnvCurrent, getSdkPlatformAvailable, getSdkPlatformConfigHints } from './requirements';
-import { loadSdkSettings, saveSdkSettings, sdkSettingsFilePath } from './settings';
+import { getCppDefaultArch, getCppAvailableArch, buildCppEnvCurrent, getCppPlatformAvailable, getCppPlatformConfigHints } from './requirements';
+import { loadCppSettings, saveCppSettings, cppSettingsFilePath } from './settings';
 import { detectVsInstallations, detectMake } from './envDetector';
 
 interface SdkCliOptions {
@@ -103,7 +103,7 @@ function parseArgs(argv: string[]): SdkCliOptions {
                 if (!val || val.startsWith('--')) { throw new Error('--arch 需要一个值'); }
                 const archVal = argv[++i];
                 if (archVal !== 'x86' && archVal !== 'x64') { throw new Error(`无效的 --arch 值: ${archVal}`); }
-                if (!getSdkAvailableArch().includes(archVal)) { throw new Error(`当前平台不支持 --arch 值: ${archVal}`); }
+                if (!getCppAvailableArch().includes(archVal)) { throw new Error(`当前平台不支持 --arch 值: ${archVal}`); }
                 options.arch = archVal;
                 break;
             }
@@ -339,7 +339,7 @@ Forja SDK CLI
   --workspace <path>     工作区路径（默认当前目录）
   --project <path>       use: 项目入口文件路径（.sln 或 Makefile）
   --mode <mode>          use: 编译模式: debug | release（默认 debug）
-  --arch <arch>          use: 目标架构: ${getSdkAvailableArch().join(' | ')}（默认 ${getSdkDefaultArch()}）
+  --arch <arch>          use: 目标架构: ${getCppAvailableArch().join(' | ')}（默认 ${getCppDefaultArch()}）
   --vs-dev-cmd <path>    use: VsDevCmd.bat 路径（Windows）
   --plan                 仅输出命令计划，不执行
   --json                 JSON 格式输出
@@ -353,7 +353,7 @@ Forja SDK CLI
 `.trim();
 }
 
-export async function runSdkCli(argv: string[]): Promise<void> {
+export async function runCppCli(argv: string[]): Promise<void> {
     if (argv.length === 0 || argv[0] === '--help' || argv[0] === '-h') {
         console.log(getHelpText());
         return;
@@ -364,9 +364,9 @@ export async function runSdkCli(argv: string[]): Promise<void> {
     try {
         const options = parseArgs(argv);
 
-        const settings = loadSdkSettings(options.workspace);
+        const settings = loadCppSettings(options.workspace);
         const effectiveMode = options.mode || settings.mode || 'debug';
-        const settingsArch = getSdkAvailableArch().includes(settings.arch) ? settings.arch : getSdkDefaultArch();
+        const settingsArch = getCppAvailableArch().includes(settings.arch) ? settings.arch : getCppDefaultArch();
         const effectiveArch = options.arch || settingsArch;
         const effectiveOptions: EffectiveSdkCliOptions = {
             ...options,
@@ -386,7 +386,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             const project = settings.pinnedProject || (candidates.length === 1 ? projectDisplayPath(options.workspace, candidates[0]) : null);
 
             const newSettings = { mode, arch, vsDevCmdPath: vsDevCmd, pinnedProject: project };
-            saveSdkSettings(options.workspace, newSettings);
+            saveCppSettings(options.workspace, newSettings);
 
             const diagnostics: SdkDiagnostic[] = [];
             const autoSelected: string[] = [];
@@ -429,7 +429,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             const vsDevCmd = options.vsDevCmd || settings.vsDevCmdPath || '';
 
             const newSettings = { mode, arch, vsDevCmdPath: vsDevCmd, pinnedProject: project };
-            saveSdkSettings(options.workspace, newSettings);
+            saveCppSettings(options.workspace, newSettings);
 
             const out: Record<string, unknown> = {
                 ok: true,
@@ -452,17 +452,17 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             const out: Record<string, unknown> = {
                 ok: true,
                 action: 'env',
-                current: buildSdkEnvCurrent({ mode: effectiveMode, arch: effectiveArch, vsDevCmd: currentVsDevCmd || null, make: makePath || null }),
+                current: buildCppEnvCurrent({ mode: effectiveMode, arch: effectiveArch, vsDevCmd: currentVsDevCmd || null, make: makePath || null }),
                 available: {
                     mode: ['debug', 'release'],
-                    arch: getSdkAvailableArch(),
-                    ...getSdkPlatformAvailable({ vsInstallations, makePath })
+                    arch: getCppAvailableArch(),
+                    ...getCppPlatformAvailable({ vsInstallations, makePath })
                 },
                 configHints: {
                     usage: 'forja use target [options] --json',
                     mode: '--mode debug|release',
-                    ...(getSdkAvailableArch().length > 1 ? { arch: `--arch ${getSdkAvailableArch().join('|')}` } : {}),
-                    ...getSdkPlatformConfigHints()
+                    ...(getCppAvailableArch().length > 1 ? { arch: `--arch ${getCppAvailableArch().join('|')}` } : {}),
+                    ...getCppPlatformConfigHints()
                 }
             };
 
@@ -526,7 +526,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
                 statusProjectPath = candidates[0];
             }
 
-            const hasSettings = fs.existsSync(sdkSettingsFilePath(options.workspace));
+            const hasSettings = fs.existsSync(cppSettingsFilePath(options.workspace));
             const projectExists = !!statusProjectPath && fs.existsSync(statusProjectPath);
             const projectRel = statusProjectPath ? path.relative(options.workspace, statusProjectPath) || statusProjectPath : null;
             const checks: Record<string, boolean> = { settings: hasSettings, project: projectExists };
@@ -597,7 +597,7 @@ export async function runSdkCli(argv: string[]): Promise<void> {
             return;
         }
 
-        const hasSettings = fs.existsSync(sdkSettingsFilePath(options.workspace));
+        const hasSettings = fs.existsSync(cppSettingsFilePath(options.workspace));
         if (!hasSettings) {
             const diagnostics: SdkDiagnostic[] = [{ level: 'error', message: '尚未初始化' }];
             const nextAction = 'forja status --json';

@@ -12,7 +12,7 @@ export function buildEnvPage(data: TemplateData): string {
     h += '<div class="page-desc">管理构建工具链</div>';
 
     h += buildQtEnvSection(data);
-    if (data.isWin) { h += buildSdkEnvSection(data); }
+    if (data.isWin) { h += buildCppEnvSection(data); }
 
     // 刷新按钮
     h += '<div style="margin-top:12px"><button id="refreshEnvBtn" class="btn"';
@@ -132,7 +132,7 @@ function buildQtEnvSection(data: TemplateData): string {
 
 // ── SDK 工具链 ──
 
-function buildSdkEnvSection(data: TemplateData): string {
+function buildCppEnvSection(data: TemplateData): string {
     const env = data.env;
     const open = data.sdkActive ? ' open' : '';
     const summary = data.sdkActive ? 'C++ 工具链' : 'C++ 工具链 <span class="section-badge">未检测到</span>';
@@ -164,7 +164,7 @@ function buildSdkEnvSection(data: TemplateData): string {
     h += " onclick=\"togglePanel('sdkVsPanel',this)\">";
     h += '<span class="env-toggle-arrow">▾</span> 选择版本</button></div>';
     h += '<div id="sdkVsPanel" class="env-expand">';
-    h += buildSdkVsCandidateSelect(env, data.sdkVsInstall);
+    h += buildCppVsCandidateSelect(env, data.sdkVsInstall);
     h += '<div class="ef-row"><span class="ef-label">VS 安装目录或 VsDevCmd</span>';
     h += '<div class="input-row">';
     h += `<input id="sdkVsInstall" class="ef-input" value="${esc(data.sdkVsInstall)}"`;
@@ -197,7 +197,7 @@ function buildVsCandidateSelect(env: EnvInfo | null, currentPath: string): strin
     return h;
 }
 
-function buildSdkVsCandidateSelect(env: EnvInfo | null, currentPath: string): string {
+function buildCppVsCandidateSelect(env: EnvInfo | null, currentPath: string): string {
     const candidates = env?.vsCandidates ?? [];
     if (candidates.length === 0) { return ''; }
     const cur = candidates.find(c => c.installPath === currentPath || c.devShellPath === currentPath);

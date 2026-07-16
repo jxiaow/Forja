@@ -4,11 +4,11 @@
 
 const isWin = process.platform === 'win32';
 
-export function getSdkDefaultArch(): 'x86' | 'x64' {
+export function getCppDefaultArch(): 'x86' | 'x64' {
     return isWin ? 'x86' : 'x64';
 }
 
-export function getSdkAvailableArch(): Array<'x86' | 'x64'> {
+export function getCppAvailableArch(): Array<'x86' | 'x64'> {
     if (isWin) { return ['x86', 'x64']; }
     return ['x64'];
 }
@@ -16,7 +16,7 @@ export function getSdkAvailableArch(): Array<'x86' | 'x64'> {
 // ── 环境输出（env 命令，按平台决定包含哪些字段） ──
 
 /** 构建 env current 对象（只包含当前平台有关的字段） */
-export function buildSdkEnvCurrent(opts: {
+export function buildCppEnvCurrent(opts: {
     mode: string; arch: string; vsDevCmd: string | null; make: string | null;
 }): Record<string, unknown> {
     const base: Record<string, unknown> = {
@@ -32,7 +32,7 @@ export function buildSdkEnvCurrent(opts: {
 }
 
 /** 获取当前平台额外可用信息 */
-export function getSdkPlatformAvailable(detected: {
+export function getCppPlatformAvailable(detected: {
     vsInstallations: Array<{ vsDevCmdPath: string; version: string; edition: string }>;
     makePath: string | null;
 }): Record<string, unknown> {
@@ -43,6 +43,6 @@ export function getSdkPlatformAvailable(detected: {
 }
 
 /** 获取当前平台额外的 configHints */
-export function getSdkPlatformConfigHints(): Record<string, string> {
+export function getCppPlatformConfigHints(): Record<string, string> {
     return isWin ? { vsDevCmd: '--vs-dev-cmd <path>' } : {};
 }

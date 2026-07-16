@@ -25,7 +25,7 @@ export function buildProjectPage(data: TemplateData): string {
     h += '<div class="page-desc">管理构建参数和 IntelliSense 设置</div>';
 
     h += buildQtSection(data);
-    h += buildSdkSection(data);
+    h += buildCppSection(data);
 
     return h;
 }
@@ -201,7 +201,7 @@ function buildQtScript(data: TemplateData): string {
     h += 'aBtns.forEach(function(b){b.classList.remove("active")});';
     h += 'var aIdx=d.arch==="x64"?1:0;if(aBtns[aIdx])aBtns[aIdx].classList.add("active")}';
     h += '}';
-    h += 'else if(d.command==="sdkSettingsUpdated"){';
+    h += 'else if(d.command==="cppSettingsUpdated"){';
     h += 'if(d.sdkMode!==undefined){var sBtns=document.querySelectorAll("#sdkMG .bgi");';
     h += 'sBtns.forEach(function(b){b.classList.remove("active")});';
     h += 'var sIdx=d.sdkMode==="release"?1:0;if(sBtns[sIdx])sBtns[sIdx].classList.add("active")}';
@@ -215,7 +215,7 @@ function buildQtScript(data: TemplateData): string {
 
 // ── SDK Section ──
 
-function buildSdkSection(data: TemplateData): string {
+function buildCppSection(data: TemplateData): string {
     const open = data.sdkActive ? ' open' : '';
     const summary = data.sdkActive ? 'C++ 项目' : 'C++ 项目 <span class="section-badge">未检测到</span>';
 
@@ -226,7 +226,7 @@ function buildSdkSection(data: TemplateData): string {
     if (!data.sdkActive) {
         h += '<div class="section-inactive">';
         h += '<div class="section-inactive-hint">未检测到 C++ 项目（.sln / Makefile）</div>';
-        h += '<button class="btn btn-sm" onclick="vscode.postMessage({command:\'selectSdkProject\'})">选择项目</button>';
+        h += '<button class="btn btn-sm" onclick="vscode.postMessage({command:\'selectCppProject\'})">选择项目</button>';
         h += '</div>';
         h += '</details>';
         return h;
@@ -239,9 +239,9 @@ function buildSdkSection(data: TemplateData): string {
     h += '<div class="ci"><div class="cii"><div class="cil">活动项目</div>';
     h += '<div class="cid">选择要构建的 .sln 项目</div></div>';
     h += '<div class="cic"><div class="input-row" style="align-items:center;justify-content:flex-end">';
-    h += `<span style="font-size:14px;font-weight:600;color:var(--vscode-foreground)">${esc(data.sdkProjectName)}</span>`;
+    h += `<span style="font-size:14px;font-weight:600;color:var(--vscode-foreground)">${esc(data.cppProjectName)}</span>`;
     h += '<button class="btn btn-sm" onclick="vscode.postMessage(';
-    h += "{command:'selectSdkProject'})\">切换</button>";
+    h += "{command:'selectCppProject'})\">切换</button>";
     h += '</div></div></div></div>';
 
     // 构建参数

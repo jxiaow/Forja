@@ -54,14 +54,14 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
     }
     const target = targetResult.target;
 
-    if (target.kind === 'sdk') {
+    if (target.kind === 'cpp') {
         return {
             ok: false,
             action: 'stop',
             workspace,
             activeTarget: target,
             state: 'unsupported',
-            diagnostics: [diag('error', T('stopSdkUnsupported'))],
+            diagnostics: [diag('error', T('stopCppUnsupported'))],
             nextAction: 'forja status',
         };
     }

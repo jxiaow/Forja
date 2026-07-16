@@ -10,7 +10,7 @@ import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner
 import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
 import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
-import { createSdkPlan } from '../../sdk/shared/plan';
+import { createCppPlan } from '../../cpp/shared/plan';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, diag, T } from './types';
 import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
@@ -69,9 +69,9 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         const projectPath = options.project;
         const ext = path.extname(projectPath).toLowerCase();
         const basename = path.basename(projectPath);
-        let kind: 'qt' | 'sdk';
+        let kind: 'qt' | 'cpp';
         if (ext === '.pro') { kind = 'qt'; }
-        else if (ext === '.sln' || basename.toLowerCase() === 'makefile' || basename.toLowerCase() === 'cmakelists.txt') { kind = 'sdk'; }
+        else if (ext === '.sln' || basename.toLowerCase() === 'makefile' || basename.toLowerCase() === 'cmakelists.txt') { kind = 'cpp'; }
         else {
             return {
                 ok: false, action: 'build', buildAction, workspace,
@@ -158,14 +158,14 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         };
     }
 
-    if ((buildAction === 'qmake' || buildAction === 'rcc') && target.kind === 'sdk') {
+    if ((buildAction === 'qmake' || buildAction === 'rcc') && target.kind === 'cpp') {
         return {
             ok: false,
             action: 'build',
             buildAction,
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', `${T('cmd.sdkNoQmakeRcc')} '${buildAction}'`)],
+            diagnostics: [diag('error', `${T('cmd.cppNoQmakeRcc')} '${buildAction}'`)],
             nextAction: 'forja build',
         };
     }
@@ -223,11 +223,11 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         };
     }
 
-    if (target.kind === 'sdk') {
+    if (target.kind === 'cpp') {
         try {
             const sdkAction = buildAction === 'fresh' ? 'rebuild' : 'build';
             const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
-            const plan = createSdkPlan({
+            const plan = createCppPlan({
                 action: sdkAction as 'build' | 'rebuild' | 'clean',
                 workspace,
                 project: path.isAbsolute(target.project) ? target.project : path.join(workspace, target.project),
@@ -263,7 +263,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 errors: executed.errors?.length > 0 ? executed.errors : undefined,
                 warningSummary: executed.warningSummary,
                 logFile: executed.logFile ?? undefined,
-                diagnostics: ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.sdkBuildFailed')} (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : T('cmd.sdkBuildFailed'))],
+                diagnostics: ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.cppBuildFailed')} (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : T('cmd.cppBuildFailed'))],
                 nextAction: ok ? undefined : (executed.errors?.length ? undefined : 'forja doctor'),
             };
         } catch (e) {

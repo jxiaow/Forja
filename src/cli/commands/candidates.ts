@@ -4,7 +4,7 @@
  */
 import * as path from 'path';
 import { scanProFiles } from '../../qt/shared/projectScanner';
-import { scanSdkProjects } from '../../core/sdkProjectScanner';
+import { scanCppProjects } from '../../core/cppProjectScanner';
 import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget, normalizePath } from '../../core/workspaceStore';
 import type { TargetProfile } from '../../core/workspaceStore';
 import { TargetCandidate } from './types';
@@ -40,27 +40,27 @@ export function aggregateCandidates(
     }
 
     // SDK candidates — uses shared scanner, then auto-detect type
-    const sdkFiles = scanSdkProjects({ workspace });
+    const cppFiles = scanCppProjects({ workspace });
 
-    for (const sdkFile of sdkFiles) {
-        const fullPath = path.join(workspace, sdkFile);
+    for (const cppFile of cppFiles) {
+        const fullPath = path.join(workspace, cppFile);
         const typeInfo = detectProjectType(fullPath);
-        const kind = typeInfo.usesQt ? 'qt' : 'sdk';
+        const kind = typeInfo.usesQt ? 'qt' : 'cpp';
 
         const isCurrent = activeProfile !== null
-            && normalizePath(activeProfile.project) === normalizePath(sdkFile);
-        const isConfigured = savedProjectSet.has(normalizePath(sdkFile));
+            && normalizePath(activeProfile.project) === normalizePath(cppFile);
+        const isConfigured = savedProjectSet.has(normalizePath(cppFile));
 
-        const fileName = path.basename(sdkFile).toLowerCase();
-        const dirName = path.basename(path.dirname(sdkFile));
+        const fileName = path.basename(cppFile).toLowerCase();
+        const dirName = path.basename(path.dirname(cppFile));
         const isConventionName = fileName === 'cmakelists.txt' || fileName === 'makefile';
         const label = isConventionName
             ? (dirName && dirName !== '.' ? dirName : path.basename(workspace))
-            : path.basename(sdkFile, path.extname(sdkFile));
+            : path.basename(cppFile, path.extname(cppFile));
 
         candidates.push({
             kind,
-            project: sdkFile,
+            project: cppFile,
             label,
             current: isCurrent,
             configured: isConfigured,

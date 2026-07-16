@@ -11,7 +11,7 @@ import { getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { getPageHtml } from './pageTemplate';
 import { buildTemplateData } from './templateData';
 import { createLogger } from '../../vscode/logger';
-import { onSettingsChange, getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
+import { onSettingsChange, getQtSetting, getCppSetting } from '../../vscode/settingsStore';
 
 const logger = createLogger('ConfigPagePanel');
 
@@ -41,14 +41,14 @@ export class ConfigPageManager {
                     });
                 }
             }
-            if (section === 'sdk' && (key === 'mode' || key === 'arch' || key === 'pinnedProject')) {
+            if (section === 'cpp' && (key === 'mode' || key === 'arch' || key === 'pinnedProject')) {
                 const projectPanel = this._panels.get('project');
                 if (projectPanel) {
                     projectPanel.webview.postMessage({
-                        command: 'sdkSettingsUpdated',
-                        sdkMode: getSdkSetting('mode'),
-                        sdkArch: getSdkSetting('arch'),
-                        sdkProjectName: getSdkSetting('pinnedProject') || '未选择'
+                        command: 'cppSettingsUpdated',
+                        sdkMode: getCppSetting('mode'),
+                        sdkArch: getCppSetting('arch'),
+                        cppProjectName: getCppSetting('pinnedProject') || '未选择'
                     });
                 }
             }

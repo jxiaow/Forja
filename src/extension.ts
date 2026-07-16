@@ -17,7 +17,7 @@ import { registerCommands } from './vscode/commands';
 import { initSettingsStore } from './vscode/settingsStore';
 import { registerWorkspaceWatcher } from './vscode/workspaceResolver';
 import { ConfigPageManager } from './ui/configPanel/configPagePanel';
-import { activateSdk } from './sdk/sdkExtension';
+import { activateCpp } from './cpp/cppExtension';
 import { TASK_SOURCE_QT } from './qt/constants';
 
 import { listProjectConfigs } from './core/settingsIO';
@@ -112,7 +112,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     setState('currentProject', project);
 
     // SDK 模块激活（异步，不阻塞 Qt 启动；在 Qt 项目恢复之后，避免竞态）
-    activateSdk(context).catch((e: Error) => logger.error(`C++ 模块激活失败: ${e.message}`));
+    activateCpp(context).catch((e: Error) => logger.error(`C++ 模块激活失败: ${e.message}`));
 
     // 环境检测（一次，全量扫描获取完整候选列表）
     detectEnv().then(async (env) => {

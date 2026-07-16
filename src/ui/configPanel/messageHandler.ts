@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { detectEnv } from '../../qt/env/envDetector';
-import { generateCppProperties, generateSdkCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
+import { generateCppProperties, generateCppPropertiesFromSln, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
 import { getState, setState } from '../../vscode/qtState';
 import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { createLogger } from '../../vscode/logger';
@@ -9,8 +9,8 @@ import { updateProjectSyncField, addServer, removeServer, updateServer, readServ
 import { loadRemoteSettings, saveRemoteSettings } from '../../core/settingsIO';
 import { executeTestConnection, refreshSyncStatusBar } from '../../sync/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
-import { setSdkSetting } from '../../vscode/settingsStore';
-import { getDefaultArch, isWindows } from '../../sdk/platform';
+import { setCppSetting } from '../../vscode/settingsStore';
+import { getDefaultArch, isWindows } from '../../cpp/platform';
 
 const logger = createLogger('ConfigPanel');
 
@@ -229,17 +229,17 @@ export async function handleMessage(
             // 判断当前活跃的项目类型
             const { getActiveTarget } = await import('../../cli/commands/activeTarget');
             const { resolveProjectRoot } = await import('../../vscode/workspaceResolver');
-            const sdkWs = resolveProjectRoot('sdk') || '';
+            const cppWs = resolveProjectRoot('cpp') || '';
             const qtWs = resolveProjectRoot('qt') || getWorkspaceRoot() || '';
-            const activeTarget = getActiveTarget(sdkWs) || getActiveTarget(qtWs) || getActiveTarget(getWorkspaceRoot() || '');
+            const activeTarget = getActiveTarget(cppWs) || getActiveTarget(qtWs) || getActiveTarget(getWorkspaceRoot() || '');
 
-            if (activeTarget?.kind === 'sdk') {
+            if (activeTarget?.kind === 'cpp') {
                 // SDK 项目：从 .sln 解析 .vcxproj 生成
                 const slnAbsPath = require('path').isAbsolute(activeTarget.project)
                     ? activeTarget.project
-                    : require('path').join(sdkWs, activeTarget.project);
-                const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || sdkWs;
-                generateSdkCppProperties(slnAbsPath, wsRoot);
+                    : require('path').join(cppWs, activeTarget.project);
+                const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || cppWs;
+                generateCppPropertiesFromSln(slnAbsPath, wsRoot);
             } else {
                 // Qt 项目：从 .pro / Makefile 生成
                 const project = getState().currentProject;
@@ -457,13 +457,13 @@ export async function handleMessage(
             const val = String(msg.value || '');
             if (val !== 'debug' && val !== 'release') { break; }
             logger.info(`保存 C++ 构建模式: "${val}"`);
-            setSdkSetting('mode', val);
+            setCppSetting('mode', val);
             // Sync to activeTarget so CLI build/run use the updated value
             const ws = getWorkspaceRoot();
             if (ws) {
                 const { getActiveTarget, setActiveTarget } = await import('../../cli/commands/activeTarget');
                 const target = getActiveTarget(ws);
-                if (target && target.kind === 'sdk') {
+                if (target && target.kind === 'cpp') {
                     setActiveTarget(ws, { ...target, mode: val });
                 }
             }
@@ -472,18 +472,18 @@ export async function handleMessage(
         case 'saveSdkArch': {
             const val = String(msg.value || '');
             if (!isWindows) {
-                setSdkSetting('arch', getDefaultArch());
+                setCppSetting('arch', getDefaultArch());
                 break;
             }
             if (val !== 'x86' && val !== 'x64') { break; }
             logger.info(`保存 C++ 目标架构: "${val}"`);
-            setSdkSetting('arch', val);
+            setCppSetting('arch', val);
             // Sync to activeTarget so CLI build/run use the updated value
             const wsArch = getWorkspaceRoot();
             if (wsArch) {
                 const { getActiveTarget: gat, setActiveTarget: sat } = await import('../../cli/commands/activeTarget');
                 const at = gat(wsArch);
-                if (at && at.kind === 'sdk') {
+                if (at && at.kind === 'cpp') {
                     sat(wsArch, { ...at, arch: val });
                 }
             }
@@ -492,10 +492,10 @@ export async function handleMessage(
         case 'saveSdkVsInstall': {
             logger.info(`保存 C++ VS 路径: "${msg.value}"`);
             const sdkVsInstall = inferVsInstall(String(msg.value || '')) || String(msg.value || '');
-            setSdkSetting('vsInstall', sdkVsInstall);
+            setCppSetting('vsInstall', sdkVsInstall);
             break;
         }
-        case 'selectSdkProject': {
+        case 'selectCppProject': {
             await vscode.commands.executeCommand('forja.list');
             updateHtml();
             break;

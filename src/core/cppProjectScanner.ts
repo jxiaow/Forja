@@ -15,7 +15,7 @@ export const SDK_EXCLUDE_PATH_SEGMENTS = ['build/output'];
 
 export const DEFAULT_SDK_SCAN_DEPTH = 8;
 
-export interface SdkScanOptions {
+export interface CppScanOptions {
     workspace: string;
     maxDepth?: number;
     excludeDirs?: string[];
@@ -26,7 +26,7 @@ export interface SdkScanOptions {
     relativePaths?: boolean;
 }
 
-export function scanSdkProjects(options: SdkScanOptions): string[] {
+export function scanCppProjects(options: CppScanOptions): string[] {
     const {
         workspace,
         maxDepth = DEFAULT_SDK_SCAN_DEPTH,

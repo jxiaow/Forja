@@ -268,7 +268,7 @@ export function generateCppProperties(project: ProjectInfo): void {
  * @param slnPath .sln 文件的绝对路径
  * @param wsRoot workspace 根目录
  */
-export function generateSdkCppProperties(slnPath: string, wsRoot: string): void {
+export function generateCppPropertiesFromSln(slnPath: string, wsRoot: string): void {
     const slnDir = path.dirname(slnPath);
     const isWin = process.platform === 'win32';
     const state = getState();

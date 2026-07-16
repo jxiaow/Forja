@@ -11,7 +11,7 @@ import { getTarget, getCustomCommands, getWorkspaceRoot } from '../qt/services/c
 import { getEffectiveProjectName } from '../qt/project/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';
 
-export type ActiveModule = 'qt' | 'sdk';
+export type ActiveModule = 'qt' | 'cpp';
 
 let _activeModule: ActiveModule = 'qt';
 let _projectModeItem: vscode.StatusBarItem;
@@ -19,11 +19,11 @@ let _runItem: vscode.StatusBarItem;
 let _debugItem: vscode.StatusBarItem;
 
 // SDK state references (set by SDK module after init)
-let _sdkProjectName: string = '';
-let _sdkMode: string = 'debug';
-let _sdkArch: string = 'x86';
-let _sdkIsBuilding: boolean = false;
-const _sdkUpdateListeners: ((update: { mode: string; arch: string }) => void)[] = [];
+let _cppProjectName: string = '';
+let _cppMode: string = 'debug';
+let _cppArch: string = 'x86';
+let _cppIsBuilding: boolean = false;
+const _cppUpdateListeners: ((update: { mode: string; arch: string }) => void)[] = [];
 
 export function getActiveModule(): ActiveModule { return _activeModule; }
 export function setActiveModule(m: ActiveModule): void {
@@ -50,22 +50,22 @@ function _syncActiveTarget(kind: ActiveModule): boolean {
     return true;
 }
 
-export function activateSdkModuleIfNoQtProject(_workspace?: string): void {
+export function activateCppModuleIfNoQtProject(_workspace?: string): void {
     // No auto-switching — let user choose module explicitly via status bar
 }
 
 export function getRunStatusBarItem(): vscode.StatusBarItem { return _runItem; }
 
 // SDK 模块调用这些函数来更新状态栏
-export function setSdkState(opts: { projectName?: string; mode?: string; arch?: string; isBuilding?: boolean }): void {
-    if (opts.projectName !== undefined) { _sdkProjectName = opts.projectName; }
-    if (opts.mode !== undefined) { _sdkMode = opts.mode; }
-    if (opts.arch !== undefined) { _sdkArch = opts.arch; }
-    if (opts.isBuilding !== undefined) { _sdkIsBuilding = opts.isBuilding; }
-    if (_activeModule === 'sdk') { _updateDisplay(); }
+export function setCppState(opts: { projectName?: string; mode?: string; arch?: string; isBuilding?: boolean }): void {
+    if (opts.projectName !== undefined) { _cppProjectName = opts.projectName; }
+    if (opts.mode !== undefined) { _cppMode = opts.mode; }
+    if (opts.arch !== undefined) { _cppArch = opts.arch; }
+    if (opts.isBuilding !== undefined) { _cppIsBuilding = opts.isBuilding; }
+    if (_activeModule === 'cpp') { _updateDisplay(); }
 }
 
-export function onSdkUpdate(fn: (update: { mode: string; arch: string }) => void): void { _sdkUpdateListeners.push(fn); }
+export function onCppUpdate(fn: (update: { mode: string; arch: string }) => void): void { _cppUpdateListeners.push(fn); }
 
 export function createStatusBar(context: vscode.ExtensionContext): void {
     _projectModeItem = vscode.window.createStatusBarItem('forja.projectMode', vscode.StatusBarAlignment.Left, 113);
@@ -107,7 +107,7 @@ function _updateDisplay(): void {
     if (_activeModule === 'qt') {
         _updateQtDisplay();
     } else {
-        _updateSdkDisplay();
+        _updateCppDisplay();
     }
 }
 
@@ -149,24 +149,24 @@ function _updateQtDisplay(): void {
     _debugItem.show();
 }
 
-function _updateSdkDisplay(): void {
-    const name = _sdkProjectName || 'No Project';
-    const mode = _sdkMode === 'debug' ? 'Debug' : 'Release';
+function _updateCppDisplay(): void {
+    const name = _cppProjectName || 'No Project';
+    const mode = _cppMode === 'debug' ? 'Debug' : 'Release';
     const isWin = process.platform === 'win32';
 
-    if (_sdkIsBuilding) {
+    if (_cppIsBuilding) {
         _projectModeItem.text = `$(sync~spin) Building ${name}`;
         _projectModeItem.tooltip = '编译中...';
         _runItem.hide();
     } else {
-        _projectModeItem.text = `$(tools) [C++] ${name} · ${mode}${isWin ? ' ' + _sdkArch : ''}`;
+        _projectModeItem.text = `$(tools) [C++] ${name} · ${mode}${isWin ? ' ' + _cppArch : ''}`;
         _projectModeItem.tooltip = 'Forja C++ 模式 — 点击切换模块/模式/项目';
         _runItem.text = '$(play)';
         _runItem.tooltip = 'Forja C++: Build';
         _runItem.command = 'forja.build';
         _runItem.show();
     }
-    _projectModeItem.color = _sdkMode === 'debug'
+    _projectModeItem.color = _cppMode === 'debug'
         ? new vscode.ThemeColor('statusBarItem.warningForeground')
         : undefined;
     _projectModeItem.show();
@@ -215,13 +215,13 @@ export async function showActions(): Promise<void> {
         ];
     } else {
         modeItems = isWin ? [
-            { label: '$(bug) Debug x86',       description: _sdkMode === 'debug' && _sdkArch === 'x86' ? '当前' : '', action: 'sdk:mode:debug:x86' },
-            { label: '$(bug) Debug x64',       description: _sdkMode === 'debug' && _sdkArch === 'x64' ? '当前' : '', action: 'sdk:mode:debug:x64' },
-            { label: '$(package) Release x86', description: _sdkMode === 'release' && _sdkArch === 'x86' ? '当前' : '', action: 'sdk:mode:release:x86' },
-            { label: '$(package) Release x64', description: _sdkMode === 'release' && _sdkArch === 'x64' ? '当前' : '', action: 'sdk:mode:release:x64' }
+            { label: '$(bug) Debug x86',       description: _cppMode === 'debug' && _cppArch === 'x86' ? '当前' : '', action: 'sdk:mode:debug:x86' },
+            { label: '$(bug) Debug x64',       description: _cppMode === 'debug' && _cppArch === 'x64' ? '当前' : '', action: 'sdk:mode:debug:x64' },
+            { label: '$(package) Release x86', description: _cppMode === 'release' && _cppArch === 'x86' ? '当前' : '', action: 'sdk:mode:release:x86' },
+            { label: '$(package) Release x64', description: _cppMode === 'release' && _cppArch === 'x64' ? '当前' : '', action: 'sdk:mode:release:x64' }
         ] : [
-            { label: '$(bug) Debug',     description: _sdkMode === 'debug' ? '当前' : '', action: 'sdk:mode:debug:x64' },
-            { label: '$(package) Release', description: _sdkMode === 'release' ? '当前' : '', action: 'sdk:mode:release:x64' }
+            { label: '$(bug) Debug',     description: _cppMode === 'debug' ? '当前' : '', action: 'sdk:mode:debug:x64' },
+            { label: '$(package) Release', description: _cppMode === 'release' ? '当前' : '', action: 'sdk:mode:release:x64' }
         ];
     }
 
@@ -250,15 +250,15 @@ export async function showActions(): Promise<void> {
 
     const moduleItems: Item[] = [
         { label: '$(folder) 切换到 Qt 模块',  description: _activeModule === 'qt' ? '当前' : '', action: 'switch:qt' },
-        { label: '$(folder) 切换到 SDK 模块', description: _activeModule === 'sdk' ? '当前' : '', action: 'switch:sdk' }
+        { label: '$(folder) 切换到 SDK 模块', description: _activeModule === 'cpp' ? '当前' : '', action: 'switch:sdk' }
     ];
 
     const currentName = _activeModule === 'qt'
         ? getEffectiveProjectName(state.currentProject, getTarget(), '未选择项目')
-        : (_sdkProjectName || 'No Project');
+        : (_cppProjectName || 'No Project');
     const currentMode = _activeModule === 'qt'
         ? getModeDisplayLabel(state.mode, state.arch, isWin)
-        : `${_sdkMode === 'debug' ? 'Debug' : 'Release'}${isWin ? ' ' + _sdkArch : ''}`;
+        : `${_cppMode === 'debug' ? 'Debug' : 'Release'}${isWin ? ' ' + _cppArch : ''}`;
 
     const pickItems: Item[] = [
         sep('模式'),
@@ -293,11 +293,11 @@ export async function showActions(): Promise<void> {
         }
     } else if (selected.action.startsWith('sdk:mode:')) {
         const [, , m, a] = selected.action.split(':');
-        setActiveModule('sdk');
-        _sdkMode = m;
-        _sdkArch = a;
+        setActiveModule('cpp');
+        _cppMode = m;
+        _cppArch = a;
         // 通过回调通知 SDK 模块持久化（由 SDK 模块使用正确的 workspace 路径写入）
-        _sdkUpdateListeners.forEach(fn => fn({ mode: m, arch: a }));
+        _cppUpdateListeners.forEach(fn => fn({ mode: m, arch: a }));
         _updateDisplay();
     } else if (selected.action === 'qt:qmake') { vscode.commands.executeCommand('forja.build', 'qmake'); }
     else if (selected.action === 'qt:build') { vscode.commands.executeCommand('forja.build'); }
@@ -318,14 +318,14 @@ export async function showActions(): Promise<void> {
     else if (selected.action === 'sdk:selectProject') {
         const ch = require('../vscode/logger').getOutputChannel();
         if (ch) { ch.appendLine('[DEBUG] sdk:selectProject → forja._selectTarget sdk'); }
-        vscode.commands.executeCommand('forja._selectTarget', 'sdk');
+        vscode.commands.executeCommand('forja._selectTarget', 'cpp');
     }
     else if (selected.action === 'switch:qt') {
         if (_syncActiveTarget('qt')) { setActiveModule('qt'); }
         else { vscode.commands.executeCommand('forja.list'); }
     }
     else if (selected.action === 'switch:sdk') {
-        if (_syncActiveTarget('sdk')) { setActiveModule('sdk'); }
+        if (_syncActiveTarget('cpp')) { setActiveModule('cpp'); }
         else { vscode.commands.executeCommand('forja.list'); }
     }
 }

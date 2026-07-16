@@ -26,7 +26,7 @@ export interface ToolchainConfig {
 export interface TargetProfile {
     id: string;
     name: string;
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';
@@ -49,7 +49,7 @@ export interface QtModulePrefs {
     qmakeReminderEnabled: boolean;
 }
 
-export interface SdkModulePrefs {
+export interface CppModulePrefs {
     scanDepth: number;
 }
 
@@ -58,7 +58,7 @@ export interface WorkspaceConfig {
     activeTarget: string | null;
     targets: Record<string, TargetProfile>;
     qtModulePrefs: QtModulePrefs;
-    sdkModulePrefs: SdkModulePrefs;
+    cppModulePrefs: CppModulePrefs;
 }
 
 export interface WorkspacesRegistry {
@@ -82,7 +82,7 @@ export const DEFAULT_QT_MODULE_PREFS: Readonly<QtModulePrefs> = {
     qmakeReminderEnabled: true,
 };
 
-export const DEFAULT_SDK_MODULE_PREFS: Readonly<SdkModulePrefs> = {
+export const DEFAULT_SDK_MODULE_PREFS: Readonly<CppModulePrefs> = {
     scanDepth: 8,
 };
 
@@ -188,7 +188,7 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
                 targets[id] = {
                     id: typeof obj.id === 'string' ? obj.id : id,
                     name: typeof obj.name === 'string' ? obj.name : id,
-                    kind: obj.kind === 'sdk' ? 'sdk' : 'qt',
+                    kind: obj.kind === 'cpp' ? 'cpp' : 'qt',
                     project: typeof obj.project === 'string' ? obj.project : '',
                     mode: obj.mode === 'release' ? 'release' : 'debug',
                     arch: obj.arch === 'x64' ? 'x64' : 'x86',
@@ -217,7 +217,7 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
         };
     };
 
-    const sanitizeSdkPrefs = (raw: unknown): SdkModulePrefs => {
+    const sanitizeCppPrefs = (raw: unknown): CppModulePrefs => {
         const obj = (raw && typeof raw === 'object') ? raw as Record<string, unknown> : {};
         return {
             scanDepth: typeof obj.scanDepth === 'number' ? obj.scanDepth : 8,
@@ -229,7 +229,7 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
         activeTarget: typeof raw.activeTarget === 'string' ? raw.activeTarget : null,
         targets,
         qtModulePrefs: sanitizeQtPrefs(raw.qtModulePrefs),
-        sdkModulePrefs: sanitizeSdkPrefs(raw.sdkModulePrefs),
+        cppModulePrefs: sanitizeCppPrefs(raw.cppModulePrefs),
     };
 }
 
@@ -248,7 +248,7 @@ export function loadWorkspaceConfig(workroot: string): WorkspaceConfig {
         activeTarget: null,
         targets: {},
         qtModulePrefs: { ...DEFAULT_QT_MODULE_PREFS },
-        sdkModulePrefs: { ...DEFAULT_SDK_MODULE_PREFS },
+        cppModulePrefs: { ...DEFAULT_SDK_MODULE_PREFS },
     };
 }
 
@@ -298,7 +298,7 @@ export function registerWorkroot(workroot: string): void {
 
 // ── Target helpers ──
 
-export function generateTargetId(kind: 'qt' | 'sdk', projectPath: string, mode: string, arch: string, existingIds?: Set<string>): string {
+export function generateTargetId(kind: 'qt' | 'cpp', projectPath: string, mode: string, arch: string, existingIds?: Set<string>): string {
     const basename = path.basename(projectPath, path.extname(projectPath));
     let id = `${kind}-${basename}-${mode}-${arch}`;
 
@@ -321,6 +321,6 @@ export function createEmptyWorkspaceConfig(workroot: string): WorkspaceConfig {
         activeTarget: null,
         targets: {},
         qtModulePrefs: { ...DEFAULT_QT_MODULE_PREFS },
-        sdkModulePrefs: { ...DEFAULT_SDK_MODULE_PREFS },
+        cppModulePrefs: { ...DEFAULT_SDK_MODULE_PREFS },
     };
 }

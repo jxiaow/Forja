@@ -91,6 +91,12 @@ After all 3 agents report, fix all findings, re-run tests, then declare complete
 | **Step key inconsistency** | Multi-step workflow sets `result.steps.remoteConfig` in code but display formatter only knows `serverSetup` — step silently missing from output. All step keys set in logic must exist in the display mapping |
 | **Result state hardcoded** | `executionMode: 'remote'` set unconditionally even when the switch step failed or was skipped — result fields must reflect actual runtime outcomes, not assumed outcomes |
 | **Silent error swallowing** | `if (result.ok) { ... }` with no `else` branch — failure from sub-function call is silently dropped, user sees no diagnostic and no failed step |
+| **Semantic drift in replacement** | Replacing `legacyConfig.qtPath \|\| legacyConfig.vsInstall` with `targets.length > 0` — the new check tests a different property (target existence vs toolchain configuration). Always verify the replacement has identical semantics, not just similar shape |
+| **Architecture layer violation in fix** | Adding `import { T } from '../../cli/commands/types'` to a `core/` or `remote/core/` module to fix a translation issue — core layers must not depend on CLI/UI layers. The fix introduces a worse problem than the original |
+| **Error detail loss in downgrade** | Changing `ok: false` with full diagnostics to `ok: true` with a generic warning — the specific error cause (permission denied, SSH timeout) is lost. Always preserve the original diagnostic details in the warning message |
+| **Optional parameter bypass** | Making `workspace?: string` optional so callers don't need to pass it — but the cascade cleanup logic inside the function is skipped when workspace is absent, leaving dangling references |
+| **Error path conflation** | A function returns `false` for both "user cancelled" and "config write failed" — the caller shows "cancelled" for both cases. Use discriminated return types to distinguish failure modes |
+| **Null as error surrogate** | Returning `null` from a function to indicate an error, then the caller maps null to a generic "cancelled" message — instead return a result type `{ ok: false, diagnostics: [...] }` that carries the actual error |
 
 ## Parallel-path consistency (apply DURING fixes, not just after)
 

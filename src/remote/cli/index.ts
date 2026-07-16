@@ -392,7 +392,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
     };
 
     let start = first === argv[0] ? 1 : 0;
-    if (first === 'qt' || first === 'sdk') {
+    if (first === 'qt' || first === 'cpp') {
         const remoteAction = argv[1];
         if (remoteAction === 'restore' || remoteAction === 'reset' || remoteAction === 'clean-untracked') {
             options.action = remoteAction === 'clean-untracked' ? 'cleanUntracked' : remoteAction;
@@ -688,13 +688,13 @@ function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | '
 function parseBuildOrderItems(items: string[]): RemoteBuildOrderItem[] {
     return items.map(item => {
         const [target, action, extra] = item.split(':');
-        if (extra !== undefined || (target !== 'qt' && target !== 'sdk')) {
+        if (extra !== undefined || (target !== 'qt' && target !== 'cpp')) {
             throw new Error('非法 build-order 项: ' + item);
         }
         if (target === 'qt' && (action === 'build' || action === 'clean' || action === 'qmake')) {
             return { target, action, args: [] };
         }
-        if (target === 'sdk' && (action === 'build' || action === 'rebuild' || action === 'clean')) {
+        if (target === 'cpp' && (action === 'build' || action === 'rebuild' || action === 'clean')) {
             return { target, action, args: [] };
         }
         throw new Error('非法 build-order 项: ' + item);

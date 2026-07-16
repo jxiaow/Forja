@@ -5,7 +5,7 @@ import * as cp from 'child_process';
 import { VS_DETECT_TIMEOUT_MS } from '../constants';
 import { isWindows } from '../platform';
 import { log, logError } from '../utils/logger';
-import { getSdkSetting, resolveVsDevCmdPath } from '../../vscode/settingsStore';
+import { getCppSetting, resolveVsDevCmdPath } from '../../vscode/settingsStore';
 
 export class ConfigService implements vscode.Disposable {
   private _vsDevCmdPath: string | null = null;
@@ -18,7 +18,7 @@ export class ConfigService implements vscode.Disposable {
       return null;
     }
 
-    const vsInstall = getSdkSetting('vsInstall');
+    const vsInstall = getCppSetting('vsInstall');
 
     // 缓存命中：vsInstall 未变且已有检测结果
     if (this._vsDevCmdPath !== null && this._cachedVsInstall === vsInstall) {

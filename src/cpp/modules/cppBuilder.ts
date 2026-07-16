@@ -6,10 +6,10 @@ import { BuildAction } from '../types';
 import { TASK_SOURCE } from '../constants';
 import { isWindows } from '../platform';
 import { getWindowsShellOptions } from '../platform/windows';
-import { buildCommand, SdkPlanOptions } from '../shared/plan';
+import { buildCommand, CppPlanOptions } from '../shared/plan';
 import { log, logError } from '../utils/logger';
 
-export class SdkBuilder {
+export class CppBuilder {
   constructor(
     private stateManager: StateManager,
     private configService: ConfigService
@@ -54,13 +54,13 @@ export class SdkBuilder {
     }
 
     // 组装命令参数
-    const actionMap: Record<BuildAction, SdkPlanOptions['action']> = {
+    const actionMap: Record<BuildAction, CppPlanOptions['action']> = {
       'Build': 'build',
       'Rebuild': 'rebuild',
       'Clean': 'clean',
     };
 
-    const planOptions: SdkPlanOptions = {
+    const planOptions: CppPlanOptions = {
       action: actionMap[action],
       workspace: '',  // Not needed for command assembly
       project: this.stateManager.currentProject.path,

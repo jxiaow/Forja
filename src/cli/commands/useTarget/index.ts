@@ -214,12 +214,12 @@ export async function runSwitchTarget(workspace: string, args: {
     // Resolve project path
     const projectPath = path.isAbsolute(args.project) ? args.project : path.join(workspace, args.project);
     let canonicalProject = args.project;
-    let kind: 'qt' | 'sdk' | null = null;
+    let kind: 'qt' | 'cpp' | null = null;
 
     if (fs.existsSync(projectPath) && !fs.statSync(projectPath).isDirectory()) {
         canonicalProject = path.relative(workspace, projectPath).replace(/\\/g, '/');
         const typeInfo = detectProjectType(projectPath);
-        kind = typeInfo.usesQt ? 'qt' : 'sdk';
+        kind = typeInfo.usesQt ? 'qt' : 'cpp';
     } else {
         // Try label match
         const inputLower = path.basename(args.project).toLowerCase();
@@ -275,7 +275,7 @@ export async function runSwitchTarget(workspace: string, args: {
     const mode = args.mode ?? currentTarget?.mode ?? 'debug';
     const arch = args.arch ?? currentTarget?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
     // SDK targets don't support remote execution — force local when switching to SDK
-    const runAt = (kind === 'sdk') ? 'local' : (currentTarget?.runAt ?? 'local');
+    const runAt = (kind === 'cpp') ? 'local' : (currentTarget?.runAt ?? 'local');
 
     let qtPath: string | undefined;
     let vsInstall: string | undefined;

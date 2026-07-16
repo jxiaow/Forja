@@ -39,7 +39,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     async function promptToolchainIfNeeded(kind: string) {
         const { getQtPath, getVsDevShellPath } = await import('../qt/services/configService');
         const { detectEnv } = await import('../qt/env/envDetector');
-        const { inferVsInstall, loadQtSettings, saveQtSettings, loadSdkSettings, saveSdkSettings } = await import('../core/settingsIO');
+        const { inferVsInstall, loadQtSettings, saveQtSettings, loadCppSettings, saveCppSettings } = await import('../core/settingsIO');
 
         if (kind === 'qt' && !getQtPath()) {
             const env = await detectEnv();
@@ -61,7 +61,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             }
         }
 
-        if (kind === 'sdk' && !getVsDevShellPath()) {
+        if (kind === 'cpp' && !getVsDevShellPath()) {
             const env = await detectEnv();
             if (env.vsCandidates && env.vsCandidates.length > 1) {
                 const items = env.vsCandidates.map(c => ({
@@ -74,8 +74,8 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 });
                 if (picked) {
                     const ws = workspace();
-                    const current = loadSdkSettings(ws);
-                    saveSdkSettings(ws, { ...current, vsInstall: inferVsInstall(picked.devShellPath) });
+                    const current = loadCppSettings(ws);
+                    saveCppSettings(ws, { ...current, vsInstall: inferVsInstall(picked.devShellPath) });
                     vscode.window.showInformationMessage(`VS 路径已设置: ${picked.label}`);
                 }
             }
@@ -125,7 +125,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 }
                 const { runList, formatListText } = await import('../cli/commands/list');
                 const { resolveProjectRoot } = await import('./workspaceResolver');
-                const ws = resolveProjectRoot('sdk') || resolveProjectRoot('qt') || workspace();
+                const ws = resolveProjectRoot('cpp') || resolveProjectRoot('qt') || workspace();
                 const result = await runList(ws, category as any);
                 const text = formatListText(result as any, locale);
                 const ch = getOutputChannel();
@@ -146,21 +146,21 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 const { resolveProjectRoot } = await import('./workspaceResolver');
                 // Resolve workspace roots — skip invalid paths (like VSCode install dir)
                 let qtWs = resolveProjectRoot('qt') || '';
-                let sdkWs = resolveProjectRoot('sdk') || '';
+                let cppWs = resolveProjectRoot('cpp') || '';
                 // Fallback: if one is empty, use the other
-                if (!qtWs && sdkWs) { qtWs = sdkWs; }
-                if (!sdkWs && qtWs) { sdkWs = qtWs; }
-                if (!qtWs && !sdkWs) { qtWs = sdkWs = workspace(); }
-                if (ch) { ch.appendLine(`[DEBUG] qtWs=${qtWs}, sdkWs=${sdkWs}`); }
+                if (!qtWs && cppWs) { qtWs = cppWs; }
+                if (!cppWs && qtWs) { cppWs = qtWs; }
+                if (!qtWs && !cppWs) { qtWs = cppWs = workspace(); }
+                if (ch) { ch.appendLine(`[DEBUG] qtWs=${qtWs}, cppWs=${cppWs}`); }
                 const qtResult = (!kindFilter || kindFilter === 'qt') ? await runList(qtWs, 'targets') : { targets: [] };
-                const sdkResult = (!kindFilter || kindFilter === 'sdk') ? await runList(sdkWs, 'targets') : { targets: [] };
-                if (ch) { ch.appendLine(`[DEBUG] qtTargets=${qtResult.targets?.length ?? 0}, sdkTargets=${sdkResult.targets?.length ?? 0}`); }
+                const cppResult = (!kindFilter || kindFilter === 'cpp') ? await runList(cppWs, 'targets') : { targets: [] };
+                if (ch) { ch.appendLine(`[DEBUG] qtTargets=${qtResult.targets?.length ?? 0}, sdkTargets=${cppResult.targets?.length ?? 0}`); }
                 if (ch) {
                     (qtResult.targets || []).forEach((t, i) => { ch.appendLine(`[DEBUG]   qt[${i}] ${t.kind}: ${t.project}`); });
-                    (sdkResult.targets || []).forEach((t, i) => { ch.appendLine(`[DEBUG]   sdk[${i}] ${t.kind}: ${t.project}`); });
+                    (cppResult.targets || []).forEach((t, i) => { ch.appendLine(`[DEBUG]   sdk[${i}] ${t.kind}: ${t.project}`); });
                 }
                 const seen = new Set<string>();
-                const allTargets = [...(qtResult.targets || []), ...(sdkResult.targets || [])].filter(t => {
+                const allTargets = [...(qtResult.targets || []), ...(cppResult.targets || [])].filter(t => {
                     if (kindFilter && t.kind !== kindFilter) { return false; }
                     // Deduplicate by absolute path
                     const key = `${t.kind}:${t.project}`;
@@ -183,13 +183,13 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         const target = allTargets.find(t => t.project === picked.label);
                         if (target) {
                             const { runUseTarget } = await import('../cli/commands/use');
-                            const targetWs = target.kind === 'sdk' ? sdkWs : qtWs;
+                            const targetWs = target.kind === 'cpp' ? cppWs : qtWs;
                             const useResult = await runUseTarget(targetWs, { project: target.project, interactive: true });
                             if (!useResult.ok) {
                                 vscode.window.showErrorMessage(`Failed to select target: ${useResult.diagnostics?.map(d => d.message).join('; ') || 'unknown error'}`);
                                 return;
                             }
-                            const { setActiveModule, setSdkState } = await import('../ui/statusBar');
+                            const { setActiveModule, setCppState } = await import('../ui/statusBar');
                             const { setState } = await import('../vscode/qtState');
                             const { parseProFile } = await import('../qt/project/projectManager');
                             const { ensureLocalStateDir } = await import('../qt/shared/localState');
@@ -216,13 +216,13 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                                 const profile = wsConfig ? getProfile(wsConfig) : null;
                                 const mode = profile?.mode ?? 'debug';
                                 const arch = profile?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
-                                setSdkState({ projectName, mode, arch });
-                                // Generate IntelliSense for SDK project
-                                const { generateSdkCppProperties } = await import('../qt/build/configGenerator');
+                                setCppState({ projectName, mode, arch });
+                                // Generate IntelliSense for C++ project
+                                const { generateCppPropertiesFromSln } = await import('../qt/build/configGenerator');
                                 const slnAbsPath = path.default.isAbsolute(target.project)
                                     ? target.project
                                     : path.default.join(targetWs, target.project);
-                                generateSdkCppProperties(slnAbsPath, targetWs);
+                                generateCppPropertiesFromSln(slnAbsPath, targetWs);
                             }
                             vscode.window.showInformationMessage(`Selected: ${target.project}`);
                             // After selecting a target, prompt for toolchain if not configured
@@ -230,7 +230,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         }
                     }
                 } else {
-                    const kindLabel = kindFilter === 'sdk' ? 'C++' : kindFilter === 'qt' ? 'Qt' : '';
+                    const kindLabel = kindFilter === 'cpp' ? 'C++' : kindFilter === 'qt' ? 'Qt' : '';
                     vscode.window.showInformationMessage(`No ${kindLabel} targets found. Run "Forja: Init" first.`);
                 }
             } catch (e: any) {
@@ -402,7 +402,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.build — Qt: buildManager (VSCode task); SDK: buildSdk(); Remote: executeRemotePlan
+    // forja.build — Qt: buildManager (VSCode task); SDK: buildCpp(); Remote: executeRemotePlan
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.build', async (action?: string) => {
             let target = await resolveActiveTarget();
@@ -410,20 +410,20 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             // Fallback: if no activeTarget but SDK module is active, synthesize from SDK state
             if (!target) {
                 const { getActiveModule } = await import('../ui/statusBar');
-                if (getActiveModule() === 'sdk') {
-                    const { loadSdkSettings } = await import('../core/settingsIO');
-                    const sdkSettings = loadSdkSettings(workspace());
-                    if (sdkSettings.pinnedProject) {
+                if (getActiveModule() === 'cpp') {
+                    const { loadCppSettings } = await import('../core/settingsIO');
+                    const cppSettings = loadCppSettings(workspace());
+                    if (cppSettings.pinnedProject) {
                         target = {
                             id: '',
                             name: '',
-                            kind: 'sdk' as const,
-                            project: sdkSettings.pinnedProject,
-                            mode: (sdkSettings.mode || 'debug') as 'debug' | 'release',
-                            arch: (sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+                            kind: 'cpp' as const,
+                            project: cppSettings.pinnedProject,
+                            mode: (cppSettings.mode || 'debug') as 'debug' | 'release',
+                            arch: (cppSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
                             runAt: 'local' as const,
                             toolchain: {
-                                vsInstall: sdkSettings.vsInstall,
+                                vsInstall: cppSettings.vsInstall,
                             },
                         };
                     }
@@ -444,17 +444,17 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            if (target?.kind === 'sdk') {
+            if (target?.kind === 'cpp') {
                 // SDK doesn't support qmake/rcc
                 if (action === 'qmake' || action === 'rcc') {
                     vscode.window.showErrorMessage(`C++ target does not support '${action}' action`);
                     return;
                 }
-                const { buildSdk, rebuildSdk } = await import('../sdk/sdkExtension');
+                const { buildCpp, rebuildCpp } = await import('../cpp/cppExtension');
                 if (action === 'fresh') {
-                    await rebuildSdk();
+                    await rebuildCpp();
                 } else {
-                    await buildSdk();
+                    await buildCpp();
                 }
                 return;
             }
@@ -511,7 +511,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             const target = await resolveActiveTarget();
 
             // SDK doesn't support run - check before remote dispatch
-            if (target?.kind === 'sdk') {
+            if (target?.kind === 'cpp') {
                 vscode.window.showWarningMessage('C++ target does not support run. Use Build instead.');
                 return;
             }
@@ -535,7 +535,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.debug', async () => {
             const target = await resolveActiveTarget();
-            if (target?.kind === 'sdk') {
+            if (target?.kind === 'cpp') {
                 vscode.window.showWarningMessage('C++ target does not support debug. Use Build instead.');
                 return;
             }
@@ -594,7 +594,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.clean — Qt: buildManager.clean() (VSCode task); SDK: cleanSdk(); Remote: executeRemotePlan
+    // forja.clean — Qt: buildManager.clean() (VSCode task); SDK: cleanCpp(); Remote: executeRemotePlan
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.clean', async () => {
             let target = await resolveActiveTarget();
@@ -602,20 +602,20 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             // Fallback: if no activeTarget but SDK module is active, synthesize from SDK state
             if (!target) {
                 const { getActiveModule } = await import('../ui/statusBar');
-                if (getActiveModule() === 'sdk') {
-                    const { loadSdkSettings } = await import('../core/settingsIO');
-                    const sdkSettings = loadSdkSettings(workspace());
-                    if (sdkSettings.pinnedProject) {
+                if (getActiveModule() === 'cpp') {
+                    const { loadCppSettings } = await import('../core/settingsIO');
+                    const cppSettings = loadCppSettings(workspace());
+                    if (cppSettings.pinnedProject) {
                         target = {
                             id: '',
                             name: '',
-                            kind: 'sdk' as const,
-                            project: sdkSettings.pinnedProject,
-                            mode: (sdkSettings.mode || 'debug') as 'debug' | 'release',
-                            arch: (sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+                            kind: 'cpp' as const,
+                            project: cppSettings.pinnedProject,
+                            mode: (cppSettings.mode || 'debug') as 'debug' | 'release',
+                            arch: (cppSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
                             runAt: 'local' as const,
                             toolchain: {
-                                vsInstall: sdkSettings.vsInstall,
+                                vsInstall: cppSettings.vsInstall,
                             },
                         };
                     }
@@ -628,9 +628,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            if (target?.kind === 'sdk') {
-                const { cleanSdk } = await import('../sdk/sdkExtension');
-                await cleanSdk();
+            if (target?.kind === 'cpp') {
+                const { cleanCpp } = await import('../cpp/cppExtension');
+                await cleanCpp();
                 return;
             }
             const buildManager = await import('../qt/build/buildManager');

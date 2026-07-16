@@ -25,7 +25,7 @@ export async function detectContext(workspace: string): Promise<DetectContext> {
         workspace,
         candidates,
         qtCandidates: candidates.filter(c => c.kind === 'qt'),
-        sdkCandidates: candidates.filter(c => c.kind === 'sdk'),
+        cppCandidates: candidates.filter(c => c.kind === 'cpp'),
         toolchain,
         existingTarget,
         existingQt: {
@@ -38,7 +38,7 @@ export async function detectContext(workspace: string): Promise<DetectContext> {
             target: profile?.toolchain.qmakeTarget || '',
         },
         existingSdk: {
-            pinnedProject: profile && profile.kind === 'sdk' ? profile.project : null,
+            pinnedProject: profile && profile.kind === 'cpp' ? profile.project : null,
             vsInstall: profile?.toolchain.vsInstall || '',
             mode: profile?.mode || '',
             arch: profile?.arch || '',

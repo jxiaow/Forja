@@ -50,7 +50,7 @@ test('aggregateCandidates: detects Makefile as sdk candidate on POSIX', () => {
     fs.writeFileSync(path.join(workspace, 'Makefile'), 'all:\n');
     const result = aggregateCandidates(workspace, null, []);
     assert.equal(result.length, 1);
-    assert.equal(result[0].kind, 'sdk');
+    assert.equal(result[0].kind, 'cpp');
 });
 
 test('aggregateCandidates: detects CMakeLists.txt as sdk candidate', () => {
@@ -60,7 +60,7 @@ test('aggregateCandidates: detects CMakeLists.txt as sdk candidate', () => {
     fs.writeFileSync(path.join(workspace, 'CMakeLists.txt'), 'cmake_minimum_required(VERSION 3.14)\n');
     const result = aggregateCandidates(workspace, null, []);
     assert.equal(result.length, 1);
-    assert.equal(result[0].kind, 'sdk');
+    assert.equal(result[0].kind, 'cpp');
     assert.equal(result[0].label, 'cmake-ws');
 });
 

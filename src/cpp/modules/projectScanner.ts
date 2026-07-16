@@ -1,21 +1,21 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { SdkProjectInfo } from '../types';
+import { CppProjectInfo } from '../types';
 import { DEFAULT_SCAN_DEPTH, SCAN_TIMEOUT_MS } from '../constants';
-import { scanSdkProjects } from '../../core/sdkProjectScanner';
+import { scanCppProjects } from '../../core/cppProjectScanner';
 import { isWindows } from '../platform';
 import { log, logError } from '../utils/logger';
-import { getSdkSetting } from '../../vscode/settingsStore';
+import { getCppSetting } from '../../vscode/settingsStore';
 
 export class ProjectScanner {
-  private _projects: SdkProjectInfo[] = [];
+  private _projects: CppProjectInfo[] = [];
 
-  get projects(): SdkProjectInfo[] {
+  get projects(): CppProjectInfo[] {
     return this._projects;
   }
 
   /** 扫描工作区中的 SDK 项目入口文件 */
-  async scan(): Promise<SdkProjectInfo[]> {
+  async scan(): Promise<CppProjectInfo[]> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
       log('无工作区文件夹，跳过扫描');
@@ -23,21 +23,21 @@ export class ProjectScanner {
       return [];
     }
 
-    const maxDepth = getSdkSetting('scanDepth') || DEFAULT_SCAN_DEPTH;
+    const maxDepth = getCppSetting('scanDepth') || DEFAULT_SCAN_DEPTH;
 
     log(`开始扫描, 最大深度: ${maxDepth}`);
 
     try {
-      const allResults: SdkProjectInfo[] = [];
+      const allResults: CppProjectInfo[] = [];
 
       await this.scanWithTimeout(() => {
         for (const folder of workspaceFolders) {
           const wsRoot = folder.uri.fsPath;
-          const files = scanSdkProjects({
+          const files = scanCppProjects({
             workspace: wsRoot,
             maxDepth,
             skipQtProjectDirs: true,
-            relativePaths: false, // need absolute paths for SdkProjectInfo
+            relativePaths: false, // need absolute paths for CppProjectInfo
           });
           for (const filePath of files) {
             allResults.push(this.toProjectInfo(filePath));
@@ -55,8 +55,8 @@ export class ProjectScanner {
     return this._projects;
   }
 
-  /** 将绝对路径转换为 SdkProjectInfo */
-  private toProjectInfo(filePath: string): SdkProjectInfo {
+  /** 将绝对路径转换为 CppProjectInfo */
+  private toProjectInfo(filePath: string): CppProjectInfo {
     const fileName = path.basename(filePath);
     const type = fileName.endsWith('.sln') ? 'sln' : 'makefile';
     const name = type === 'sln'
@@ -84,7 +84,7 @@ export class ProjectScanner {
   }
 
   /** 根据扫描结果解析当前项目 */
-  async resolveCurrentProject(projects: SdkProjectInfo[]): Promise<SdkProjectInfo | null> {
+  async resolveCurrentProject(projects: CppProjectInfo[]): Promise<CppProjectInfo | null> {
     if (projects.length === 0) {
       return null;
     }

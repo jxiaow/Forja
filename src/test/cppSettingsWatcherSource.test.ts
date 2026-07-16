@@ -4,11 +4,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 test('SDK extension observes unified settingsStore changes instead of old workspace settings file', () => {
-    const sdkExtension = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'sdkExtension.ts'), 'utf8');
-    const configService = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'modules', 'configService.ts'), 'utf8');
+    const cppExtension = fs.readFileSync(path.join(process.cwd(), 'src', 'cpp', 'cppExtension.ts'), 'utf8');
+    const configService = fs.readFileSync(path.join(process.cwd(), 'src', 'cpp', 'modules', 'configService.ts'), 'utf8');
 
-    assert.match(sdkExtension, /onSettingsChange/);
-    assert.doesNotMatch(sdkExtension, /onSettingsFileChanged/);
+    assert.match(cppExtension, /onSettingsChange/);
+    assert.doesNotMatch(cppExtension, /onSettingsFileChanged/);
     assert.doesNotMatch(configService, /\.forja\/settings\.json/);
 });
 
@@ -31,8 +31,8 @@ test('sync watcher refreshes status from unified settings changes', () => {
 });
 
 test('SDK state manager uses non-Windows x64 default arch before persisting config', () => {
-    const platformSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'platform', 'index.ts'), 'utf8');
-    const stateManagerSource = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'modules', 'stateManager.ts'), 'utf8');
+    const platformSource = fs.readFileSync(path.join(process.cwd(), 'src', 'cpp', 'platform', 'index.ts'), 'utf8');
+    const stateManagerSource = fs.readFileSync(path.join(process.cwd(), 'src', 'cpp', 'modules', 'stateManager.ts'), 'utf8');
 
     assert.match(platformSource, /getDefaultArch\(\): Arch/);
     assert.match(platformSource, /return isWindows \? 'x86' : 'x64'/);
@@ -41,9 +41,9 @@ test('SDK state manager uses non-Windows x64 default arch before persisting conf
 });
 
 test('SDK status bar updates handle config persistence failures', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'sdkExtension.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cpp', 'cppExtension.ts'), 'utf8');
 
-    assert.match(source, /onSdkUpdate\(\(\{ mode, arch \}\) => \{[\s\S]*?\.persistToConfig\(\)\s*\.catch\(\(e: Error\) => logError\('状态栏更新后保存 SDK 配置失败', e\)\);[\s\S]*?\}\);/);
+    assert.match(source, /onCppUpdate\(\(\{ mode, arch \}\) => \{[\s\S]*?\.persistToConfig\(\)\s*\.catch\(\(e: Error\) => logError\('状态栏更新后保存 SDK 配置失败', e\)\);[\s\S]*?\}\);/);
 });
 
 test('config panel rejects SDK arch writes on non-Windows platforms', () => {
@@ -52,7 +52,7 @@ test('config panel rejects SDK arch writes on non-Windows platforms', () => {
     assert.match(source, /getDefaultArch/);
     assert.match(source, /isWindows/);
     assert.match(source, /if \(!isWindows\)/);
-    assert.match(source, /setSdkSetting\('arch', getDefaultArch\(\)\)/);
+    assert.match(source, /setCppSetting\('arch', getDefaultArch\(\)\)/);
 });
 
 test('config panel normalizes SDK VsDevCmd paths before saving vsInstall', () => {
@@ -60,11 +60,11 @@ test('config panel normalizes SDK VsDevCmd paths before saving vsInstall', () =>
 
     assert.match(source, /case 'saveSdkVsInstall'/);
     assert.match(source, /inferVsInstall\(String\(msg\.value \|\| ''\)\) \|\| String\(msg\.value \|\| ''\)/);
-    assert.match(source, /setSdkSetting\('vsInstall', sdkVsInstall\)/);
+    assert.match(source, /setCppSetting\('vsInstall', sdkVsInstall\)/);
 });
 
 test('SDK state restore clears missing or stale pinned projects', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'modules', 'stateManager.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cpp', 'modules', 'stateManager.ts'), 'utf8');
 
     assert.match(source, /import \* as fs from 'fs'/);
     assert.match(source, /if \(!pinnedProject\)/);
@@ -73,7 +73,7 @@ test('SDK state restore clears missing or stale pinned projects', () => {
 });
 
 test('SDK builder refuses to build when current project file no longer exists', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'sdk', 'modules', 'sdkBuilder.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cpp', 'modules', 'cppBuilder.ts'), 'utf8');
 
     assert.match(source, /import \* as fs from 'fs'/);
     assert.match(source, /fs\.existsSync\(this\.stateManager\.currentProject\.path\)/);
