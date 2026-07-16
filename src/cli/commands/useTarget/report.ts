@@ -53,13 +53,16 @@ export function buildConfigSummary(config: ResolvedConfig, toolchain: ToolchainI
  * Build success result.
  */
 export function buildSuccessResult(config: ResolvedConfig, toolchain: ToolchainInfo, changed: string[], workspace: string): UseTargetResult {
+    const mode = (config.mode || 'debug') as 'debug' | 'release';
+    const arch = (config.arch || (os.platform() === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64';
+    const basename = config.project.split('/').pop()?.replace(/\.\w+$/, '') || config.project;
     const target = {
-        id: '',
-        name: '',
+        id: `${config.kind}-${basename}-${mode}-${arch}`,
+        name: `${basename} ${mode} ${arch}`,
         kind: config.kind,
         project: config.project,
-        mode: (config.mode || 'debug') as 'debug' | 'release',
-        arch: (config.arch || (os.platform() === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+        mode,
+        arch,
         runAt: config.runAt,
         toolchain: {
             qtPath: config.qtPath,

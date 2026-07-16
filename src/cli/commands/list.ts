@@ -101,8 +101,8 @@ export function formatListText(result: ListResult, locale: Locale): string {
                     lines.push(`  ${T('none')}`);
                 } else {
                     for (const s of servers) {
-                        const sel = s.selected ? ' *' : '';
-                        lines.push(`  ${s.id}  ${s.name}  ${s.username}@${s.host}:${s.port}  auth=${s.authMode}${sel}`);
+                        const sel = s.selected ? '* ' : '  ';
+                        lines.push(`  ${sel}${s.id}  ${s.name}  ${s.username}@${s.host}:${s.port}  auth=${s.authMode}`);
                     }
                 }
             } else if (servers) {
@@ -272,7 +272,7 @@ function listTargets(workspace: string): ListResult {
 
     const nextAction = savedTargets.length > 0
         ? 'forja use target --project <name|path>'
-        : 'forja init';
+        : (workroot ? 'forja use target' : 'forja init');
 
     return {
         ok: true,
@@ -330,36 +330,40 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
 
 async function listEnvAll(workspace: string): Promise<ListResult> {
     setSilent(true);
-    const env = await detectEnv();
+    try {
+        const env = await detectEnv();
 
-    // Get configured paths from workspaceStore (active target's toolchain)
-    const workroot = resolveWorkroot(workspace);
-    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
-    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
-    const configuredQtPath = activeProfile?.toolchain.qtPath || '';
-    const configuredVsPath = activeProfile?.toolchain.vsInstall || '';
+        // Get configured paths from workspaceStore (active target's toolchain)
+        const workroot = resolveWorkroot(workspace);
+        const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+        const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+        const configuredQtPath = activeProfile?.toolchain.qtPath || '';
+        const configuredVsPath = activeProfile?.toolchain.vsInstall || '';
 
-    const summary: EnvSummary = {};
-    summary.qt = env.qtCandidates.map(c => ({
-        path: c.path, version: c.version,
-        ...(c.path === configuredQtPath ? { configured: true } : {}),
-    }));
-    if (process.platform === 'win32') {
-        if (env.jom) { summary.jom = env.jom; }
-        summary.vs = env.vsCandidates.map(v => ({
-            path: v.installPath, version: v.version, edition: v.edition,
-            ...(v.installPath === configuredVsPath ? { configured: true } : {}),
+        const summary: EnvSummary = {};
+        summary.qt = env.qtCandidates.map(c => ({
+            path: c.path, version: c.version,
+            ...(c.path === configuredQtPath ? { configured: true } : {}),
         }));
-    } else {
-        if (detectMake()) { summary.make = true; }
-    }
+        if (process.platform === 'win32') {
+            if (env.jom) { summary.jom = env.jom; }
+            summary.vs = env.vsCandidates.map(v => ({
+                path: v.installPath, version: v.version, edition: v.edition,
+                ...(v.installPath === configuredVsPath ? { configured: true } : {}),
+            }));
+        } else {
+            if (detectMake()) { summary.make = true; }
+        }
 
-    return {
-        ok: true,
-        action: 'list',
-        category: 'env',
-        env: summary,
-    };
+        return {
+            ok: true,
+            action: 'list',
+            category: 'env',
+            env: summary,
+        };
+    } finally {
+        setSilent(false);
+    }
 }
 
 async function listEnvSub(workspace: string, sub: EnvSubCategory): Promise<ListResult> {
@@ -373,26 +377,30 @@ async function listEnvSub(workspace: string, sub: EnvSubCategory): Promise<ListR
 
 async function listEnvQt(workspace: string): Promise<ListResult> {
     setSilent(true);
-    const workroot = resolveWorkroot(workspace);
-    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
-    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
-    const configuredPath = activeProfile?.toolchain.qtPath || '';
-    const env = await detectEnv();
-    const qt = env.qtCandidates.map(c => ({
-        path: c.path, version: c.version,
-        ...(c.path === configuredPath ? { configured: true } : {}),
-    }));
-    const summary: EnvSummary = { qt };
-    if (process.platform === 'win32' && env.jom) { summary.jom = env.jom; }
-    if (process.platform !== 'win32' && detectMake()) { summary.make = true; }
+    try {
+        const workroot = resolveWorkroot(workspace);
+        const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+        const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+        const configuredPath = activeProfile?.toolchain.qtPath || '';
+        const env = await detectEnv();
+        const qt = env.qtCandidates.map(c => ({
+            path: c.path, version: c.version,
+            ...(c.path === configuredPath ? { configured: true } : {}),
+        }));
+        const summary: EnvSummary = { qt };
+        if (process.platform === 'win32' && env.jom) { summary.jom = env.jom; }
+        if (process.platform !== 'win32' && detectMake()) { summary.make = true; }
 
-    return {
-        ok: true,
-        action: 'list',
-        category: 'env',
-        envSubCategory: 'qt',
-        env: summary,
-    };
+        return {
+            ok: true,
+            action: 'list',
+            category: 'env',
+            envSubCategory: 'qt',
+            env: summary,
+        };
+    } finally {
+        setSilent(false);
+    }
 }
 
 async function listEnvVs(workspace: string): Promise<ListResult> {
@@ -402,35 +410,43 @@ async function listEnvVs(workspace: string): Promise<ListResult> {
     const configuredPath = activeProfile?.toolchain.vsInstall || '';
 
     setSilent(true);
-    const env = await detectEnv();
-    const vs = env.vsCandidates.map(v => ({
-        path: v.installPath, version: v.version, edition: v.edition,
-        ...(v.installPath === configuredPath ? { configured: true } : {}),
-    }));
+    try {
+        const env = await detectEnv();
+        const vs = env.vsCandidates.map(v => ({
+            path: v.installPath, version: v.version, edition: v.edition,
+            ...(v.installPath === configuredPath ? { configured: true } : {}),
+        }));
 
-    return {
-        ok: true,
-        action: 'list',
-        category: 'env',
-        envSubCategory: 'vs',
-        env: { vs },
-    };
+        return {
+            ok: true,
+            action: 'list',
+            category: 'env',
+            envSubCategory: 'vs',
+            env: { vs },
+        };
+    } finally {
+        setSilent(false);
+    }
 }
 
 async function listEnvJom(): Promise<ListResult> {
     setSilent(true);
-    const summary: EnvSummary = {};
-    if (process.platform === 'win32') {
-        const env = await detectEnv();
-        if (env.jom) { summary.jom = env.jom; }
+    try {
+        const summary: EnvSummary = {};
+        if (process.platform === 'win32') {
+            const env = await detectEnv();
+            if (env.jom) { summary.jom = env.jom; }
+        }
+        return {
+            ok: true,
+            action: 'list',
+            category: 'env',
+            envSubCategory: 'jom',
+            env: summary,
+        };
+    } finally {
+        setSilent(false);
     }
-    return {
-        ok: true,
-        action: 'list',
-        category: 'env',
-        envSubCategory: 'jom',
-        env: summary,
-    };
 }
 
 async function listEnvMake(): Promise<ListResult> {

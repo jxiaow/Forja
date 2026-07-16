@@ -318,6 +318,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     'sync.createRemoteDirFailed':  { en: 'Create remote directory failed', zh: '创建远程目录失败' },
     'sync.resetDone':              { en: 'Sync state cleared; next sync will recalculate', zh: '已清除同步状态；下次同步会重新计算待同步文件' },
     syncConfirm:                   { en: 'Proceed with sync?',          zh: '确认执行同步？' },
+    syncResetConfirm:              { en: 'Sync reset: clear all sync state. Continue?', zh: '同步重置：清除所有同步状态。继续？' },
     syncCancelled:                 { en: 'Sync cancelled',              zh: '同步已取消' },
     syncNothing:                   { en: 'Nothing to sync',             zh: '没有需要同步的内容' },
     syncComplete:                  { en: 'Sync complete',                zh: '同步完成' },
@@ -714,6 +715,8 @@ Options:
     'init.selectTargetToModify':        { en: 'Select target to modify',              zh: '选择要修改的目标' },
     'init.configurationCancelled':      { en: 'Configuration cancelled',              zh: '配置已取消' },
     'init.existingAction':              { en: 'Action for existing workroot',         zh: '对已注册工作根目录的操作' },
+    'init.invalidMode':                 { en: 'Invalid mode value: {0}. Must be debug or release.', zh: '无效的 mode 值: {0}。必须为 debug 或 release。' },
+    'init.invalidArch':                 { en: 'Invalid arch value: {0}. Must be x86 or x64.',     zh: '无效的 arch 值: {0}。必须为 x86 或 x64。' },
     'help.init': {
         en: `Usage:
   forja init                     Register work root and configure initial target
@@ -752,6 +755,9 @@ Options:
     'remote.resetUsage':                { en: 'forja remote reset requires <repo> and at least one <path>', zh: 'forja remote reset 需要 <repo> 和至少一个 <path>' },
     'remote.invalidPath':               { en: 'Invalid path (must be relative, no \'..\')', zh: '无效路径（必须是相对路径，不能包含 \'..\'）' },
     'remote.cleanFailedWarning':        { en: 'Clean untracked files failed after reset', zh: '重置后清理未跟踪文件失败' },
+    'remote.setUpdated':               { en: 'Remote set updated',                     zh: '远程设置已更新' },
+    'remote.restoreUpdated':           { en: 'Remote restore updated',                  zh: '远程恢复已更新' },
+    'remote.resetUpdated':             { en: 'Remote reset updated',                    zh: '远程重置已更新' },
     'idx.serverIdRequired':             { en: 'Server ID required',                   zh: '需要服务器 ID' },
     'idx.unknownBuildAction':           { en: 'Unknown build action',               zh: '未知构建动作' },
     'idx.validActions':                 { en: 'Valid actions: fresh, qmake, rcc',   zh: '有效动作: fresh, qmake, rcc' },

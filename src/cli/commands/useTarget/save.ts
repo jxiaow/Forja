@@ -48,19 +48,27 @@ export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; 
         // Ensure workroot is registered
         registerWorkroot(workroot);
 
+        const mode = (config.mode || 'debug') as 'debug' | 'release';
+        const arch = (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64';
+
+        // Reuse existing target with same kind/project/mode/arch instead of creating a duplicate
+        const matchId = Object.values(wsConfig.targets).find(
+            t => t.kind === config.kind && t.project === config.project && t.mode === mode && t.arch === arch
+        )?.id;
+
         const existingIds = new Set(Object.keys(wsConfig.targets));
-        const id = generateTargetId(config.kind, config.project, config.mode || 'debug', config.arch || 'x86', existingIds);
+        const id = matchId ?? generateTargetId(config.kind, config.project, mode, arch, existingIds);
         const basename = config.project.split('/').pop()?.replace(/\.\w+$/, '') || config.project;
 
         const oldProfile = wsConfig.activeTarget ? wsConfig.targets[wsConfig.activeTarget] : null;
 
         const profile: TargetProfile = {
             id,
-            name: `${basename} ${config.mode || 'debug'} ${config.arch || 'x86'}`,
+            name: `${basename} ${mode} ${arch}`,
             kind: config.kind,
             project: config.project,
-            mode: (config.mode || 'debug') as 'debug' | 'release',
-            arch: (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+            mode,
+            arch,
             runAt: config.runAt || 'local',
             toolchain: {
                 qtPath: config.qtPath,

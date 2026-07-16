@@ -65,6 +65,8 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
                 for (const d of c.diagnostics) {
                     if (d.level === 'error' || d.level === 'warning') {
                         lines.push(`      ${T(d.level)}: ${d.message}`);
+                    } else if (d.level === 'info') {
+                        lines.push(`      ℹ ${d.message}`);
                     }
                 }
             }
@@ -98,6 +100,8 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
         for (const d of result.diagnostics) {
             if (d.level === 'error' || d.level === 'warning') {
                 lines.push(`${T(d.level)}: ${d.message}`);
+            } else if (d.level === 'info') {
+                lines.push(`ℹ ${d.message}`);
             }
         }
     }

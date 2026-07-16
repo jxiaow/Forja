@@ -99,14 +99,17 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         const savedProfile = allTargets.find(t => t.kind === kind && t.id === wsConfigEarly?.activeTarget)
             || allTargets.find(t => t.kind === kind)
             || null;
+        const fallbackMode = 'debug' as const;
+        const fallbackArch = (process.platform === 'win32' ? 'x86' : 'x64') as 'x86' | 'x64';
+        const projectBasename = path.basename(projectPath, path.extname(projectPath));
         targetResult = {
             target: savedProfile || {
-                id: '',
-                name: '',
+                id: `${kind}-${projectBasename}-${fallbackMode}-${fallbackArch}`,
+                name: projectBasename,
                 kind,
                 project: relativeProject,
-                mode: 'debug' as const,
-                arch: (process.platform === 'win32' ? 'x86' : 'x64') as 'x86' | 'x64',
+                mode: fallbackMode,
+                arch: fallbackArch,
                 runAt: 'local' as const,
                 toolchain: {},
             },
@@ -248,6 +251,14 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                     activeTarget: target,
                     plan: { mode: 'dryRun', commands: plan.commands, shellCommand: plan.shellCommand },
                 };
+            }
+
+            // Pre-kill: terminate running instance before building (prevents LNK1204/file lock errors)
+            if (buildAction === 'default' || buildAction === 'fresh') {
+                const state = readRunState(workspace);
+                if (state?.executablePath) {
+                    terminateExecutable(state.executablePath);
+                }
             }
 
             const started = Date.now();

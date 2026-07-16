@@ -257,6 +257,12 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
         };
     }
 
+    // Answers mode: skip interactive confirmation, use workroot as-is
+    if (options.answers) {
+        const emptyConfig = createEmptyWorkspaceConfig(workroot);
+        return configureNewTarget(workroot, emptyConfig, options);
+    }
+
     // Interactive flow
     console.log(T('init.newWorkroot'));
     console.log(`  ${T('init.workroot')}: ${workroot}`);
@@ -368,7 +374,9 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.answersMissingProject') }] };
     }
 
-    console.log(`  ✓ ${selectedProject.label}`);
+    if (options.interactive) {
+        console.log(`  ✓ ${selectedProject.label}`);
+    }
 
     // Detect toolchain
     setSilent(true);
@@ -418,7 +426,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         if (options.answers.mode === 'debug' || options.answers.mode === 'release') {
             mode = options.answers.mode;
         } else {
-            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `Invalid mode value: ${options.answers.mode}. Expected: debug | release` }] };
+            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.invalidMode', [options.answers.mode]) }] };
         }
     } else if (options.interactive) {
         const chosen = await chooseRequired(T('init.selectMode'), [
@@ -434,7 +442,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         if (options.answers.arch === 'x86' || options.answers.arch === 'x64') {
             arch = options.answers.arch;
         } else {
-            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `Invalid arch value: ${options.answers.arch}. Expected: x86 | x64` }] };
+            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.invalidArch', [options.answers.arch]) }] };
         }
     } else if (options.interactive && process.platform === 'win32') {
         const chosen = await chooseRequired(T('init.selectArch'), [
@@ -523,7 +531,7 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
         if (options.answers.mode === 'debug' || options.answers.mode === 'release') {
             updated.mode = options.answers.mode;
         } else {
-            return { ok: false, diagnostics: [{ level: 'error', message: `Invalid mode value: ${options.answers.mode}. Expected: debug | release` }] };
+            return { ok: false, diagnostics: [{ level: 'error', message: T('init.invalidMode', [options.answers.mode]) }] };
         }
     } else if (options.interactive) {
         const chosen = await chooseRequired(T('init.selectMode'), [
@@ -538,7 +546,7 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
         if (options.answers.arch === 'x86' || options.answers.arch === 'x64') {
             updated.arch = options.answers.arch;
         } else {
-            return { ok: false, diagnostics: [{ level: 'error', message: `Invalid arch value: ${options.answers.arch}. Expected: x86 | x64` }] };
+            return { ok: false, diagnostics: [{ level: 'error', message: T('init.invalidArch', [options.answers.arch]) }] };
         }
     } else if (options.interactive && process.platform === 'win32') {
         const chosen = await chooseRequired(T('init.selectArch'), [

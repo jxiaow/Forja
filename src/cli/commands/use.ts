@@ -208,7 +208,6 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
     }
 
     // No flags: interactive picker if saved targets exist, otherwise full flow
-    const { resolveWorkroot, loadWorkspaceConfig } = await import('../../core/workspaceStore');
     const workroot = resolveWorkroot(workspace);
     if (workroot && args.interactive === true && !args.json) {
         const wsConfig = loadWorkspaceConfig(workroot);

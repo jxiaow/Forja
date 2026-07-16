@@ -122,6 +122,8 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     }
     const target = targetResult.target;
     const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const suppressedWarnings = wsConfig?.qtModulePrefs.suppressedWarnings ?? [];
 
     // Validate project file exists
     const projectPath = path.isAbsolute(target.project)
@@ -212,7 +214,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
         }
 
         const started = Date.now();
-        const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false });
+        const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false, suppressedWarnings });
         const durationMs = Date.now() - started;
 
         const ok = executed.exitCode === 0;
@@ -232,7 +234,6 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     }
 
     // Qt local
-    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
     const rccProjectPath = wsConfig?.qtModulePrefs.rccProjectPath || undefined;
     const cliOptions = buildCleanQtCliOptions(workspace, target, options.plan ?? false, qmakeArgs, rccProjectPath);
@@ -274,7 +275,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             };
         }
 
-        const executed = await runCliResult(planned, { streaming: !wantsJson, detach: false });
+        const executed = await runCliResult(planned, { streaming: !wantsJson, detach: false, suppressedWarnings });
         const ok = executed.ok;
         const changed = ok ? [path.relative(workspace, buildDir) || '.'] : undefined;
         return {

@@ -88,10 +88,10 @@ export function runStatus(workspace: string): StatusResult {
                 level: 'error',
                 message: `${T('sts.configCorrupted')}: ${detail}`,
                 hint: T('sts.configCorruptedHint'),
-                fix: 'forja use target',
+                fix: 'forja init',
                 params: { file: corrupted.map((c: CorruptedConfig) => c.path).join(', '), detail: corrupted.map((c: CorruptedConfig) => c.detail).join('; ') },
             }],
-            nextAction: 'forja use target',
+            nextAction: 'forja init',
         };
     }
 
@@ -304,7 +304,7 @@ export function runStatus(workspace: string): StatusResult {
         if (toolchainSummary?.vs?.version) { targetForOutput.toolchain.vsVersion = toolchainSummary.vs.version; }
     }
     const result: StatusResult = {
-        ok: assessOk(readiness),
+        ok: assessOk(readiness, activeTarget),
         action: 'status',
         workspace: workroot || workspace,
         readiness,
@@ -507,12 +507,14 @@ function buildRuntimeState(workspace: string, target: TargetProfile | null, diag
     return { running: false };
 }
 
-function assessOk(readiness: Readiness): boolean {
+function assessOk(readiness: Readiness, activeTarget?: TargetProfile | null): boolean {
     // sync/remote=not-selected are OK; sync issues don't block local builds,
     // runtime is also excluded: process state doesn't affect build readiness.
     if (readiness.target === 'blocked' || readiness.target === 'missing' || readiness.target === 'not-selected') { return false; }
     if (readiness.toolchain === 'blocked' || readiness.toolchain === 'missing' || readiness.toolchain === 'unknown') { return false; }
     if (readiness.remote === 'blocked' || readiness.remote === 'missing') { return false; }
+    // When running remotely, sync issues block the build
+    if (activeTarget?.runAt === 'remote' && (readiness.sync === 'blocked' || readiness.sync === 'missing')) { return false; }
     return true;
 }
 
@@ -615,11 +617,17 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         lines.push('');
         lines.push(T('next'));
         lines.push(`${indent}  ${result.nextAction}`);
-    } else if (!result.activeTarget && result.readiness?.toolchain === 'unknown') {
-        lines.push('');
-        lines.push(T('next'));
-        lines.push(`${indent}  forja use target       (${T('statusSetupLocal')})`);
-        lines.push(`${indent}  forja remote set       (${T('statusSetupRemote')})`);
+    }
+
+    // ── Choices ──
+    if (result.choices?.length) {
+        if (!result.nextAction) {
+            lines.push('');
+            lines.push(T('next'));
+        }
+        for (const c of result.choices) {
+            lines.push(`${indent}  ${c.command}       (${c.description})`);
+        }
     }
 
     return lines.join('\n');

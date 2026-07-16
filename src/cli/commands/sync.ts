@@ -20,6 +20,7 @@ export interface SyncResult extends ForjaJsonResult {
     deleted?: string[];
     skipped?: string[];
     skippedDetails?: Array<{ file: string; reason: string }>;
+    failed?: Array<{ file: string; error: string }>;
     // status fields
     enabled?: boolean;
     serverDetail?: { name: string; host: string; username: string; port: number };
@@ -36,7 +37,11 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
 
     if (!result.ok) {
         lines.push(T('error'));
-        if (result.diagnostics) {
+        if (result.failed?.length) {
+            for (const f of result.failed) {
+                lines.push(`  ${f.file ? f.file + ': ' : ''}${f.error}`);
+            }
+        } else if (result.diagnostics) {
             for (const d of result.diagnostics) {
                 lines.push(`  ${d.message}`);
             }
@@ -178,6 +183,7 @@ export async function runSyncExecute(workspace: string, fileFilters: string[] = 
             deleted: result.deleted,
             skipped: result.skipped,
             skippedDetails: result.skippedDetails?.length ? result.skippedDetails : undefined,
+            failed: result.failed?.length ? result.failed : undefined,
             diagnostics: result.ok ? undefined : result.failed.map(f => diag('error', `${T('sync.syncFailed')}: ${f.error}`)),
             nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja doctor fix --remote'),
         };

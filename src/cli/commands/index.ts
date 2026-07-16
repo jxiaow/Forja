@@ -1101,7 +1101,7 @@ async function handleSync(argv: string[], workroot: string, wantsJson: boolean, 
     if (subArg === 'reset') {
         const forceFlag = hasFlag(argv, '--force');
         if (!wantsJson && !forceFlag) {
-            const yes = await confirm('Sync reset: 清除所有同步状态。继续？', false);
+            const yes = await confirm(T('syncResetConfirm'), false);
             if (!yes) {
                 outputResult({ ok: false, action: 'sync', syncAction: 'reset', diagnostics: [{ level: 'info', message: 'Cancelled' }] }, wantsJson);
                 return;

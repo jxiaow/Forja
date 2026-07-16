@@ -120,21 +120,21 @@ export function formatRemoteText(result: RemoteResult, locale: Locale): string {
             break;
         }
         case 'set': {
-            lines.push(`Remote ${result.remoteAction} ${T('updated')}`);
+            lines.push(T('remote.setUpdated'));
             if (result.changed && result.changed.length > 0) {
                 lines.push(`  ${T('changed')} ${result.changed.join(', ')}`);
             }
             break;
         }
         case 'restore': {
-            lines.push(`Remote restore ${T('updated')}`);
+            lines.push(T('remote.restoreUpdated'));
             if (result.remote?.restored !== undefined) {
                 lines.push(`  ${T('doctorRestored')} ${result.remote.restored} ${T('paths')}`);
             }
             break;
         }
         case 'reset': {
-            lines.push(`Remote reset ${T('updated')}`);
+            lines.push(T('remote.resetUpdated'));
             if (result.remote?.resetPaths !== undefined) {
                 lines.push(`  ${T('doctorResetDone')} ${result.remote.resetPaths} ${T('paths')}`);
             }

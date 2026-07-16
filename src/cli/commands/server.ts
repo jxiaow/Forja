@@ -121,14 +121,17 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
     if (!args.username) {
         diagnostics.push({ level: 'error', message: T('srv.missingUsername') });
     }
-    // Validate auth mode consistency
+    // Validate auth mode — only block when explicitly specified; missing credentials without explicit auth-mode are warnings
     if (args.authMode === 'key' && !args.privateKeyPath && !args.password) {
         diagnostics.push({ level: 'error', message: T('srv.keyRequiresKeyOrPassword') });
     }
     if (args.authMode === 'password' && !args.password) {
         diagnostics.push({ level: 'error', message: T('srv.passwordRequiresPassword') });
     }
-    if (diagnostics.length > 0) {
+    if (!args.authMode && !args.privateKeyPath && !args.password) {
+        diagnostics.push({ level: 'warning', message: T('srv.keyRequiresKeyOrPassword') });
+    }
+    if (diagnostics.some(d => d.level === 'error')) {
         return {
             ok: false, action: 'server', serverAction: 'add', changed: [],
             diagnostics,
@@ -153,6 +156,7 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
             serverAction: 'add',
             server: toServerDetail(created),
             changed: [`servers.${created.id}`],
+            diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
             nextAction: `forja remote set --server ${created.id} --remote-path <path>`,
         };
     } catch (e) {
@@ -188,6 +192,26 @@ export function runServerUpdate(id: string, updates: Partial<ServerAddArgs>): Se
         patch.password = '';
     } else if (updates.authMode === 'password') {
         patch.privateKeyPath = '';
+    }
+
+    // Validate credentials only when auth mode is explicitly being changed
+    if (updates.authMode) {
+        const resultKeyPath = updates.privateKeyPath ?? existing.privateKeyPath;
+        const resultPassword = updates.password ?? existing.password;
+        if (updates.authMode === 'key' && !resultKeyPath && !resultPassword) {
+            return {
+                ok: false, action: 'server', serverAction: 'update', changed: [],
+                diagnostics: [{ level: 'error', message: T('srv.keyRequiresKeyOrPassword') }],
+                nextAction: `forja server update ${id} --private-key-path <path>`,
+            };
+        }
+        if (updates.authMode === 'password' && !resultPassword) {
+            return {
+                ok: false, action: 'server', serverAction: 'update', changed: [],
+                diagnostics: [{ level: 'error', message: T('srv.passwordRequiresPassword') }],
+                nextAction: `forja server update ${id} --password`,
+            };
+        }
     }
 
     try {
@@ -240,6 +264,10 @@ export function runServerRemove(id: string, workspace: string): ServerResult {
             }
             if (remote.remotePaths[id]) {
                 delete remote.remotePaths[id];
+                remoteChanged = true;
+            }
+            if (remote.transfer?.deployServer === id) {
+                remote.transfer = null;
                 remoteChanged = true;
             }
             if (remoteChanged) {
