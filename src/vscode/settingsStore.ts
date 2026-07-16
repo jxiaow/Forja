@@ -107,6 +107,48 @@ function _saveQtToStore(key: QtKey, value: QtSettings[QtKey]): void {
     if (!workroot) { return; }
 
     const config = loadWorkspaceConfig(workroot);
+
+    // QtModulePrefs fields — workspace-level, saved even without active target
+    switch (key) {
+        case 'qmakeArgs':
+            config.qtModulePrefs.qmakeArgs = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'cStandard':
+            config.qtModulePrefs.cStandard = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'cppStandard':
+            config.qtModulePrefs.cppStandard = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'designerPath':
+            config.qtModulePrefs.designerPath = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'qtSourcePath':
+            config.qtModulePrefs.qtSourcePath = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'manualProPath':
+            config.qtModulePrefs.manualProPath = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'rccProjectPath':
+            config.qtModulePrefs.rccProjectPath = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'scanExcludeDirs':
+            config.qtModulePrefs.scanExcludeDirs = value as string[];
+            saveWorkspaceConfig(config); return;
+        case 'customCommands':
+            config.qtModulePrefs.customCommands = value as QtSettings['customCommands'];
+            saveWorkspaceConfig(config); return;
+        case 'fileSyncPromptEnabled':
+            config.qtModulePrefs.fileSyncPromptEnabled = value as boolean;
+            saveWorkspaceConfig(config); return;
+        case 'qmakeReminderEnabled':
+            config.qtModulePrefs.qmakeReminderEnabled = value as boolean;
+            saveWorkspaceConfig(config); return;
+        case 'suppressedWarnings':
+            config.qtModulePrefs.suppressedWarnings = (value as string[] | undefined) ?? [];
+            saveWorkspaceConfig(config); return;
+    }
+
+    // Target-specific fields — require active target
     const targetId = config.activeTarget;
     if (!targetId) { return; }
 
@@ -114,14 +156,12 @@ function _saveQtToStore(key: QtKey, value: QtSettings[QtKey]): void {
     if (!target || target.kind !== 'qt') { return; }
 
     switch (key) {
-        // → TargetProfile fields
         case 'mode':
             if (value === 'debug' || value === 'release') { target.mode = value; }
             break;
         case 'arch':
             if (value === 'x86' || value === 'x64') { target.arch = value; }
             break;
-        // → TargetProfile.toolchain fields
         case 'qtPath':
             target.toolchain.qtPath = value as string;
             break;
@@ -142,43 +182,6 @@ function _saveQtToStore(key: QtKey, value: QtSettings[QtKey]): void {
             target.project = pp ? pp.relative : '';
             break;
         }
-        // → QtModulePrefs fields
-        case 'qmakeArgs':
-            config.qtModulePrefs.qmakeArgs = value as string;
-            break;
-        case 'cStandard':
-            config.qtModulePrefs.cStandard = value as string;
-            break;
-        case 'cppStandard':
-            config.qtModulePrefs.cppStandard = value as string;
-            break;
-        case 'designerPath':
-            config.qtModulePrefs.designerPath = value as string;
-            break;
-        case 'qtSourcePath':
-            config.qtModulePrefs.qtSourcePath = value as string;
-            break;
-        case 'manualProPath':
-            config.qtModulePrefs.manualProPath = value as string;
-            break;
-        case 'rccProjectPath':
-            config.qtModulePrefs.rccProjectPath = value as string;
-            break;
-        case 'scanExcludeDirs':
-            config.qtModulePrefs.scanExcludeDirs = value as string[];
-            break;
-        case 'customCommands':
-            config.qtModulePrefs.customCommands = value as QtSettings['customCommands'];
-            break;
-        case 'fileSyncPromptEnabled':
-            config.qtModulePrefs.fileSyncPromptEnabled = value as boolean;
-            break;
-        case 'qmakeReminderEnabled':
-            config.qtModulePrefs.qmakeReminderEnabled = value as boolean;
-            break;
-        case 'suppressedWarnings':
-            config.qtModulePrefs.suppressedWarnings = (value as string[] | undefined) ?? [];
-            break;
     }
 
     saveWorkspaceConfig(config);
@@ -252,11 +255,11 @@ function _load(): ForjaSettings {
 }
 
 function _saveQt(): void {
-    // Qt 已迁移到 workspaceStore，由 setQtSetting 逐字段写入
+    // no-op — Qt writes go through _saveQtToStore
 }
 
 function _saveSdk(): void {
-    // SDK 已迁移到 workspaceStore，由 setSdkSetting 逐字段写入
+    // no-op — SDK writes go through _saveSdkToStore
 }
 
 function _saveSync(): void {
@@ -284,7 +287,10 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
 
     // 2. ~/.forja/workspaces/ — Qt/SDK 配置（workspaceStore）
     const wsDir = workspacesDir();
-    if (fs.existsSync(wsDir)) {
+    if (!fs.existsSync(wsDir)) {
+        fs.mkdirSync(wsDir, { recursive: true });
+    }
+    {
         const wsPattern = new vscode.RelativePattern(vscode.Uri.file(wsDir), '*.json');
         const wsWatcher = vscode.workspace.createFileSystemWatcher(wsPattern);
         wsWatcher.onDidChange(() => _reload());
