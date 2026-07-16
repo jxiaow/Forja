@@ -367,11 +367,18 @@ export async function runSwitchTarget(workspace: string, args: {
 
     const qtVersion = qtPath ? ctx.toolchain.qtCandidates.find(q => q.path === qtPath)?.version : undefined;
 
+    // Resolve vsVersion before config construction
+    let vsVersion = ctx.toolchain.vsVersion;
+    if (vsInstall) {
+        const match = ctx.toolchain.vsCandidates.find(v => v.installPath === vsInstall);
+        if (match) vsVersion = match.version;
+    }
+
     const config: ResolvedConfig = {
         kind, project: canonicalProject,
         mode: mode as 'debug' | 'release',
         arch: arch as 'x86' | 'x64',
-        runAt, qtPath, qtVersion, vsInstall, jomPath, qmakeTarget,
+        runAt, qtPath, qtVersion, vsInstall, vsVersion, jomPath, qmakeTarget,
     };
 
     // Save
@@ -389,13 +396,6 @@ export async function runSwitchTarget(workspace: string, args: {
     changed.push('activeTarget');
 
     const target = buildTargetProfile(config);
-
-    // Match VS version for report
-    let vsVersion = ctx.toolchain.vsVersion;
-    if (vsInstall) {
-        const match = ctx.toolchain.vsCandidates.find(v => v.installPath === vsInstall);
-        if (match) vsVersion = match.version;
-    }
 
     return {
         ok: true, action: 'use', useScope: 'target',

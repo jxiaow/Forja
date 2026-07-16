@@ -71,6 +71,7 @@ export interface ResolvedConfig {
     qtPath?: string;
     qtVersion?: string;
     vsInstall?: string;
+    vsVersion?: string;
     jomPath?: string;
     qmakeTarget?: string;
 }

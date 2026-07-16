@@ -65,6 +65,7 @@ export function buildSuccessResult(config: ResolvedConfig, toolchain: ToolchainI
             qtPath: config.qtPath,
             qtVersion: config.qtVersion,
             vsInstall: config.vsInstall,
+            vsVersion: config.vsVersion,
             jomPath: config.jomPath,
             qmakeTarget: config.qmakeTarget,
         },

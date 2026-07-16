@@ -254,14 +254,6 @@ function _load(): ForjaSettings {
     };
 }
 
-function _saveQt(): void {
-    // no-op — Qt writes go through _saveQtToStore
-}
-
-function _saveSdk(): void {
-    // no-op — SDK writes go through _saveSdkToStore
-}
-
 function _saveSync(): void {
     const ws = _getWorkspace('sync');
     if (!ws) { return; }
