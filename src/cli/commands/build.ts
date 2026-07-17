@@ -141,9 +141,9 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         if (target.runAt === 'remote') {
             const remote = loadRemoteSettings(workspace);
             const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-            console.log(`→ remote:${server?.name || remote.selectedServer}`);
+            console.log(T('execRemote', [server?.name || remote.selectedServer || '']));
         } else {
-            console.log('→ local');
+            console.log(T('execLocal'));
         }
         console.log(`  ${T('target')}${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
@@ -280,7 +280,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 errors: executed.errors?.length > 0 ? executed.errors : undefined,
                 warningSummary: executed.warningSummary,
                 logFile: executed.logFile ?? undefined,
-                diagnostics: ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.cppBuildFailed')} (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : T('cmd.cppBuildFailed'))],
+                diagnostics: ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.cppBuildFailed')} (${T('cmd.buildErrorCount', [String(executed.errors.length)])})` : T('cmd.cppBuildFailed'))],
                 nextAction: ok ? undefined : (executed.errors?.length ? undefined : 'forja doctor'),
             };
         } catch (e) {
@@ -391,7 +391,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             errors: executed.errors?.length > 0 ? executed.errors : undefined,
             warningSummary: executed.warningSummary,
             logFile: executed.logFile ?? undefined,
-            diagnostics: executed.ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.qtBuildFailed')} (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : T('cmd.qtBuildFailed'))],
+            diagnostics: executed.ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.qtBuildFailed')} (${T('cmd.buildErrorCount', [String(executed.errors.length)])})` : T('cmd.qtBuildFailed'))],
             nextAction: executed.ok ? (buildAction === 'qmake' ? 'forja build' : 'forja run') : (executed.errors?.length ? undefined : 'forja doctor'),
         };
     } catch (e) {

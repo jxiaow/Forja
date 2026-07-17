@@ -121,12 +121,12 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
                     lines.push(`  ${T('syncIgnoreEmpty')}`);
                 }
             } else if (result.ignoreAction === 'add') {
-                lines.push(T('syncIgnoreAdded').replace('{pattern}', result.ignorePattern || ''));
+                lines.push(T('syncIgnoreAdded', [result.ignorePattern || '']));
                 if (result.ignore?.length) {
                     lines.push(`  ${result.ignore.join(', ')}`);
                 }
             } else if (result.ignoreAction === 'rm') {
-                lines.push(T('syncIgnoreRemoved').replace('{pattern}', result.ignorePattern || ''));
+                lines.push(T('syncIgnoreRemoved', [result.ignorePattern || '']));
                 if (result.ignore?.length) {
                     lines.push(`  ${result.ignore.join(', ')}`);
                 }
@@ -255,7 +255,7 @@ export function runSyncIgnoreAdd(workspace: string, pattern: string): SyncResult
             workspace,
             ignore: sync.ignore,
             ignorePattern: pattern,
-            diagnostics: [diag('error', T('syncIgnoreAlreadyExists').replace('{pattern}', pattern))],
+            diagnostics: [diag('error', T('syncIgnoreAlreadyExists', [pattern]))],
         };
     }
     const updated = [...sync.ignore, pattern];
@@ -296,7 +296,7 @@ export function runSyncIgnoreRm(workspace: string, pattern: string): SyncResult 
             workspace,
             ignore: sync.ignore,
             ignorePattern: pattern,
-            diagnostics: [diag('error', T('syncIgnoreNotFound').replace('{pattern}', pattern))],
+            diagnostics: [diag('error', T('syncIgnoreNotFound', [pattern]))],
         };
     }
     const updated = sync.ignore.filter((_, i) => i !== idx);
@@ -398,7 +398,7 @@ export async function interactiveSyncSetup(workroot: string): Promise<{ ok: true
 
     const cfg = configureSyncSettings(workroot, { serverId: serverId!, remotePath, enable: true });
     if (!cfg.ok) {
-        return { ok: false, reason: 'configError', error: cfg.error || 'Failed to configure sync settings' };
+        return { ok: false, reason: 'configError', error: cfg.error || T('syncConfigFailed') };
     }
 
     console.log();

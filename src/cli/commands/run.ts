@@ -89,9 +89,9 @@ export async function runRun(workspace: string, options: {
         if (target.runAt === 'remote') {
             const remote = loadRemoteSettings(workspace);
             const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-            console.log(`→ remote:${server?.name || remote.selectedServer}`);
+            console.log(T('execRemote', [server?.name || remote.selectedServer || '']));
         } else {
-            console.log('→ local');
+            console.log(T('execLocal'));
         }
         console.log(`  ${T('target')}${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
@@ -124,7 +124,7 @@ export async function runRun(workspace: string, options: {
             workspace,
             activeTarget: target,
             diagnostics: [diag('error', T('cmd.debugVscodeOnly'))],
-            nextAction: 'Open VSCode Command Palette → "Forja: Debug"',
+            nextAction: T('debugNextAction'),
         };
     }
 
@@ -314,15 +314,14 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
     const customCommands = wsConfig?.qtModulePrefs.customCommands ?? [];
     const customCmd = customCommands.find(c => c.name === customName);
     if (!customCmd) {
-        const available = customCommands.map(c => c.name).join(', ') || '(none)';
+        const available = customCommands.map(c => c.name).join(', ') || T('none');
         return {
             ok: false,
             action: 'run',
             runAction: 'custom',
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', `${T('cmd.customNotFound')}: ${customName}. Available: ${available}`)],
-            nextAction: 'forja list targets',
+            diagnostics: [diag('error', `${T('cmd.customNotFound')}: ${customName}. ${T('cmd.customAvailable')}: ${available}`)],
         };
     }
 

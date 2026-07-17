@@ -329,10 +329,10 @@ const UI: Record<string, { en: string; zh: string }> = {
     syncStateReset:                { en: 'Sync state reset',             zh: '同步状态已重置' },
     syncIgnore:                    { en: 'Ignore',                        zh: '忽略' },
     syncIgnoreEmpty:               { en: 'No ignore patterns configured', zh: '未配置忽略规则' },
-    syncIgnoreAdded:               { en: 'Added: {pattern}',             zh: '已添加：{pattern}' },
-    syncIgnoreRemoved:             { en: 'Removed: {pattern}',           zh: '已移除：{pattern}' },
-    syncIgnoreAlreadyExists:       { en: 'Already in ignore list: {pattern}', zh: '已在忽略列表中：{pattern}' },
-    syncIgnoreNotFound:            { en: 'Not in ignore list: {pattern}', zh: '不在忽略列表中：{pattern}' },
+    syncIgnoreAdded:               { en: 'Added: {0}',                    zh: '已添加：{0}' },
+    syncIgnoreRemoved:             { en: 'Removed: {0}',                  zh: '已移除：{0}' },
+    syncIgnoreAlreadyExists:       { en: 'Already in ignore list: {0}',   zh: '已在忽略列表中：{0}' },
+    syncIgnoreNotFound:            { en: 'Not in ignore list: {0}',       zh: '不在忽略列表中：{0}' },
     syncIgnorePatternRequired:     { en: 'Pattern required. Usage: forja sync ignore --add <pattern>', zh: '需要提供规则。用法：forja sync ignore --add <pattern>' },
     pending:                       { en: 'Pending',                      zh: '待同步' },
     uploaded:                      { en: 'Uploaded',                     zh: '已上传' },
@@ -780,6 +780,7 @@ Options:
     'srv.noCredentials':                { en: 'No credentials provided; server will default to key auth. Use --private-key-path or --password to configure', zh: '未提供凭证；服务器将默认使用密钥认证。请使用 --private-key-path 或 --password 配置' },
     'srv.failedToSave':                 { en: 'Failed to save',                     zh: '保存失败' },
     'srv.serverNotFound':               { en: 'Server not found',                   zh: '服务器未找到' },
+    'srv.duplicateName':                { en: 'Server name already exists',         zh: '服务器名称已存在' },
     // status diagnostics
     'sts.workspaceNotFound':            { en: 'Workspace does not exist',           zh: '工作区不存在' },
     'sts.configCorrupted':              { en: 'Config file parse failed',               zh: '配置文件解析失败' },
@@ -826,6 +827,8 @@ Options:
     'use.invalidRunAt':                  { en: 'Invalid execution location',          zh: '无效执行位置' },
     'use.useLocalOrRemote':              { en: 'Use local or remote',                 zh: '请使用 local 或 remote' },
     'use.execution':                     { en: 'Execution',                           zh: '执行位置' },
+    'use.cppRunAtLocal':                 { en: 'C++ targets do not support remote execution — ignored --run-at remote', zh: 'C++ 目标不支持远程执行——已忽略 --run-at remote' },
+    'use.noChanges':                     { en: 'No changes — values already match',  zh: '无变更——当前值已匹配' },
     // build/run/clean/stop shared diagnostics
     'cmd.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
     'cmd.projectNotFound':               { en: 'Project file not found',             zh: '项目文件未找到' },
@@ -839,6 +842,8 @@ Options:
     'cmd.cppCustomUnsupported':          { en: 'C++ target does not support custom commands', zh: 'C++ 目标不支持自定义命令' },
     'cmd.customNotFound':                { en: 'Custom command not found',           zh: '自定义命令未找到' },
     'cmd.customFailed':                  { en: 'Custom command failed',              zh: '自定义命令失败' },
+    'cmd.customAvailable':               { en: 'Available',                          zh: '可用命令' },
+    'cmd.buildErrorCount':               { en: '{0} error(s)',                        zh: '{0} 个错误' },
     'cmd.qtRunFailed':                   { en: 'Qt run failed',                      zh: 'Qt 运行失败' },
     'cmd.appExitedWithError':            { en: 'Application exited with error',      zh: '应用程序异常退出' },
     'cmd.targetNotSelected':             { en: 'Target not selected',                zh: '目标未选择' },
@@ -897,6 +902,54 @@ Options:
   forja server remove <id> [--force]
                                 删除服务器（非交互模式需 --force）`,
     },
+
+    // ── Hardcoded string fixes — i18n keys ──
+
+    // Execution location header (build/run/stop/clean)
+    'execLocal':                         { en: '→ local',                             zh: '→ 本地' },
+    'execRemote':                        { en: '→ remote:{0}',                        zh: '→ 远程:{0}' },
+
+    // Cancelled / destructive action guards
+    'cancelled':                         { en: 'Cancelled',                           zh: '已取消' },
+    'destructiveRequiresForce':          { en: 'Destructive action requires --force in JSON mode', zh: '破坏性操作在 JSON 模式下需要 --force' },
+
+    // Confirmation prompts
+    'confirmRemoteReset':                { en: 'Remote reset: {0}. Continue?',        zh: '远程重置：{0}。继续？' },
+    'confirmRemoveServer':               { en: "Remove server '{0}'?",                zh: "删除服务器 '{0}'？" },
+
+    // Flag validation errors
+    'langRequiresValue':                 { en: '--lang requires a value. Usage: forja <command> --lang zh|en', zh: '--lang 需要参数。用法：forja <command> --lang zh|en' },
+    'workspaceRequiresValue':            { en: '--workspace requires a value. Usage: forja <command> --workspace <path>', zh: '--workspace 需要参数。用法：forja <command> --workspace <path>' },
+    'unknownCommand':                    { en: 'Unknown command: {0}',                 zh: '未知命令：{0}' },
+
+    // outputResult fallback
+    'formatError':                       { en: 'Format error:',                       zh: '格式化错误：' },
+    'errorTitle':                        { en: 'Error',                               zh: '错误' },
+    'nextLabel':                         { en: 'Next:',                               zh: '下一步：' },
+
+    // Init answers file
+    'initAnswersFileFailed':             { en: 'Failed to read answers file: {0}',     zh: '读取答案文件失败：{0}' },
+
+    // Custom command requires name
+    'runCustomRequiresName':             { en: 'forja run custom requires <name>',     zh: 'forja run custom 需要 <name>' },
+
+    // Debug nextAction
+    'debugNextAction':                   { en: 'Open VSCode Command Palette → "Forja: Debug"', zh: '打开 VSCode 命令面板 → "Forja: Debug"' },
+
+    // Fallback error texts
+    'unknownError':                      { en: 'unknown error',                       zh: '未知错误' },
+    'remoteResetFailed':                 { en: 'Remote reset failed',                  zh: '远程重置失败' },
+    'syncConfigFailed':                  { en: 'Failed to configure sync settings',    zh: '同步配置失败' },
+
+    // Init (current) marker
+    'currentMarker':                     { en: '(current)',                           zh: '(当前)' },
+
+    // Init checkmark
+    'selectedMark':                      { en: '✓',                                   zh: '✓' },
+
+    // Suppress warnings
+    'use.suppressedWarningsList':        { en: 'Suppressed warnings: {0}',             zh: '已抑制警告：{0}' },
+    'use.noSuppressedWarnings':          { en: 'No suppressed warnings',               zh: '无已抑制警告' },
 };
 
 // Global locale state

@@ -46,7 +46,7 @@ function _syncActiveTarget(kind: ActiveModule): boolean {
     if (!target) { return false; }
 
     config.activeTarget = target.id;
-    saveWorkspaceConfig(config);
+    try { saveWorkspaceConfig(config); } catch { return false; }
     return true;
 }
 
@@ -191,7 +191,7 @@ function _syncActiveTargetModeArch(mode: BuildMode, arch: Arch): void {
     if (profile.mode === mode && profile.arch === arch) { return; }
     profile.mode = mode;
     profile.arch = arch;
-    saveWorkspaceConfig(config);
+    try { saveWorkspaceConfig(config); } catch { /* ignore — status bar sync is best-effort */ }
 }
 
 export async function showActions(): Promise<void> {

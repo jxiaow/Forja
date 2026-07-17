@@ -336,7 +336,7 @@ export async function runRemoteReset(workspace: string, args: RemoteResetArgs): 
     if (executed.exitCode !== 0) {
         return {
             ok: false, action: 'remote', remoteAction: 'reset', changed: [],
-            diagnostics: [{ level: 'error', message: executed.stderr.trim() || 'Remote reset failed' }],
+            diagnostics: [{ level: 'error', message: executed.stderr.trim() || T('remoteResetFailed') }],
             nextAction: 'forja doctor',
         };
     }
@@ -354,7 +354,7 @@ export async function runRemoteReset(workspace: string, args: RemoteResetArgs): 
             cleaned = cleanResult.cleaned.length;
         } else {
             // Reset succeeded but clean failed — report as success with warning
-            const cleanDetail = cleanResult.diagnostics?.map(d => d.message).join('; ') || 'unknown error';
+            const cleanDetail = cleanResult.diagnostics?.map(d => d.message).join('; ') || T('unknownError');
             diagnostics.push({ level: 'warning', message: `${T('remote.cleanFailedWarning')}: ${cleanDetail}` });
         }
     }

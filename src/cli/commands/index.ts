@@ -67,7 +67,7 @@ export async function runCli(argv: string[]): Promise<void> {
     if (langIdx >= 0) {
         const next = argv[langIdx + 1];
         if (!next || next.startsWith('--')) {
-            langError = '--lang requires a value. Usage: forja <command> --lang zh|en';
+            langError = T('langRequiresValue');
         } else {
             langValue = next;
         }
@@ -90,7 +90,7 @@ export async function runCli(argv: string[]): Promise<void> {
     // Intercept --help / -h before any other check (including no-command)
     if (argv.includes('--help') || argv.includes('-h')) {
         const cmd = argv[0] && !argv[0].startsWith('--') ? argv[0] : '';
-        const helpText = cmd ? (getCommandHelp(cmd) || `Unknown command: ${cmd}`) : getTopLevelHelp();
+        const helpText = cmd ? (getCommandHelp(cmd) || T('unknownCommand', [cmd])) : getTopLevelHelp();
         if (wantsJson) {
             outputResult({ ok: true, action: cmd || 'help', diagnostics: [{ level: 'info', message: helpText }] }, wantsJson);
         } else {
@@ -161,7 +161,7 @@ function extractWorkspace(argv: string[]): { cwd: string; error?: string } {
     if (idx >= 0) {
         const next = argv[idx + 1];
         if (!next || next.startsWith('--')) {
-            return { cwd: process.cwd(), error: '--workspace requires a value. Usage: forja <command> --workspace <path>' };
+            return { cwd: process.cwd(), error: T('workspaceRequiresValue') };
         }
         return { cwd: path.resolve(next) };
     }
@@ -284,7 +284,7 @@ function outputResult<T extends ForjaJsonResult>(result: T, wantsJson: boolean, 
             console.log(textFormatter(result));
         } catch (e) {
             // Fallback: show raw diagnostics
-            console.error('Format error:', e instanceof Error ? e.message : String(e));
+            console.error(T('formatError'), e instanceof Error ? e.message : String(e));
             if (result.diagnostics) {
                 for (const d of result.diagnostics) {
                     if (d) { console.error(d.message); }
@@ -294,7 +294,7 @@ function outputResult<T extends ForjaJsonResult>(result: T, wantsJson: boolean, 
     } else {
         const lines: string[] = [];
         if (!result.ok) {
-            lines.push('Error');
+            lines.push(T('errorTitle'));
         }
         if (result.diagnostics) {
             for (const d of result.diagnostics) {
@@ -302,7 +302,7 @@ function outputResult<T extends ForjaJsonResult>(result: T, wantsJson: boolean, 
             }
         }
         if (result.nextAction) {
-            lines.push('Next:');
+            lines.push(T('nextLabel'));
             const a = result.nextAction; lines.push(`  ${a}`);
         }
         console.log(lines.length > 0 ? lines.join('\n') : JSON.stringify(result, null, 2));
@@ -351,7 +351,7 @@ async function handleInit(argv: string[], workroot: string, wantsJson: boolean, 
         try {
             answers = JSON.parse(fs.readFileSync(answersFile, 'utf8'));
         } catch {
-            outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: `Failed to read answers file: ${answersFile}` }] }, wantsJson);
+            outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('initAnswersFileFailed', [answersFile])}` }] }, wantsJson);
             process.exitCode = 1;
             return;
         }
@@ -617,13 +617,13 @@ async function handleRemote(argv: string[], workroot: string, wantsJson: boolean
             const forceFlag = hasFlag(argv, '--force');
             if (!wantsJson && !forceFlag) {
                 const desc = isAll ? `reset ALL files in repo '${repo}'` : `reset ${paths.length} path(s) in repo '${repo}'`;
-                const yes = await confirm(`Remote reset: ${desc}. Continue?`, false);
+                const yes = await confirm(T('confirmRemoteReset', [desc]), false);
                 if (!yes) {
-                    outputResult({ ok: false, action: 'remote', remoteAction: 'reset', changed: [], diagnostics: [{ level: 'info', message: 'Cancelled' }] }, wantsJson);
+                    outputResult({ ok: false, action: 'remote', remoteAction: 'reset', changed: [], diagnostics: [{ level: 'info', message: T('cancelled') }] }, wantsJson);
                     return;
                 }
             } else if (wantsJson && !forceFlag) {
-                outputResult({ ok: false, action: 'remote', remoteAction: 'reset', changed: [], diagnostics: [{ level: 'error', message: 'Destructive action requires --force in JSON mode' }], nextAction: 'forja remote reset <repo> <paths...> --force' }, wantsJson);
+                outputResult({ ok: false, action: 'remote', remoteAction: 'reset', changed: [], diagnostics: [{ level: 'error', message: T('destructiveRequiresForce') }], nextAction: 'forja remote reset <repo> <paths...> --force' }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
@@ -792,13 +792,13 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
             // Destructive action: require confirmation
             const forceFlag = hasFlag(argv, '--force');
             if (!wantsJson && !forceFlag) {
-                const yes = await confirm(`Remove server '${id}'?`, false);
+                const yes = await confirm(T('confirmRemoveServer', [id]), false);
                 if (!yes) {
-                    outputResult({ ok: false, action: 'server', serverAction: 'remove', changed: [], diagnostics: [{ level: 'info', message: 'Cancelled' }] }, wantsJson);
+                    outputResult({ ok: false, action: 'server', serverAction: 'remove', changed: [], diagnostics: [{ level: 'info', message: T('cancelled') }] }, wantsJson);
                     return;
                 }
             } else if (wantsJson && !forceFlag) {
-                outputResult({ ok: false, action: 'server', serverAction: 'remove', changed: [], diagnostics: [{ level: 'error', message: 'Destructive action requires --force in JSON mode' }], nextAction: `forja server remove ${id} --force` }, wantsJson);
+                outputResult({ ok: false, action: 'server', serverAction: 'remove', changed: [], diagnostics: [{ level: 'error', message: T('destructiveRequiresForce') }], nextAction: `forja server remove ${id} --force` }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
@@ -905,7 +905,7 @@ async function handleRun(argv: string[], workroot: string, wantsJson: boolean, l
                 ok: false,
                 action: 'run',
                 runAction: 'custom',
-                diagnostics: [{ level: 'error', message: 'forja run custom requires <name>' }],
+                diagnostics: [{ level: 'error', message: T('runCustomRequiresName') }],
                 nextAction: 'forja run custom <name>',
             }, wantsJson);
             process.exitCode = 1;
@@ -1095,11 +1095,11 @@ async function handleSync(argv: string[], workroot: string, wantsJson: boolean, 
         if (!wantsJson && !forceFlag) {
             const yes = await confirm(T('syncResetConfirm'), false);
             if (!yes) {
-                outputResult({ ok: false, action: 'sync', syncAction: 'reset', diagnostics: [{ level: 'info', message: 'Cancelled' }] }, wantsJson);
+                outputResult({ ok: false, action: 'sync', syncAction: 'reset', diagnostics: [{ level: 'info', message: T('cancelled') }] }, wantsJson);
                 return;
             }
         } else if (wantsJson && !forceFlag) {
-            outputResult({ ok: false, action: 'sync', syncAction: 'reset', diagnostics: [{ level: 'error', message: 'Destructive action requires --force in JSON mode' }], nextAction: 'forja sync reset --force' }, wantsJson);
+            outputResult({ ok: false, action: 'sync', syncAction: 'reset', diagnostics: [{ level: 'error', message: T('destructiveRequiresForce') }], nextAction: 'forja sync reset --force' }, wantsJson);
             process.exitCode = 1;
             return;
         }
@@ -1118,7 +1118,7 @@ async function handleSync(argv: string[], workroot: string, wantsJson: boolean, 
     // ignore: 管理忽略规则，不需要 sync 前置配置
     if (subArg === 'ignore') {
         if (hasFlag(argv, '--add') && hasFlag(argv, '--rm')) {
-            outputResult({ ok: false, action: 'sync', syncAction: 'ignore', workroot, diagnostics: [diag('error', T('sync.ignoreAddRmConflict'))] }, wantsJson, fmt);
+            outputResult({ ok: false, action: 'sync', syncAction: 'ignore', workroot, diagnostics: [diag('error', T('syncIgnoreAddRmConflict'))] }, wantsJson, fmt);
             process.exitCode = 1;
             return;
         }
@@ -1167,7 +1167,7 @@ async function handleSync(argv: string[], workroot: string, wantsJson: boolean, 
             const guided = await interactiveSyncSetup(workroot);
             if (!guided.ok) {
                 const msg = guided.reason === 'configError'
-                    ? (guided.error || 'Failed to configure sync settings')
+                    ? (guided.error || T('syncConfigFailed'))
                     : T('syncCancelled');
                 outputResult({
                     ok: false, action: 'sync',

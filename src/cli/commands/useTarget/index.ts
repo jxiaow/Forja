@@ -184,7 +184,13 @@ export async function runSwitchTarget(workspace: string, args: {
             }
 
             wsConfig.activeTarget = target.id;
-            wsMod.saveWorkspaceConfig(wsConfig);
+            try { wsMod.saveWorkspaceConfig(wsConfig); } catch (e) {
+                return {
+                    ok: false, action: 'use', useScope: 'target', changed: [],
+                    diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
+                    nextAction: 'forja doctor',
+                };
+            }
             return {
                 ok: true, action: 'use', useScope: 'target',
                 workspace, activeTarget: target, changed,
@@ -310,8 +316,8 @@ export async function runSwitchTarget(workspace: string, args: {
         vsInstall = currentTarget.toolchain.vsInstall;
     } else if (args.interactive) {
         setSilent(true);
-        const env = await detectEnv();
-        setSilent(false);
+        let env;
+        try { env = await detectEnv(); } finally { setSilent(false); }
 
         if (kind === 'qt') {
             if (env.qtCandidates.length > 1) {
@@ -363,8 +369,8 @@ export async function runSwitchTarget(workspace: string, args: {
         };
     } else {
         setSilent(true);
-        const env = await detectEnv();
-        setSilent(false);
+        let env;
+        try { env = await detectEnv(); } finally { setSilent(false); }
         if (kind === 'qt') { qtPath = env.qt?.path; }
         // Filter VS by Qt compiler tag for Qt targets
         if (kind === 'qt' && qtPath) {
@@ -462,6 +468,14 @@ export async function runUpdateModeArch(workspace: string, args: {
                 nextAction: 'forja init',
             };
         }
+    } else {
+        // Nothing changed — inform the user
+        return {
+            ok: true, action: 'use', useScope: 'target',
+            workspace, activeTarget: updated, changed: [],
+            diagnostics: [{ level: 'info', message: T('use.noChanges') }],
+            nextAction: 'forja status',
+        };
     }
 
     return {
@@ -498,12 +512,19 @@ export async function runUpdateToolchain(workspace: string, args: {
         updated.toolchain.qtPath = args.qtPath;
         changed.push('qtPath');
         setSilent(true);
-        const env = await detectEnv();
-        setSilent(false);
+        let env;
+        try { env = await detectEnv(); } finally { setSilent(false); }
         const match = env.qtCandidates.find(q => q.path === args.qtPath);
         if (match) {
             updated.toolchain.qtVersion = match.version;
             changed.push('qtVersion');
+        } else {
+            // Fallback: extract the LAST X.Y.Z match from path (handles /opt/1.2.3/Qt/6.5.3/)
+            const matches = [...args.qtPath.matchAll(/(\d+\.\d+\.\d+)/g)];
+            if (matches.length > 0) {
+                updated.toolchain.qtVersion = matches[matches.length - 1][1];
+                changed.push('qtVersion');
+            }
         }
     }
     if (args.vsInstall && args.vsInstall !== currentTarget.toolchain.vsInstall) {

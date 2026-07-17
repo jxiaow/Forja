@@ -139,6 +139,16 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
         };
     }
 
+    // Check for duplicate name
+    const existing = readServers().find(s => s.name === args.name);
+    if (existing) {
+        return {
+            ok: false, action: 'server', serverAction: 'add', changed: [],
+            diagnostics: [{ level: 'error', message: `${T('srv.duplicateName')}: ${args.name} (${T('id')}: ${existing.id})` }],
+            nextAction: `forja server update ${existing.id} --name <new-name>`,
+        };
+    }
+
     try {
         const created = addServer({
             name: args.name,

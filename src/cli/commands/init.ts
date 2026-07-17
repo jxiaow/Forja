@@ -221,7 +221,9 @@ async function handleModifyTarget(workroot: string, config: WorkspaceConfig, opt
     }
 
     config.targets[updatedResult.target.id] = updatedResult.target;
-    saveWorkspaceConfig(config);
+    try { saveWorkspaceConfig(config); } catch (e) {
+        return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }] };
+    }
 
     return {
         ok: true, action: 'init', workroot,
@@ -245,8 +247,11 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
         const questions: Question[] = [
             { id: 'project', label: T('init.selectProject'), choices: candidates.map(c => c.project) },
             { id: 'mode', label: T('init.selectMode'), choices: ['debug', 'release'] },
-            { id: 'arch', label: T('init.selectArch'), choices: ['x86', 'x64'] },
         ];
+        // Only prompt arch on Windows where multiple options exist
+        if (process.platform === 'win32') {
+            questions.push({ id: 'arch', label: T('init.selectArch'), choices: ['x86', 'x64'] });
+        }
         return {
             ok: false, action: 'init', workroot,
             questions,
@@ -396,7 +401,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
     }
 
     if (options.interactive) {
-        console.log(`  ✓ ${selectedProject.label}`);
+        console.log(`  ${T('selectedMark')} ${selectedProject.label}`);
     }
 
     // Detect toolchain
@@ -477,6 +482,19 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
     const id = generateTargetId(selectedProject.kind, selectedProject.project, mode, arch, existingIds);
     const basename = path.basename(selectedProject.project, path.extname(selectedProject.project));
 
+    // Resolve Qt version — try exact match first, then extract from path as fallback
+    let qtVersion: string | undefined;
+    if (qtPath) {
+        const exact = env.qtCandidates.find(q => q.path === qtPath);
+        if (exact) {
+            qtVersion = exact.version;
+        } else {
+            // Extract the LAST X.Y.Z match (handles paths like /opt/1.2.3/Qt/6.5.3/)
+            const matches = [...qtPath.matchAll(/(\d+\.\d+\.\d+)/g)];
+            if (matches.length > 0) qtVersion = matches[matches.length - 1][1];
+        }
+    }
+
     const target: TargetProfile = {
         id,
         name: `${basename} ${mode} ${arch}`,
@@ -487,7 +505,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         runAt: 'local',
         toolchain: {
             qtPath,
-            qtVersion: qtPath ? env.qtCandidates.find(q => q.path === qtPath)?.version : undefined,
+            qtVersion,
             vsInstall,
             jomPath,
         },
@@ -495,7 +513,9 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
 
     config.targets[id] = target;
     config.activeTarget = id;
-    saveWorkspaceConfig(config);
+    try { saveWorkspaceConfig(config); } catch (e) {
+        return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }] };
+    }
 
     return { ok: true, action: 'init', target };
 }
@@ -556,8 +576,8 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
         }
     } else if (options.interactive) {
         const chosen = await chooseRequired(T('init.selectMode'), [
-            { value: 'debug' as const, label: `debug ${updated.mode === 'debug' ? '(current)' : ''}` },
-            { value: 'release' as const, label: `release ${updated.mode === 'release' ? '(current)' : ''}` },
+            { value: 'debug' as const, label: `debug ${updated.mode === 'debug' ? T('currentMarker') : ''}` },
+            { value: 'release' as const, label: `release ${updated.mode === 'release' ? T('currentMarker') : ''}` },
         ], item => item.label);
         updated.mode = chosen.value;
     }
@@ -571,8 +591,8 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
         }
     } else if (options.interactive && process.platform === 'win32') {
         const chosen = await chooseRequired(T('init.selectArch'), [
-            { value: 'x86' as const, label: `x86 ${updated.arch === 'x86' ? '(current)' : ''}` },
-            { value: 'x64' as const, label: `x64 ${updated.arch === 'x64' ? '(current)' : ''}` },
+            { value: 'x86' as const, label: `x86 ${updated.arch === 'x86' ? T('currentMarker') : ''}` },
+            { value: 'x64' as const, label: `x64 ${updated.arch === 'x64' ? T('currentMarker') : ''}` },
         ], item => item.label);
         updated.arch = chosen.value;
     }

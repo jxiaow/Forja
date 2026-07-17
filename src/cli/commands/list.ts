@@ -71,7 +71,7 @@ export function formatListText(result: ListResult, locale: Locale): string {
                     const marker = t.active ? '* ' : '  ';
                     lines.push(`  ${marker}${t.name} — ${t.mode}|${t.arch} — ${t.project}`);
                 }
-                lines.push('');
+                if (hasDiscovered) { lines.push(''); }
             }
 
             // Show discovered targets
@@ -221,7 +221,6 @@ export function formatListText(result: ListResult, locale: Locale): string {
 export async function runList(workspace: string, category: InternalListCategory, options: { detailId?: string; envSubCategory?: EnvSubCategory; savedOnly?: boolean } = {}): Promise<ListResult> {
     switch (category) {
         case 'targets':
-        case undefined as unknown as ListCategory:
             return listTargets(workspace, options.savedOnly);
         case 'servers':
             return listServersCmd(workspace, options.detailId);
@@ -271,7 +270,9 @@ function listTargets(workspace: string, savedOnly?: boolean): ListResult {
         };
     }
 
-    const rawTargets = collectTargetCandidates(workspace);
+    setSilent(true);
+    let rawTargets;
+    try { rawTargets = collectTargetCandidates(workspace); } finally { setSilent(false); }
 
     const hasQtTargets = rawTargets.some(t => t.kind === 'qt');
     const hasQtToolchain = activeProfile?.toolchain.qtPath;

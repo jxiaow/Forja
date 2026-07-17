@@ -107,8 +107,8 @@ export function runSuppressWarnings(workspace: string, codes: string[], add: boo
         return {
             ok: true, action: 'use', useScope: 'target', workspace, changed: [],
             diagnostics: current.length > 0
-                ? [{ level: 'info', message: `Suppressed warnings: ${current.join(', ')}` }]
-                : [{ level: 'info', message: 'No suppressed warnings' }],
+                ? [{ level: 'info', message: T('use.suppressedWarningsList', [current.join(', ')]) }]
+                : [{ level: 'info', message: T('use.noSuppressedWarnings') }],
             nextAction: 'forja use target suppress-warnings --add <code>',
         };
     }
@@ -130,7 +130,15 @@ export function runSuppressWarnings(workspace: string, codes: string[], add: boo
     }
 
     config.qtModulePrefs.suppressedWarnings = updated;
-    saveWorkspaceConfig(config);
+    try {
+        saveWorkspaceConfig(config);
+    } catch (e) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
+            nextAction: 'forja doctor',
+        };
+    }
     return {
         ok: true, action: 'use', useScope: 'target', workspace, changed: ['qt.suppressedWarnings'],
         nextAction: 'forja build',
@@ -174,6 +182,15 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
                 ok: false, action: 'use', useScope: 'target', changed: [],
                 diagnostics: [{ level: 'error', message: T('use.noActiveTargetSelected') }],
                 nextAction: 'forja use target --project <path>',
+            };
+        }
+        // C++ targets do not support remote execution
+        if (currentTarget.kind === 'cpp' && args.runAt === 'remote') {
+            return {
+                ok: true, action: 'use', useScope: 'target',
+                workspace, activeTarget: currentTarget, changed: [],
+                diagnostics: [{ level: 'warning', message: T('use.cppRunAtLocal') }],
+                nextAction: 'forja status',
             };
         }
         if (currentTarget.runAt === args.runAt) {
@@ -239,13 +256,20 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
     }
 
     // Post-step: apply --run-at if combined with other flags (C++ targets must stay local)
-    if (args.runAt && result.ok && result.activeTarget && result.activeTarget.kind !== 'cpp') {
-        const current = getActiveTarget(workspace);
-        if (current && current.runAt !== args.runAt) {
-            const updated = { ...current, runAt: args.runAt };
-            setActiveTarget(workspace, updated);
-            result.activeTarget = updated;
-            result.changed = [...(result.changed || []), 'activeTarget.runAt'];
+    if (args.runAt && result.ok && result.activeTarget) {
+        if (result.activeTarget.kind === 'cpp' && args.runAt === 'remote') {
+            result.diagnostics = [
+                ...(result.diagnostics || []),
+                { level: 'warning' as const, message: T('use.cppRunAtLocal') },
+            ];
+        } else {
+            const current = getActiveTarget(workspace);
+            if (current && current.runAt !== args.runAt) {
+                const updated = { ...current, runAt: args.runAt };
+                setActiveTarget(workspace, updated);
+                result.activeTarget = updated;
+                result.changed = [...(result.changed || []), 'activeTarget.runAt'];
+            }
         }
     }
 

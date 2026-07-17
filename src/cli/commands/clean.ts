@@ -228,7 +228,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             exitCode: executed.exitCode ?? undefined,
             durationMs: executed.durationMs > 0 ? executed.durationMs : durationMs,
             changed,
-            diagnostics: ok ? undefined : [diag('error', `${T('cmd.cppCleanFailed')}: ${extractCleanError(executed) || 'unknown error'}`)],
+            diagnostics: ok ? undefined : [diag('error', `${T('cmd.cppCleanFailed')}: ${extractCleanError(executed) || T('unknownError')}`)],
             nextAction: ok ? 'forja build' : 'forja doctor',
         };
     }
@@ -289,7 +289,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             exitCode: executed.exitCode ?? undefined,
             durationMs: executed.durationMs > 0 ? executed.durationMs : undefined,
             changed,
-            diagnostics: ok ? undefined : [diag('error', `${T('cmd.qtCleanFailed')}: ${extractCleanError(executed) || 'unknown error'}`)],
+            diagnostics: ok ? undefined : [diag('error', `${T('cmd.qtCleanFailed')}: ${extractCleanError(executed) || T('unknownError')}`)],
             nextAction: ok ? 'forja build' : 'forja doctor',
         };
     } catch (e) {
@@ -314,9 +314,9 @@ export function outputCleanResult(result: CleanResult, wantsJson: boolean): void
             if (t.runAt === 'remote' && result.workspace) {
                 const remote = loadRemoteSettings(result.workspace);
                 const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-                console.log(`→ remote:${server?.name || remote.selectedServer}`);
+                console.log(T('execRemote', [server?.name || remote.selectedServer || '']));
             } else {
-                console.log('→ local');
+                console.log(T('execLocal'));
             }
         }
         const status = result.ok ? T('cleanSucceeded') : T('cleanFailed');

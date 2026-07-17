@@ -6,7 +6,7 @@ import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig, updateRemoteSelectedServer } from '../../core/serverStore';
-import { loadRemoteSettings, saveRemoteSettings } from '../../core/settingsIO';
+import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
 import { executeTestConnection, refreshSyncStatusBar } from '../../sync/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
 import { setCppSetting } from '../../vscode/settingsStore';
@@ -198,7 +198,9 @@ export async function handleMessage(
                     if (workroot) {
                         const config = loadWorkspaceConfig(workroot);
                         config.activeTarget = null;
-                        saveWorkspaceConfig(config);
+                        try { saveWorkspaceConfig(config); } catch (e) {
+                            logger.error(`Failed to clear activeTarget: ${e instanceof Error ? e.message : String(e)}`);
+                        }
                     }
                 }
             }
@@ -313,6 +315,12 @@ export async function handleMessage(
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
                 break;
             }
+            // Check for duplicate name
+            const existing = readServers().find(s => s.name === newServerData.name);
+            if (existing) {
+                vscode.window.showWarningMessage(`服务器名称 "${newServerData.name}" 已存在 (ID: ${existing.id})`);
+                break;
+            }
             const created = addServer(newServerData);
             // 保存远程路径和选中服务器到项目配置
             const wsAdd = getWorkspaceRoot();
@@ -333,11 +341,39 @@ export async function handleMessage(
             logger.info(`删除服务器: "${msg.id}"`);
             if (msg.id) {
                 removeServer(msg.id);
-                // 如果删除的是当前选中的服务器，切换到剩余的第一个
+                // Cascade cleanup: clear references in remote and sync settings
                 const wsRm = getWorkspaceRoot();
                 if (wsRm) {
                     const remoteCfgRm = loadRemoteSettings(wsRm);
-                    if (remoteCfgRm.selectedServer === msg.id) {
+                    const wasSelected = remoteCfgRm.selectedServer === msg.id;
+                    let remoteChanged = false;
+                    if (wasSelected) {
+                        remoteCfgRm.selectedServer = '';
+                        remoteChanged = true;
+                    }
+                    if (remoteCfgRm.remotePaths[msg.id]) {
+                        delete remoteCfgRm.remotePaths[msg.id];
+                        remoteChanged = true;
+                    }
+                    if (remoteCfgRm.transfer?.deployServer === msg.id) {
+                        remoteCfgRm.transfer = null;
+                        remoteChanged = true;
+                    }
+                    if (remoteChanged) {
+                        saveRemoteSettings(wsRm, remoteCfgRm);
+                    }
+                    // Disable sync if the removed server was the sync target
+                    if (wasSelected) {
+                        try {
+                            const sync = loadSyncSettings(wsRm);
+                            if (sync.enabled) {
+                                sync.enabled = false;
+                                saveSyncSettings(wsRm, sync);
+                            }
+                        } catch { /* sync file may not exist */ }
+                    }
+                    // If deleted server was selected, switch to first remaining
+                    if (wasSelected) {
                         const remaining = readServers();
                         updateRemoteSelectedServer(wsRm, remaining.length > 0 ? remaining[0].id : '');
                     }

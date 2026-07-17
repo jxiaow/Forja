@@ -200,9 +200,9 @@ export function runStatus(workspace: string): StatusResult {
             t.toolchain.qtPath || t.toolchain.vsInstall
         ) : false;
         readiness.toolchain = hasAnyToolchain ? 'configured' : 'unknown';
-        if (!hasAnyToolchain && workroot) {
-            // Only push toolchain diagnostic when workroot exists;
-            // the target block already reports "not initialized" when !workroot
+        if (!hasAnyToolchain && workroot && diagnostics.length === 0) {
+            // Only push when target block didn't already emit a diagnostic
+            // (it always does when !activeTarget)
             diagnostics.push({
                 level: 'warning',
                 message: T('notInitialized'),
@@ -326,10 +326,12 @@ export function runStatus(workspace: string): StatusResult {
         };
     }
 
-    // Runtime
-    const runtimeResult = buildRuntimeState(workspace, activeTarget, diagnostics);
-    result.runtime = runtimeResult.state;
-    readiness.runtime = runtimeResult.readiness ?? (runtimeResult.state.running ? 'ready' : 'not-selected');
+    // Runtime — only meaningful for Qt targets (C++ run is unsupported)
+    if (activeTarget?.kind === 'qt') {
+        const runtimeResult = buildRuntimeState(workspace, activeTarget, diagnostics);
+        result.runtime = runtimeResult.state;
+        readiness.runtime = runtimeResult.readiness ?? (runtimeResult.state.running ? 'ready' : 'not-selected');
+    }
 
     // Next action — running process takes priority, then first diagnostic fix, then default to build
     if (result.runtime?.running) {

@@ -107,6 +107,20 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
     const result = terminateProcess(pid);
 
     if (!result.ok) {
+        // On Windows, taskkill fails if the process already exited (race condition).
+        // Check if the process is actually still running before reporting failure.
+        if (!isProcessRunning(pid)) {
+            clearRunState(workspace);
+            return {
+                ok: true,
+                action: 'stop',
+                workspace,
+                activeTarget: target,
+                state: 'stopped',
+                runtime: { running: false, pid, executablePath: state?.executablePath, logFile: state?.logFile },
+                nextAction: 'forja run',
+            };
+        }
         return {
             ok: false,
             action: 'stop',
@@ -184,9 +198,9 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
             if (t.runAt === 'remote' && result.workspace) {
                 const remote = loadRemoteSettings(result.workspace);
                 const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-                console.log(`→ remote:${server?.name || remote.selectedServer}`);
+                console.log(T('execRemote', [server?.name || remote.selectedServer || '']));
             } else {
-                console.log('→ local');
+                console.log(T('execLocal'));
             }
         }
         if (result.state === 'stopped') {

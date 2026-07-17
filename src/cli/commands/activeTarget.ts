@@ -24,7 +24,11 @@ export function setActiveTarget(cwd: string, target: TargetProfile): boolean {
 
     // Replace the active target profile entirely
     config.targets[config.activeTarget] = target;
-    saveWorkspaceConfig(config);
+    try {
+        saveWorkspaceConfig(config);
+    } catch {
+        return false;
+    }
     return true;
 }
 
