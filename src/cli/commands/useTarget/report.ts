@@ -52,12 +52,13 @@ export function buildConfigSummary(config: ResolvedConfig, toolchain: ToolchainI
 /**
  * Build success result.
  */
-export function buildSuccessResult(config: ResolvedConfig, toolchain: ToolchainInfo, changed: string[], workspace: string): UseTargetResult {
+export function buildSuccessResult(config: ResolvedConfig, toolchain: ToolchainInfo, changed: string[], workspace: string, targetId?: string): UseTargetResult {
     const mode = (config.mode || 'debug') as 'debug' | 'release';
     const arch = (config.arch || (os.platform() === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64';
     const basename = config.project.split('/').pop()?.replace(/\.\w+$/, '') || config.project;
+    const id = targetId || `${config.kind}-${basename}-${mode}-${arch}`;
     const target = {
-        id: `${config.kind}-${basename}-${mode}-${arch}`,
+        id,
         name: `${basename} ${mode} ${arch}`,
         kind: config.kind,
         project: config.project,

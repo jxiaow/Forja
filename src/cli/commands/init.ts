@@ -260,7 +260,15 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
     // Answers mode: skip interactive confirmation, use workroot as-is
     if (options.answers) {
         const emptyConfig = createEmptyWorkspaceConfig(workroot);
-        return configureNewTarget(workroot, emptyConfig, options);
+        const result = await configureNewTarget(workroot, emptyConfig, options);
+        if (!result.ok) return result;
+        registerWorkroot(workroot);
+        return {
+            ok: true, action: 'init', workroot,
+            registered: true,
+            target: result.target,
+            nextAction: 'forja status',
+        };
     }
 
     // Interactive flow

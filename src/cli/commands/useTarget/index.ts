@@ -128,7 +128,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
         const match = toolchain.vsCandidates.find(v => v.installPath === config.vsInstall);
         if (match) { toolchain.vsVersion = match.version; }
     }
-    return buildSuccessResult(config, toolchain, saveResult.changed, workspace);
+    return buildSuccessResult(config, toolchain, saveResult.changed, workspace, saveResult.targetId);
 }
 
 // ── Switch target (with --project) — simplified path for existing use.ts compatibility ──
@@ -412,6 +412,7 @@ export async function runSwitchTarget(workspace: string, args: {
     changed.push('activeTarget');
 
     const target = buildTargetProfile(config);
+    target.id = saveResult.targetId;
 
     return {
         ok: true, action: 'use', useScope: 'target',

@@ -40,7 +40,7 @@ export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
  * Full save: write target profile to workspaceStore.
  * Returns list of changed field names.
  */
-export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; changed: string[] } | { ok: false; error: string } {
+export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; changed: string[]; targetId: string } | { ok: false; error: string } {
     try {
         const workroot = resolveWorkroot(workspace) || workspace;
         const wsConfig = loadWorkspaceConfig(workroot);
@@ -94,7 +94,7 @@ export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; 
         if (config.arch && config.arch !== oldProfile?.arch) changed.push('arch');
         if (config.qmakeTarget && config.qmakeTarget !== oldProfile?.toolchain.qmakeTarget) changed.push('qmakeTarget');
 
-        return { ok: true, changed };
+        return { ok: true, changed, targetId: id };
     } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
