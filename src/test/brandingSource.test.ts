@@ -119,10 +119,10 @@ test('Qt environment source and docs do not keep legacy Qt Pilot env aliases', (
 });
 
 test('current CLI surfaces do not document removed --dry-run alias', () => {
+    // --dry-run was removed as an alias for --plan in build/run/clean/doctor.
+    // sync still uses --dry-run as its primary flag (not an alias).
     const files = [
-        'src/sync/cli.ts',
         'docs/cli-interface-spec.md',
-        'docs/README-cli.md',
         'skills/forja/SKILL.md'
     ];
 

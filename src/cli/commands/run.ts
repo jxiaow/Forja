@@ -31,6 +31,8 @@ export interface RunResult {
     logFile?: string;
     diagnostics?: Diagnostic[];
     nextAction?: string;
+    customStdout?: string;
+    customStderr?: string;
 }
 
 function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: { detach?: boolean; plan?: boolean }, qmakeArgs?: string, rccProjectPath?: string): CliOptions {
@@ -373,6 +375,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
                 workspace,
                 activeTarget: target,
                 exitCode: 0,
+                ...(json && stdout ? { customStdout: stdout } : {}),
             };
         }
         return {
@@ -383,6 +386,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
             activeTarget: target,
             exitCode,
             diagnostics: [diag('error', `${T('cmd.customFailed')}: "${customName}" exit code ${exitCode}`)],
+            ...(json ? { customStdout: stdout || undefined, customStderr: stderr || undefined } : {}),
             nextAction: 'forja doctor',
         };
     } catch (e) {

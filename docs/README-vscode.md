@@ -88,7 +88,7 @@ forja remote --server dev --remote-path /home/dev/workspace
 forja init --remote
 
 # 4. 切换执行位置
-forja use execution --remote
+forja use target --run-at remote
 ```
 
 切换后，状态栏 Build/Run 自动走远程路径。远程诊断：`forja doctor --remote`。

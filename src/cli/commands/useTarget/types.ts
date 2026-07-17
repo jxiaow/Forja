@@ -88,5 +88,4 @@ export interface UseTargetResult extends ForjaJsonResult {
         cpp?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
     };
     changed: string[];
-    nextActions?: string[];
 }

@@ -327,12 +327,9 @@ export function runStatus(workspace: string): StatusResult {
     }
 
     // Runtime
-    result.runtime = buildRuntimeState(workspace, activeTarget, diagnostics, readiness);
-    if (!readiness.runtime) {
-        // buildRuntimeState only sets readiness.runtime on error ('unknown');
-        // normal path: derive from process state
-        readiness.runtime = result.runtime.running ? 'ready' : 'not-selected';
-    }
+    const runtimeResult = buildRuntimeState(workspace, activeTarget, diagnostics);
+    result.runtime = runtimeResult.state;
+    readiness.runtime = runtimeResult.readiness ?? (runtimeResult.state.running ? 'ready' : 'not-selected');
 
     // Next action — running process takes priority, then first diagnostic fix, then default to build
     if (result.runtime?.running) {
@@ -419,7 +416,7 @@ function assessToolchainReadiness(summary: ToolchainSummary, target: TargetProfi
                 diagnostics.push({
                     level: 'warning',
                     message: T('jomNotFound'),
-                    fix: 'forja list env qt',
+                    fix: 'forja list env --qt',
                 });
             }
             if (!qtOk || !target.toolchain.vsInstall) { return 'missing'; }
@@ -477,20 +474,22 @@ function buildRemoteStatusSummary(remoteConfig: RemoteSettings): RemoteStatusSum
     };
 }
 
-function buildRuntimeState(workspace: string, target: TargetProfile | null, diagnostics: Diagnostic[], readiness: Readiness): RuntimeState {
+function buildRuntimeState(workspace: string, target: TargetProfile | null, diagnostics: Diagnostic[]): { state: RuntimeState; readiness?: ReadinessState } {
     // Read local run state from the Qt localState file
     if (!target) {
-        return { running: false };
+        return { state: { running: false } };
     }
     try {
         const state = readRunState(workspace);
         const status = resolveRunProcessStatus(state);
         if (status.running && state) {
             return {
-                running: true,
-                pid: state.pid,
-                executablePath: state.executablePath,
-                logFile: state.logFile,
+                state: {
+                    running: true,
+                    pid: state.pid,
+                    executablePath: state.executablePath,
+                    logFile: state.logFile,
+                },
             };
         }
     } catch (e) {
@@ -500,11 +499,10 @@ function buildRuntimeState(workspace: string, target: TargetProfile | null, diag
                 level: 'warning',
                 message: `${T('sts.failedToReadRunState')}: ${e instanceof Error ? e.message : String(e)}`,
             });
-            readiness.runtime = 'unknown';
-            return { running: false };
+            return { state: { running: false }, readiness: 'unknown' };
         }
     }
-    return { running: false };
+    return { state: { running: false } };
 }
 
 function assessOk(readiness: Readiness, activeTarget?: TargetProfile | null): boolean {
@@ -634,5 +632,7 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
 }
 
 function shortPath(p: string): string {
-    return p.replace(/\\/g, '/').split('/').pop() || p;
+    const parts = p.replace(/\\/g, '/').split('/').filter(Boolean);
+    if (parts.length <= 2) { return p; }
+    return parts.slice(-2).join('/');
 }

@@ -59,15 +59,17 @@ export function formatListText(result: ListResult, locale: Locale): string {
     switch (result.category) {
         case 'targets': {
             lines.push(T('targets'));
-            if (result.workspace) { lines.push(`${T('workspace')}${result.workspace}`); }
+            if (result.workspace) { lines.push(`${T('workspace')}  ${result.workspace}`); }
 
             // Show saved targets first (from workspaceStore)
             const saved = result.savedTargets || [];
+            const hasDiscovered = (result.targets || []).length > 0;
             if (saved.length > 0) {
-                lines.push(`  ${T('lst.savedTargets')}:`);
+                // Only show section header when both sections are present
+                if (hasDiscovered) { lines.push(`  ${T('lst.savedTargets')}:`); }
                 for (const t of saved) {
                     const marker = t.active ? '* ' : '  ';
-                    lines.push(`  ${marker}${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}  ${t.project}`);
+                    lines.push(`  ${marker}${t.name} — ${t.mode}|${t.arch} — ${t.project}`);
                 }
                 lines.push('');
             }
@@ -216,11 +218,11 @@ export function formatListText(result: ListResult, locale: Locale): string {
     return lines.join('\n');
 }
 
-export async function runList(workspace: string, category: InternalListCategory, options: { detailId?: string; envSubCategory?: EnvSubCategory } = {}): Promise<ListResult> {
+export async function runList(workspace: string, category: InternalListCategory, options: { detailId?: string; envSubCategory?: EnvSubCategory; savedOnly?: boolean } = {}): Promise<ListResult> {
     switch (category) {
         case 'targets':
         case undefined as unknown as ListCategory:
-            return listTargets(workspace);
+            return listTargets(workspace, options.savedOnly);
         case 'servers':
             return listServersCmd(workspace, options.detailId);
         case 'env':
@@ -233,8 +235,7 @@ export async function runList(workspace: string, category: InternalListCategory,
     throw new Error(`Unknown list category: ${category}`);
 }
 
-function listTargets(workspace: string): ListResult {
-    const rawTargets = collectTargetCandidates(workspace);
+function listTargets(workspace: string, savedOnly?: boolean): ListResult {
     const diagnostics: Diagnostic[] = [];
 
     const workroot = resolveWorkroot(workspace);
@@ -256,6 +257,21 @@ function listTargets(workspace: string): ListResult {
             });
         }
     }
+
+    // Default: only saved targets (skip discovery)
+    if (savedOnly) {
+        return {
+            ok: true,
+            action: 'list',
+            category: 'targets',
+            workspace,
+            targets: [],
+            savedTargets: savedTargets.length > 0 ? savedTargets : undefined,
+            nextAction: savedTargets.length > 0 ? 'forja use target --project <name|path>' : 'forja list targets --all',
+        };
+    }
+
+    const rawTargets = collectTargetCandidates(workspace);
 
     const hasQtTargets = rawTargets.some(t => t.kind === 'qt');
     const hasQtToolchain = activeProfile?.toolchain.qtPath;

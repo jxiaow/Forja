@@ -102,6 +102,9 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         const fallbackMode = 'debug' as const;
         const fallbackArch = (process.platform === 'win32' ? 'x86' : 'x64') as 'x86' | 'x64';
         const projectBasename = path.basename(projectPath, path.extname(projectPath));
+        // Inherit toolchain from any saved target to avoid empty toolchain for local builds
+        const anySavedTarget = allTargets[0];
+        const fallbackToolchain = anySavedTarget ? { ...anySavedTarget.toolchain } : {};
         targetResult = {
             target: savedProfile || {
                 id: `${kind}-${projectBasename}-${fallbackMode}-${fallbackArch}`,
@@ -111,7 +114,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 mode: fallbackMode,
                 arch: fallbackArch,
                 runAt: 'local' as const,
-                toolchain: {},
+                toolchain: fallbackToolchain,
             },
         };
     } else {
@@ -129,8 +132,8 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         };
     }
     const target = targetResult.target;
-    const _wr = resolveWorkroot(workspace);
-    const earlyWsConfig = _wr ? loadWorkspaceConfig(_wr) : null;
+    const workroot = resolveWorkroot(workspace);
+    const earlyWsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const suppressedWarnings = earlyWsConfig?.qtModulePrefs.suppressedWarnings ?? [];
 
     // Print build header before execution (text mode only)
@@ -151,7 +154,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     // Validate project file exists
     const buildProjectPath = path.isAbsolute(target.project)
         ? target.project
-        : path.join(_wr || workspace, target.project);
+        : path.join(workroot || workspace, target.project);
     if (!fs.existsSync(buildProjectPath)) {
         return {
             ok: false,
@@ -236,7 +239,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             const plan = createCppPlan({
                 action: cppAction as 'build' | 'rebuild' | 'clean',
                 workspace,
-                project: path.isAbsolute(target.project) ? target.project : path.join(_wr || workspace, target.project),
+                project: path.isAbsolute(target.project) ? target.project : path.join(workroot || workspace, target.project),
                 mode: target.mode,
                 arch: target.arch,
                 vsDevCmdPath: vsDevCmdPath || undefined,
@@ -295,7 +298,6 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     }
 
     // Qt local
-    const workroot = resolveWorkroot(workspace);
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
     const rccProjectPath = wsConfig?.qtModulePrefs.rccProjectPath || undefined;
@@ -390,7 +392,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             warningSummary: executed.warningSummary,
             logFile: executed.logFile ?? undefined,
             diagnostics: executed.ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.qtBuildFailed')} (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : T('cmd.qtBuildFailed'))],
-            nextAction: executed.ok ? 'forja run' : (executed.errors?.length ? undefined : 'forja doctor'),
+            nextAction: executed.ok ? (buildAction === 'qmake' ? 'forja build' : 'forja run') : (executed.errors?.length ? undefined : 'forja doctor'),
         };
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e);

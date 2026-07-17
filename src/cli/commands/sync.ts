@@ -1,10 +1,12 @@
 /**
  * `forja sync` — sync changed files to remote.
  */
-import { planSyncCli, executeSyncCli, resetSyncCli, ClassifiedChanges } from '../../sync/cli';
-import { readProjectSyncConfig, writeProjectSyncConfig, getServerById } from '../../core/serverStore';
+import * as path from 'path';
+import { planSyncCli, executeSyncCli, resetSyncCli, ClassifiedChanges, configureSyncSettings } from '../../sync/cli';
+import { readProjectSyncConfig, writeProjectSyncConfig, getServerById, readServers, addServer } from '../../core/serverStore';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { Diagnostic, SyncPlan, ForjaJsonResult, diag, Locale, T } from './types';
+import { prompt, choose } from './prompt';
 
 // ── Types ──
 
@@ -184,7 +186,7 @@ export async function runSyncExecute(workspace: string, fileFilters: string[] = 
             skipped: result.skipped,
             skippedDetails: result.skippedDetails?.length ? result.skippedDetails : undefined,
             failed: result.failed?.length ? result.failed : undefined,
-            diagnostics: result.ok ? undefined : result.failed.map(f => diag('error', `${T('sync.syncFailed')}: ${f.error}`)),
+            diagnostics: result.ok ? undefined : (result.failed?.length ? result.failed.map(f => diag('error', `${T('sync.syncFailed')}: ${f.error}`)) : [diag('error', T('sync.syncFailed'))]),
             nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja doctor fix --remote'),
         };
     } catch (e) {
@@ -332,4 +334,73 @@ function syncCatchResult(syncAction: SyncAction, workspace: string, e: unknown):
         diagnostics: [diag('error', `${T('sync.remoteBlocked')}: ${message}`)],
         nextAction: 'forja doctor fix --remote',
     };
+}
+
+// ── Interactive setup ──
+
+/**
+ * Interactive sync setup — guides user to select/create server and input remote path.
+ * Returns true if configuration was completed successfully.
+ */
+export async function interactiveSyncSetup(workroot: string): Promise<{ ok: true } | { ok: false; reason: 'cancelled' | 'configError'; error?: string }> {
+    const existingServers = readServers();
+    let serverId: string | undefined;
+    let selectedServer: { username: string } | undefined;
+
+    if (existingServers.length === 0) {
+        // No servers — guide creation
+        console.log(T('sync.notConfigured'));
+        const host = await prompt(T('setupPromptHost'));
+        if (!host) return { ok: false, reason: 'cancelled' };
+        const username = await prompt(T('setupPromptUsername'));
+        if (!username) return { ok: false, reason: 'cancelled' };
+        const portStr = await prompt(T('setupPromptPort'), '22');
+        const port = parseInt(portStr || '22', 10);
+        if (isNaN(port) || port < 1 || port > 65535) return { ok: false, reason: 'cancelled' };
+        const authChoice = await choose(T('setupPromptAuthMode'), ['key', 'password'] as const, m => m === 'key' ? T('setupAuthKey') : T('setupAuthPassword'));
+        const authMode = authChoice || 'key';
+        let privateKeyPath = '';
+        let password = '';
+        if (authMode === 'key') {
+            privateKeyPath = await prompt(T('setupPromptPrivateKey'), '') || '';
+        } else {
+            password = await prompt(T('setupPromptPassword')) || '';
+        }
+        const name = await prompt(T('setupPromptName'), host) || host;
+        try {
+            const created = addServer({ name, host, username, port, authMode, privateKeyPath, password });
+            serverId = created.id;
+            selectedServer = created;
+            console.log(`${T('setupServerCreated')}: ${created.name} (${created.host})`);
+        } catch {
+            return { ok: false, reason: 'cancelled' };
+        }
+    } else if (existingServers.length === 1) {
+        // Single server — auto-select
+        serverId = existingServers[0].id;
+        selectedServer = existingServers[0];
+    } else {
+        // Multiple servers — interactive selection
+        const server = await choose(T('setupSelectServer'), existingServers, s => `${s.name} (${s.username}@${s.host})`);
+        if (!server) return { ok: false, reason: 'cancelled' };
+        serverId = server.id;
+        selectedServer = server;
+    }
+
+    // Remote path: reuse existing or prompt
+    const remoteCfg = loadRemoteSettings(workroot);
+    let remotePath = remoteCfg.remotePaths[serverId || ''] || '';
+    if (!remotePath) {
+        const defaultPath = `/home/${selectedServer?.username || 'user'}/${path.basename(workroot)}`;
+        remotePath = await prompt(T('setupRemotePathPrompt'), defaultPath);
+        if (!remotePath) return { ok: false, reason: 'cancelled' };
+    }
+
+    const cfg = configureSyncSettings(workroot, { serverId: serverId!, remotePath, enable: true });
+    if (!cfg.ok) {
+        return { ok: false, reason: 'configError', error: cfg.error || 'Failed to configure sync settings' };
+    }
+
+    console.log();
+    return { ok: true };
 }

@@ -104,7 +104,7 @@ test('init --json 返回初始化结果', () => {
 
 test('list targets current 与 status activeTarget 一致', () => {
     const statusJ = json('status');
-    const listJ = json('list targets');
+    const listJ = json('list targets --all');
 
     if (statusJ.activeTarget) {
         // 规范化路径比较
@@ -123,8 +123,7 @@ test('list targets current 与 status activeTarget 一致', () => {
 // ════════════════════════════════════════════════════════════
 
 test('doctor 输出跟随 locale（中文）', () => {
-    run('use lang zh');
-    const r = run('doctor');
+    const r = run('doctor --lang zh');
     // 检查关键标签是中文
     assert.match(r.out, /诊断/, 'doctor 必须输出中文"诊断"');
     assert.match(r.out, /工作区/, 'doctor 必须输出中文"工作区"');
@@ -132,20 +131,17 @@ test('doctor 输出跟随 locale（中文）', () => {
 });
 
 test('doctor 输出跟随 locale（英文）', () => {
-    run('use lang en');
-    const r = run('doctor');
+    const r = run('doctor --lang en');
     assert.match(r.out, /Doctor/, 'doctor 必须输出英文"Doctor"');
     assert.match(r.out, /Workspace/, 'doctor 必须输出英文"Workspace"');
     assert.match(r.out, /Next/, 'doctor 必须输出英文"Next"');
 });
 
 test('status 输出跟随 locale', () => {
-    run('use lang zh');
-    const zh = run('status');
+    const zh = run('status --lang zh');
     assert.match(zh.out, /工作区/, '中文 status 必须包含"工作区"');
 
-    run('use lang en');
-    const en = run('status');
+    const en = run('status --lang en');
     assert.match(en.out, /Workspace/, '英文 status 必须包含"Workspace"');
 });
 
@@ -154,8 +150,7 @@ test('status 输出跟随 locale', () => {
 // ═══════════════════════════════════════════════════════════
 
 test('doctor 检查项格式正确（无连体字）', () => {
-    run('use lang zh');
-    const r = run('doctor');
+    const r = run('doctor --lang zh');
     const lines = r.out.trim().split('\n');
 
     for (const line of lines) {
@@ -185,8 +180,7 @@ test('diagnostic level 和 message 之间有分隔符', () => {
 });
 
 test('文本输出标签后紧跟值（无多余空格）', () => {
-    run('use lang zh');
-    const r = run('status');
+    const r = run('status --lang zh');
     const lines = r.out.trim().split('\n');
 
     for (const line of lines) {
@@ -235,15 +229,12 @@ test('server update 实际修改了数据', () => {
     run(`server remove ${addResult.server.id} --force`);
 });
 
-test('use lang → 配置持久化一致', () => {
-    run('use lang zh');
-    const configPath = path.join(process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja'), 'config.json');
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(config.lang, 'zh');
+test('--lang 全局 flag 切换输出语言', () => {
+    const zhResult = run('status --lang zh');
+    assert.match(zhResult.out, /工作区/, '中文输出必须包含"工作区"');
 
-    run('use lang en');
-    const config2 = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(config2.lang, 'en');
+    const enResult = run('status --lang en');
+    assert.match(enResult.out, /Workspace/, '英文输出必须包含"Workspace"');
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -340,7 +331,7 @@ test('status JSON 结构完整', () => {
 });
 
 test('所有 list 分类返回有效 JSON', () => {
-    const categories = ['targets', 'env', 'lang'];
+    const categories = ['targets', 'env'];
     for (const cat of categories) {
         const j = json(`list ${cat}`);
         assert.ok(j, `list ${cat} 必须返回有效 JSON`);
@@ -410,8 +401,8 @@ test('server remove 不存在的 ID 报错', () => {
 // 10. Use 子命令测试
 // ═══════════════════════════════════════════════════════════════
 
-test('use execution --local 设置本地执行', () => {
-    const r = json('use execution --local');
+test('use target --run-at local 设置本地执行', () => {
+    const r = json('use target --run-at local');
     assert.ok(r);
     // 可能因为没有 active target 而失败，但必须返回有效 JSON
     assert.equal(r.action, 'use');
@@ -421,31 +412,15 @@ test('use execution --local 设置本地执行', () => {
     }
 });
 
-test('use execution --remote 设置远程执行', () => {
-    const r = json('use execution --remote');
+test('use target --run-at remote 设置远程执行', () => {
+    const r = json('use target --run-at remote');
     assert.ok(r);
     // 可能因为没有配置远程而失败，但必须返回有效 JSON
     assert.equal(r.action, 'use');
 });
 
-test('use lang 切换语言', () => {
-    const configPath = path.join(process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja'), 'config.json');
-
-    // 设置中文
-    const zhResult = json('use lang zh');
-    assert.ok(zhResult.ok);
-    const zhConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(zhConfig.lang, 'zh');
-
-    // 设置英文
-    const enResult = json('use lang en');
-    assert.ok(enResult.ok);
-    const enConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(enConfig.lang, 'en');
-});
-
-test('use lang 无参数报错', () => {
-    const r = json('use lang');
+test('use target --run-at 无效值报错', () => {
+    const r = json('use target --run-at invalid');
     assert.ok(r);
     assert.equal(r.ok, false);
 });
@@ -492,8 +467,8 @@ test('server --detail 显示服务器详情', () => {
     run(`server remove ${addResult.server.id} --force`);
 });
 
-test('list targets 显示项目信息', () => {
-    const r = json('list targets');
+test('list targets --all 显示项目信息', () => {
+    const r = json('list targets --all');
     assert.ok(r);
     assert.equal(r.action, 'list');
     assert.equal(r.category, 'targets');
@@ -519,23 +494,6 @@ test('list env 显示工具链信息', () => {
 // ═══════════════════════════════════════════════════════════════
 // 12. 配置持久化测试
 // ═════════════════════════════════════════════════════════════
-
-test('use lang 后配置持久化', () => {
-    // 设置语言
-    run('use lang zh');
-
-    // 重新读取配置文件
-    const configPath = path.join(process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja'), 'config.json');
-    const r1 = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(r1.lang, 'zh');
-
-    // 再次设置
-    run('use lang en');
-
-    // 验证变更
-    const r2 = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(r2.lang, 'en');
-});
 
 test('server add 后配置持久化', () => {
     const name = `persist-test-${Date.now()}`;
@@ -571,7 +529,7 @@ test('空工作区 status 不崩溃', () => {
 });
 
 test('list 所有分类都不崩溃', () => {
-    const categories = ['targets', 'env', 'lang'];
+    const categories = ['targets', 'env'];
     for (const cat of categories) {
         const r = run(`list ${cat}`);
         assert.ok(r.code === 0 || r.code === 1, `list ${cat} 不应崩溃`);
@@ -581,7 +539,7 @@ test('list 所有分类都不崩溃', () => {
 test('JSON 输出必须可解析', () => {
     const cmds = [
         'status', 'list targets', 'list env',
-        'list lang', 'remote', 'server',
+        'remote', 'server',
     ];
     for (const cmd of cmds) {
         const r = run(`${cmd} --json`);

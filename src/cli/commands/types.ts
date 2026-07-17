@@ -257,7 +257,6 @@ const UI: Record<string, { en: string; zh: string }> = {
     installVsCpp:                  { en: 'Install Visual Studio and configure with forja use target --vs', zh: '安装 Visual Studio 并用 forja use target --vs 配置' },
     installBuildEssential:         { en: 'Install build-essential or equivalent', zh: '安装 build-essential 或同等工具' },
     deployRemote:                  { en: 'Run forja doctor fix --remote to deploy, or configure with forja remote forja-bin --path <path>', zh: '运行 forja doctor fix --remote 部署，或用 forja remote forja-bin --path <path> 配置' },
-    langMissingValue:              { en: 'Language required: zh or en. View current: forja use', zh: '请指定语言: zh 或 en。查看当前语言: forja use' },
     // list
     targets:                       { en: 'Targets',                      zh: '目标' },
     servers:                       { en: 'Servers',                      zh: '服务器' },
@@ -319,6 +318,11 @@ const UI: Record<string, { en: string; zh: string }> = {
     'sync.resetDone':              { en: 'Sync state cleared; next sync will recalculate', zh: '已清除同步状态；下次同步会重新计算待同步文件' },
     syncConfirm:                   { en: 'Proceed with sync?',          zh: '确认执行同步？' },
     syncResetConfirm:              { en: 'Sync reset: clear all sync state. Continue?', zh: '同步重置：清除所有同步状态。继续？' },
+    'sync.dryRunIncompatible':      { en: '--dry-run cannot be used with this subcommand', zh: '--dry-run 不能与此子命令一起使用' },
+    'sync.fileOnlyForExecute':      { en: '--file can only be used with sync execute/plan', zh: '--file 只能在 sync 执行/计划时使用' },
+    'sync.dryRunYesConflict':       { en: '--dry-run and --yes cannot be used together', zh: '--dry-run 和 --yes 不能同时使用' },
+    'sync.ignoreFlagsOnlyWithIgnore': { en: '--add/--rm can only be used with sync ignore', zh: '--add/--rm 仅适用于 sync ignore' },
+    syncIgnoreAddRmConflict:      { en: 'Cannot use --add and --rm together', zh: '不能同时使用 --add 和 --rm' },
     syncCancelled:                 { en: 'Sync cancelled',              zh: '同步已取消' },
     syncNothing:                   { en: 'Nothing to sync',             zh: '没有需要同步的内容' },
     syncComplete:                  { en: 'Sync complete',                zh: '同步完成' },
@@ -329,7 +333,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     syncIgnoreRemoved:             { en: 'Removed: {pattern}',           zh: '已移除：{pattern}' },
     syncIgnoreAlreadyExists:       { en: 'Already in ignore list: {pattern}', zh: '已在忽略列表中：{pattern}' },
     syncIgnoreNotFound:            { en: 'Not in ignore list: {pattern}', zh: '不在忽略列表中：{pattern}' },
-    syncIgnorePatternRequired:     { en: 'Pattern required. Usage: forja sync ignore add|rm <pattern>', zh: '需要提供规则。用法：forja sync ignore add|rm <pattern>' },
+    syncIgnorePatternRequired:     { en: 'Pattern required. Usage: forja sync ignore --add <pattern>', zh: '需要提供规则。用法：forja sync ignore --add <pattern>' },
     pending:                       { en: 'Pending',                      zh: '待同步' },
     uploaded:                      { en: 'Uploaded',                     zh: '已上传' },
     deleted:                       { en: 'Deleted',                      zh: '已删除' },
@@ -533,27 +537,24 @@ Options:
     },
     'help.list': {
         en: `Usage:
-  forja list targets               List project targets
+  forja list targets               List saved targets
+  forja list targets --all         Include discovered targets (scan)
   forja list env                   List all environment tools
-  forja list env <qt|vs|jom|make>  List specific environment tool
+  forja list env --qt|--vs|--jom|--make  List specific environment tool
 
 Options:
   --json                  Output as JSON`,
         zh: `用法:
-  forja list targets               列出项目目标
+  forja list targets               列出已保存目标
+  forja list targets --all         同时列出扫描发现的目标
   forja list env                   列出所有环境工具
-  forja list env <qt|vs|jom|make>  列出指定环境工具
+  forja list env --qt|--vs|--jom|--make  列出指定环境工具
 
 选项:
   --json                  JSON 格式输出`,
     },
     'help.use': {
-        en: `Usage: forja use <subcommand> [options] [--json]
-
-Subcommands:
-  target    Select or reconfigure the active target
-  execution Set execution location (--local | --remote)
-  lang      Set language (zh | en)
+        en: `Usage: forja use target [options] [--json]
 
 Target options:
   --project <path>        Select target by project path or label
@@ -562,15 +563,11 @@ Target options:
   --qt <path>             Set Qt installation path
   --vs <path>             Set Visual Studio installation path
   --jom <path>            Set jom installation path
+  --run-at <local|remote> Set execution location
   suppress-warnings [codes]     Manage suppressed warnings (no args = show)
     --add <codes>               Add to list
     --rm <codes>                Remove from list`,
-        zh: `用法: forja use <子命令> [选项] [--json]
-
-子命令:
-  target    选择或重新配置活动目标
-  execution 设置执行位置（--local | --remote）
-  lang      设置语言（zh | en）
+        zh: `用法: forja use target [选项] [--json]
 
 Target 选项:
   --project <路径>        按项目路径或标签选择目标
@@ -579,6 +576,7 @@ Target 选项:
   --qt <路径>             设置 Qt 安装路径
   --vs <路径>             设置 Visual Studio 安装路径
   --jom <路径>            设置 jom 安装路径
+  --run-at <local|remote> 设置执行位置
   suppress-warnings [代码]      管理被过滤的构建警告（无参数=查看）
     --add <代码>                追加到列表
     --rm <代码>                 从列表删除`,
@@ -658,8 +656,8 @@ Options:
         zh: '用法: forja clean [--plan] [--json]',
     },
     'help.doctor': {
-        en: 'Usage: forja doctor [check|fix|unlock] [--remote] [--json]',
-        zh: '用法: forja doctor [check|fix|unlock] [--remote] [--json]',
+        en: 'Usage: forja doctor [fix|unlock] [--remote] [--json]',
+        zh: '用法: forja doctor [fix|unlock] [--remote] [--json]',
     },
     // init diagnostics
     'init.projectNotFound':              { en: 'Project not found in workspace',      zh: '工作区中未找到项目' },
@@ -717,6 +715,7 @@ Options:
     'init.existingAction':              { en: 'Action for existing workroot',         zh: '对已注册工作根目录的操作' },
     'init.invalidMode':                 { en: 'Invalid mode value: {0}. Must be debug or release.', zh: '无效的 mode 值: {0}。必须为 debug 或 release。' },
     'init.invalidArch':                 { en: 'Invalid arch value: {0}. Must be x86 or x64.',     zh: '无效的 arch 值: {0}。必须为 x86 或 x64。' },
+    'init.invalidAction':              { en: 'Invalid action value: {0}. Must be add, modify, or exit.', zh: '无效的 action 值: {0}。必须为 add、modify 或 exit。' },
     'help.init': {
         en: `Usage:
   forja init                     Register work root and configure initial target
@@ -725,6 +724,7 @@ Options:
 Options:
   --workroot <path>       Work root directory (default: current directory)
   --answers <file>        JSON file with pre-configured answers (for automation)
+  --lang <zh|en>          Set display language (persisted)
   --json                  Output as JSON`,
         zh: `用法:
   forja init                     注册工作根目录并配置初始目标
@@ -733,6 +733,7 @@ Options:
 选项:
   --workroot <path>       工作根目录（默认当前目录）
   --answers <file>        预配置答案的 JSON 文件（用于自动化）
+  --lang <zh|en>          设置显示语言（持久化）
   --json                  JSON 格式输出`,
     },
     // index.ts dispatcher messages
@@ -742,9 +743,10 @@ Options:
     'idx.listCategoryRequired':         { en: 'Category required. Usage: forja list <targets|env>', zh: '需要指定分类。用法: forja list <targets|env>' },
     'idx.unknownListCategory':          { en: 'Unknown list category',              zh: '未知列表分类' },
     'idx.validCategories':              { en: 'Valid categories',                   zh: '有效分类' },
-    'idx.unknownEnvSubcategory':        { en: 'Unknown env subcategory',           zh: '未知环境子分类' },
+    'idx.envSingleFilterOnly':          { en: 'Specify only one env filter: --qt, --vs, --jom, or --make', zh: '只能指定一个环境过滤器：--qt、--vs、--jom 或 --make' },
+    'idx.envFlagsOnlyWithEnv':          { en: 'Env filter flags only valid with list env', zh: '环境过滤 flag 仅适用于 list env' },
+    'idx.allOnlyWithTargets':           { en: '--all only valid with list targets',          zh: '--all 仅适用于 list targets' },
     'idx.unknownUseSubcommand':         { en: 'Unknown use subcommand',             zh: '未知 use 子命令' },
-    'idx.useUsage':                     { en: 'Usage: forja use <target|execution|lang> [options]', zh: '用法: forja use <target|execution|lang> [选项]' },
     'idx.invalidPort':                  { en: 'Invalid port',                       zh: '无效端口' },
     'idx.invalidPortHint':              { en: 'Must be a number between 1 and 65535.', zh: '必须是 1 到 65535 之间的数字。' },
     'idx.unknownServerSubcommand':      { en: 'Unknown server subcommand',          zh: '未知 server 子命令' },
@@ -767,13 +769,15 @@ Options:
     'idx.unexpectedArgument':           { en: 'Unexpected argument',                zh: '意外参数' },
     'idx.didYouMean':                   { en: 'Did you mean',                       zh: '你是否想' },
     'idx.unknownSubcommand':            { en: 'Unknown subcommand',                 zh: '未知子命令' },
-    'idx.doctorSubcommands':            { en: 'Usage: forja doctor [check|fix|unlock]', zh: '用法: forja doctor [check|fix|unlock]' },
+    'idx.doctorSubcommands':            { en: 'Usage: forja doctor [fix|unlock]', zh: '用法: forja doctor [fix|unlock]' },
+    'idx.doctorUnlockRequiresId':       { en: 'unlock requires a lock ID',            zh: 'unlock 需要指定锁 ID' },
     // server diagnostics
     'srv.missingName':                  { en: 'Missing required: --name',           zh: '缺少必填参数：--name' },
     'srv.missingHost':                  { en: 'Missing required: --host',           zh: '缺少必填参数：--host' },
     'srv.missingUsername':              { en: 'Missing required: --username',       zh: '缺少必填参数：--username' },
     'srv.keyRequiresKeyOrPassword':     { en: 'auth-mode=key requires --private-key-path or password', zh: 'auth-mode=key 需要 --private-key-path 或 password' },
     'srv.passwordRequiresPassword':     { en: 'auth-mode=password requires --password', zh: 'auth-mode=password 需要 --password' },
+    'srv.noCredentials':                { en: 'No credentials provided; server will default to key auth. Use --private-key-path or --password to configure', zh: '未提供凭证；服务器将默认使用密钥认证。请使用 --private-key-path 或 --password 配置' },
     'srv.failedToSave':                 { en: 'Failed to save',                     zh: '保存失败' },
     'srv.serverNotFound':               { en: 'Server not found',                   zh: '服务器未找到' },
     // status diagnostics
@@ -799,16 +803,11 @@ Options:
     // use diagnostics
     'use.workspaceNotFound':             { en: 'Workspace does not exist',          zh: '工作区不存在' },
     'use.invalidMode':                   { en: 'Invalid mode',                      zh: '无效模式' },
-    'use.invalidModeDetail':             { en: 'Must be debug or release',          zh: '必须为 debug 或 release' },
     'use.invalidArch':                   { en: 'Invalid arch',                      zh: '无效架构' },
-    'use.invalidArchDetail':             { en: 'Must be x86 or x64',               zh: '必须为 x86 或 x64' },
     'use.projectNotFound':              { en: 'Project file not found',            zh: '项目文件未找到' },
     'use.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
-    'use.expectedExtensions':            { en: 'Expected .pro, .sln, Makefile, or CMakeLists.txt',  zh: '期望 .pro、.sln、Makefile 或 CMakeLists.txt' },
     'use.failedToSaveTarget':              { en: 'Failed to save target',              zh: '保存目标失败' },
     'use.failedToSaveExecMode':          { en: 'Failed to save execution mode',     zh: '保存执行模式失败' },
-    'use.cannotSpecifyBothLocalRemote':  { en: 'Cannot specify both --local and --remote', zh: '不能同时指定 --local 和 --remote' },
-    'use.mustSpecifyLocalOrRemote':      { en: 'Must specify --local or --remote',  zh: '必须指定 --local 或 --remote' },
     'use.noActiveTargetSelected':        { en: 'No active target selected',         zh: '未选择活动目标' },
     'use.selectTarget':                  { en: 'Select a target',                    zh: '选择目标' },
     'use.addNewTarget':                  { en: '+ Add new target',                   zh: '+ 添加新目标' },
@@ -816,30 +815,17 @@ Options:
     'use.multipleTargetsFound':          { en: 'Multiple targets found',            zh: '找到多个匹配目标' },
     'use.vsVersionMismatch':             { en: 'Qt requires VS {0}, not detected — please select manually', zh: 'Qt 需要 VS {0}，未检测到，请手动选择' },
     'use.toolchainNotConfigured':        { en: 'Toolchain not configured for this target', zh: '此目标未配置工具链' },
-    'use.cannotSpecifyBothEnableDisable':{ en: 'Cannot specify both --enable and --disable', zh: '不能同时指定 --enable 和 --disable' },
     'use.suppressWarningsRequiresFlag':  { en: 'Specify --add or --rm to modify the suppress-warnings list', zh: '请指定 --add 或 --rm 来修改抑制警告列表' },
     'use.serverNotFound':                { en: 'Server not found',                  zh: '服务器未找到' },
     'use.ambiguousServerName':           { en: 'Ambiguous server name',              zh: '服务器名称不明确' },
     'use.useServerIdInstead':            { en: 'Use server ID instead',              zh: '请改用服务器 ID' },
-    'use.remotePathRequired':            { en: 'Remote path required when specifying server', zh: '指定服务器时需要远程路径' },
     'use.noServerConfigured':            { en: 'No server configured. Use --server <name> first.', zh: '未配置服务器。请先使用 --server <name>。' },
-    'use.workspaceSetRequiresMode':      { en: 'workspace set requires --mode',      zh: 'workspace set 需要 --mode' },
-    'use.repoSetRequires':               { en: 'repo set requires --local, --remote, and --role', zh: 'repo set 需要 --local、--remote 和 --role' },
-    'use.invalidLocalRepoName':          { en: 'Invalid local repo name',            zh: '无效的本地仓库名' },
-    'use.invalidRemoteRepoName':         { en: 'Invalid remote repo name',           zh: '无效的远程仓库名' },
-    'use.repoRemoveRequiresLocal':       { en: 'repo remove requires --local',       zh: 'repo remove 需要 --local' },
-    'use.forjaBinSetRequiresPath':       { en: 'forja-bin set requires --path',      zh: 'forja-bin set 需要 --path' },
-    'use.buildOrderRequiresItem':        { en: 'build-order set requires at least one item', zh: 'build-order set 至少需要一个条目' },
-    'use.invalidActionFor':              { en: 'Invalid action for',                 zh: '无效动作' },
-    'use.validActions':                  { en: 'Valid',                              zh: '有效值' },
-    'use.transferSetRequiresServerPath': { en: 'transfer set requires --server and --path', zh: 'transfer set 需要 --server 和 --path' },
-    'use.transferSetRequiresArtifact':   { en: 'transfer set requires at least one --artifact', zh: 'transfer set 至少需要一个 --artifact' },
-    'use.qmakeTargetCannotBeEmpty':      { en: 'qmake-target cannot be empty',       zh: 'qmake-target 不能为空' },
     'use.invalidLanguage':               { en: 'Invalid language',                   zh: '无效语言' },
     'use.useZhOrEn':                     { en: 'Use zh or en',                       zh: '请使用 zh 或 en' },
     'use.failedToSaveLanguage':          { en: 'Failed to save language',             zh: '保存语言失败' },
+    'use.invalidRunAt':                  { en: 'Invalid execution location',          zh: '无效执行位置' },
+    'use.useLocalOrRemote':              { en: 'Use local or remote',                 zh: '请使用 local 或 remote' },
     'use.execution':                     { en: 'Execution',                           zh: '执行位置' },
-    'use.language':                      { en: 'Language',                            zh: '语言' },
     // build/run/clean/stop shared diagnostics
     'cmd.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
     'cmd.projectNotFound':               { en: 'Project file not found',             zh: '项目文件未找到' },
@@ -870,12 +856,12 @@ Options:
         en: `Usage:
   forja sync                                        Sync changed files (interactive confirm)
   forja sync --yes                                  Skip confirmation
+  forja sync --dry-run                              Preview pending changes
   forja sync reset                                  Clear sync state
-  forja sync plan                                   Preview pending changes
   forja sync status                                 Show sync configuration
   forja sync ignore                                 List ignore patterns
-  forja sync ignore add <pattern>                   Add an ignore pattern
-  forja sync ignore rm <pattern>                    Remove an ignore pattern
+  forja sync ignore --add <pattern>                 Add an ignore pattern
+  forja sync ignore --rm <pattern>                  Remove an ignore pattern
   forja sync --file <path>                          Sync specific file (repeatable)
 
 Options:
@@ -883,12 +869,12 @@ Options:
         zh: `用法:
   forja sync                                        同步变更文件（交互确认）
   forja sync --yes                                  跳过确认
+  forja sync --dry-run                              预览待同步文件
   forja sync reset                                  清除同步状态
-  forja sync plan                                   预览待同步文件
   forja sync status                                 查看同步配置
   forja sync ignore                                 列出忽略规则
-  forja sync ignore add <pattern>                   添加忽略规则
-  forja sync ignore rm <pattern>                    移除忽略规则
+  forja sync ignore --add <pattern>                 添加忽略规则
+  forja sync ignore --rm <pattern>                  移除忽略规则
   forja sync --file <路径>                          同步指定文件（可重复）
 
 选项:

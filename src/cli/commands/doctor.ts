@@ -10,7 +10,7 @@ import { listProjectConfigs } from '../../core/settingsIO';
 import { resolveWorkroot } from '../../core/workspaceStore';
 import { listSyncStates } from '../../core/syncState';
 import { getServerById } from '../../core/serverStore';
-import { Diagnostic, CheckResult, CheckStatus, CommandPlan, diag, Locale, T } from './types';
+import { ForjaJsonResult, Diagnostic, CheckResult, CheckStatus, CommandPlan, diag, Locale, T } from './types';
 import { createSshRunner, createScpUploader } from '../../remote/core/shell';
 import { resolveRemoteConfig, resolveRemoteActionPath } from '../../remote/core/config';
 import { executeRemoteBootstrap, findBootstrapArtifact, findPackageRoot } from '../../remote/core/bootstrap';
@@ -116,17 +116,12 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
 
 export type DoctorAction = 'check' | 'fix' | 'unlock';
 
-export interface DoctorResult {
-    ok: boolean;
+export interface DoctorResult extends ForjaJsonResult {
     action: 'doctor';
     doctorAction: DoctorAction;
-    workspace?: string;
     checks?: CheckResult[];
     plan?: CommandPlan;
     changed?: string[];
-    diagnostics?: Diagnostic[];
-    nextAction?: string;
-    [key: string]: unknown;
 }
 
 function check(name: string, status: CheckStatus, message?: string, diagnostics?: Diagnostic[], nextAction?: string): CheckResult {
@@ -213,9 +208,9 @@ export async function runDoctor(workspace: string, options: {
         } else {
             checkedToolchain.add('toolchain-make');
             // POSIX: check make
+            let makePath: string | null;
             setSilent(true);
-            const makePath = detectMake();
-            setSilent(false);
+            try { makePath = detectMake(); } finally { setSilent(false); }
             if (makePath) {
                 checks.push(check('toolchain-make', 'ready', `make: ${makePath}`));
             } else {
@@ -246,9 +241,9 @@ export async function runDoctor(workspace: string, options: {
         } else {
             if (!checkedToolchain.has('toolchain-make')) {
                 // POSIX: check make
+                let makePath: string | null;
                 setSilent(true);
-                const makePath = detectMake();
-                setSilent(false);
+                try { makePath = detectMake(); } finally { setSilent(false); }
                 if (makePath) {
                     checks.push(check('toolchain-make', 'ready', `make: ${makePath}`));
                 } else {
@@ -432,9 +427,11 @@ export async function runDoctor(workspace: string, options: {
     let nextAction: string | undefined = undefined;
     if (hasBlocked) {
         // Check if any blocked check is fixable
-        const fixableChecks = ['cleanup', 'remote-forja'];
-        const hasFixable = checks.some(c => c.status === 'blocked' && fixableChecks.includes(c.name));
-        if (hasFixable) {
+        const hasRemoteForjaBlocked = checks.some(c => c.name === 'remote-forja' && c.status === 'blocked');
+        const hasCleanupBlocked = checks.some(c => c.name === 'cleanup' && c.status === 'blocked');
+        if (hasRemoteForjaBlocked) {
+            nextAction = 'forja doctor fix --remote';
+        } else if (hasCleanupBlocked) {
             nextAction = 'forja doctor fix';
         } else {
             // No fixable blocks — suggest the most relevant command based on what's blocked

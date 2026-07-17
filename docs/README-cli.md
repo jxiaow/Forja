@@ -89,7 +89,7 @@ forja server add --name dev --host 192.168.1.10 --username dev
 forja remote set --server dev --remote-path /home/dev/workspace
 
 # 远程初始化（通过 SSH 在远端执行 init）
-forja use execution --remote
+forja use target --run-at remote
 
 # 远程构建
 forja build
@@ -102,7 +102,7 @@ forja doctor --remote
 
 ```bash
 forja use sync --server dev --remote-path /home/dev/workspace --enable
-forja sync plan                           # 预览待同步文件
+forja sync --dry-run                      # 预览待同步文件
 forja sync                                # 同步变更文件
 ```
 
@@ -136,14 +136,14 @@ VSCode 扩展和 CLI 共享同一套新配置存储（`~/.forja/workspaces/<hash
 | `status` | 查看就绪状态 | `forja status` |
 | `init` | 首次初始化 | `forja init` |
 | `list` | 列出候选项 | `forja list targets`、`forja list env` |
-| `use` | 写入配置 | `forja use target --project`、`forja use execution --remote` |
+| `use` | 写入配置 | `forja use target --project`、`forja use target --run-at remote` |
 | `server` | 管理服务器 | `forja server add`、`forja server remove` |
 | `build` | 编译 | `forja build`、`forja build fresh`、`forja build qmake` |
 | `run` | 运行 | `forja run`、`forja run --detach` |
 | `stop` | 停止进程 | `forja stop` |
 | `clean` | 清理产物 | `forja clean` |
 | `doctor` | 诊断修复 | `forja doctor`、`forja doctor fix --remote` |
-| `sync` | 文件同步 | `forja sync`、`forja sync plan` |
+| `sync` | 文件同步 | `forja sync`、`forja sync --dry-run` |
 
 ## 通用选项
 
@@ -186,7 +186,7 @@ forja init --json
 ```bash
 forja list targets --json     # 列出可用项目（.pro/.sln/Makefile/CMakeLists.txt）
 forja list env --json         # 列出检测到的工具链环境
-forja list env qt --json      # 列出 Qt 环境详情
+forja list env --qt --json    # 列出 Qt 环境详情
 forja remote --json             # 显示远程执行配置（含 repos）
 forja list lang --json        # 列出当前语言设置
 ```
@@ -201,8 +201,8 @@ forja use target --project app.pro
 forja use target --mode release --arch x64
 
 # 切换本地/远程执行
-forja use execution --remote
-forja use execution --local
+forja use target --run-at remote
+forja use target --run-at local
 
 # 当前支持的远程操作
 forja remote
@@ -288,7 +288,7 @@ forja doctor fix --remote   # 修复远程问题（部署 forja CLI）
 forja sync                              # 同步所有变更
 forja sync --yes                        # 跳过确认直接同步
 forja sync --reset                      # 清除同步状态
-forja sync plan                         # 预览待同步文件
+forja sync --dry-run                    # 预览待同步文件
 ```
 
 | 选项 | 说明 |

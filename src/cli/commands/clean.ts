@@ -236,6 +236,19 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     // Qt local
     const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
     const rccProjectPath = wsConfig?.qtModulePrefs.rccProjectPath || undefined;
+
+    // Check for artifacts BEFORE building the plan (avoid unnecessary plan construction)
+    const buildDir = getBuildOutputDir(projectPath, 'qt');
+    if (!options.plan && !hasBuildArtifacts(buildDir)) {
+        return {
+            ok: true,
+            action: 'clean',
+            workspace,
+            activeTarget: target,
+            state: 'already-clean',
+        };
+    }
+
     const cliOptions = buildCleanQtCliOptions(workspace, target, options.plan ?? false, qmakeArgs, rccProjectPath);
 
     try {
@@ -261,17 +274,6 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
                 workspace,
                 activeTarget: target,
                 plan: { mode: 'dryRun', commands: planned.commands, shellCommand: planned.shellCommand },
-            };
-        }
-
-        const buildDir = getBuildOutputDir(projectPath, 'qt');
-        if (!hasBuildArtifacts(buildDir)) {
-            return {
-                ok: true,
-                action: 'clean',
-                workspace,
-                activeTarget: target,
-                state: 'already-clean',
             };
         }
 

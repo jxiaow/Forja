@@ -68,8 +68,6 @@ test('use command supports all documented subcommands', () => {
     const useSrc = source('src/cli/commands/use.ts');
     const expectedSubcommands = [
         'runUseTarget',
-        'runUseExecution',
-        'runUseLang',
         'formatUseText',
     ];
     for (const fn of expectedSubcommands) {
@@ -78,6 +76,8 @@ test('use command supports all documented subcommands', () => {
     }
     // Removed functions that moved to remote.ts or were deleted
     const removedSubcommands = [
+        'runUseExecution',
+        'runUseLang',
         'runUseSync',
         'runUseRemote',
         'runUseRemoteWorkspace',

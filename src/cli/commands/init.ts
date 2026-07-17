@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import { T, diag, Diagnostic, Question } from './types';
 import type { ForjaJsonResult } from './types';
 import {
-    resolveWorkroot, isWorkrootRegistered, registerWorkroot,
+    resolveWorkroot, isWorkrootRegistered, registerWorkroot, unregisterWorkroot,
     loadWorkspaceConfig, saveWorkspaceConfig, createEmptyWorkspaceConfig,
     generateTargetId, getActiveTarget,
     type WorkspaceConfig, type TargetProfile,
@@ -128,12 +128,17 @@ async function handleExistingWorkroot(workroot: string, options: InitOptions): P
             return handleAddTargetFromAnswers(workroot, config, options);
         } else if (action === 'modify') {
             return handleModifyTarget(workroot, config, options);
+        } else if (action === 'exit') {
+            return {
+                ok: true, action: 'init', workroot,
+                target: config.activeTarget ? config.targets[config.activeTarget] : undefined,
+                nextAction: 'forja status',
+            };
         }
-        // 'exit' or unknown → return current state
         return {
-            ok: true, action: 'init', workroot,
-            target: config.activeTarget ? config.targets[config.activeTarget] : undefined,
-            nextAction: 'forja status',
+            ok: false, action: 'init', workroot,
+            diagnostics: [{ level: 'error', message: T('init.invalidAction', [action]) }],
+            nextAction: 'forja init',
         };
     }
 
@@ -260,9 +265,13 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
     // Answers mode: skip interactive confirmation, use workroot as-is
     if (options.answers) {
         const emptyConfig = createEmptyWorkspaceConfig(workroot);
-        const result = await configureNewTarget(workroot, emptyConfig, options);
-        if (!result.ok) return result;
         registerWorkroot(workroot);
+        const result = await configureNewTarget(workroot, emptyConfig, options);
+        if (!result.ok) {
+            // Rollback registration to avoid orphaned empty workroot
+            unregisterWorkroot(workroot);
+            return result;
+        }
         return {
             ok: true, action: 'init', workroot,
             registered: true,
@@ -303,11 +312,15 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
 
     const config = createEmptyWorkspaceConfig(workroot);
 
-    const result = await configureNewTarget(workroot, config, options, candidates);
-    if (!result.ok) return result;
-
-    // Register AFTER configureNewTarget succeeds — avoids orphaned workroot on failure
+    // Register BEFORE configureNewTarget — avoids orphaned config if registration fails
     registerWorkroot(workroot);
+
+    const result = await configureNewTarget(workroot, config, options, candidates);
+    if (!result.ok) {
+        // Rollback registration to avoid orphaned empty workroot
+        unregisterWorkroot(workroot);
+        return result;
+    }
 
     return {
         ok: true, action: 'init', workroot,

@@ -92,8 +92,8 @@ forja use target --mode release --json
 forja use target --arch x64 --json
 
 # 切换执行位置
-forja use execution --remote --json
-forja use execution --local --json
+forja use target --run-at remote --json
+forja use target --run-at local --json
 ```
 
 ### 5. 构建命令
@@ -366,13 +366,13 @@ forja use remote transfer set --server <id> --path /deploy --artifact out/app --
 ### 5. 参数缺失测试
 
 ```bash
-# use execution 缺少参数
-forja use execution --json
-# 预期：ok: false, 提示需要 --local 或 --remote
+# use target 查看配置
+forja use target --json
+# 预期：ok: true, 显示当前 target 配置
 
-# use execution 冲突参数
-forja use execution --local --remote --json
-# 预期：ok: false, 提示参数冲突
+# use target --run-at 无效值
+forja use target --run-at invalid --json
+# 预期：ok: false, 提示 --run-at 只接受 local 或 remote
 
 # repo set 缺少必填参数
 forja use remote repo set --local test --json
@@ -454,7 +454,7 @@ forja use remote --server <id> --remote-path <path> --json
 - [ ] `forja list env --json`
 - [ ] `forja list remote --json`
 - [ ] `forja use target --project <path> --json`
-- [ ] `forja use execution --remote --json`
+- [ ] `forja use target --run-at remote --json`
 - [ ] `forja build --json`
 - [ ] `forja run --detach --json`
 - [ ] `forja stop --json`
@@ -513,8 +513,8 @@ echo "✓ 错误处理通过"
 
 # 3. 参数验证
 echo "测试参数验证..."
-if forja use execution --json 2>/dev/null; then
-  echo "✗ 应该要求 --local 或 --remote"
+if forja use target --run-at invalid --json 2>/dev/null; then
+  echo "✗ 应该拒绝无效的 --run-at 值"
   exit 1
 fi
 echo "✓ 参数验证通过"

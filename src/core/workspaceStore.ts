@@ -308,6 +308,16 @@ export function registerWorkroot(workroot: string): void {
     }
 }
 
+export function unregisterWorkroot(workroot: string): void {
+    const registry = loadWorkspacesRegistry();
+    const normalized = normalizePath(workroot);
+    const idx = registry.workroots.findIndex(wr => normalizePath(wr) === normalized);
+    if (idx >= 0) {
+        registry.workroots.splice(idx, 1);
+        saveWorkspacesRegistry(registry);
+    }
+}
+
 // ── Target helpers ──
 
 export function generateTargetId(kind: 'qt' | 'cpp', projectPath: string, mode: string, arch: string, existingIds?: Set<string>): string {

@@ -56,12 +56,12 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
 
     if (target.kind === 'cpp') {
         return {
-            ok: false,
+            ok: true,
             action: 'stop',
             workspace,
             activeTarget: target,
             state: 'unsupported',
-            diagnostics: [diag('error', T('stopCppUnsupported'))],
+            diagnostics: [diag('info', T('stopCppUnsupported'))],
             nextAction: 'forja status',
         };
     }
@@ -118,15 +118,24 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
         };
     }
 
-    // Verify process actually exited (SIGTERM is graceful on POSIX)
-    if (process.platform !== 'win32') {
-        let stillRunning = true;
-        for (let i = 0; i < 10; i++) {
-            await delay(200);
-            if (!isProcessRunning(pid)) { stillRunning = false; break; }
-        }
-        if (stillRunning) {
-            // Escalate to SIGKILL
+    // Verify process actually exited
+    let stillRunning = true;
+    for (let i = 0; i < 10; i++) {
+        await delay(200);
+        if (!isProcessRunning(pid)) { stillRunning = false; break; }
+    }
+    if (stillRunning) {
+        if (process.platform === 'win32') {
+            // Windows: taskkill /F may not have taken effect yet — retry once
+            try {
+                cp.execFileSync('taskkill', ['/F', '/T', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true });
+                for (let i = 0; i < 5; i++) {
+                    await delay(200);
+                    if (!isProcessRunning(pid)) { stillRunning = false; break; }
+                }
+            } catch { /* ignore */ }
+        } else {
+            // POSIX: escalate to SIGKILL
             try {
                 process.kill(pid, 'SIGKILL');
                 for (let i = 0; i < 5; i++) {
@@ -134,18 +143,18 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
                     if (!isProcessRunning(pid)) { stillRunning = false; break; }
                 }
             } catch { /* ignore — process may have exited */ }
+        }
 
-            if (stillRunning) {
-                return {
-                    ok: false,
-                    action: 'stop',
-                    workspace,
-                    activeTarget: target,
-                    state: 'running',
-                    diagnostics: [diag('warning', `${T('cmd.stopStillRunningDetail')} (pid ${pid})`)],
-                    nextAction: 'forja doctor',
-                };
-            }
+        if (stillRunning) {
+            return {
+                ok: false,
+                action: 'stop',
+                workspace,
+                activeTarget: target,
+                state: 'running',
+                diagnostics: [diag('warning', `${T('cmd.stopStillRunningDetail')} (pid ${pid})`)],
+                nextAction: 'forja doctor',
+            };
         }
     }
 

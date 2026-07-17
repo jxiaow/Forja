@@ -5,9 +5,6 @@
 import * as fs from 'fs';
 import { ForjaJsonResult, ActiveTarget, Locale, T, Question } from './types';
 import { getActiveTarget, setActiveTarget } from './activeTarget';
-import {
-    saveGlobalConfig,
-} from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } from '../../core/workspaceStore';
 import {
     runUseTarget as runUseTargetNew,
@@ -30,7 +27,7 @@ export interface ConfigSummary {
     sync?: { configured: boolean; enabled: boolean; selectedServer?: string; remotePath?: string };
 }
 
-// ── Text formatting (for execution/lang) ──
+// ── Text formatting ──
 
 export function formatUseText(result: UseResult, locale: Locale): string {
     // For target scope, delegate to the new formatter
@@ -63,45 +60,8 @@ export function formatUseText(result: UseResult, locale: Locale): string {
         return lines.join('\n');
     }
 
-    const lines: string[] = [];
-
-    if (!result.ok) {
-        lines.push(T('error'));
-        if (result.diagnostics) {
-            for (const d of result.diagnostics) {
-                lines.push(`  ${d.message}`);
-            }
-        }
-        if (result.nextAction) {
-            lines.push(T('next'));
-            lines.push(`  ${result.nextAction}`);
-        } else if (result.nextActions && (result.nextActions as string[]).length > 0) {
-            lines.push(T('next'));
-            for (const a of result.nextActions as string[]) { lines.push(`  ${a}`); }
-        }
-        return lines.join('\n');
-    }
-
-    const scope = result.useScope || 'use';
-    lines.push(`${scope} ${T('updated')}`);
-
-    if (result.activeTarget) {
-        const t = result.activeTarget;
-        lines.push(`  ${T('target')} ${t.project} ${t.mode} ${t.arch} ${t.runAt}`);
-    }
-
-    if (result.changed && result.changed.length > 0) {
-        lines.push(`  ${T('changed')} ${result.changed.join(', ')}`);
-    }
-
-    if (result.nextAction) {
-        lines.push(T('next'));
-        lines.push(`  ${result.nextAction}`);
-    } else if (result.nextActions && (result.nextActions as string[]).length > 0) {
-        lines.push(T('next'));
-        for (const a of result.nextActions as string[]) { lines.push(`  ${a}`); }
-    }
-    return lines.join('\n');
+    // Fallback for unexpected useScope
+    return result.ok ? `${result.useScope || 'use'} ${T('updated')}` : T('error');
 }
 
 // ── Result interface ──
@@ -114,7 +74,6 @@ export interface UseResult extends ForjaJsonResult {
     activeTarget?: ActiveTarget;
     config?: ConfigSummary;
     changed: string[];
-    nextActions?: string[];
 }
 
 // ── runUseTarget — dispatches to new module ──
@@ -126,6 +85,7 @@ export interface UseTargetArgs {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
+    runAt?: 'local' | 'remote';
     reset?: boolean;
     interactive?: boolean;
     json?: boolean;
@@ -149,6 +109,7 @@ export function runSuppressWarnings(workspace: string, codes: string[], add: boo
             diagnostics: current.length > 0
                 ? [{ level: 'info', message: `Suppressed warnings: ${current.join(', ')}` }]
                 : [{ level: 'info', message: 'No suppressed warnings' }],
+            nextAction: 'forja use target suppress-warnings --add <code>',
         };
     }
 
@@ -177,10 +138,11 @@ export function runSuppressWarnings(workspace: string, codes: string[], add: boo
 }
 
 export async function runUseTarget(workspace: string, args: UseTargetArgs): Promise<UseResult> {
+    let result: UseResult | undefined;
 
     // If --project is specified, use the switch path
     if (args.project) {
-        return runSwitchTarget(workspace, {
+        result = await runSwitchTarget(workspace, {
             project: args.project,
             mode: args.mode,
             arch: args.arch,
@@ -189,133 +151,105 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
             json: args.json,
         });
     }
-
     // If --mode or --arch without --project, update current target
-    if (args.mode || args.arch) {
-        return runUpdateModeArch(workspace, {
+    else if (args.mode || args.arch) {
+        result = await runUpdateModeArch(workspace, {
             mode: args.mode,
             arch: args.arch,
         });
     }
-
     // Toolchain-only update: --qt / --vs / --jom without --project
-    if (args.qtPath || args.vsInstall || args.jomPath) {
-        return runUpdateToolchain(workspace, {
+    else if (args.qtPath || args.vsInstall || args.jomPath) {
+        result = await runUpdateToolchain(workspace, {
             qtPath: args.qtPath,
             vsInstall: args.vsInstall,
             jomPath: args.jomPath,
         });
     }
-
-    // No flags: interactive picker if saved targets exist, otherwise full flow
-    const workroot = resolveWorkroot(workspace);
-    if (workroot && args.interactive === true && !args.json) {
-        const wsConfig = loadWorkspaceConfig(workroot);
-        const savedTargets = Object.values(wsConfig.targets);
-        if (savedTargets.length > 0) {
-            const { choose } = await import('./prompt');
-            const { T: tr } = await import('./types');
-            const ADD_NEW = '__add_new__';
-            interface PickerItem { value: string; label: string }
-            const items: PickerItem[] = savedTargets.map(t => ({
-                value: t.id,
-                label: `${t.id === wsConfig.activeTarget ? '* ' : '  '}${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}`,
-            }));
-            items.push({ value: ADD_NEW, label: tr('use.addNewTarget') });
-
-            const chosen = await choose(tr('use.selectTarget'), items, item => item.label);
-            if (chosen && chosen.value !== ADD_NEW) {
-                return runSwitchTarget(workspace, {
-                    project: chosen.value,
-                    interactive: true,
-                    json: false,
-                });
-            }
-            // User chose "add new" or cancelled — fall through to full flow
+    // Execution location update: --run-at alone
+    else if (args.runAt) {
+        const currentTarget = getActiveTarget(workspace);
+        if (!currentTarget) {
+            return {
+                ok: false, action: 'use', useScope: 'target', changed: [],
+                diagnostics: [{ level: 'error', message: T('use.noActiveTargetSelected') }],
+                nextAction: 'forja use target --project <path>',
+            };
         }
-    }
-
-    return runUseTargetNew(workspace, {
-        interactive: args.interactive ?? false,
-        json: args.json ?? false,
-        reset: args.reset ?? false,
-    });
-}
-
-// ── runUseExecution ──
-
-export function runUseExecution(workspace: string, local: boolean, remote: boolean): UseResult {
-    if (local && remote) {
+        if (currentTarget.runAt === args.runAt) {
+            return {
+                ok: true, action: 'use', useScope: 'target',
+                workspace, activeTarget: currentTarget, changed: [],
+                nextAction: 'forja status',
+            };
+        }
+        const updated = { ...currentTarget, runAt: args.runAt };
+        const saved = setActiveTarget(workspace, updated);
+        if (!saved) {
+            return {
+                ok: false, action: 'use', useScope: 'target', changed: [],
+                diagnostics: [{ level: 'error', message: T('use.failedToSaveExecMode') }],
+                nextAction: 'forja init',
+            };
+        }
         return {
-            ok: false, action: 'use', useScope: 'execution', changed: [],
-            diagnostics: [{ level: 'error', message: T('use.cannotSpecifyBothLocalRemote') }],
-            nextAction: 'forja use execution --local',
-        };
-    }
-    if (!local && !remote) {
-        return {
-            ok: false, action: 'use', useScope: 'execution', changed: [],
-            diagnostics: [{ level: 'error', message: T('use.mustSpecifyLocalOrRemote') }],
-            nextAction: 'forja use execution --local',
-        };
-    }
-
-    const currentTarget = getActiveTarget(workspace);
-    if (!currentTarget) {
-        return {
-            ok: false, action: 'use', useScope: 'execution', changed: [],
-            diagnostics: [{ level: 'error', message: T('use.noActiveTargetSelected') }],
-            nextAction: 'forja use target --project <path>',
-        };
-    }
-
-    const runAt: 'local' | 'remote' = remote ? 'remote' : 'local';
-    if (currentTarget.runAt === runAt) {
-        return {
-            ok: true, action: 'use', useScope: 'execution',
-            workspace, activeTarget: currentTarget, changed: [],
+            ok: true, action: 'use', useScope: 'target',
+            workspace, activeTarget: updated, changed: ['activeTarget.runAt'],
             nextAction: 'forja status',
         };
     }
+    // No flags: interactive picker if saved targets exist, otherwise full flow
+    else {
+        const workroot = resolveWorkroot(workspace);
+        if (workroot && args.interactive === true && !args.json) {
+            const wsConfig = loadWorkspaceConfig(workroot);
+            const savedTargets = Object.values(wsConfig.targets);
+            if (savedTargets.length > 0) {
+                const { choose } = await import('./prompt');
+                const { T: tr } = await import('./types');
+                const ADD_NEW = '__add_new__';
+                interface PickerItem { value: string; label: string }
+                const items: PickerItem[] = savedTargets.map(t => ({
+                    value: t.id,
+                    label: `${t.id === wsConfig.activeTarget ? '* ' : '  '}${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}`,
+                }));
+                items.push({ value: ADD_NEW, label: tr('use.addNewTarget') });
 
-    const updated = { ...currentTarget, runAt };
-    const saved = setActiveTarget(workspace, updated);
-    if (!saved) {
-        return {
-            ok: false, action: 'use', useScope: 'execution', changed: [],
-            diagnostics: [{ level: 'error', message: T('use.failedToSaveExecMode') }],
-            nextAction: 'forja init',
-        };
-    }
-    return {
-        ok: true, action: 'use', useScope: 'execution',
-        workspace, activeTarget: updated, changed: ['activeTarget.runAt'],
-        nextAction: 'forja status',
-    };
-}
+                const chosen = await choose(tr('use.selectTarget'), items, item => item.label);
+                if (chosen && chosen.value !== ADD_NEW) {
+                    result = await runSwitchTarget(workspace, {
+                        project: chosen.value,
+                        interactive: true,
+                        json: false,
+                    });
+                    // Skip runUseTargetNew, fall through to --run-at post-step
+                }
+                // User chose "add new" or cancelled — fall through to full flow
+            }
+        }
 
-// ── runUseLang ──
+        // If result not set by interactive picker, run full flow
+        if (!result) {
+            result = await runUseTargetNew(workspace, {
+                interactive: args.interactive ?? false,
+                json: args.json ?? false,
+                reset: args.reset ?? false,
+            });
+        }
+    }
 
-export function runUseLang(value: string, locale: Locale): UseResult {
-    if (value !== 'zh' && value !== 'en') {
-        return {
-            ok: false, action: 'use', useScope: 'lang', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.invalidLanguage')}: ${value}. ${T('use.useZhOrEn')}` }],
-            nextAction: 'forja use lang zh',
-        };
+    // Post-step: apply --run-at if combined with other flags (C++ targets must stay local)
+    if (args.runAt && result.ok && result.activeTarget && result.activeTarget.kind !== 'cpp') {
+        const current = getActiveTarget(workspace);
+        if (current && current.runAt !== args.runAt) {
+            const updated = { ...current, runAt: args.runAt };
+            setActiveTarget(workspace, updated);
+            result.activeTarget = updated;
+            result.changed = [...(result.changed || []), 'activeTarget.runAt'];
+        }
     }
-    try {
-        saveGlobalConfig({ lang: value });
-    } catch (e) {
-        return {
-            ok: false, action: 'use', useScope: 'lang', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveLanguage')}: ${e instanceof Error ? e.message : String(e)}` }],
-            nextAction: 'forja use lang zh',
-        };
-    }
-    return {
-        ok: true, action: 'use', useScope: 'lang', changed: ['lang'],
-    };
+
+    return result;
 }
 
 // ── Show current config (for `forja use` with no subcommand) ──

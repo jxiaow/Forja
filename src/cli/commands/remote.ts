@@ -69,9 +69,6 @@ export function formatRemoteText(result: RemoteResult, locale: Locale): string {
         if (result.nextAction) {
             lines.push(T('next'));
             lines.push(`  ${result.nextAction}`);
-        } else if (result.nextActions && (result.nextActions as string[]).length > 0) {
-            lines.push(T('next'));
-            for (const a of result.nextActions as string[]) { lines.push(`  ${a}`); }
         }
         return lines.join('\n');
     }
@@ -148,9 +145,6 @@ export function formatRemoteText(result: RemoteResult, locale: Locale): string {
     if (result.nextAction) {
         lines.push(T('next'));
         lines.push(`  ${result.nextAction}`);
-    } else if (result.nextActions && (result.nextActions as string[]).length > 0) {
-        lines.push(T('next'));
-        for (const a of result.nextActions as string[]) { lines.push(`  ${a}`); }
     }
     return lines.join('\n');
 }
@@ -254,6 +248,17 @@ export interface RemoteRestoreArgs {
 }
 
 export async function runRemoteRestore(workspace: string, args: RemoteRestoreArgs): Promise<RemoteResult> {
+    // Validate paths — reject absolute paths and .. segments (same as reset)
+    for (const p of args.paths) {
+        if (path.isAbsolute(p) || p.includes('..')) {
+            return {
+                ok: false, action: 'remote', remoteAction: 'restore', changed: [],
+                diagnostics: [{ level: 'error', message: `${T('remote.invalidPath')}: ${p}` }],
+                nextAction: 'forja remote restore <repo> <paths...>',
+            };
+        }
+    }
+
     const resolved = resolveRemoteConfig(workspace, args.server);
     if (!resolved.config) {
         return {
@@ -274,7 +279,7 @@ export async function runRemoteRestore(workspace: string, args: RemoteRestoreArg
     if (result.ok) {
         return {
             ok: true, action: 'remote', remoteAction: 'restore',
-            workspace, changed: [`restore.${args.repo}(${result.restored.length} paths)`],
+            workspace, changed: [`remote.restore.${args.repo}`],
             remote: { restored: result.restored.length },
             nextAction: 'forja status',
         };
@@ -335,7 +340,7 @@ export async function runRemoteReset(workspace: string, args: RemoteResetArgs): 
             nextAction: 'forja doctor',
         };
     }
-    changed.push(`reset.${args.repo}(${args.paths.length} paths)`);
+    changed.push(`remote.reset.${args.repo}`);
     resetPaths = args.paths.length;
 
     // --all: also clean untracked files
@@ -345,7 +350,7 @@ export async function runRemoteReset(workspace: string, args: RemoteResetArgs): 
             recursive: true, runner,
         });
         if (cleanResult.ok) {
-            changed.push(`clean-untracked.${args.repo}(${cleanResult.cleaned.length} paths)`);
+            changed.push(`remote.cleanUntracked.${args.repo}`);
             cleaned = cleanResult.cleaned.length;
         } else {
             // Reset succeeded but clean failed — report as success with warning

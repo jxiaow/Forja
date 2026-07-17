@@ -6,7 +6,7 @@ import {
     ServerConfig, AuthMode,
 } from '../../core/serverStore';
 import { ForjaJsonResult, Diagnostic, ServerDetail, ServerSummary, Locale, T } from './types';
-import { loadRemoteSettings, saveRemoteSettings } from '../../core/settingsIO';
+import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
 import * as path from 'path';
 
 export function formatServerText(result: ServerResult, locale: Locale): string {
@@ -129,7 +129,7 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
         diagnostics.push({ level: 'error', message: T('srv.passwordRequiresPassword') });
     }
     if (!args.authMode && !args.privateKeyPath && !args.password) {
-        diagnostics.push({ level: 'warning', message: T('srv.keyRequiresKeyOrPassword') });
+        diagnostics.push({ level: 'warning', message: T('srv.noCredentials') });
     }
     if (diagnostics.some(d => d.level === 'error')) {
         return {
@@ -258,7 +258,8 @@ export function runServerRemove(id: string, workspace: string): ServerResult {
             const ws = path.resolve(workspace);
             const remote = loadRemoteSettings(ws);
             let remoteChanged = false;
-            if (remote.selectedServer === id) {
+            const wasSelected = remote.selectedServer === id;
+            if (wasSelected) {
                 remote.selectedServer = '';
                 remoteChanged = true;
             }
@@ -273,6 +274,17 @@ export function runServerRemove(id: string, workspace: string): ServerResult {
             if (remoteChanged) {
                 saveRemoteSettings(ws, remote);
                 changed.push('remote.selectedServer');
+            }
+            // Disable sync if the removed server was the sync target
+            if (wasSelected) {
+                try {
+                    const sync = loadSyncSettings(ws);
+                    if (sync.enabled) {
+                        sync.enabled = false;
+                        saveSyncSettings(ws, sync);
+                        changed.push('sync.disabled');
+                    }
+                } catch { /* sync file may not exist */ }
             }
         }
 

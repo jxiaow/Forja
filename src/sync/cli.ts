@@ -374,6 +374,6 @@ export function resetSyncCli(workspaceRoot: string): { ok: boolean; diagnostics:
     return {
         ok: true,
         diagnostics: [{ level: 'info', message: T('sync.resetDone') }],
-        nextAction: 'forja sync plan --json'
+        nextAction: 'forja sync --dry-run --json'
     };
 }
