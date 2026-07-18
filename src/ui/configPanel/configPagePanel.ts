@@ -25,6 +25,12 @@ const PAGE_TITLES: Record<ConfigPageId, string> = {
 export class ConfigPageManager {
     private _panels = new Map<ConfigPageId, vscode.WebviewPanel>();
     private readonly _context: vscode.ExtensionContext;
+    private _navTree: { setDescription(id: ConfigPageId, desc: string): void } | null = null;
+
+    /** 关联导航树，用于高亮已打开的页面 */
+    setNavTree(navTree: { setDescription(id: ConfigPageId, desc: string): void }): void {
+        this._navTree = navTree;
+    }
 
     constructor(context: vscode.ExtensionContext) {
         this._context = context;
@@ -72,9 +78,11 @@ export class ConfigPageManager {
         );
 
         this._panels.set(pageId, panel);
+        this._navTree?.setDescription(pageId, '已打开');
 
         panel.onDidDispose(() => {
             this._panels.delete(pageId);
+            this._navTree?.setDescription(pageId, '');
         });
 
         panel.webview.onDidReceiveMessage(msg =>
@@ -90,6 +98,7 @@ export class ConfigPageManager {
         if (pageId === 'env') {
             panel.webview.postMessage({ command: 'envDetecting', scope: 'all' });
             detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined).then(env => {
+                if (!this._panels.has(pageId)) { return; }
                 setState('envInfo', env);
                 this._updatePageHtml(pageId);
                 this._pushEnvUpdate(panel.webview);

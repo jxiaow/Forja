@@ -158,80 +158,24 @@ forja remote set --server <server-id> --remote-path /home/dev/workspace --json
 forja remote --json
 ```
 
-### 3. 配置远程仓库映射
+### 3. Qt 工具链配置
 
 ```bash
-# 设置主仓库
-forja remote set repo set --local qt_client --remote qt_client --role primary --json
+# 设置 Qt 路径
+forja use target --qt /opt/Qt/5.15.2/gcc_64 --json
 
-# 设置带路径的映射仓库
-forja remote set repo set \
-  --local xylib_win32 \
-  --remote xylib_arm64 \
-  --role remote-only \
-  --path /home/dev/workspace/xylib_arm64 \
-  --baseline status-only \
-  --mount symlink \
-  --json
+# 设置 VS 路径（Windows）
+forja use target --vs "C:\Program Files\Microsoft Visual Studio\2022\Community" --json
 
-# 验证仓库映射（在 remote 输出的 repos 段中）
-forja remote --json
-
-# 预期输出：包含 baseline, overlay, mount 等高级字段
+# 设置 jom 路径
+forja use target --jom /opt/Qt/Tools/jom --json
 ```
 
-### 4. 配置远程 Forja 二进制
+### 4. C++ 工具链配置
 
 ```bash
-# 设置远程 Forja 路径
-forja remote set forja-bin set --path /home/dev/.forja/bin/forja --json
-
-# 验证
-forja remote --json
-```
-
-### 5. 配置构建顺序
-
-```bash
-# 设置构建顺序（位置参数）
-forja remote set build-order set qt:build sdk:rebuild --json
-
-# 验证
-forja remote --json
-
-# 清除构建顺序
-forja remote set build-order clear --json
-```
-
-### 6. 配置部署传输
-
-```bash
-# 设置部署配置
-forja remote set transfer set \
-  --server <server-id> \
-  --path /deploy/app \
-  --artifact out/app \
-  --artifact out/lib \
-  --json
-
-# 验证
-forja remote --json
-
-# 清除部署配置
-forja remote set transfer clear --json
-```
-
-### 7. 配置远程工作区
-
-```bash
-# 设置 staged 模式
-forja remote set workspace set --mode staged --path /home/dev/workspace/release --json
-
-# 验证
-forja remote --json
-
-# 清除工作区配置
-forja remote set workspace clear --json
+# 设置 VS 路径（Windows）
+forja use target --vs "C:\Program Files\Microsoft Visual Studio\2022\Community" --json
 ```
 
 ---
@@ -283,26 +227,6 @@ forja server update <server-id> --host 192.168.1.101 --json
 forja server remove <server-id> --json
 ```
 
-### 4. Qt 工具链配置
-
-```bash
-# 设置 Qt 路径
-forja use qt --qt-path /opt/Qt/5.15.2/gcc_64 --json
-
-# 设置 VS Dev Shell（Windows）
-forja use qt --vs-dev-shell "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" --json
-
-# 设置 qmake target
-forja use qt --qmake-target MyApp --json
-```
-
-### 5. SDK 工具链配置
-
-```bash
-# 设置 VS Dev Cmd（Windows）
-forja use sdk --vs-dev-cmd "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" --json
-```
-
 ---
 
 ## 边界条件测试
@@ -327,43 +251,7 @@ forja server add --name test --host 127.0.0.1 --username dev --port abc --json
 # 预期：ok: false, 端口验证错误
 ```
 
-### 2. 仓库名称安全校验
-
-```bash
-# 包含路径分隔符的仓库名
-forja remote set repo set --local "../danger" --remote test --role primary --json
-# 预期：ok: false, 仓库名验证错误
-
-# 包含斜杠的仓库名
-forja remote set repo set --local "a/b" --remote test --role primary --json
-# 预期：ok: false, 仓库名验证错误
-```
-
-### 3. 构建顺序合法性校验
-
-```bash
-# 无效的 action
-forja remote set build-order set qt:rebuild --json
-# 预期：ok: false, action 验证错误（qt 不支持 rebuild）
-
-# 有效的 action
-forja remote set build-order set qt:build qt:clean sdk:rebuild --json
-# 预期：ok: true
-```
-
-### 4. 部署传输必填字段
-
-```bash
-# 缺少 artifact
-forja remote set transfer set --server <id> --path /deploy --json
-# 预期：ok: false, 提示需要 artifact
-
-# 完整的配置
-forja remote set transfer set --server <id> --path /deploy --artifact out/app --json
-# 预期：ok: true
-```
-
-### 5. 参数缺失测试
+### 2. 参数缺失测试
 
 ```bash
 # use target 查看配置
@@ -374,9 +262,9 @@ forja use target --json
 forja use target --run-at invalid --json
 # 预期：ok: false, 提示 --run-at 只接受 local 或 remote
 
-# repo set 缺少必填参数
-forja remote set repo set --local test --json
-# 预期：ok: false, 提示缺少 --remote 和 --role
+# remote set 缺少 --server
+forja remote set --json
+# 预期：ok: false, 提示缺少必要参数
 ```
 
 ---
@@ -404,7 +292,7 @@ node out/cli/index.js status --json
 ```bash
 
 # 清除配置重新初始化
-rm -rf .forja
+# 清除 workroot 注册（谨慎操作）
 forja init --json
 ```
 
@@ -463,11 +351,6 @@ forja remote set --server <id> --remote-path <path> --json
 ### 远程配置
 - [ ] `forja server add --name <name> --host <host> --username <user> --json`
 - [ ] `forja remote set --server <id> --remote-path <path> --json`
-- [ ] `forja remote set repo set --local <name> --remote <name> --role primary --json`
-- [ ] `forja remote set forja-bin set --path <path> --json`
-- [ ] `forja remote set build-order set qt:build sdk:rebuild --json`
-- [ ] `forja remote set transfer set --server <id> --path <path> --artifact <path> --json`
-- [ ] `forja remote set workspace set --mode staged --path <path> --json`
 
 ### 高级功能
 - [ ] `forja sync --dry-run --json`
@@ -476,9 +359,6 @@ forja remote set --server <id> --remote-path <path> --json
 
 ### 边界条件
 - [ ] 无效参数返回错误
-- [ ] 仓库名称安全校验
-- [ ] 构建顺序合法性校验
-- [ ] 部署传输必填字段验证
 - [ ] 参数缺失提示
 
 ---
@@ -537,7 +417,7 @@ chmod +x test-forja.sh
 
 1. **环境准备**：编译项目，全局链接
 2. **基础命令**：逐个测试 status/init/list/use/build/run/stop/clean
-3. **远程配置**：测试 server/repo/forja-bin/build-order/transfer/workspace
+3. **远程配置**：测试 server/remote set
 4. **高级功能**：测试 sync/doctor/designer
 5. **边界条件**：测试无效参数、安全校验、必填字段
 6. **问题排查**：参考常见问题部分

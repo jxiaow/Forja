@@ -77,7 +77,7 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         syncServers: servers.map(s => ({
             id: s.id, name: s.name, host: s.host, port: s.port,
             username: s.username, authMode: s.authMode,
-            privateKeyPath: s.privateKeyPath, password: s.password
+            privateKeyPath: s.privateKeyPath, password: s.password ? '••••••••' : ''
         })),
         syncIgnore: sync.ignore.join(', '),
         syncRemotePath: selectedServerExists ? (remote.remotePaths[remote.selectedServer] || '') : '',

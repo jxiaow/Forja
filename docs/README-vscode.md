@@ -1,6 +1,6 @@
 # Forja — VSCode 扩展
 
-C++ 项目构建扩展，支持 Qt (qmake) 和 SDK (.sln/Makefile) 项目，覆盖本地和远程执行。
+C++ 项目构建扩展，支持 Qt (qmake) 和 C++ (.sln/Makefile) 项目，覆盖本地和远程执行。
 
 ## 安装
 
@@ -56,9 +56,10 @@ code --install-extension forja-<version>-dev.vsix
 | `forja.qt.rcc` | 编译 .qrc 资源 |
 | `forja.qt.designer` | 用 Qt Designer 打开 .ui |
 | `forja.qt.testConnection` | 测试 SSH 连接 |
-| `forja.sdk.build` | 编译 SDK 项目 |
-| `forja.sdk.rebuild` | 重新编译 SDK |
-| `forja.sdk.clean` | 清理 SDK |
+| `forja.build` | 编译项目（Qt/C++ 自动分发） |
+| `forja.run` | 运行项目 |
+| `forja.stop` | 停止运行中的进程 |
+| `forja.clean` | 清理构建产物 |
 
 ## 配置面板
 
@@ -66,10 +67,10 @@ code --install-extension forja-<version>-dev.vsix
 
 | 页面 | 内容 |
 |------|------|
-| **概览** | 项目名称、环境状态、C/C++ 标准、QMake TARGET、IntelliSense 配置 |
-| **环境** | Qt 路径、VS DevShell、Designer 路径；SDK 的 Visual Studio 配置 |
-| **项目** | 选择 .pro / .sln / Makefile，支持浏览工作区外项目 |
+| **项目** | 选择 .pro / .sln / Makefile，构建模式，IntelliSense 配置 |
+| **环境** | Qt 路径、VS DevShell、Designer 路径、C++ 的 Visual Studio 配置 |
 | **同步** | 服务器配置、远程路径、同步开关、忽略规则 |
+| **高级** | 扫描排除目录、自定义命令等 |
 
 在配置面板中修改 mode/arch 会同步写入 activeTarget，CLI 的 `forja build` 立即生效。
 
@@ -82,12 +83,9 @@ Forja 支持通过 SSH 在远程服务器上构建和运行：
 forja server add --name dev --host 192.168.1.10 --username dev
 
 # 2. 配置远程执行目标
-forja remote --server dev --remote-path /home/dev/workspace
+forja remote set --server dev --remote-path /home/dev/workspace
 
-# 3. 远程初始化
-forja init --remote
-
-# 4. 切换执行位置
+# 3. 切换执行位置
 forja use target --run-at remote
 ```
 
@@ -121,7 +119,7 @@ forja doctor fix --remote   # 自动修复：部署/更新远程 Forja
 | 文件 | 内容 |
 |------|------|
 | `~/.forja/workspaces.json` | 已注册 workroot |
-| `~/.forja/workspaces/<hash>.json` | 当前 workspace 的 Qt/SDK/sync/remote 配置 |
+| `~/.forja/workspaces/<hash>.json` | 当前 workspace 的 Qt/C++/sync/remote 配置 |
 | `~/.forja/servers.json` | 服务器列表 |
 | `.forja/sync-state.json` | 同步运行状态 |
 

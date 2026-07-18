@@ -7,7 +7,8 @@ test('cpp activation does not unconditionally switch the status bar to C++', () 
     const cppExtension = fs.readFileSync(path.join(process.cwd(), 'src', 'cpp', 'cppExtension.ts'), 'utf8');
     const statusBar = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'statusBar.ts'), 'utf8');
 
-    assert.match(statusBar, /export function activateCppModuleIfNoQtProject\(_?workspace\?: string\): void/);
-    assert.match(cppExtension, /activateCppModuleIfNoQtProject\(/);
+    // activateCppModuleIfNoQtProject has been removed — C++ module is only activated via status bar
+    assert.doesNotMatch(statusBar, /export function activateCppModuleIfNoQtProject/);
+    assert.doesNotMatch(cppExtension, /activateCppModuleIfNoQtProject/);
     assert.doesNotMatch(cppExtension, /setActiveModule\('cpp'\)/);
 });

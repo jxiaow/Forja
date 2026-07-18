@@ -143,17 +143,13 @@ export class ConfigService implements vscode.Disposable {
   /** 带超时的命令执行 */
   private execWithTimeout(command: string, timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {
-      const proc = cp.exec(command, { timeout: timeoutMs }, (error, stdout) => {
+      cp.exec(command, { timeout: timeoutMs }, (error, stdout) => {
         if (error) {
           reject(error);
         } else {
           resolve(stdout);
         }
       });
-      setTimeout(() => {
-        proc.kill();
-        reject(new Error('VS detection timed out'));
-      }, timeoutMs);
     });
   }
 

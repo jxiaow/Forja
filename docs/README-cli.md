@@ -1,6 +1,6 @@
 # Forja CLI
 
-命令行工具用于 C++ 项目的构建、运行和环境管理。支持 Qt (qmake) 和 SDK (.sln/Makefile) 两种项目类型，支持本地和远程执行。
+命令行工具用于 C++ 项目的构建、运行和环境管理。支持 Qt (qmake) 和 C++ (.sln/Makefile) 两种项目类型，支持本地和远程执行。
 
 ## 安装
 
@@ -70,7 +70,7 @@ forja build                                   # 编译
 forja run                                     # 运行
 ```
 
-### 场景 2：本地 SDK 项目（Windows .sln）
+### 场景 2：本地 C++ 项目（Windows .sln）
 
 ```bash
 forja init                                    # 检测 VS/MSBuild
@@ -208,7 +208,7 @@ forja remote set --server server-1 --remote-path /home/dev/workspace
 forja remote restore <repo> <path>...
 forja remote reset <repo> <path>... --all
 
-# 配置 Qt/SDK(C++) 工具链
+# 配置 Qt/C++ 工具链
 forja use target --qt /path/to/Qt --vs "C:/Program Files/Microsoft Visual Studio/2022/Community" --jom /path/to/jom
 ```
 
@@ -315,7 +315,7 @@ forja remote set --server server-1 --remote-path /home/dev/workspace
 
 远程 repo/build-order/transfer 的公开参数尚未冻结；在契约冻结前不要依赖这些字段。
 
-如果远端无法安装或执行 forja CLI，staged 模式会对执行类动作尝试 shell fallback：Qt 支持 `qmake/build/clean/run/stop/ps`，SDK 支持 `build/rebuild/clean`。`init/use/status` 等远端持久配置或诊断动作仍依赖远端 forja。
+如果远端无法安装或执行 forja CLI，staged 模式会对执行类动作尝试 shell fallback：Qt 支持 `qmake/build/clean/run/stop/ps`，C++ 支持 `build/rebuild/clean`。`init/use/status` 等远端持久配置或诊断动作仍依赖远端 forja。
 
 ## JSON 输出
 
@@ -348,7 +348,7 @@ forja remote set --server server-1 --remote-path /home/dev/workspace
 ```text
 ~/.forja/
 ├── workspaces.json       # 已注册 workroot
-├── workspaces/<hash>.json # 当前 workspace 的 Qt/SDK/sync/remote 配置
+├── workspaces/<hash>.json # 当前 workspace 的 Qt/C++/sync/remote 配置
 └── servers.json          # 服务器列表
 
 .forja/

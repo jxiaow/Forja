@@ -10,7 +10,7 @@ import { CppBuilder } from './modules/cppBuilder';
 import { CTX_ACTIVATED, TASK_SOURCE } from './constants';
 import { isWindows } from './platform';
 import { initLogger, log, logError } from './utils/logger';
-import { setCppState, activateCppModuleIfNoQtProject, onCppUpdate } from '../ui/statusBar';
+import { setCppState, onCppUpdate } from '../ui/statusBar';
 import { setCppProjectRoot } from '../vscode/workspaceResolver';
 import { onSettingsChange } from '../vscode/settingsStore';
 
@@ -191,11 +191,6 @@ export async function activateCpp(context: vscode.ExtensionContext): Promise<voi
                 .catch((e: Error) => logError('settingsStore 变更后重新加载 C++ 配置失败', e));
         }, 300);
     }));
-    // 有 C++ 项目时激活 C++ 模块
-    if (sm.currentProject) {
-        const wsRoot = cppWorkspaceRoot || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        activateCppModuleIfNoQtProject(wsRoot);
-    }
     log('状态栏已初始化（统一模式）');
 
     // 7. 初始化 Builder 并赋值给模块级变量

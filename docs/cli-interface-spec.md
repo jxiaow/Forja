@@ -49,22 +49,16 @@ forja <subcommand> [action] [options]
 
 | 分类 | 说明 |
 |------|------|
-| `targets` | Qt/SDK 候选目标 |
+| `targets` | Qt/C++ 候选目标 |
 | `env` | 工具链路径（子分类 qt/vs/jom/make） |
-| `servers` | SSH server 列表 |
-| `remote` | 远程配置详情（含 repos） |
-| `config` | 已保存配置摘要 |
-| `lang` | 当前语言设置 |
 
-额外参数：`--detail <id>`（仅 `servers` 分类）
+注意：服务器列表通过 `forja server` 查看，远程配置通过 `forja remote` 查看。
 
 ### `forja use`
 
 | 子命令 | 参数 | 说明 |
 |--------|------|------|
-| `target` | `--project`, `--mode`, `--arch` | 选择项目和构建配置 |
-| `execution` | `--local`, `--remote` | 切换执行端 |
-| `lang` | 位置参数 `zh\|en` | 界面语言 |
+| `target` | `--project`, `--mode`, `--arch`, `--run-at`, `--qt`, `--vs`, `--jom` | 选择项目和构建配置 |
 
 ### `forja remote`
 
@@ -116,12 +110,10 @@ repo/build-order/transfer 高级配置不属于当前公开 CLI 契约，待后�
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| 位置参数 | `fix` \| `unlock` \| `restore` \| `reset` \| `clean-untracked` | 诊断动作 |
+| 位置参数 | `fix` \| `unlock` | 诊断动作（默认 check） |
 | `--remote` | boolean | 检查远程配置 |
 | `--server <id>` | string | 指定服务器 |
 | `--force` | boolean | 强制执行 |
-| `--recursive` | boolean | 递归清理 |
-| `--plan` | boolean | 只输出计划 |
 
 ### `forja sync`
 
@@ -203,7 +195,7 @@ interface InitResult extends ForjaJsonResult {
   action: 'init';
   local: {
     qtTargets: number;
-    sdkTargets: number;
+    cppTargets: number;
     toolchain: { qt?: boolean; vs?: boolean; jom?: boolean; make?: boolean };
     configured: boolean;
   };
@@ -260,7 +252,7 @@ interface CleanResult extends ForjaJsonResult {
 
 interface DoctorResult extends ForjaJsonResult {
   action: 'doctor';
-  doctorAction: 'check' | 'fix' | 'unlock' | 'restore' | 'reset' | 'clean-untracked';
+  doctorAction: 'check' | 'fix' | 'unlock';
   checks?: CheckResult[];
   plan?: CommandPlan;
   changed?: string[];

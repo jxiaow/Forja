@@ -54,10 +54,15 @@ async function _ensureMakefileFresh(cfg: ReturnType<typeof getBuildConfig>): Pro
     const { commands, matcher } = builder.qmakeCommands(cfg);
     const execution = await runTask(`QMake ${cfg.mode}`, commands, matcher);
 
-    // 等待 qmake 任务完成
+    // 等待 qmake 任务完成（带超时保护）
     const exitCode = await new Promise<number | undefined>(resolve => {
+        const timeout = setTimeout(() => {
+            d.dispose();
+            resolve(undefined);
+        }, 120_000); // 2 minute timeout
         const d = vscode.tasks.onDidEndTaskProcess(e => {
             if (e.execution === execution) {
+                clearTimeout(timeout);
                 d.dispose();
                 resolve(e.exitCode);
             }

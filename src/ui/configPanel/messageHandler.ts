@@ -95,7 +95,6 @@ export async function handleMessage(
         }
         case 'selectProject': {
             await vscode.commands.executeCommand('forja.list');
-            updateHtml();
             break;
         }
         case 'saveVsPath': {
@@ -347,16 +346,18 @@ export async function handleMessage(
                     const remoteCfgRm = loadRemoteSettings(wsRm);
                     const wasSelected = remoteCfgRm.selectedServer === msg.id;
                     let remoteChanged = false;
-                    if (wasSelected) {
-                        remoteCfgRm.selectedServer = '';
-                        remoteChanged = true;
-                    }
                     if (remoteCfgRm.remotePaths[msg.id]) {
                         delete remoteCfgRm.remotePaths[msg.id];
                         remoteChanged = true;
                     }
                     if (remoteCfgRm.transfer?.deployServer === msg.id) {
                         remoteCfgRm.transfer = null;
+                        remoteChanged = true;
+                    }
+                    // Compute final selectedServer before writing (avoid intermediate empty state)
+                    if (wasSelected) {
+                        const remaining = readServers();
+                        remoteCfgRm.selectedServer = remaining.length > 0 ? remaining[0].id : '';
                         remoteChanged = true;
                     }
                     if (remoteChanged) {
@@ -371,11 +372,6 @@ export async function handleMessage(
                                 saveSyncSettings(wsRm, sync);
                             }
                         } catch { /* sync file may not exist */ }
-                    }
-                    // If deleted server was selected, switch to first remaining
-                    if (wasSelected) {
-                        const remaining = readServers();
-                        updateRemoteSelectedServer(wsRm, remaining.length > 0 ? remaining[0].id : '');
                     }
                 }
             }
@@ -400,8 +396,8 @@ export async function handleMessage(
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
                 break;
             }
-            // 如果密码为空，保留原密码
-            if (!updates.password) {
+            // 如果密码为空或为遮蔽占位符，保留原密码
+            if (!updates.password || updates.password === '••••••••') {
                 const existing = readServers().find(s => s.id === serverId);
                 if (existing) { updates.password = existing.password; }
             }
@@ -533,7 +529,6 @@ export async function handleMessage(
         }
         case 'selectCppProject': {
             await vscode.commands.executeCommand('forja.list');
-            updateHtml();
             break;
         }
     }

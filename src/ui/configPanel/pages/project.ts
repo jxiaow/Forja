@@ -98,16 +98,16 @@ function buildQtSection(data: TemplateData): string {
     h += '<div class="cic"><div class="btn-group" id="mG">';
     const mDebug = data.mode !== 'release' ? ' active' : '';
     const mRelease = data.mode === 'release' ? ' active' : '';
-    h += `<button class="bgi${mDebug}" onclick="setM('debug')">debug</button>`;
-    h += `<button class="bgi${mRelease}" onclick="setM('release')">release</button>`;
+    h += `<button class="bgi${mDebug}" onclick="setM('debug',this)">debug</button>`;
+    h += `<button class="bgi${mRelease}" onclick="setM('release',this)">release</button>`;
     h += '</div></div></div>';
     if (data.isWin) {
         h += '<div class="ci"><div class="cii"><div class="cil">目标架构</div></div>';
         h += '<div class="cic"><div class="btn-group" id="aG">';
         const aX86 = data.arch !== 'x64' ? ' active' : '';
         const aX64 = data.arch === 'x64' ? ' active' : '';
-        h += `<button class="bgi${aX86}" onclick="setA('x86')">x86</button>`;
-        h += `<button class="bgi${aX64}" onclick="setA('x64')">x64</button>`;
+        h += `<button class="bgi${aX86}" onclick="setA('x86',this)">x86</button>`;
+        h += `<button class="bgi${aX64}" onclick="setA('x64',this)">x64</button>`;
         h += '</div></div></div>';
     }
     h += '</div>';
@@ -160,13 +160,13 @@ function buildQtScript(data: TemplateData): string {
     h += 'if(cStdEl)cStdEl.addEventListener("csel-change",savS);';
     h += 'var cppStdEl=document.getElementById("cppStd");';
     h += 'if(cppStdEl)cppStdEl.addEventListener("csel-change",savS);';
-    h += 'function setM(m){document.querySelectorAll("#mG .bgi")';
+    h += 'function setM(m,el){document.querySelectorAll("#mG .bgi")';
     h += '.forEach(b=>b.classList.remove("active"));';
-    h += 'event.currentTarget.classList.add("active");';
+    h += 'el.classList.add("active");';
     h += 'vscode.postMessage({command:"saveMode",value:m})}';
-    h += 'function setA(a){document.querySelectorAll("#aG .bgi")';
+    h += 'function setA(a,el){document.querySelectorAll("#aG .bgi")';
     h += '.forEach(b=>b.classList.remove("active"));';
-    h += 'event.currentTarget.classList.add("active");';
+    h += 'el.classList.add("active");';
     h += 'vscode.postMessage({command:"saveArch",value:a})}';
     // tag input
     h += '(function(){';
@@ -251,29 +251,29 @@ function buildCppSection(data: TemplateData): string {
     h += '<div class="cic"><div class="btn-group" id="cppMG">';
     const mDebug = data.cppMode !== 'release' ? ' active' : '';
     const mRelease = data.cppMode === 'release' ? ' active' : '';
-    h += `<button class="bgi${mDebug}" onclick="setCppM('debug')">debug</button>`;
-    h += `<button class="bgi${mRelease}" onclick="setCppM('release')">release</button>`;
+    h += `<button class="bgi${mDebug}" onclick="setCppM('debug',this)">debug</button>`;
+    h += `<button class="bgi${mRelease}" onclick="setCppM('release',this)">release</button>`;
     h += '</div></div></div>';
     if (data.isWin) {
         h += '<div class="ci"><div class="cii"><div class="cil">目标架构</div></div>';
         h += '<div class="cic"><div class="btn-group" id="cppAG">';
         const aX86 = data.cppArch !== 'x64' ? ' active' : '';
         const aX64 = data.cppArch === 'x64' ? ' active' : '';
-        h += `<button class="bgi${aX86}" onclick="setCppA('x86')">x86</button>`;
-        h += `<button class="bgi${aX64}" onclick="setCppA('x64')">x64</button>`;
+        h += `<button class="bgi${aX86}" onclick="setCppA('x86',this)">x86</button>`;
+        h += `<button class="bgi${aX64}" onclick="setCppA('x64',this)">x64</button>`;
         h += '</div></div></div>';
     }
     h += '</div>';
 
     // C++ script
     h += '<script>';
-    h += 'function setCppM(m){document.querySelectorAll("#cppMG .bgi")';
+    h += 'function setCppM(m,el){document.querySelectorAll("#cppMG .bgi")';
     h += '.forEach(b=>b.classList.remove("active"));';
-    h += 'event.currentTarget.classList.add("active");';
+    h += 'el.classList.add("active");';
     h += 'vscode.postMessage({command:"saveCppMode",value:m})}';
-    h += 'function setCppA(a){document.querySelectorAll("#cppAG .bgi")';
+    h += 'function setCppA(a,el){document.querySelectorAll("#cppAG .bgi")';
     h += '.forEach(b=>b.classList.remove("active"));';
-    h += 'event.currentTarget.classList.add("active");';
+    h += 'el.classList.add("active");';
     h += 'vscode.postMessage({command:"saveCppArch",value:a})}';
     h += '</script>';
 

@@ -35,6 +35,27 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         return getActiveTarget(workspace());
     }
 
+    // Synthesize a C++ target from workspaceStore C++ settings when no activeTarget exists
+    async function synthesizeCppTarget() {
+        const { getActiveModule } = await import('../ui/statusBar');
+        if (getActiveModule() !== 'cpp') { return null; }
+        const { getCppSetting } = await import('./settingsStore');
+        const pinnedProject = getCppSetting('pinnedProject');
+        if (!pinnedProject) { return null; }
+        return {
+            id: '',
+            name: '',
+            kind: 'cpp' as const,
+            project: pinnedProject as string,
+            mode: (getCppSetting('mode') || 'debug') as 'debug' | 'release',
+            arch: (getCppSetting('arch') || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+            runAt: 'local' as const,
+            toolchain: {
+                vsInstall: getCppSetting('vsInstall') as string,
+            },
+        };
+    }
+
     // After selecting a project, prompt for toolchain version if multiple detected and none configured
     async function promptToolchainIfNeeded(kind: string) {
         const { getQtPath, getVsDevShellPath } = await import('../qt/services/configService');
@@ -112,6 +133,24 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
+    // forja.init — register workroot + configure initial target
+    context.subscriptions.push(
+        vscode.commands.registerCommand('forja.init', async () => {
+            try {
+                const { runInit, formatInitText } = await import('../cli/commands/init');
+                const result = await runInit(workspace(), { interactive: true, json: false });
+                const text = formatInitText(result);
+                const ch = getOutputChannel();
+                if (ch) { ch.clear(); ch.appendLine(text); ch.show(true); }
+                if (result.ok) {
+                    vscode.window.showInformationMessage('Forja: 初始化完成');
+                }
+            } catch (e: any) {
+                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            }
+        })
+    );
+
     // forja.list — requires a category: targets|env
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.list', async (category?: string) => {
@@ -148,8 +187,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('forja._selectTarget', async (kindFilter?: string) => {
             try {
-                const ch = getOutputChannel();
-                if (ch) { ch.appendLine(`[DEBUG] forja._selectTarget called with kindFilter=${kindFilter}`); }
                 const { runList } = await import('../cli/commands/list');
                 const { resolveProjectRoot } = await import('./workspaceResolver');
                 // Resolve workspace roots — skip invalid paths (like VSCode install dir)
@@ -159,14 +196,8 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 if (!qtWs && cppWs) { qtWs = cppWs; }
                 if (!cppWs && qtWs) { cppWs = qtWs; }
                 if (!qtWs && !cppWs) { qtWs = cppWs = workspace(); }
-                if (ch) { ch.appendLine(`[DEBUG] qtWs=${qtWs}, cppWs=${cppWs}`); }
                 const qtResult = (!kindFilter || kindFilter === 'qt') ? await runList(qtWs, 'targets') : { targets: [] };
                 const cppResult = (!kindFilter || kindFilter === 'cpp') ? await runList(cppWs, 'targets') : { targets: [] };
-                if (ch) { ch.appendLine(`[DEBUG] qtTargets=${qtResult.targets?.length ?? 0}, cppTargets=${cppResult.targets?.length ?? 0}`); }
-                if (ch) {
-                    (qtResult.targets || []).forEach((t, i) => { ch.appendLine(`[DEBUG]   qt[${i}] ${t.kind}: ${t.project}`); });
-                    (cppResult.targets || []).forEach((t, i) => { ch.appendLine(`[DEBUG]   cpp[${i}] ${t.kind}: ${t.project}`); });
-                }
                 const seen = new Set<string>();
                 const allTargets = [...(qtResult.targets || []), ...(cppResult.targets || [])].filter(t => {
                     if (kindFilter && t.kind !== kindFilter) { return false; }
@@ -176,8 +207,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     seen.add(key);
                     return true;
                 });
-                if (ch) { ch.appendLine(`[DEBUG] filteredTargets=${allTargets.length}`); }
-                if (ch) { allTargets.forEach((t, i) => { ch.appendLine(`[DEBUG]   [${i}] ${t.kind}: ${t.project}`); }); }
                 if (allTargets.length > 0) {
                     const items = allTargets.map(t => ({
                         label: t.project,
@@ -390,15 +419,30 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                             });
                             if (action) {
                                 switch (action.action) {
-                                    case 'remove':
-                                        await vscode.commands.executeCommand('forja.server', 'remove', server.id);
+                                    case 'remove': {
+                                        const { runServerRemove } = await import('../cli/commands/server');
+                                        const r = runServerRemove(server.id, workspace());
+                                        if (r.ok) {
+                                            vscode.window.showInformationMessage(`Server '${server.name}' removed`);
+                                        } else {
+                                            vscode.window.showErrorMessage(`Remove failed: ${r.diagnostics?.map(d => d.message).join('; ') || 'unknown'}`);
+                                        }
                                         break;
+                                    }
                                     case 'test':
                                         await vscode.commands.executeCommand('forja.syncTestConnection');
                                         break;
-                                    case 'sync':
-                                        await vscode.commands.executeCommand('forja.use', 'sync', '--server', server.id);
+                                    case 'sync': {
+                                        const { configureSyncSettings } = await import('../sync/cli');
+                                        const ws = workspace();
+                                        const r = configureSyncSettings(ws, { enable: true, serverId: server.id });
+                                        if (r.ok) {
+                                            vscode.window.showInformationMessage(`Sync server set to '${server.name}'`);
+                                        } else {
+                                            vscode.window.showErrorMessage(`Set sync server failed: ${r.error}`);
+                                        }
                                         break;
+                                    }
                                 }
                             }
                         }
@@ -417,25 +461,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
 
             // Fallback: if no activeTarget but C++ module is active, synthesize from workspaceStore
             if (!target) {
-                const { getActiveModule } = await import('../ui/statusBar');
-                if (getActiveModule() === 'cpp') {
-                    const { getCppSetting } = await import('./settingsStore');
-                    const pinnedProject = getCppSetting('pinnedProject');
-                    if (pinnedProject) {
-                        target = {
-                            id: '',
-                            name: '',
-                            kind: 'cpp' as const,
-                            project: pinnedProject as string,
-                            mode: (getCppSetting('mode') || 'debug') as 'debug' | 'release',
-                            arch: (getCppSetting('arch') || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
-                            runAt: 'local' as const,
-                            toolchain: {
-                                vsInstall: getCppSetting('vsInstall') as string,
-                            },
-                        };
-                    }
-                }
+                target = await synthesizeCppTarget();
             }
 
             // Remote dispatch
@@ -609,25 +635,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
 
             // Fallback: if no activeTarget but C++ module is active, synthesize from workspaceStore
             if (!target) {
-                const { getActiveModule } = await import('../ui/statusBar');
-                if (getActiveModule() === 'cpp') {
-                    const { getCppSetting } = await import('./settingsStore');
-                    const pinnedProject = getCppSetting('pinnedProject');
-                    if (pinnedProject) {
-                        target = {
-                            id: '',
-                            name: '',
-                            kind: 'cpp' as const,
-                            project: pinnedProject as string,
-                            mode: (getCppSetting('mode') || 'debug') as 'debug' | 'release',
-                            arch: (getCppSetting('arch') || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
-                            runAt: 'local' as const,
-                            toolchain: {
-                                vsInstall: getCppSetting('vsInstall') as string,
-                            },
-                        };
-                    }
-                }
+                target = await synthesizeCppTarget();
             }
 
             // Remote dispatch

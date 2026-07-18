@@ -203,9 +203,14 @@ function publishProblemsIfApplicable(
     result: { ok: boolean; stdout?: string; stderr?: string; exitCode?: number; actionRemotePath?: string }
 ): void {
     if (!remoteDiagnostics) { return; }
+    // Try to parse structured result from stdout (remote forja outputs JSON)
+    let parsedResult: unknown = null;
+    if (result.stdout) {
+        try { parsedResult = JSON.parse(result.stdout); } catch { /* not JSON — stdout line parsing still works */ }
+    }
     const source = {
         remote: {
-            result: null,
+            result: parsedResult,
             stdout: result.stdout || '',
             stderr: result.stderr || '',
         },

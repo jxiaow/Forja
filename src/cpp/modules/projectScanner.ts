@@ -72,14 +72,16 @@ export class ProjectScanner {
         reject(new Error('Scan timed out'));
       }, SCAN_TIMEOUT_MS);
 
-      try {
-        scanFn();
-        clearTimeout(timer);
-        resolve();
-      } catch (err) {
-        clearTimeout(timer);
-        reject(err);
-      }
+      setImmediate(() => {
+        try {
+          scanFn();
+          clearTimeout(timer);
+          resolve();
+        } catch (err) {
+          clearTimeout(timer);
+          reject(err);
+        }
+      });
     });
   }
 

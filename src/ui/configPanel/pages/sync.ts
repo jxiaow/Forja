@@ -257,7 +257,7 @@ function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0]
     h += 'setAuthMode(_currentServer.authMode||"key");';
     h += 'if(_currentServer.privateKeyPath)document.getElementById("sf-privateKeyPath").value=_currentServer.privateKeyPath;';
     h += 'var pwdEl=document.getElementById("sf-password");';
-    h += 'if(pwdEl){pwdEl.value=_currentServer.password||""}';
+    h += 'if(pwdEl){var p=_currentServer.password||"";pwdEl.value=p==="••••••••"?"":p}';
     h += 'var rpEl=document.getElementById("sf-remotePath");';
     h += 'if(rpEl)rpEl.value=_currentServer.remotePath||"";';
     h += '}else{';
@@ -298,11 +298,12 @@ function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0]
     h += 'var remotePath=document.getElementById("sf-remotePath").value.trim();';
     h += 'var rpInput=document.getElementById("sf-remotePath");';
     h += 'if(!s.name||!s.host||!s.username){';
-    h += 'document.getElementById("sf-name").style.borderColor=!s.name?"#EF4444":"";';
-    h += 'document.getElementById("sf-host").style.borderColor=!s.host?"#EF4444":"";';
-    h += 'document.getElementById("sf-username").style.borderColor=!s.username?"#EF4444":"";';
+    h += 'var errBorder="var(--vscode-inputValidation-errorBorder,#EF4444)";';
+    h += 'document.getElementById("sf-name").style.borderColor=!s.name?errBorder:"";';
+    h += 'document.getElementById("sf-host").style.borderColor=!s.host?errBorder:"";';
+    h += 'document.getElementById("sf-username").style.borderColor=!s.username?errBorder:"";';
     h += 'return}';
-    h += 'if(!remotePath){rpInput.style.borderColor="#EF4444";rpInput.placeholder="必填：远程目录路径";return}';
+    h += 'if(!remotePath){rpInput.style.borderColor="var(--vscode-inputValidation-errorBorder,#EF4444)";rpInput.placeholder="必填：远程目录路径";return}';
     h += 'rpInput.style.borderColor="";';
     h += 'if(_editMode){s.id=_editId;vscode.postMessage({command:"updateServer",server:s,remotePath:remotePath})}';
     h += 'else{vscode.postMessage({command:"addServer",server:s,remotePath:remotePath})}';

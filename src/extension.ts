@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { setState, loadPersistedState } from './vscode/qtState';
-import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, updateConfig, getJomPath } from './qt/services/configService';
+import { getWorkspaceRoot, getManualProPath } from './qt/services/configService';
 import { createStatusBar } from './ui/statusBar';
 import { registerPriWatcher } from './qt/project/priWatcher';
 import { ConfigNavTreeProvider } from './ui/configPanel/configNavTree';
@@ -64,7 +64,7 @@ function checkWorkrootRegistration(): void {
         action
     ).then(selected => {
         if (selected === action) {
-            vscode.commands.executeCommand('forja.status');
+            vscode.commands.executeCommand('forja.init');
         }
     });
 }
@@ -96,6 +96,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // 配置面板管理器
     const pageManager = new ConfigPageManager(context);
+    pageManager.setNavTree(navTree);
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.config.openPage', (pageId?: string) => {
             const { normalizeConfigPageId } = require('./ui/configPanel/pageIds');
@@ -176,59 +177,4 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {
     // 资源清理由 context.subscriptions 自动处理
-}
-
-/**
- * 检测到环境后，如果配置中对应字段为空（用户未手动设置），自动写入。
- * 多候选时弹 QuickPick 让用户选择；单候选直接写入。
- */
-async function autoWriteDetectedEnv(env: Awaited<ReturnType<typeof detectEnv>>): Promise<void> {
-    // Qt 路径
-    if (!getQtPath() && env.qtCandidates && env.qtCandidates.length > 0) {
-        if (env.qtCandidates.length === 1) {
-            updateConfig('qtPath', env.qtCandidates[0].path);
-            logger.info(`自动写入 qtPath: ${env.qtCandidates[0].path}`);
-        } else {
-            const items = env.qtCandidates.map(c => ({
-                label: `Qt ${c.version} (${c.compiler})`,
-                detail: c.path,
-                path: c.path
-            }));
-            const picked = await vscode.window.showQuickPick(items, {
-                placeHolder: '检测到多个 Qt 版本，请选择一个作为默认'
-            });
-            if (picked) {
-                updateConfig('qtPath', picked.path);
-                logger.info(`用户选择 qtPath: ${picked.path}`);
-            }
-        }
-    }
-
-    // VS 路径
-    if (!getVsDevShellPath() && env.vsCandidates && env.vsCandidates.length > 0) {
-        const { inferVsInstall } = await import('./core/settingsIO');
-        if (env.vsCandidates.length === 1) {
-            updateConfig('vsInstall', inferVsInstall(env.vsCandidates[0].devShellPath));
-            logger.info(`自动写入 vsInstall: ${env.vsCandidates[0].devShellPath}`);
-        } else {
-            const items = env.vsCandidates.map(c => ({
-                label: `VS ${c.version} ${c.edition}`,
-                detail: c.devShellPath,
-                devShellPath: c.devShellPath
-            }));
-            const picked = await vscode.window.showQuickPick(items, {
-                placeHolder: '检测到多个 Visual Studio 版本，请选择一个作为默认'
-            });
-            if (picked) {
-                updateConfig('vsInstall', inferVsInstall(picked.devShellPath));
-                logger.info(`用户选择 vsInstall: ${picked.devShellPath}`);
-            }
-        }
-    }
-
-    // jom 路径
-    if (!getJomPath() && env.jom) {
-        updateConfig('jomPath', env.jom);
-        logger.info(`自动写入 jomPath: ${env.jom}`);
-    }
 }

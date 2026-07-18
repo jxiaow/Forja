@@ -50,10 +50,6 @@ function _syncActiveTarget(kind: ActiveModule): boolean {
     return true;
 }
 
-export function activateCppModuleIfNoQtProject(_workspace?: string): void {
-    // No auto-switching — let user choose module explicitly via status bar
-}
-
 export function getRunStatusBarItem(): vscode.StatusBarItem { return _runItem; }
 
 // C++ 模块调用这些函数来更新状态栏
@@ -65,7 +61,13 @@ export function setCppState(opts: { projectName?: string; mode?: string; arch?: 
     if (_activeModule === 'cpp') { _updateDisplay(); }
 }
 
-export function onCppUpdate(fn: (update: { mode: string; arch: string }) => void): void { _cppUpdateListeners.push(fn); }
+export function onCppUpdate(fn: (update: { mode: string; arch: string }) => void): vscode.Disposable {
+    _cppUpdateListeners.push(fn);
+    return new vscode.Disposable(() => {
+        const idx = _cppUpdateListeners.indexOf(fn);
+        if (idx >= 0) { _cppUpdateListeners.splice(idx, 1); }
+    });
+}
 
 export function createStatusBar(context: vscode.ExtensionContext): void {
     _projectModeItem = vscode.window.createStatusBarItem('forja.projectMode', vscode.StatusBarAlignment.Left, 113);
@@ -194,6 +196,21 @@ function _syncActiveTargetModeArch(mode: BuildMode, arch: Arch): void {
     try { saveWorkspaceConfig(config); } catch { /* ignore — status bar sync is best-effort */ }
 }
 
+function _syncCppModeArch(mode: string, arch: string): void {
+    const ws = getWorkspaceRoot() || process.cwd();
+    if (!ws) { return; }
+    const { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig, getActiveTarget } = require('../core/workspaceStore');
+    const workroot = resolveWorkroot(ws);
+    if (!workroot) { return; }
+    const config = loadWorkspaceConfig(workroot);
+    const profile = getActiveTarget(config);
+    if (!profile || profile.kind !== 'cpp') { return; }
+    if (profile.mode === mode && profile.arch === arch) { return; }
+    profile.mode = mode as 'debug' | 'release';
+    profile.arch = arch as 'x86' | 'x64';
+    try { saveWorkspaceConfig(config); } catch { /* best-effort */ }
+}
+
 export async function showActions(): Promise<void> {
     const state = getState();
     const isWin = process.platform === 'win32';
@@ -289,16 +306,18 @@ export async function showActions(): Promise<void> {
         setState('arch', a as Arch);
         if (changed) {
             _syncActiveTargetModeArch(m as BuildMode, a as Arch);
-            await vscode.commands.executeCommand('forja.build', 'qmake');
+            // Don't auto-run qmake — the next `forja build` will detect Makefile
+            // mismatch and run qmake automatically if needed
         }
     } else if (selected.action.startsWith('cpp:mode:')) {
         const [, , m, a] = selected.action.split(':');
         setActiveModule('cpp');
         _cppMode = m;
         _cppArch = a;
-        // 通过回调通知 C++ 模块持久化（由 C++ 模块使用正确的 workspace 路径写入）
         _cppUpdateListeners.forEach(fn => fn({ mode: m, arch: a }));
         _updateDisplay();
+        // Persist to workspaceStore (same as Qt path)
+        _syncCppModeArch(m, a);
     } else if (selected.action === 'qt:qmake') { vscode.commands.executeCommand('forja.build', 'qmake'); }
     else if (selected.action === 'qt:build') { vscode.commands.executeCommand('forja.build'); }
     else if (selected.action === 'qt:rcc') { vscode.commands.executeCommand('forja.build', 'rcc'); }
@@ -311,13 +330,9 @@ export async function showActions(): Promise<void> {
         const cmd = customCmds[idx];
         if (cmd) { vscode.commands.executeCommand('forja.run', cmd.name, cmd.command); }
     } else if (selected.action === 'qt:selectProject') {
-        const ch = require('../vscode/logger').getOutputChannel();
-        if (ch) { ch.appendLine('[DEBUG] qt:selectProject → forja._selectTarget qt'); }
         vscode.commands.executeCommand('forja._selectTarget', 'qt');
     }
     else if (selected.action === 'cpp:selectProject') {
-        const ch = require('../vscode/logger').getOutputChannel();
-        if (ch) { ch.appendLine('[DEBUG] cpp:selectProject → forja._selectTarget cpp'); }
         vscode.commands.executeCommand('forja._selectTarget', 'cpp');
     }
     else if (selected.action === 'switch:qt') {

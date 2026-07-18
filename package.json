@@ -15,7 +15,8 @@
   "activationEvents": [
     "workspaceContains:**/*.pro",
     "workspaceContains:**/*.sln",
-    "workspaceContains:**/Makefile"
+    "workspaceContains:**/Makefile",
+    "workspaceContains:**/CMakeLists.txt"
   ],
   "main": "./out/extension.js",
   "bin": {
@@ -114,6 +115,14 @@
       {
         "command": "forja._showActions",
         "title": "Forja: Actions"
+      },
+      {
+        "command": "forja.config.openPage",
+        "title": "Forja: Open Config Page"
+      },
+      {
+        "command": "forja._selectTarget",
+        "title": "Forja: Select Target"
       }
     ],
     "menus": {
@@ -128,6 +137,14 @@
         },
         {
           "command": "forja._showActions",
+          "when": "false"
+        },
+        {
+          "command": "forja.config.openPage",
+          "when": "false"
+        },
+        {
+          "command": "forja._selectTarget",
           "when": "false"
         },
         {
@@ -159,7 +176,7 @@
         },
         {
           "command": "forja.sync",
-          "when": "resourceScheme == file",
+          "when": "resourceScheme == file && workspaceFolderCount > 0",
           "group": "navigation@101"
         }
       ]
