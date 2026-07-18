@@ -37,7 +37,7 @@ export type RemoteAction = 'show' | 'set' | 'restore' | 'reset';
 export interface RemoteResult extends ForjaJsonResult {
     action: 'remote';
     remoteAction: RemoteAction;
-    changed: string[];
+    changed?: string[];
     remote?: {
         selectedServer?: string;
         remotePath?: string;
@@ -81,10 +81,10 @@ export function formatRemoteText(result: RemoteResult, locale: Locale): string {
                 lines.push(`  ${T('doctorNoServer')}`);
             } else {
                 if (r.selectedServer) {
-                    lines.push(`  ${T('serverLabel')} ${r.selectedServer}`);
+                    lines.push(`  ${T('serverLabel')}: ${r.selectedServer}`);
                 }
                 if (r.remotePath) {
-                    lines.push(`  ${T('remotePathLabel')} ${r.remotePath}`);
+                    lines.push(`  ${T('remotePathLabel')}: ${r.remotePath}`);
                 }
                 if (r.workspaceMode && r.workspaceMode !== 'legacy') {
                     lines.push(`  ${T('workspaceMode')}: ${r.workspaceMode}`);
@@ -119,24 +119,24 @@ export function formatRemoteText(result: RemoteResult, locale: Locale): string {
         case 'set': {
             lines.push(T('remote.setUpdated'));
             if (result.changed && result.changed.length > 0) {
-                lines.push(`  ${T('changed')} ${result.changed.join(', ')}`);
+                lines.push(`  ${T('changed')}: ${result.changed.join(', ')}`);
             }
             break;
         }
         case 'restore': {
             lines.push(T('remote.restoreUpdated'));
             if (result.remote?.restored !== undefined) {
-                lines.push(`  ${T('doctorRestored')} ${result.remote.restored} ${T('paths')}`);
+                lines.push(`  ${T('doctorRestored')}: ${result.remote.restored} ${T('paths')}`);
             }
             break;
         }
         case 'reset': {
             lines.push(T('remote.resetUpdated'));
             if (result.remote?.resetPaths !== undefined) {
-                lines.push(`  ${T('doctorResetDone')} ${result.remote.resetPaths} ${T('paths')}`);
+                lines.push(`  ${T('doctorResetDone')}: ${result.remote.resetPaths} ${T('paths')}`);
             }
             if (result.remote?.cleaned !== undefined) {
-                lines.push(`  ${T('doctorCleanDone')} ${result.remote.cleaned} ${T('paths')}`);
+                lines.push(`  ${T('doctorCleanDone')}: ${result.remote.cleaned} ${T('paths')}`);
             }
             break;
         }
@@ -248,6 +248,14 @@ export interface RemoteRestoreArgs {
 }
 
 export async function runRemoteRestore(workspace: string, args: RemoteRestoreArgs): Promise<RemoteResult> {
+    if (args.paths.length === 0) {
+        return {
+            ok: false, action: 'remote', remoteAction: 'restore', changed: [],
+            diagnostics: [{ level: 'error', message: T('remote.restoreUsage') }],
+            nextAction: 'forja remote restore <repo> <paths...>',
+        };
+    }
+
     // Validate paths — reject absolute paths and .. segments (same as reset)
     for (const p of args.paths) {
         if (path.isAbsolute(p) || p.includes('..')) {

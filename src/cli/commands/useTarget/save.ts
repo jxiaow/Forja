@@ -4,7 +4,7 @@
  */
 import {
     resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig,
-    generateTargetId, registerWorkroot,
+    generateTargetId, registerWorkroot, unregisterWorkroot,
 } from '../../../core/workspaceStore';
 import type { TargetProfile } from '../../../core/workspaceStore';
 import type { ResolvedConfig } from './types';
@@ -41,12 +41,15 @@ export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
  * Returns list of changed field names.
  */
 export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; changed: string[]; targetId: string } | { ok: false; error: string } {
+    let workroot: string | undefined;
+    let newlyRegistered = false;
     try {
-        const workroot = resolveWorkroot(workspace) || workspace;
+        workroot = resolveWorkroot(workspace) || workspace;
         const wsConfig = loadWorkspaceConfig(workroot);
 
-        // Ensure workroot is registered
-        registerWorkroot(workroot);
+        // Ensure workroot is registered — track if newly registered for rollback
+        newlyRegistered = !resolveWorkroot(workspace);
+        if (newlyRegistered) { registerWorkroot(workroot); }
 
         const mode = (config.mode || 'debug') as 'debug' | 'release';
         const arch = (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64';
@@ -96,6 +99,8 @@ export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; 
 
         return { ok: true, changed, targetId: id };
     } catch (e) {
+        // Rollback workroot registration if it was newly added in this call
+        if (newlyRegistered && workroot) { unregisterWorkroot(workroot); }
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
 }

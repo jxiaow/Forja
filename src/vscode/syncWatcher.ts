@@ -1,18 +1,42 @@
 import * as vscode from 'vscode';
-import { getResolvedConfig, ResolvedSyncConfig } from './resolver';
+import { getResolvedConfig, ResolvedSyncConfig } from '../sync/resolver';
 import { readServers, readProjectSyncConfig, ServerConfig } from '../core/serverStore';
-import { syncChangedFiles, askPassword, clearPasswordCache } from './sftpClient';
-import { testConnection } from './transport';
-import { resolveProjectRoot } from '../vscode/workspaceResolver';
-import { createLogger } from '../vscode/logger';
+import { syncChangedFiles } from '../sync/sftpClient';
+import { testConnection } from '../sync/transport';
+import { resolveProjectRoot } from './workspaceResolver';
+import { createLogger } from './logger';
 import { resolveGitRoots } from '../core/gitRepoResolver';
-import { onSettingsChange } from '../vscode/settingsStore';
+import { onSettingsChange } from './settingsStore';
 import { forjaConfigDir, loadRemoteSettings } from '../core/settingsIO';
 import { isPathInside } from '../core/syncFileSelection';
 
 const logger = createLogger('SyncManager');
 
 let _statusItem: vscode.StatusBarItem | null = null;
+
+// ── 密码处理（vscode 弹窗） ──
+
+const _passwordCache: Map<string, string> = new Map();
+
+export async function askPassword(server: ServerConfig): Promise<string | null> {
+    const key = `${server.username}@${server.host}`;
+    if (_passwordCache.has(key)) { return _passwordCache.get(key)!; }
+    if (server.password) {
+        _passwordCache.set(key, server.password);
+        return server.password;
+    }
+    const pwd = await vscode.window.showInputBox({
+        prompt: `输入 ${key} 的密码`,
+        password: true,
+        ignoreFocusOut: true
+    });
+    if (pwd) { _passwordCache.set(key, pwd); }
+    return pwd ?? null;
+}
+
+export function clearPasswordCache(): void {
+    _passwordCache.clear();
+}
 const _hostKeyWarningShown = new Set<string>();
 
 function getWorkspaceRoot(): string {
@@ -161,13 +185,23 @@ export async function executeSyncChangedFiles(uri?: vscode.Uri): Promise<void> {
             let totalSkipped = 0;
             const totalFailed: { file: string; error: string }[] = [];
 
+            // Resolve password once before the loop
+            let password: string | null = null;
+            if (resolved.server.authMode === 'password') {
+                password = await askPassword(resolved.server);
+                if (!password) {
+                    vscode.window.showWarningMessage('未输入密码，取消同步');
+                    return;
+                }
+            }
+
             for (const { dir: gitDir, name: gitName } of selectedRoots) {
                 if (token.isCancellationRequested) { break; }
                 const repoResolved: ResolvedSyncConfig = {
                     ...resolved,
                     remotePath: resolved.remotePath.replace(/\/$/, '') + '/' + gitName
                 };
-                const result = await syncChangedFiles(repoResolved, gitDir, token, requestedFile ? [requestedFile] : []);
+                const result = await syncChangedFiles(repoResolved, gitDir, token, requestedFile ? [requestedFile] : [], password);
                 totalUploaded += result.uploaded.length;
                 totalDeleted += result.deleted.length;
                 totalSkipped += result.skipped.length;

@@ -1,48 +1,16 @@
 /**
  * SFTP/SCP 同步编排层 — 组合 resolver、transport、serverStore 提供完整同步功能。
- * 依赖 vscode（密码输入弹窗）。
+ * 无 vscode 依赖 — 密码由调用方提供。
  */
-import * as vscode from 'vscode';
 import * as path from 'path';
-import { createLogger } from '../vscode/logger';
+import { createLoggerBase as createLogger } from '../core/loggerBase';
 import { filterNeedsDelete, filterNeedsSync, markDeletedBatch, markSyncedBatch, SyncTargetContext } from '../core/syncState';
-import { ServerConfig } from '../core/serverStore';
 import { ResolvedSyncConfig } from './resolver';
 import { deleteRemoteFile, scpUpload, ensureRemoteDir, isCancellationError } from './transport';
 import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
 import { getGitChangedEntries, GitChangedFile, isIgnored } from '../core/gitChangedFiles';
 
 const logger = createLogger('SftpClient');
-
-// ── 密码处理 ──
-
-const _passwordCache: Map<string, string> = new Map();
-
-export async function askPassword(server: ServerConfig): Promise<string | null> {
-    const key = `${server.username}@${server.host}`;
-
-    // 缓存
-    if (_passwordCache.has(key)) { return _passwordCache.get(key)!; }
-
-    // 从 serverStore 读取
-    if (server.password) {
-        _passwordCache.set(key, server.password);
-        return server.password;
-    }
-
-    // 弹窗输入
-    const pwd = await vscode.window.showInputBox({
-        prompt: `输入 ${key} 的密码`,
-        password: true,
-        ignoreFocusOut: true
-    });
-    if (pwd) { _passwordCache.set(key, pwd); }
-    return pwd ?? null;
-}
-
-export function clearPasswordCache(): void {
-    _passwordCache.clear();
-}
 
 // ── 公开接口 ──
 
@@ -53,16 +21,12 @@ export interface SyncResult {
     failed: { file: string; error: string }[];
 }
 
-export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRoot: string, token?: { isCancellationRequested: boolean }, fileFilters: string[] = []): Promise<SyncResult> {
+export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRoot: string, token?: { isCancellationRequested: boolean }, fileFilters: string[] = [], password: string | null = null): Promise<SyncResult> {
     const { server, remotePath, ignore } = resolved;
     const result: SyncResult = { uploaded: [], deleted: [], skipped: [], failed: [] };
 
-    let password: string | null = null;
-    if (server.authMode === 'password') {
-        password = await askPassword(server);
-        if (!password) {
-            throw new Error('未输入密码，取消同步');
-        }
+    if (server.authMode === 'password' && !password) {
+        throw new Error('未输入密码，取消同步');
     }
 
     const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath };

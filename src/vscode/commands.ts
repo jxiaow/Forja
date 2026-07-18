@@ -675,7 +675,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.sync', async (uri?: vscode.Uri) => {
             try {
-                const { executeSyncChangedFiles } = await import('../sync/syncWatcher');
+                const { executeSyncChangedFiles } = await import('./syncWatcher');
                 await executeSyncChangedFiles(uri);
             } catch (e: any) {
                 vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
@@ -693,7 +693,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     // forja.syncTestConnection — test remote sync connection
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.syncTestConnection', async () => {
-            const { executeTestConnection } = await import('../sync/syncWatcher');
+            const { executeTestConnection } = await import('./syncWatcher');
             await executeTestConnection();
         })
     );

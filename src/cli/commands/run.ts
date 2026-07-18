@@ -7,10 +7,11 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
-import { runCliResult } from '../../qt/shared/commandRunner';
+import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner';
+import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
 import { CliOptions } from '../../qt/cli/types';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
-import { ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
+import { ForjaJsonResult, ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
 import { getActiveTarget } from './activeTarget';
 import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
@@ -19,18 +20,13 @@ import { launchDesigner } from '../../qt/build/designer';
 
 export type RunAction = 'default' | 'detach' | 'debug' | 'custom' | 'designer';
 
-export interface RunResult {
-    ok: boolean;
+export interface RunResult extends ForjaJsonResult {
     action: 'run';
     runAction: RunAction;
-    workspace?: string;
-    activeTarget?: ActiveTarget;
     plan?: { mode: 'dryRun'; commands?: string[]; shellCommand?: string };
     runtime?: RuntimeState;
     exitCode?: number;
     logFile?: string;
-    diagnostics?: Diagnostic[];
-    nextAction?: string;
     customStdout?: string;
     customStderr?: string;
 }
@@ -93,7 +89,7 @@ export async function runRun(workspace: string, options: {
         } else {
             console.log(T('execLocal'));
         }
-        console.log(`  ${T('target')}${target.project}`);
+        console.log(`  ${T('target')}: ${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
         if (target.toolchain.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.toolchain.qmakeTarget}`); }
         console.log();
@@ -218,6 +214,15 @@ export async function runRun(workspace: string, options: {
                 activeTarget: target,
                 plan: { mode: 'dryRun', commands: planned.commands, shellCommand: planned.shellCommand },
             };
+        }
+
+        // Pre-kill: terminate existing instance before launching (avoid port/file-lock conflicts)
+        if (!options.detach) {
+            const projectDir = path.dirname(path.isAbsolute(target.project) ? target.project : path.join(workroot || workspace, target.project));
+            const runtimeInfo = resolveRuntimeTarget(projectDir, target.mode, target.arch);
+            if (runtimeInfo?.exePath) {
+                terminateExecutable(runtimeInfo.exePath);
+            }
         }
 
         const executed = await runCliResult(planned, { streaming: !wantsJson, detach: options.detach ?? false });
@@ -411,13 +416,13 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
         if (result.activeTarget) {
             const t = result.activeTarget;
             const qt = t.toolchain.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}` : '';
-            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
+            console.log(`${T('target')}: ${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
         }
         if (result.runtime?.pid) {
-            console.log(`${T('pidLabel')}${result.runtime.pid}`);
+            console.log(`${T('pidLabel')}: ${result.runtime.pid}`);
         }
         if (result.logFile) {
-            console.log(`${T('log')}${result.logFile}`);
+            console.log(`${T('log')}: ${result.logFile}`);
         }
         if (result.diagnostics) {
             for (const d of result.diagnostics) {
@@ -429,4 +434,5 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
             console.log(`  ${result.nextAction}`);
         }
     }
+    if (!result.ok) { process.exitCode = 1; }
 }

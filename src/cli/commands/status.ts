@@ -529,12 +529,12 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
 
     // ── Config section ──
     if (result.workspace) {
-        lines.push(`${indent}${T('workspace')}  ${result.workspace}`);
+        lines.push(`${indent}${T('workspace')}: ${result.workspace}`);
     }
     if (result.activeTarget) {
         const t = result.activeTarget;
-        lines.push(`${indent}${T('target')}  ${t.project}`);
-        lines.push(`${indent}${T('setupSummaryModeArch')}  ${t.mode} | ${t.arch} | ${t.runAt}`);
+        lines.push(`${indent}${T('target')}: ${t.project}`);
+        lines.push(`${indent}${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch} | ${t.runAt}`);
         if (t.toolchain.qmakeTarget) { lines.push(`${indent}${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}`); }
     }
 
@@ -569,7 +569,7 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
             tcParts.push(`VS ${ver}(${shortPath(t.toolchain.vsInstall)})`);
         }
         if (t.toolchain.jomPath) { tcParts.push('jom'); }
-        if (tcParts.length > 0) { lines.push(`${indent}${T('toolchainLabel')}  ${tcParts.join(', ')}`); }
+        if (tcParts.length > 0) { lines.push(`${indent}${T('toolchainLabel')}: ${tcParts.join(', ')}`); }
     }
 
     // ── Remote ──
@@ -577,9 +577,9 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         const rem = result.remote;
         const remParts: string[] = [];
         if (rem.server) { remParts.push(`${rem.server.name} (${rem.server.host})`); }
-        if (rem.remoteForjaBin) { remParts.push(`${T('forjaBin')}${rem.remoteForjaBin}`); }
-        if (remParts.length > 0) { lines.push(`${indent}${T('remoteLabel')}  ${remParts.join(', ')}`); }
-        if (rem.workspaceMode) { lines.push(`${indent}${T('workspaceMode')}  ${rem.workspaceMode}`); }
+        if (rem.remoteForjaBin) { remParts.push(`${T('forjaBin')}: ${rem.remoteForjaBin}`); }
+        if (remParts.length > 0) { lines.push(`${indent}${T('remoteLabel')}: ${remParts.join(', ')}`); }
+        if (rem.workspaceMode) { lines.push(`${indent}${T('workspaceMode')}: ${rem.workspaceMode}`); }
     }
 
     // ── Sync ──
@@ -587,26 +587,25 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         const s = result.sync;
         if (s.enabled) {
             if (s.server) {
-                lines.push(`${indent}${T('syncLabel')}  ${T('enabledStatus')} → ${s.server.username}@${s.server.host}:${s.server.port} → ${s.remotePath || ''} (${s.server.authMode})`);
+                lines.push(`${indent}${T('syncLabel')}: ${T('enabledStatus')} → ${s.server.username}@${s.server.host}:${s.server.port} → ${s.remotePath || ''} (${s.server.authMode})`);
             } else {
-                lines.push(`${indent}${T('syncLabel')}  ${T('enabledStatus')} (${T('sts.syncServerMissing')})`);
+                lines.push(`${indent}${T('syncLabel')}: ${T('enabledStatus')} (${T('sts.syncServerMissing')})`);
             }
         }
     }
 
     // ── Runtime (only show when running — readiness section covers the not-running case) ──
     if (result.runtime?.running) {
-        lines.push(`${indent}${T('runtimeLabel')}  ${T('running')} (${T('pid')}${result.runtime.pid})`);
-        if (result.runtime.executablePath) { lines.push(`${indent}  ${T('executable')}  ${result.runtime.executablePath}`); }
-        if (result.runtime.logFile) { lines.push(`${indent}  ${T('log')}  ${result.runtime.logFile}`); }
+        lines.push(`${indent}${T('runtimeLabel')}: ${T('running')} (${T('pid')}: ${result.runtime.pid})`);
+        if (result.runtime.executablePath) { lines.push(`${indent}  ${T('executable')}: ${result.runtime.executablePath}`); }
+        if (result.runtime.logFile) { lines.push(`${indent}  ${T('log')}: ${result.runtime.logFile}`); }
     }
 
     // ── Diagnostics (warnings/errors) ──
     if (result.diagnostics) {
         lines.push('');
         for (const d of result.diagnostics) {
-            const icon = d.level === 'warning' ? '⚠' : d.level === 'error' ? '✗' : 'ℹ';
-            lines.push(`${indent}${icon} ${d.message}`);
+            lines.push(`${indent}${T(d.level)}: ${d.message}`);
             if (d.hint) { lines.push(`${indent}  → ${d.hint}`); }
             if (d.fix) { lines.push(`${indent}  → ${d.fix}`); }
         }
@@ -616,7 +615,7 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
     if (result.nextAction) {
         lines.push('');
         lines.push(T('next'));
-        lines.push(`${indent}  ${result.nextAction}`);
+        lines.push(`  ${result.nextAction}`);
     }
 
     // ── Choices ──

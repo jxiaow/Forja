@@ -172,7 +172,7 @@ test('use target command supports setup-equivalent options', () => {
 
 test('sync command supports plan and reset actions', () => {
     const syncSrc = source('src/cli/commands/sync.ts');
-    assert.match(syncSrc, /SyncAction\s*=\s*'run'\s*\|\s*'plan'\s*\|\s*'reset'/, 'SyncAction must include run, plan, and reset');
+    assert.match(syncSrc, /SyncAction\s*=\s*'run'\s*\|\s*'plan'\s*\|\s*'reset'\s*\|\s*'status'\s*\|\s*'ignore'/, 'SyncAction must include run, plan, reset, status, and ignore');
 });
 
 // ── Doctor command ──

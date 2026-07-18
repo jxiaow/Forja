@@ -143,7 +143,7 @@ test('production source does not keep selected legacy compatibility helpers', ()
         'src/core/serverStore.ts',
         'src/sync/resolver.ts',
         'src/sync/cli.ts',
-        'src/sync/syncWatcher.ts',
+        'src/vscode/syncWatcher.ts',
         'src/ui/configPanel/templateData.ts',
         'src/core/syncState.ts'
     ];

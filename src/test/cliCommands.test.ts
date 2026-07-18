@@ -299,7 +299,7 @@ test('未知命令返回正确错误结构', () => {
     assert.equal(r.ok, false);
     assert.ok(r.diagnostics?.length > 0);
     assert.equal(r.diagnostics[0].level, 'error');
-    assert.ok(r.diagnostics[0].code || r.diagnostics[0].level, 'diagnostic must have identifying fields');
+    assert.ok(r.diagnostics[0].level, 'diagnostic must have a level');
 });
 
 test('未知参数返回正确错误结构', () => {

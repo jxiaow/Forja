@@ -12,27 +12,22 @@ import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
 import { createCppPlan } from '../../cpp/shared/plan';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
-import { ActiveTarget, Diagnostic, diag, T } from './types';
+import { ForjaJsonResult, ActiveTarget, Diagnostic, diag, T } from './types';
 import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 import { getServerById } from '../../core/serverStore';
 
 export type BuildAction = 'default' | 'fresh' | 'qmake' | 'rcc';
 
-export interface BuildResult {
-    ok: boolean;
+export interface BuildResult extends ForjaJsonResult {
     action: 'build';
     buildAction: BuildAction;
-    workspace?: string;
-    activeTarget?: ActiveTarget;
     plan?: { mode: 'dryRun'; commands?: string[]; shellCommand?: string };
     durationMs?: number;
     exitCode?: number;
     errors?: string[];
     warningSummary?: { total: number; summary: string };
     logFile?: string;
-    diagnostics?: Diagnostic[];
-    nextAction?: string;
 }
 
 function buildQtCliOptions(workspace: string, target: ActiveTarget, action: BuildAction, plan: boolean, qmakeArgs?: string, rccProjectPath?: string): CliOptions {
@@ -102,9 +97,9 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         const fallbackMode = 'debug' as const;
         const fallbackArch = (process.platform === 'win32' ? 'x86' : 'x64') as 'x86' | 'x64';
         const projectBasename = path.basename(projectPath, path.extname(projectPath));
-        // Inherit toolchain from any saved target to avoid empty toolchain for local builds
-        const anySavedTarget = allTargets[0];
-        const fallbackToolchain = anySavedTarget ? { ...anySavedTarget.toolchain } : {};
+        // Inherit toolchain from a saved target of the same kind to avoid mismatched toolchain
+        const sameKindTarget = allTargets.find(t => t.kind === kind);
+        const fallbackToolchain = sameKindTarget ? { ...sameKindTarget.toolchain } : {};
         targetResult = {
             target: savedProfile || {
                 id: `${kind}-${projectBasename}-${fallbackMode}-${fallbackArch}`,
@@ -145,7 +140,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         } else {
             console.log(T('execLocal'));
         }
-        console.log(`  ${T('target')}${target.project}`);
+        console.log(`  ${T('target')}: ${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
         if (target.toolchain.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.toolchain.qmakeTarget}`); }
         console.log();
@@ -257,10 +252,15 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             }
 
             // Pre-kill: terminate running instance before building (prevents LNK1204/file lock errors)
+            // Only kill if the run state executable matches this project (avoid cross-target kill)
             if (buildAction === 'default' || buildAction === 'fresh') {
                 const state = readRunState(workspace);
                 if (state?.executablePath) {
-                    terminateExecutable(state.executablePath);
+                    const projectBasename = path.basename(target.project, path.extname(target.project));
+                    const exeBasename = path.basename(state.executablePath, path.extname(state.executablePath));
+                    if (exeBasename === projectBasename) {
+                        terminateExecutable(state.executablePath);
+                    }
                 }
             }
 
@@ -312,6 +312,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             if (cleanPlan.ok && cleanPlan.commands.length > 0) {
                 const cleanResult = await runCliResult(cleanPlan, { streaming: false, detach: false, suppressedWarnings });
                 if (!cleanResult.ok) {
+                    const cleanDetail = cleanResult.errors?.slice(0, 2).join('; ') || `exit code ${cleanResult.exitCode ?? '?'}`;
                     return {
                         ok: false,
                         action: 'build',
@@ -319,7 +320,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                         workspace,
                         activeTarget: target,
                         exitCode: cleanResult.exitCode ?? undefined,
-                        diagnostics: [diag('error', T('cmd.freshCleanFailed'))],
+                        diagnostics: [diag('error', `${T('cmd.freshCleanFailed')}: ${cleanDetail}`)],
                         nextAction: 'forja doctor',
                     };
                 }
@@ -372,9 +373,14 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 terminateExecutable(runtimeInfo.exePath);
             } else {
                 // Makefile mismatch or unresolved — fall back to saved run state
+                // Only kill if the exe matches this project (avoid cross-target kill)
                 const state = readRunState(workspace);
                 if (state?.executablePath) {
-                    terminateExecutable(state.executablePath);
+                    const projectBasename = path.basename(target.project, path.extname(target.project));
+                    const exeBasename = path.basename(state.executablePath, path.extname(state.executablePath));
+                    if (exeBasename === projectBasename) {
+                        terminateExecutable(state.executablePath);
+                    }
                 }
             }
         }
@@ -417,13 +423,13 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
         if (result.activeTarget) {
             const t = result.activeTarget;
             const qt = t.toolchain.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}` : '';
-            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
+            console.log(`${T('target')}: ${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
         }
         if (result.durationMs) {
-            console.log(`${T('duration')}${result.durationMs}ms`);
+            console.log(`${T('duration')}: ${result.durationMs}ms`);
         }
         if (result.logFile) {
-            console.log(`${T('log')}${result.logFile}`);
+            console.log(`${T('log')}: ${result.logFile}`);
         }
         if (result.errors && result.errors.length > 0) {
             console.log(`${T('errors')}`);
@@ -432,12 +438,12 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
             }
         }
         if (result.warningSummary && result.warningSummary.total > 0) {
-            console.log(`${T('warnings')} ${result.warningSummary.total} (${result.warningSummary.summary})`);
+            console.log(`${T('warnings')}: ${result.warningSummary.total} (${result.warningSummary.summary})`);
         }
         if (result.diagnostics) {
             for (const d of result.diagnostics) {
                 console.log(`${T(d.level)}: ${d.message}`);
-                if (d.hint) { console.log(`  ${T('hint')}${d.hint}`); }
+                if (d.hint) { console.log(`  ${T('hint')}: ${d.hint}`); }
             }
         }
         if (result.nextAction) {
@@ -445,4 +451,5 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
             console.log(`  ${result.nextAction}`);
         }
     }
+    if (!result.ok) { process.exitCode = 1; }
 }

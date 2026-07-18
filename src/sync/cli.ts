@@ -204,24 +204,32 @@ export interface ConfigureSyncOptions {
 }
 
 export function configureSyncSettings(workspaceRoot: string, options: ConfigureSyncOptions): { ok: true } | { ok: false; error: string } {
+    // Snapshot original state for rollback
+    const originalSync = readProjectSyncConfig(workspaceRoot);
+    const originalRemote = loadRemoteSettings(workspaceRoot);
+
     // Update sync enabled state
-    const sync = readProjectSyncConfig(workspaceRoot);
+    const sync = { ...originalSync };
     if (options.enable !== false) {
         sync.enabled = true;
     }
     try {
-        writeProjectSyncConfig(workspaceRoot, {
-            enabled: sync.enabled,
-        });
-        // Update remote selectedServer and remotePath
-        const remote = loadRemoteSettings(workspaceRoot);
-        remote.selectedServer = options.serverId;
+        // Update remote selectedServer and remotePath first (fail-fast before modifying sync)
+        const remote = { ...originalRemote, selectedServer: options.serverId, remotePaths: { ...originalRemote.remotePaths } };
         if (options.remotePath) {
             remote.remotePaths[options.serverId] = options.remotePath;
         }
         saveRemoteSettings(workspaceRoot, remote);
+
+        // Then update sync enabled state
+        writeProjectSyncConfig(workspaceRoot, {
+            enabled: sync.enabled,
+        });
         return { ok: true };
     } catch (e) {
+        // Rollback both to original state
+        try { writeProjectSyncConfig(workspaceRoot, { enabled: originalSync.enabled }); } catch { /* best effort */ }
+        try { saveRemoteSettings(workspaceRoot, originalRemote); } catch { /* best effort */ }
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
 }

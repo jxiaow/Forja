@@ -2,7 +2,6 @@
  * `forja use` — user-facing configuration entry point.
  * Delegates target operations to useTarget/ module.
  */
-import * as fs from 'fs';
 import { ForjaJsonResult, ActiveTarget, Locale, T, Question } from './types';
 import { getActiveTarget, setActiveTarget } from './activeTarget';
 import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } from '../../core/workspaceStore';
@@ -49,7 +48,7 @@ export function formatUseText(result: UseResult, locale: Locale): string {
         lines.push(T('setupTitle'));
         if (result.activeTarget) {
             const t = result.activeTarget;
-            lines.push(`  ${T('target')} ${t.project}`);
+            lines.push(`  ${T('target')}: ${t.project}`);
             if (t.toolchain.qtPath) lines.push(`  ${T('setupSummaryQt')}: ${t.toolchain.qtPath}`);
             if (t.toolchain.vsInstall) lines.push(`  ${T('setupSummaryVs')}: ${t.toolchain.vsInstall}`);
             if (t.toolchain.jomPath) lines.push(`  ${T('init.currentJom')}: ${t.toolchain.jomPath}`);
@@ -73,7 +72,7 @@ export interface UseResult extends ForjaJsonResult {
     useScope?: string;
     activeTarget?: ActiveTarget;
     config?: ConfigSummary;
-    changed: string[];
+    changed?: string[];
 }
 
 // ── runUseTarget — dispatches to new module ──

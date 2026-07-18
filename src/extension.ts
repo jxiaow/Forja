@@ -12,7 +12,7 @@ import { generateCppProperties } from './qt/build/configGenerator';
 import { createLogger, initLogger } from './vscode/logger';
 import { detectEnv } from './qt/env/envDetector';
 import { ensureLocalStateDir } from './qt/shared/localState';
-import { registerSyncWatcher } from './sync/syncWatcher';
+import { registerSyncWatcher } from './vscode/syncWatcher';
 import { registerCommands } from './vscode/commands';
 import { initSettingsStore } from './vscode/settingsStore';
 import { registerWorkspaceWatcher } from './vscode/workspaceResolver';

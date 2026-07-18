@@ -87,5 +87,5 @@ export interface UseTargetResult extends ForjaJsonResult {
         qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qtVersion?: string; vsVersion?: string; qmakeTarget?: string };
         cpp?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
     };
-    changed: string[];
+    changed?: string[];
 }

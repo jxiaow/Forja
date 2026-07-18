@@ -6,27 +6,23 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
-import { runCliResult } from '../../qt/shared/commandRunner';
+import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner';
+import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
 import { createCppPlan } from '../../cpp/shared/plan';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
-import { ActiveTarget, Diagnostic, diag, T } from './types';
+import { ForjaJsonResult, ActiveTarget, Diagnostic, diag, T } from './types';
 import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 import { getServerById } from '../../core/serverStore';
 
-export interface CleanResult {
-    ok: boolean;
+export interface CleanResult extends ForjaJsonResult {
     action: 'clean';
-    workspace?: string;
-    activeTarget?: ActiveTarget;
     state?: 'cleaned' | 'already-clean';
     plan?: { mode: 'dryRun'; commands?: string[]; shellCommand?: string };
     durationMs?: number;
     exitCode?: number;
     changed?: string[];
-    diagnostics?: Diagnostic[];
-    nextAction?: string;
 }
 
 // ── Build artifact detection ──
@@ -213,6 +209,16 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             };
         }
 
+        // Pre-kill: terminate running exe before deleting artifacts (Windows file lock)
+        const state = readRunState(workspace);
+        if (state?.executablePath) {
+            const projectBasename = path.basename(target.project, path.extname(target.project));
+            const exeBasename = path.basename(state.executablePath, path.extname(state.executablePath));
+            if (exeBasename === projectBasename) {
+                terminateExecutable(state.executablePath);
+            }
+        }
+
         const started = Date.now();
         const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false, suppressedWarnings });
         const durationMs = Date.now() - started;
@@ -318,23 +324,21 @@ export function outputCleanResult(result: CleanResult, wantsJson: boolean): void
             } else {
                 console.log(T('execLocal'));
             }
+            console.log(`  ${T('target')}: ${t.project}`);
+            console.log(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         }
         const status = result.ok ? T('cleanSucceeded') : T('cleanFailed');
         console.log(`${T('clean')} ${status}`);
-        if (result.activeTarget) {
-            const t = result.activeTarget;
-            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}`);
-        }
         if (result.state) {
-            console.log(`${T('state')}${result.state}`);
+            console.log(`${T('state')}: ${result.state}`);
         }
         if (result.changed?.length) {
             for (const c of result.changed) {
-                console.log(`${T('cleaned')}${c}`);
+                console.log(`${T('cleaned')}: ${c}`);
             }
         }
         if (result.durationMs) {
-            console.log(`${T('duration')}${result.durationMs}ms`);
+            console.log(`${T('duration')}: ${result.durationMs}ms`);
         }
         if (result.diagnostics) {
             for (const d of result.diagnostics) {
@@ -346,4 +350,5 @@ export function outputCleanResult(result: CleanResult, wantsJson: boolean): void
             console.log(`  ${result.nextAction}`);
         }
     }
+    if (!result.ok) { process.exitCode = 1; }
 }

@@ -5,20 +5,15 @@
 import { requireActiveTarget } from './activeTarget';
 import { readRunState, clearRunState, resolveRunProcessStatus, isProcessRunning } from '../../qt/shared/localState';
 import { executeRemotePlan } from '../../remote/core/plan';
-import { ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
+import { ForjaJsonResult, ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { getServerById } from '../../core/serverStore';
 import * as cp from 'child_process';
 
-export interface StopResult {
-    ok: boolean;
+export interface StopResult extends ForjaJsonResult {
     action: 'stop';
-    workspace?: string;
-    activeTarget?: ActiveTarget;
     state: 'stopped' | 'not-running' | 'unsupported' | 'running';
     runtime?: RuntimeState;
-    diagnostics?: Diagnostic[];
-    nextAction?: string;
 }
 
 function terminateProcess(pid: number): { ok: boolean; error?: string } {
@@ -202,6 +197,8 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
             } else {
                 console.log(T('execLocal'));
             }
+            console.log(`  ${T('target')}: ${t.project}`);
+            console.log(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         }
         if (result.state === 'stopped') {
             console.log(`${T('processStopped')} (${T('pidLabel')}: ${result.runtime?.pid ?? 'unknown'})`);
@@ -214,7 +211,9 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
         }
         if (result.diagnostics) {
             for (const d of result.diagnostics) {
-                if (d.level !== 'info') {
+                if (d.level === 'error' || d.level === 'warning') {
+                    console.log(`${T(d.level)}: ${d.message}`);
+                } else if (d.level === 'info' && result.state !== 'unsupported') {
                     console.log(`${T(d.level)}: ${d.message}`);
                 }
             }
@@ -224,4 +223,5 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
             console.log(`  ${result.nextAction}`);
         }
     }
+    if (!result.ok) { process.exitCode = 1; }
 }

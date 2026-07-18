@@ -68,6 +68,8 @@ export async function runCli(argv: string[]): Promise<void> {
         const next = argv[langIdx + 1];
         if (!next || next.startsWith('--')) {
             langError = T('langRequiresValue');
+        } else if (next !== 'zh' && next !== 'en') {
+            langError = `${T('use.invalidLanguage')}: ${next}. ${T('use.useZhOrEn')}`;
         } else {
             langValue = next;
         }
@@ -294,15 +296,16 @@ function outputResult<T extends ForjaJsonResult>(result: T, wantsJson: boolean, 
     } else {
         const lines: string[] = [];
         if (!result.ok) {
-            lines.push(T('errorTitle'));
+            lines.push(T('error'));
         }
         if (result.diagnostics) {
             for (const d of result.diagnostics) {
-                if (d) { lines.push(`${d.message}`); }
+                if (d) { lines.push(`  ${T(d.level)}: ${d.message}`); }
             }
         }
         if (result.nextAction) {
-            lines.push(T('nextLabel'));
+            lines.push('');
+            lines.push(T('next'));
             const a = result.nextAction; lines.push(`  ${a}`);
         }
         console.log(lines.length > 0 ? lines.join('\n') : JSON.stringify(result, null, 2));
@@ -570,6 +573,14 @@ async function handleRemote(argv: string[], workroot: string, wantsJson: boolean
     const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
 
     switch (subCmd) {
+        case 'set': {
+            const result = runRemoteSet(workroot, {
+                server: extractFlag(argv, '--server'),
+                remotePath: extractFlag(argv, '--remote-path'),
+            });
+            outputResult(result, wantsJson, fmt);
+            return;
+        }
         case 'restore': {
             const repo = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
             const paths: string[] = [];
@@ -638,7 +649,7 @@ async function handleRemote(argv: string[], workroot: string, wantsJson: boolean
                 const msg = hint
                     ? `${T('idx.unknownRemoteSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: ${hint}?`
                     : `${T('idx.unknownRemoteSubcommand')}: ${subCmd}`;
-                outputResult({ ok: false, action: 'remote', remoteAction: 'show', changed: [], diagnostics: [{ level: 'error', message: msg }], nextAction: hint ? `forja remote ${hint}` : 'forja remote' }, wantsJson);
+                outputResult({ ok: false, action: 'remote', remoteAction: 'set', changed: [], diagnostics: [{ level: 'error', message: msg }], nextAction: hint ? `forja remote ${hint}` : 'forja remote' }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
@@ -656,14 +667,6 @@ async function handleRemote(argv: string[], workroot: string, wantsJson: boolean
                 return;
             }
             const result = runRemoteShow(workroot);
-            outputResult(result, wantsJson, fmt);
-            return;
-        }
-        case 'set': {
-            const result = runRemoteSet(workroot, {
-                server: extractFlag(argv, '--server'),
-                remotePath: extractFlag(argv, '--remote-path'),
-            });
             outputResult(result, wantsJson, fmt);
             return;
         }
@@ -813,13 +816,13 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
                 const msg = hint
                     ? `${T('idx.unknownServerSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: ${hint}?`
                     : `${T('idx.unknownServerSubcommand')}: ${subCmd}`;
-                outputResult({ ok: false, action: 'server', serverAction: 'add', changed: [], diagnostics: [{ level: 'error', message: msg }], nextAction: hint ? `forja server ${hint}` : 'forja server add' }, wantsJson);
+                outputResult({ ok: false, action: 'server', serverAction: 'list', changed: [], diagnostics: [{ level: 'error', message: msg }], nextAction: hint ? `forja server ${hint}` : 'forja server add' }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
             const listUnknown = findUnknownFlags(argv, listKnown, new Set(['--detail']));
             if (listUnknown.length > 0) {
-                outputResult({ ok: false, action: 'server', serverAction: 'add', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(listUnknown, listKnown) }], nextAction: 'forja server' }, wantsJson);
+                outputResult({ ok: false, action: 'server', serverAction: 'list', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(listUnknown, listKnown) }], nextAction: 'forja server' }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
@@ -865,7 +868,6 @@ async function handleBuild(argv: string[], workroot: string, wantsJson: boolean,
 
     const result = await runBuild(workroot, buildAction, { plan: hasFlag(argv, '--plan'), json: wantsJson, project: extractFlag(argv, '--project') });
     outputBuildResult(result, wantsJson);
-    if (!result.ok) { process.exitCode = 1; }
 }
 
 // ── Run ──
@@ -894,7 +896,6 @@ async function handleRun(argv: string[], workroot: string, wantsJson: boolean, l
         }
         const result = await runRun(workroot, { designer: uiFile, json: wantsJson });
         outputRunResult(result, wantsJson);
-        if (!result.ok) { process.exitCode = 1; }
         return;
     }
 
@@ -913,7 +914,6 @@ async function handleRun(argv: string[], workroot: string, wantsJson: boolean, l
         }
         const result = await runRun(workroot, { custom: customName, json: wantsJson });
         outputRunResult(result, wantsJson);
-        if (!result.ok) { process.exitCode = 1; }
         return;
     }
 
@@ -940,7 +940,6 @@ async function handleRun(argv: string[], workroot: string, wantsJson: boolean, l
         json: wantsJson,
     });
     outputRunResult(result, wantsJson);
-    if (!result.ok) { process.exitCode = 1; }
 }
 
 // ── Stop ──
@@ -960,7 +959,6 @@ async function handleStop(argv: string[], workroot: string, wantsJson: boolean, 
     }
     const result = await runStop(workroot, { json: wantsJson });
     outputStopResult(result, wantsJson);
-    if (!result.ok) { process.exitCode = 1; }
 }
 
 // ── Clean ──
@@ -980,7 +978,6 @@ async function handleClean(argv: string[], workroot: string, wantsJson: boolean,
     }
     const result = await runClean(workroot, { plan: hasFlag(argv, '--plan'), json: wantsJson });
     outputCleanResult(result, wantsJson);
-    if (!result.ok) { process.exitCode = 1; }
 }
 
 // ── Doctor ──
@@ -1065,21 +1062,21 @@ async function handleSync(argv: string[], workroot: string, wantsJson: boolean, 
 
     // X2: --file is only valid for default sync (execute/plan), not for subcommands
     if (files.length > 0 && subArg !== '') {
-        outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: T('sync.fileOnlyForExecute') }], nextAction: 'forja sync --file <path>' }, wantsJson);
+        outputResult({ ok: false, action: 'sync', syncAction: 'run', diagnostics: [{ level: 'error', message: T('sync.fileOnlyForExecute') }], nextAction: 'forja sync --file <path>' }, wantsJson);
         process.exitCode = 1;
         return;
     }
 
     // X3: --add/--rm are only valid for the ignore subcommand
     if (subArg !== 'ignore' && (hasFlag(argv, '--add') || hasFlag(argv, '--rm'))) {
-        outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: T('sync.ignoreFlagsOnlyWithIgnore') }], nextAction: 'forja sync ignore --add <pattern>' }, wantsJson);
+        outputResult({ ok: false, action: 'sync', syncAction: 'ignore', diagnostics: [{ level: 'error', message: T('sync.ignoreFlagsOnlyWithIgnore') }], nextAction: 'forja sync ignore --add <pattern>' }, wantsJson);
         process.exitCode = 1;
         return;
     }
 
     // X1: --dry-run and --yes are mutually exclusive
     if (hasFlag(argv, '--dry-run') && hasFlag(argv, '--yes')) {
-        outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: T('sync.dryRunYesConflict') }], nextAction: 'forja sync' }, wantsJson);
+        outputResult({ ok: false, action: 'sync', syncAction: 'run', diagnostics: [{ level: 'error', message: T('sync.dryRunYesConflict') }], nextAction: 'forja sync' }, wantsJson);
         process.exitCode = 1;
         return;
     }
@@ -1110,6 +1107,11 @@ async function handleSync(argv: string[], workroot: string, wantsJson: boolean, 
 
     // status: 显示配置，不需要 sync 前置配置
     if (subArg === 'status') {
+        if (hasFlag(argv, '--dry-run')) {
+            outputResult({ ok: false, action: 'sync', syncAction: 'status', diagnostics: [{ level: 'error', message: T('sync.dryRunIncompatible') }], nextAction: 'forja sync status' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
         const result = runSyncStatus(workroot);
         outputResult(result, wantsJson, fmt);
         return;
@@ -1117,24 +1119,37 @@ async function handleSync(argv: string[], workroot: string, wantsJson: boolean, 
 
     // ignore: 管理忽略规则，不需要 sync 前置配置
     if (subArg === 'ignore') {
+        if (hasFlag(argv, '--dry-run')) {
+            outputResult({ ok: false, action: 'sync', syncAction: 'ignore', diagnostics: [{ level: 'error', message: T('sync.dryRunIncompatible') }], nextAction: 'forja sync ignore' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
         if (hasFlag(argv, '--add') && hasFlag(argv, '--rm')) {
             outputResult({ ok: false, action: 'sync', syncAction: 'ignore', workroot, diagnostics: [diag('error', T('syncIgnoreAddRmConflict'))] }, wantsJson, fmt);
             process.exitCode = 1;
             return;
         }
         if (hasFlag(argv, '--add') || hasFlag(argv, '--rm')) {
-            const addPattern = extractFlag(argv, '--add');
-            const rmPattern = extractFlag(argv, '--rm');
-            if (!addPattern && !rmPattern) {
+            const hasAdd = hasFlag(argv, '--add');
+            const hasRm = hasFlag(argv, '--rm');
+            const addPattern = hasAdd ? extractFlag(argv, '--add') : undefined;
+            const rmPattern = hasRm ? extractFlag(argv, '--rm') : undefined;
+            if (hasAdd && !addPattern) {
                 outputResult({ ok: false, action: 'sync', syncAction: 'ignore', ignoreAction: 'add', workroot, diagnostics: [diag('error', T('syncIgnorePatternRequired'))] }, wantsJson, fmt);
                 process.exitCode = 1;
                 return;
-            } else if (addPattern) {
+            }
+            if (hasRm && !rmPattern) {
+                outputResult({ ok: false, action: 'sync', syncAction: 'ignore', ignoreAction: 'rm', workroot, diagnostics: [diag('error', T('syncIgnorePatternRequired').replace('--add', '--rm'))] }, wantsJson, fmt);
+                process.exitCode = 1;
+                return;
+            }
+            if (addPattern) {
                 const result = runSyncIgnoreAdd(workroot, addPattern);
                 outputResult(result, wantsJson, fmt);
                 if (!result.ok) process.exitCode = 1;
-            } else {
-                const result = runSyncIgnoreRm(workroot, rmPattern!);
+            } else if (rmPattern) {
+                const result = runSyncIgnoreRm(workroot, rmPattern);
                 outputResult(result, wantsJson, fmt);
                 if (!result.ok) process.exitCode = 1;
             }

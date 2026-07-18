@@ -52,8 +52,8 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
         'unlock': T('doctorActionUnlock'),
     };
 
-    lines.push(`${T('doctor')} ${actionMap[result.doctorAction] || result.doctorAction}`);
-    if (result.workspace) { lines.push(`${T('workspace')} ${result.workspace}`); }
+    lines.push(`${T('doctor')}: ${actionMap[result.doctorAction] || result.doctorAction}`);
+    if (result.workspace) { lines.push(`${T('workspace')}: ${result.workspace}`); }
 
     if (result.checks && result.checks.length > 0) {
         lines.push('');
@@ -66,7 +66,7 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
                     if (d.level === 'error' || d.level === 'warning') {
                         lines.push(`      ${T(d.level)}: ${d.message}`);
                     } else if (d.level === 'info') {
-                        lines.push(`      ℹ ${d.message}`);
+                        lines.push(`      ${T(d.level)}: ${d.message}`);
                     }
                 }
             }
@@ -92,7 +92,7 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
 
     if (result.changed && result.changed.length > 0) {
         lines.push('');
-        lines.push(`${T('changed')}${result.changed.join(', ')}`);
+        lines.push(`${T('changed')}: ${result.changed.join(', ')}`);
     }
 
     if (result.diagnostics && result.diagnostics.length > 0) {
@@ -101,7 +101,7 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
             if (d.level === 'error' || d.level === 'warning') {
                 lines.push(`${T(d.level)}: ${d.message}`);
             } else if (d.level === 'info') {
-                lines.push(`ℹ ${d.message}`);
+                lines.push(`${T(d.level)}: ${d.message}`);
             }
         }
     }

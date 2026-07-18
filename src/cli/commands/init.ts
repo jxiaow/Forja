@@ -22,9 +22,9 @@ import { confirm, prompt, choose, chooseRequired } from './prompt';
 
 export interface InitResult extends ForjaJsonResult {
     action: 'init';
-    workroot?: string;
     registered?: boolean;
     target?: TargetProfile;
+    questions?: Question[];
 }
 
 // ── Entry options ──
@@ -456,8 +456,8 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         }
     } else if (options.interactive) {
         const chosen = await chooseRequired(T('init.selectMode'), [
-            { value: 'debug' as const, label: 'debug' },
-            { value: 'release' as const, label: 'release' },
+            { value: 'debug' as const, label: `debug` },
+            { value: 'release' as const, label: `release` },
         ], item => item.label);
         mode = chosen.value;
     }
@@ -472,8 +472,8 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         }
     } else if (options.interactive && process.platform === 'win32') {
         const chosen = await chooseRequired(T('init.selectArch'), [
-            { value: 'x86' as const, label: 'x86' },
-            { value: 'x64' as const, label: 'x64' },
+            { value: 'x86' as const, label: `x86` },
+            { value: 'x64' as const, label: `x64` },
         ], item => item.label);
         arch = chosen.value;
     }

@@ -75,7 +75,7 @@ forja server --json
 forja list env --json
 
 # 列出远程配置
-forja list remote --json
+forja remote --json
 
 ```
 
@@ -152,20 +152,20 @@ forja server add --name test-server --host 192.168.1.100 --username dev --json
 
 ```bash
 # 设置远程服务器和路径
-forja use remote --server <server-id> --remote-path /home/dev/workspace --json
+forja remote set --server <server-id> --remote-path /home/dev/workspace --json
 
 # 验证配置
-forja list remote --json
+forja remote --json
 ```
 
 ### 3. 配置远程仓库映射
 
 ```bash
 # 设置主仓库
-forja use remote repo set --local qt_client --remote qt_client --role primary --json
+forja remote set repo set --local qt_client --remote qt_client --role primary --json
 
 # 设置带路径的映射仓库
-forja use remote repo set \
+forja remote set repo set \
   --local xylib_win32 \
   --remote xylib_arm64 \
   --role remote-only \
@@ -174,8 +174,8 @@ forja use remote repo set \
   --mount symlink \
   --json
 
-# 验证仓库映射（在 list remote 输出的 repos 段中）
-forja list remote --json
+# 验证仓库映射（在 remote 输出的 repos 段中）
+forja remote --json
 
 # 预期输出：包含 baseline, overlay, mount 等高级字段
 ```
@@ -184,30 +184,30 @@ forja list remote --json
 
 ```bash
 # 设置远程 Forja 路径
-forja use remote forja-bin set --path /home/dev/.forja/bin/forja --json
+forja remote set forja-bin set --path /home/dev/.forja/bin/forja --json
 
 # 验证
-forja list remote --json
+forja remote --json
 ```
 
 ### 5. 配置构建顺序
 
 ```bash
 # 设置构建顺序（位置参数）
-forja use remote build-order set qt:build sdk:rebuild --json
+forja remote set build-order set qt:build sdk:rebuild --json
 
 # 验证
-forja list remote --json
+forja remote --json
 
 # 清除构建顺序
-forja use remote build-order clear --json
+forja remote set build-order clear --json
 ```
 
 ### 6. 配置部署传输
 
 ```bash
 # 设置部署配置
-forja use remote transfer set \
+forja remote set transfer set \
   --server <server-id> \
   --path /deploy/app \
   --artifact out/app \
@@ -215,23 +215,23 @@ forja use remote transfer set \
   --json
 
 # 验证
-forja list remote --json
+forja remote --json
 
 # 清除部署配置
-forja use remote transfer clear --json
+forja remote set transfer clear --json
 ```
 
 ### 7. 配置远程工作区
 
 ```bash
 # 设置 staged 模式
-forja use remote workspace set --mode staged --path /home/dev/workspace/release --json
+forja remote set workspace set --mode staged --path /home/dev/workspace/release --json
 
 # 验证
-forja list remote --json
+forja remote --json
 
 # 清除工作区配置
-forja use remote workspace clear --json
+forja remote set workspace clear --json
 ```
 
 ---
@@ -242,7 +242,7 @@ forja use remote workspace clear --json
 
 ```bash
 # 查看同步计划
-forja sync --plan --json
+forja sync --dry-run --json
 
 # 同步单个文件
 forja sync --file src/main.cpp --json
@@ -331,11 +331,11 @@ forja server add --name test --host 127.0.0.1 --username dev --port abc --json
 
 ```bash
 # 包含路径分隔符的仓库名
-forja use remote repo set --local "../danger" --remote test --role primary --json
+forja remote set repo set --local "../danger" --remote test --role primary --json
 # 预期：ok: false, 仓库名验证错误
 
 # 包含斜杠的仓库名
-forja use remote repo set --local "a/b" --remote test --role primary --json
+forja remote set repo set --local "a/b" --remote test --role primary --json
 # 预期：ok: false, 仓库名验证错误
 ```
 
@@ -343,11 +343,11 @@ forja use remote repo set --local "a/b" --remote test --role primary --json
 
 ```bash
 # 无效的 action
-forja use remote build-order set qt:rebuild --json
+forja remote set build-order set qt:rebuild --json
 # 预期：ok: false, action 验证错误（qt 不支持 rebuild）
 
 # 有效的 action
-forja use remote build-order set qt:build qt:clean sdk:rebuild --json
+forja remote set build-order set qt:build qt:clean sdk:rebuild --json
 # 预期：ok: true
 ```
 
@@ -355,11 +355,11 @@ forja use remote build-order set qt:build qt:clean sdk:rebuild --json
 
 ```bash
 # 缺少 artifact
-forja use remote transfer set --server <id> --path /deploy --json
+forja remote set transfer set --server <id> --path /deploy --json
 # 预期：ok: false, 提示需要 artifact
 
 # 完整的配置
-forja use remote transfer set --server <id> --path /deploy --artifact out/app --json
+forja remote set transfer set --server <id> --path /deploy --artifact out/app --json
 # 预期：ok: true
 ```
 
@@ -375,7 +375,7 @@ forja use target --run-at invalid --json
 # 预期：ok: false, 提示 --run-at 只接受 local 或 remote
 
 # repo set 缺少必填参数
-forja use remote repo set --local test --json
+forja remote set repo set --local test --json
 # 预期：ok: false, 提示缺少 --remote 和 --role
 ```
 
@@ -418,10 +418,10 @@ forja init --json
 forja server --json
 
 # 检查远程配置
-forja list remote --json
+forja remote --json
 
 # 重新配置
-forja use remote --server <id> --remote-path <path> --json
+forja remote set --server <id> --remote-path <path> --json
 ```
 
 ### 4. nextActions 显示旧命令
@@ -435,7 +435,7 @@ forja use remote --server <id> --remote-path <path> --json
 
 ### 5. list remote repos 段字段完整性
 
-**问题**：`forja list remote` 的 repos 段需包含 baseline/overlay/mount 等字段
+**问题**：`forja remote` 的 repos 段需包含 baseline/overlay/mount 等字段
 
 **解决**：
 已修复。`RemoteConfigDetail.repos` 字段包含完整的 `RemoteRepoSettings` 定义。
@@ -452,7 +452,7 @@ forja use remote --server <id> --remote-path <path> --json
 - [ ] `forja list targets --json`
 - [ ] `forja server --json`
 - [ ] `forja list env --json`
-- [ ] `forja list remote --json`
+- [ ] `forja remote --json`
 - [ ] `forja use target --project <path> --json`
 - [ ] `forja use target --run-at remote --json`
 - [ ] `forja build --json`
@@ -462,15 +462,15 @@ forja use remote --server <id> --remote-path <path> --json
 
 ### 远程配置
 - [ ] `forja server add --name <name> --host <host> --username <user> --json`
-- [ ] `forja use remote --server <id> --remote-path <path> --json`
-- [ ] `forja use remote repo set --local <name> --remote <name> --role primary --json`
-- [ ] `forja use remote forja-bin set --path <path> --json`
-- [ ] `forja use remote build-order set qt:build sdk:rebuild --json`
-- [ ] `forja use remote transfer set --server <id> --path <path> --artifact <path> --json`
-- [ ] `forja use remote workspace set --mode staged --path <path> --json`
+- [ ] `forja remote set --server <id> --remote-path <path> --json`
+- [ ] `forja remote set repo set --local <name> --remote <name> --role primary --json`
+- [ ] `forja remote set forja-bin set --path <path> --json`
+- [ ] `forja remote set build-order set qt:build sdk:rebuild --json`
+- [ ] `forja remote set transfer set --server <id> --path <path> --artifact <path> --json`
+- [ ] `forja remote set workspace set --mode staged --path <path> --json`
 
 ### 高级功能
-- [ ] `forja sync --plan --json`
+- [ ] `forja sync --dry-run --json`
 - [ ] `forja doctor --remote --json`
 - [ ] `forja run designer <ui-file> --json`
 

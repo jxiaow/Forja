@@ -59,7 +59,7 @@ export function formatListText(result: ListResult, locale: Locale): string {
     switch (result.category) {
         case 'targets': {
             lines.push(T('targets'));
-            if (result.workspace) { lines.push(`${T('workspace')}  ${result.workspace}`); }
+            if (result.workspace) { lines.push(`${T('workspace')}: ${result.workspace}`); }
 
             // Show saved targets first (from workspaceStore)
             const saved = result.savedTargets || [];
@@ -109,14 +109,14 @@ export function formatListText(result: ListResult, locale: Locale): string {
                 }
             } else if (servers) {
                 const s = servers as ServerDetail;
-                lines.push(`  ${T('serverIdLabel')}${s.id}`);
-                lines.push(`  ${T('serverNameLabel')}${s.name}`);
-                lines.push(`  ${T('serverHostLabel')}${s.host}`);
-                lines.push(`  ${T('serverPortLabel')}${s.port}`);
-                lines.push(`  ${T('serverUsernameLabel')}${s.username}`);
-                lines.push(`  ${T('serverAuthLabel')}${s.authMode}`);
-                if (s.privateKeyPath) { lines.push(`  ${T('key')}${s.privateKeyPath}`); }
-                if (s.strictHostKeyChecking !== undefined) { lines.push(`  ${T('strictHostKey')}${s.strictHostKeyChecking}`); }
+                lines.push(`  ${T('serverIdLabel')}: ${s.id}`);
+                lines.push(`  ${T('serverNameLabel')}: ${s.name}`);
+                lines.push(`  ${T('serverHostLabel')}: ${s.host}`);
+                lines.push(`  ${T('serverPortLabel')}: ${s.port}`);
+                lines.push(`  ${T('serverUsernameLabel')}: ${s.username}`);
+                lines.push(`  ${T('serverAuthLabel')}: ${s.authMode}`);
+                if (s.privateKeyPath) { lines.push(`  ${T('key')}: ${s.privateKeyPath}`); }
+                if (s.strictHostKeyChecking !== undefined) { lines.push(`  ${T('strictHostKey')}: ${s.strictHostKeyChecking}`); }
             }
             break;
         }
@@ -127,13 +127,13 @@ export function formatListText(result: ListResult, locale: Locale): string {
                 const env = result.env || {};
                 if (result.envSubCategory === 'jom') {
                     if (env.jom) {
-                        lines.push(`  ${T('jomLabel')}${quotePath(env.jom)}`);
+                        lines.push(`  ${T('jomLabel')}: ${quotePath(env.jom)}`);
                     } else {
                         lines.push(`  ${T('nothingDetected')}`);
                     }
                 } else if (result.envSubCategory === 'make') {
                     if (env.make) {
-                        lines.push(`  ${T('makeLabel')}${T('available')}`);
+                        lines.push(`  ${T('makeLabel')}: ${T('available')}`);
                     } else {
                         lines.push(`  ${T('nothingDetected')}`);
                     }
@@ -153,9 +153,9 @@ export function formatListText(result: ListResult, locale: Locale): string {
                     // Show jom/make alongside Qt/VS
                     if (result.envSubCategory === 'qt') {
                         if (process.platform === 'win32') {
-                            lines.push(`  ${T('jomLabel')}${env.jom ? quotePath(env.jom) : T('nothingDetected')}`);
+                            lines.push(`  ${T('jomLabel')}: ${env.jom ? quotePath(env.jom) : T('nothingDetected')}`);
                         } else {
-                            lines.push(`  ${T('makeLabel')}${env.make ? T('available') : T('nothingDetected')}`);
+                            lines.push(`  ${T('makeLabel')}: ${env.make ? T('available') : T('nothingDetected')}`);
                         }
                     }
                 }
@@ -197,14 +197,14 @@ export function formatListText(result: ListResult, locale: Locale): string {
 
                 // jom / make
                 if (env.jom) {
-                    lines.push(`  ${T('jomLabel')}${quotePath(env.jom)}`);
+                    lines.push(`  ${T('jomLabel')}: ${quotePath(env.jom)}`);
                 } else {
-                    lines.push(`  ${T('jomLabel')}${T('nothingDetected')}`);
+                    lines.push(`  ${T('jomLabel')}: ${T('nothingDetected')}`);
                 }
                 if (env.make) {
-                    lines.push(`  ${T('makeLabel')}${T('available')}`);
+                    lines.push(`  ${T('makeLabel')}: ${T('available')}`);
                 } else if (process.platform !== 'win32') {
-                    lines.push(`  ${T('makeLabel')}${T('nothingDetected')}`);
+                    lines.push(`  ${T('makeLabel')}: ${T('nothingDetected')}`);
                 }
             }
             break;

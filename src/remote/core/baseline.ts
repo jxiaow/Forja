@@ -44,6 +44,7 @@ export interface RemoteRepoProbeInput {
 
 export interface RepoBaselineState {
     name: string;
+    remoteName?: string;
     mode: 'git' | 'files';
     remotePath?: string;
     missing?: boolean;
@@ -210,9 +211,14 @@ export async function buildRemoteBaselineStatus(options: BuildRemoteBaselineStat
             upstreamCommit: localRepo?.upstreamCommit
         };
         if (remoteRepo.mode === 'git') {
-            merged.commitAligned = !!localRepo?.localCommit && localRepo.localCommit === remoteRepo.remoteCommit;
+            const localHead = localRepo?.localCommit;
+            const upstreamHead = localRepo?.upstreamCommit;
+            const remoteHead = remoteRepo.remoteCommit;
+            const headMatch = !!localHead && localHead === remoteHead;
+            const upstreamMatch = options.allowUnpushed && !!upstreamHead && !!remoteHead && upstreamHead === remoteHead;
+            merged.commitAligned = headMatch || upstreamMatch;
             if (!merged.commitAligned) {
-                diagnostics.push({ level: 'error', message: remoteRepo.name + ' commit 不一致: local=' + (localRepo?.localCommit || 'unknown') + ', remote=' + (remoteRepo.remoteCommit || 'unknown') });
+                diagnostics.push({ level: 'error', message: remoteRepo.name + ' commit 不一致: local=' + (localHead || 'unknown') + ', remote=' + (remoteHead || 'unknown') });
             }
         }
         if (remoteRepo.mode === 'files' && !remoteRepo.missing) {

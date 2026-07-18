@@ -49,7 +49,7 @@ export function formatServerText(result: ServerResult, locale: Locale): string {
     }
 
     if (result.changed?.length) {
-        lines.push(`  ${T('changed')} ${result.changed.join(', ')}`);
+        lines.push(`  ${T('changed')}: ${result.changed.join(', ')}`);
     }
 
     if (result.nextAction) {
@@ -64,7 +64,7 @@ export interface ServerResult extends ForjaJsonResult {
     serverAction: 'add' | 'update' | 'remove';
     server?: ServerDetail;
     removed?: string;
-    changed: string[];
+    changed?: string[];
 }
 
 function toServerSummary(s: ServerConfig, selectedId?: string): ServerSummary {

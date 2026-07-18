@@ -176,7 +176,7 @@ export async function runSwitchTarget(workspace: string, args: {
                 const newId = wsMod.generateTargetId(matched.kind, matched.project, matched.mode, matched.arch, new Set(Object.keys(wsConfig.targets)));
                 if (newId !== matched.id) {
                     matched.id = newId;
-                    matched.name = `${matched.project.split('/').pop()?.replace(/\.\w+$/, '')} ${matched.mode} ${matched.arch}`;
+                    matched.name = `${path.basename(matched.project).replace(/\.\w+$/, '')} ${matched.mode} ${matched.arch}`;
                     if (oldId && oldId !== newId) { delete wsConfig.targets[oldId]; }
                 }
                 wsConfig.targets[newId] = matched;
@@ -259,7 +259,7 @@ export async function runSwitchTarget(workspace: string, args: {
                 if (chosen) {
                     canonicalProject = chosen.project;
                     kind = chosen.kind;
-                    if (!args.json) { console.log(`  ✓ ${chosen.label} — ${chosen.project}`); }
+                    if (!args.json) { console.log(`  ${T('selectedMark')} ${chosen.label} — ${chosen.project}`); }
                 } else {
                     return {
                         ok: false, action: 'use', useScope: 'target', changed: [],

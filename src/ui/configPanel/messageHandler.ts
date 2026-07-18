@@ -7,7 +7,7 @@ import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig, updateRemoteSelectedServer } from '../../core/serverStore';
 import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
-import { executeTestConnection, refreshSyncStatusBar } from '../../sync/syncWatcher';
+import { executeTestConnection, refreshSyncStatusBar } from '../../vscode/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
 import { setCppSetting } from '../../vscode/settingsStore';
 import { getDefaultArch, isWindows } from '../../cpp/platform';

@@ -23,7 +23,7 @@ test('workspace resolver watches workspaces.json registry instead of old project
 });
 
 test('sync watcher refreshes status from unified settings changes', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'sync', 'syncWatcher.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'vscode', 'syncWatcher.ts'), 'utf8');
 
     assert.match(source, /onSettingsChange/);
     assert.match(source, /section === 'sync'/);

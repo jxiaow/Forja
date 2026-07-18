@@ -55,6 +55,6 @@ test('shared scp upload quotes the remote target through a helper', () => {
 
 test('sync vscode modules live outside the qt tree', () => {
     assert.equal(fs.existsSync(path.join(repoRoot, 'src', 'qt', 'sync')), false);
-    assert.equal(fs.existsSync(path.join(repoRoot, 'src', 'sync', 'syncWatcher.ts')), true);
+    assert.equal(fs.existsSync(path.join(repoRoot, 'src', 'vscode', 'syncWatcher.ts')), true);
     assert.equal(fs.existsSync(path.join(repoRoot, 'src', 'qt', 'shared', 'syncCli.ts')), false);
 });

@@ -58,8 +58,8 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
     switch (result.syncAction) {
         case 'plan': {
             lines.push(T('syncPlan'));
-            if (result.server) { lines.push(`  ${T('serverLabel')} ${result.server}`); }
-            if (result.remotePath) { lines.push(`  ${T('remotePathLabel')} ${result.remotePath}`); }
+            if (result.server) { lines.push(`  ${T('serverLabel')}: ${result.server}`); }
+            if (result.remotePath) { lines.push(`  ${T('remotePathLabel')}: ${result.remotePath}`); }
             if (result.plan) {
                 if (result.plan.pending?.length) {
                     lines.push(`  ${T('pending')} (${result.plan.pending.length}):`);
@@ -78,8 +78,8 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
         }
         case 'run': {
             lines.push(T('syncComplete'));
-            if (result.server) { lines.push(`  ${T('serverLabel')} ${result.server}`); }
-            if (result.remotePath) { lines.push(`  ${T('remotePathLabel')} ${result.remotePath}`); }
+            if (result.server) { lines.push(`  ${T('serverLabel')}: ${result.server}`); }
+            if (result.remotePath) { lines.push(`  ${T('remotePathLabel')}: ${result.remotePath}`); }
             if (result.uploaded?.length) {
                 lines.push(`  ${T('uploaded')} (${result.uploaded.length}):`);
                 for (const f of result.uploaded) { lines.push(`    ${f}`); }
@@ -102,10 +102,10 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
             lines.push(`  ${result.enabled ? T('enabledStatus') : T('disabledStatus')}`);
             if (result.serverDetail) {
                 const s = result.serverDetail;
-                lines.push(`  ${T('serverLabel')} ${s.name} (${s.username}@${s.host}:${s.port})`);
+                lines.push(`  ${T('serverLabel')}: ${s.name} (${s.username}@${s.host}:${s.port})`);
             }
             if (result.remotePath) {
-                lines.push(`  ${T('remotePathLabel')} ${result.remotePath}`);
+                lines.push(`  ${T('remotePathLabel')}: ${result.remotePath}`);
             }
             if (result.ignore?.length) {
                 lines.push(`  ${T('syncIgnore')}: ${result.ignore.join(', ')}`);
@@ -160,6 +160,7 @@ export async function runSyncPlan(workspace: string, fileFilters: string[] = [])
                 pending: plan.pending,
                 deleted: plan.deleted,
                 skipped: plan.skipped,
+                skippedDetails: plan.skippedDetails?.length ? plan.skippedDetails : undefined,
             },
             server: plan.server,
             remotePath: plan.remotePath,

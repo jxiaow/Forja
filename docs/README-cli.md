@@ -187,8 +187,6 @@ forja init --json
 forja list targets --json     # 列出可用项目（.pro/.sln/Makefile/CMakeLists.txt）
 forja list env --json         # 列出检测到的工具链环境
 forja list env --qt --json    # 列出 Qt 环境详情
-forja remote --json             # 显示远程执行配置（含 repos）
-forja list lang --json        # 列出当前语言设置
 ```
 
 ### `forja use`
@@ -287,14 +285,19 @@ forja doctor fix --remote   # 修复远程问题（部署 forja CLI）
 ```bash
 forja sync                              # 同步所有变更
 forja sync --yes                        # 跳过确认直接同步
-forja sync --reset                      # 清除同步状态
+forja sync reset                        # 清除同步状态
 forja sync --dry-run                    # 预览待同步文件
 ```
 
 | 选项 | 说明 |
 | --- | --- |
 | `--yes` | 跳过确认直接执行同步 |
-| `--reset` | 清除同步状态 |
+
+子命令：
+
+| 子命令 | 说明 |
+| --- | --- |
+| `reset` | 清除同步状态 |
 
 服务器列表存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/workspaces/<hash>.json`。
 

@@ -79,7 +79,11 @@ export function buildSuccessResult(config: ResolvedConfig, toolchain: ToolchainI
     const warnings = toolchainWarnings(toolchain);
     diagnostics.push(...warnings);
 
-    const toolchainReady = config.qtPath && (os.platform() !== 'win32' || config.vsInstall);
+    const toolchainReady = !!(config.qtPath && (os.platform() !== 'win32' || config.vsInstall));
+
+    if (!toolchainReady) {
+        diagnostics.push({ level: 'warning', message: T('use.toolchainIncomplete') });
+    }
 
     return {
         ok: true,
@@ -116,7 +120,7 @@ export function formatUseTargetText(result: UseTargetResult): string {
 
     const t = result.activeTarget;
     if (t) {
-        lines.push(`  ${T('target')} ${t.project}`);
+        lines.push(`  ${T('target')}: ${t.project}`);
         if (t.toolchain.qtPath) {
             const ver = result.config?.qt?.qtVersion ? ` (${result.config.qt.qtVersion})` : '';
             lines.push(`  ${T('setupSummaryQt')}${ver}: ${t.toolchain.qtPath}`);
@@ -133,14 +137,13 @@ export function formatUseTargetText(result: UseTargetResult): string {
     }
 
     if (result.changed && result.changed.length > 0) {
-        lines.push(`  ${T('changed')} ${result.changed.join(', ')}`);
+        lines.push(`  ${T('changed')}: ${result.changed.join(', ')}`);
     }
 
     if (result.diagnostics?.length) {
         lines.push('');
         for (const d of result.diagnostics) {
-            const icon = d.level === 'warning' ? '⚠' : d.level === 'error' ? '✗' : 'ℹ';
-            lines.push(`  ${icon} ${d.message}`);
+            lines.push(`  ${T(d.level)}: ${d.message}`);
         }
     }
 
