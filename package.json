@@ -2,7 +2,7 @@
   "name": "forja",
   "displayName": "Forja (Dev)",
   "publisher": "forja",
-  "description": "Build, run, debug C++ projects — Qt (qmake) and C++ (.sln/Makefile) in one extension",
+  "description": "Build C++ projects — Qt (qmake) and C++ (.sln/Makefile/CMake) with local and remote execution",
   "version": "0.7.55.dev",
   "icon": "media/icon.png",
   "engines": {
@@ -115,10 +115,6 @@
       {
         "command": "forja._showActions",
         "title": "Forja: Actions"
-      },
-      {
-        "command": "forja.config.openPage",
-        "title": "Forja: Open Config Page"
       },
       {
         "command": "forja._selectTarget",

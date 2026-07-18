@@ -17,10 +17,10 @@ import { runClean, outputCleanResult } from './clean';
 import { runDoctor, formatDoctorText } from './doctor';
 import { runSyncPlan, runSyncExecute, runSyncReset, runSyncStatus, runSyncIgnoreList, runSyncIgnoreAdd, runSyncIgnoreRm, formatSyncText, SyncResult, interactiveSyncSetup } from './sync';
 import { runInit, formatInitText } from './init';
-import { confirm, prompt, choose } from './prompt';
+import { confirm } from './prompt';
 import { resolveLocale, Locale, T, setGlobalLocale, diag } from './types';
 import { loadGlobalConfig, saveGlobalConfig, loadRemoteSettings } from '../../core/settingsIO';
-import { readServers, getServerById, readProjectSyncConfig } from '../../core/serverStore';
+import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
 import { resolveWorkroot } from '../../core/workspaceStore';
 import { ClassifiedChanges } from '../../sync/cli';
@@ -328,7 +328,7 @@ function handleStatus(argv: string[], workroot: string, wantsJson: boolean, loca
 
 // ── Init ──
 
-async function handleInit(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+async function handleInit(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
     const initKnown = new Set(['--workroot', '--answers', '--lang']);
     const initWithValue = new Set(['--workroot', '--answers', '--lang']);
     const initUnknown = findUnknownFlags(argv, initKnown, initWithValue);
@@ -835,7 +835,7 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
 
 // ── Build ──
 
-async function handleBuild(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+async function handleBuild(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
     const buildUnknown = findUnknownFlags(argv, new Set(['--plan', '--project']), new Set(['--project']));
     if (buildUnknown.length > 0) {
         outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: unknownFlagsMessage(buildUnknown, new Set(['--plan','--project'])) }], nextAction: 'forja build' }, wantsJson);
@@ -872,7 +872,7 @@ async function handleBuild(argv: string[], workroot: string, wantsJson: boolean,
 
 // ── Run ──
 
-async function handleRun(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+async function handleRun(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
     const runUnknown = findUnknownFlags(argv, new Set(['--detach', '--plan', '--debug']), new Set());
     if (runUnknown.length > 0) {
         outputResult({ ok: false, action: 'run', diagnostics: [{ level: 'error', message: unknownFlagsMessage(runUnknown, new Set(['--detach','--plan','--debug'])) }], nextAction: 'forja run' }, wantsJson);
@@ -944,7 +944,7 @@ async function handleRun(argv: string[], workroot: string, wantsJson: boolean, l
 
 // ── Stop ──
 
-async function handleStop(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+async function handleStop(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
     const stopUnknown = findUnknownFlags(argv, new Set(), new Set());
     if (stopUnknown.length > 0) {
         outputResult({ ok: false, action: 'stop', diagnostics: [{ level: 'error', message: unknownFlagsMessage(stopUnknown, new Set()) }], nextAction: 'forja stop' }, wantsJson);
@@ -963,7 +963,7 @@ async function handleStop(argv: string[], workroot: string, wantsJson: boolean, 
 
 // ── Clean ──
 
-async function handleClean(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+async function handleClean(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
     const cleanUnknown = findUnknownFlags(argv, new Set(['--plan']), new Set());
     if (cleanUnknown.length > 0) {
         outputResult({ ok: false, action: 'clean', diagnostics: [{ level: 'error', message: unknownFlagsMessage(cleanUnknown, new Set(['--plan'])) }], nextAction: 'forja clean' }, wantsJson);

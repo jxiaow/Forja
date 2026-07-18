@@ -8,7 +8,7 @@ import { resolveBuildConfig } from './configResolver';
 import { buildRunCommand } from './commandRunner';
 import { resolveRuntimeTarget, validateMakefile } from './runtimeTarget';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from './rccResolver';
-import { getAvailableArch, getDefaultArch } from '../platform/requirements';
+import { getDefaultArch } from '../platform/requirements';
 
 function emptyResult(options: CliOptions, workspace: string): CliResult {
     return {

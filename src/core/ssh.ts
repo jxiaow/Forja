@@ -21,8 +21,8 @@ export function buildSshArgs(server: ServerConfig, options?: SshArgsOptions): st
         args.push('-i', server.privateKeyPath);
     }
     args.push('-p', String(server.port));
-    // 默认启用严格主机密钥检查；显式设为 true 时启用
-    const hostKeyChecking = server.strictHostKeyChecking === true ? 'yes' : 'no';
+    // 默认启用严格主机密钥检查；显式设为 false 时关闭
+    const hostKeyChecking = server.strictHostKeyChecking !== false ? 'yes' : 'no';
     args.push('-o', `StrictHostKeyChecking=${hostKeyChecking}`);
     args.push('-o', 'ConnectTimeout=10');
     if (server.authMode === 'key') {

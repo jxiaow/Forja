@@ -14,7 +14,6 @@ import test, { before, after } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { execSync } from 'child_process';
 
 // ── 测试环境 ──
@@ -39,12 +38,13 @@ function run(args: string, cwd?: string): { code: number; out: string; err: stri
             timeout: 30000,
         });
         return { code: 0, out, err: '' };
-    } catch (e: any) {
-        return { code: e.status || 1, out: e.stdout || '', err: e.stderr || '' };
+    } catch (e: unknown) {
+        const err = e as { status?: number; stdout?: string; stderr?: string };
+        return { code: err.status || 1, out: err.stdout || '', err: err.stderr || '' };
     }
 }
 
-function json(args: string, cwd?: string): any {
+function json(args: string, cwd?: string) {
     const r = run(`${args} --json`, cwd);
     try { return JSON.parse(r.out); } catch { return null; }
 }
@@ -109,7 +109,7 @@ test('list targets current 与 status activeTarget 一致', () => {
     if (statusJ.activeTarget) {
         // 规范化路径比较
         const activeProject = statusJ.activeTarget.project.replace(/\\/g, '/');
-        const currentTarget = listJ.targets?.find((t: any) => t.current === true);
+        const currentTarget = listJ.targets?.find((t: { current?: boolean }) => t.current === true);
 
         assert.ok(currentTarget, 'list targets 必须有一个 current=true 的目标');
         const currentProject = currentTarget.project.replace(/\\/g, '/');
@@ -189,7 +189,7 @@ test('文本输出标签后紧跟值（无多余空格）', () => {
             // ：后面不应该有多个连续空格（缩进除外）
             const afterColon = line.split('：')[1];
             if (afterColon && !line.startsWith(' ')) {
-                assert.doesNotMatch(afterColon, /^  /,
+                assert.doesNotMatch(afterColon, /^ {2}/,
                     `中文标签后不应有多余空格: ${line}`);
             }
         }
@@ -206,7 +206,7 @@ test('server add → list servers 能看到', () => {
     assert.ok(addResult.ok, 'add 必须成功');
 
     const listResult = json('server');
-    const found = listResult.servers?.find((s: any) => s.name === name);
+    const found = listResult.servers?.find((s: { name?: string }) => s.name === name);
     assert.ok(found, `list servers 必须包含 ${name}`);
     assert.equal(found.host, '127.0.0.1');
 
@@ -223,7 +223,7 @@ test('server update 实际修改了数据', () => {
     assert.ok(updateResult.ok);
 
     const listResult = json('server');
-    const found = listResult.servers?.find((s: any) => s.id === addResult.server.id);
+    const found = listResult.servers?.find((s: { id?: string }) => s.id === addResult.server.id);
     assert.equal(found?.host, '2.2.2.2', 'host 必须已更新');
 
     run(`server remove ${addResult.server.id} --force`);
@@ -358,7 +358,7 @@ test('server 完整 CRUD 流程', () => {
 
     // Read
     const listResult = json('server');
-    const found = listResult.servers.find((s: any) => s.id === serverId);
+    const found = listResult.servers.find((s: { id?: string }) => s.id === serverId);
     assert.ok(found, 'list 必须包含新创建的 server');
     assert.equal(found.name, name);
 
@@ -369,7 +369,7 @@ test('server 完整 CRUD 流程', () => {
 
     // Verify update
     const afterUpdate = json('server');
-    const updated = afterUpdate.servers.find((s: any) => s.id === serverId);
+    const updated = afterUpdate.servers.find((s: { id?: string }) => s.id === serverId);
     assert.equal(updated.host, '192.168.1.1', 'host 必须已更新');
     assert.equal(updated.port, 3333, 'port 必须已更新');
 
@@ -380,7 +380,7 @@ test('server 完整 CRUD 流程', () => {
 
     // Verify delete
     const afterRemove = json('server');
-    const stillThere = afterRemove.servers.find((s: any) => s.id === serverId);
+    const stillThere = afterRemove.servers.find((s: { id?: string }) => s.id === serverId);
     assert.ok(!stillThere, 'server 必须已删除');
 });
 
@@ -504,7 +504,7 @@ test('server add 后配置持久化', () => {
 
     // 重新读取
     const listResult = json('server');
-    const found = listResult.servers.find((s: any) => s.name === name);
+    const found = listResult.servers.find((s: { name?: string }) => s.name === name);
     assert.ok(found, 'server 必须持久化');
     assert.equal(found.host, '9.9.9.9');
 
@@ -546,7 +546,7 @@ test('JSON 输出必须可解析', () => {
         let parsed;
         try {
             parsed = JSON.parse(r.out);
-        } catch (e) {
+        } catch {
             assert.fail(`${cmd} --json 输出不是有效 JSON: ${r.out.slice(0, 200)}`);
         }
         assert.ok(parsed, `${cmd} 必须返回 JSON 对象`);

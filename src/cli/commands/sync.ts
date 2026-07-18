@@ -34,7 +34,7 @@ export interface SyncResult extends ForjaJsonResult {
 
 // ── Formatter ──
 
-export function formatSyncText(result: SyncResult, locale: Locale): string {
+export function formatSyncText(result: SyncResult, _locale: Locale): string {
     const lines: string[] = [];
 
     if (!result.ok) {

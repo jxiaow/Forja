@@ -9,7 +9,7 @@ import type { TargetProfile } from '../../../core/workspaceStore';
 import { detectContext } from './detect';
 import { resolveAll } from './resolve';
 import { saveAll, buildTargetProfile } from './save';
-import { buildSuccessResult, formatUseTargetText } from './report';
+import { buildSuccessResult } from './report';
 import type { ResolveOptions, UseTargetResult, ResolvedConfig } from './types';
 import { detectProjectType } from '../../../core/projectTypeDetector';
 import { detectEnv } from '../../../qt/env/envDetector';

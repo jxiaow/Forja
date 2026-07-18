@@ -17,10 +17,8 @@ import {
     saveWorkspaceConfig,
     getActiveTarget,
     workspacesDir,
-    DEFAULT_QT_MODULE_PREFS,
     type WorkspaceConfig,
     type TargetProfile,
-    type QtModulePrefs,
 } from '../core/workspaceStore';
 
 export type { ForjaSettings, QtSettings, CppSettings, SyncSettings } from '../core/settingsIO';
@@ -56,20 +54,23 @@ function _buildQtSettings(config: WorkspaceConfig, target: TargetProfile | null)
     const prefs = config.qtModulePrefs;
     const d = DEFAULT_SETTINGS.qt;
 
+    // Only use target if it's a Qt project — prevent cross-type contamination
+    const qtTarget = target?.kind === 'qt' ? target : null;
+
     let pinnedProject: QtSettings['pinnedProject'] = null;
-    if (target && target.project) {
-        pinnedProject = { root: config.workroot, relative: target.project };
+    if (qtTarget && qtTarget.project) {
+        pinnedProject = { root: config.workroot, relative: qtTarget.project };
     }
 
     return {
-        mode: target ? target.mode : d.mode,
-        arch: target ? target.arch : d.arch,
-        vsInstall: target?.toolchain.vsInstall ?? d.vsInstall,
-        qtPath: target?.toolchain.qtPath ?? d.qtPath,
-        qtVersion: target?.toolchain.qtVersion ?? d.qtVersion,
-        jomPath: target?.toolchain.jomPath ?? d.jomPath,
+        mode: qtTarget ? qtTarget.mode : d.mode,
+        arch: qtTarget ? qtTarget.arch : d.arch,
+        vsInstall: qtTarget?.toolchain.vsInstall ?? d.vsInstall,
+        qtPath: qtTarget?.toolchain.qtPath ?? d.qtPath,
+        qtVersion: qtTarget?.toolchain.qtVersion ?? d.qtVersion,
+        jomPath: qtTarget?.toolchain.jomPath ?? d.jomPath,
         pinnedProject,
-        target: target?.toolchain.qmakeTarget ?? d.target,
+        target: qtTarget?.toolchain.qmakeTarget ?? d.target,
         qmakeArgs: prefs.qmakeArgs,
         cStandard: prefs.cStandard,
         cppStandard: prefs.cppStandard,
@@ -91,11 +92,14 @@ function _buildCppSettings(config: WorkspaceConfig, target: TargetProfile | null
     const prefs = config.cppModulePrefs;
     const d = DEFAULT_SETTINGS.cpp;
 
+    // Only use target if it's a C++ project — prevent cross-type contamination
+    const cppTarget = target?.kind === 'cpp' ? target : null;
+
     return {
-        mode: target ? target.mode : d.mode,
-        arch: target ? target.arch : d.arch,
-        vsInstall: target?.toolchain.vsInstall ?? d.vsInstall,
-        pinnedProject: (target && target.project) ? target.project : null,
+        mode: cppTarget ? cppTarget.mode : d.mode,
+        arch: cppTarget ? cppTarget.arch : d.arch,
+        vsInstall: cppTarget?.toolchain.vsInstall ?? d.vsInstall,
+        pinnedProject: (cppTarget && cppTarget.project) ? cppTarget.project : null,
         scanDepth: prefs.scanDepth,
     };
 }

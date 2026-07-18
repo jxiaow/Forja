@@ -11,7 +11,7 @@
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { loadWorkspacesRegistry, normalizePath, workspacesRegistryPath } from '../core/workspaceStore';
+import { loadWorkspacesRegistry, normalizePath } from '../core/workspaceStore';
 import { forjaConfigDir } from '../core/settingsIO';
 
 export type ModuleType = 'qt' | 'cpp' | 'sync';
@@ -56,7 +56,6 @@ export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void
     );
 
     // 监听 workspaces.json 变化，重置缓存
-    const registryPath = workspacesRegistryPath();
     const configDir = forjaConfigDir();
     if (!fs.existsSync(configDir)) {
         fs.mkdirSync(configDir, { recursive: true });

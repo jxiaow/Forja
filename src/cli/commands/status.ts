@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-    ForjaJsonResult, Diagnostic, Readiness, ReadinessState, ActiveTarget,
+    ForjaJsonResult, Diagnostic, Readiness, ReadinessState,
     RuntimeState, Locale, readinessText, readinessSymbol, T,
 } from './types';
 import { getActiveTarget } from './activeTarget';
@@ -13,7 +13,7 @@ import { collectTargetCandidates } from './candidates';
 import {
     loadSyncSettings, loadRemoteSettings,
     getCorruptedConfigs, clearCorruptedConfigs,
-    SyncSettings, RemoteSettings, CorruptedConfig,
+    RemoteSettings, CorruptedConfig,
 } from '../../core/settingsIO';
 import { resolveWorkroot as resolveWorkrootForStatus, loadWorkspaceConfig as loadWsConfig } from '../../core/workspaceStore';
 import type { TargetProfile } from '../../core/workspaceStore';

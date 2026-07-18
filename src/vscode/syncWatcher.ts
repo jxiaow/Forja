@@ -240,7 +240,6 @@ export async function executeSyncChangedFiles(uri?: vscode.Uri): Promise<void> {
 
 export async function executeTestConnection(): Promise<void> {
     const wsRoot = getWorkspaceRoot();
-    const project = wsRoot ? readProjectSyncConfig(wsRoot) : null;
     const remote = wsRoot ? loadRemoteSettings(wsRoot) : null;
     const servers = readServers();
 

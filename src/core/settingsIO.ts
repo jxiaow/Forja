@@ -413,47 +413,6 @@ function isBool(v: unknown): v is boolean { return typeof v === 'boolean'; }
 function isStringArray(v: unknown): v is string[] { return Array.isArray(v) && v.every(i => typeof i === 'string'); }
 function isNumber(v: unknown): v is number { return typeof v === 'number'; }
 
-function sanitizeQt(raw: Record<string, unknown>): QtSettings {
-    const d = DEFAULT_QT;
-
-    let pinnedProject: QtSettings['pinnedProject'] = null;
-    if (raw.pinnedProject && typeof raw.pinnedProject === 'object') {
-        const p = raw.pinnedProject as Record<string, unknown>;
-        if (isString(p.root) && isString(p.relative)) {
-            pinnedProject = { root: p.root, relative: p.relative };
-        }
-    }
-
-    let customCommands: QtSettings['customCommands'] = [];
-    if (Array.isArray(raw.customCommands)) {
-        customCommands = raw.customCommands.filter(
-            (c: unknown) => !!c && typeof c === 'object' && isString((c as Record<string, unknown>).name) && isString((c as Record<string, unknown>).command)
-        ) as QtSettings['customCommands'];
-    }
-
-    return {
-        mode: (raw.mode === 'debug' || raw.mode === 'release' || raw.mode === '') ? raw.mode : d.mode,
-        arch: (raw.arch === 'x86' || raw.arch === 'x64' || raw.arch === '') ? raw.arch : d.arch,
-        vsInstall: isString(raw.vsInstall) ? raw.vsInstall : d.vsInstall,
-        qtPath: isString(raw.qtPath) ? raw.qtPath : d.qtPath,
-        qtVersion: isString(raw.qtVersion) ? raw.qtVersion : d.qtVersion,
-        jomPath: isString(raw.jomPath) ? raw.jomPath : d.jomPath,
-        pinnedProject,
-        target: isString(raw.target) ? raw.target : d.target,
-        qmakeArgs: isString(raw.qmakeArgs) ? raw.qmakeArgs : d.qmakeArgs,
-        cStandard: isString(raw.cStandard) ? raw.cStandard : d.cStandard,
-        cppStandard: isString(raw.cppStandard) ? raw.cppStandard : d.cppStandard,
-        designerPath: isString(raw.designerPath) ? raw.designerPath : d.designerPath,
-        qtSourcePath: isString(raw.qtSourcePath) ? raw.qtSourcePath : d.qtSourcePath,
-        manualProPath: isString(raw.manualProPath) ? raw.manualProPath : d.manualProPath,
-        rccProjectPath: isString(raw.rccProjectPath) ? raw.rccProjectPath : d.rccProjectPath,
-        scanExcludeDirs: isStringArray(raw.scanExcludeDirs) ? raw.scanExcludeDirs : d.scanExcludeDirs,
-        customCommands,
-        fileSyncPromptEnabled: isBool(raw.fileSyncPromptEnabled) ? raw.fileSyncPromptEnabled : d.fileSyncPromptEnabled,
-        qmakeReminderEnabled: isBool(raw.qmakeReminderEnabled) ? raw.qmakeReminderEnabled : d.qmakeReminderEnabled,
-        suppressedWarnings: isStringArray(raw.suppressedWarnings) ? raw.suppressedWarnings : undefined
-    };
-}
 function sanitizeCpp(raw: Record<string, unknown>): CppSettings {
     const d = DEFAULT_CPP;
     return {

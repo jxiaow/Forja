@@ -5,7 +5,7 @@
 import { requireActiveTarget } from './activeTarget';
 import { readRunState, clearRunState, resolveRunProcessStatus, isProcessRunning } from '../../qt/shared/localState';
 import { executeRemotePlan } from '../../remote/core/plan';
-import { ForjaJsonResult, ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
+import { ForjaJsonResult, Diagnostic, RuntimeState, diag, T } from './types';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { getServerById } from '../../core/serverStore';
 import * as cp from 'child_process';

@@ -3,7 +3,6 @@ import * as path from 'path';
 import { CppProjectInfo } from '../types';
 import { DEFAULT_SCAN_DEPTH, SCAN_TIMEOUT_MS } from '../constants';
 import { scanCppProjects } from '../../core/cppProjectScanner';
-import { isWindows } from '../platform';
 import { log, logError } from '../utils/logger';
 import { getCppSetting } from '../../vscode/settingsStore';
 

@@ -12,7 +12,7 @@ import { executeRemoteRestore } from '../../remote/core/restore';
 import { executeRemoteCleanUntracked } from '../../remote/core/cleanUntracked';
 import { createSshRunner, remoteCommand } from '../../remote/core/shell';
 import { resolveRemoteConfig, resolveRemoteActionPath } from '../../remote/core/config';
-import { buildRemoteRepoDirSetup } from '../../remote/core/repoPath';
+import { buildRemoteRepoDirSetup, validateRepoName } from '../../remote/core/repoPath';
 import { ServerConfig } from '../../core/serverStore';
 import * as path from 'path';
 
@@ -56,7 +56,7 @@ export interface RemoteResult extends ForjaJsonResult {
 
 // ── Text formatting ──
 
-export function formatRemoteText(result: RemoteResult, locale: Locale): string {
+export function formatRemoteText(result: RemoteResult, _locale: Locale): string {
     const lines: string[] = [];
 
     if (!result.ok) {
@@ -256,6 +256,16 @@ export async function runRemoteRestore(workspace: string, args: RemoteRestoreArg
         };
     }
 
+    // Validate repo name — reject path traversal
+    const repoCheck = validateRepoName(args.repo);
+    if (!repoCheck.ok) {
+        return {
+            ok: false, action: 'remote', remoteAction: 'restore', changed: [],
+            diagnostics: [{ level: 'error', message: repoCheck.reason === 'empty' ? T('remote.invalidRepoName') : `${T('remote.invalidRepoNameChars')}: ${args.repo}` }],
+            nextAction: 'forja remote restore <repo> <paths...>',
+        };
+    }
+
     // Validate paths — reject absolute paths and .. segments (same as reset)
     for (const p of args.paths) {
         if (path.isAbsolute(p) || p.includes('..')) {
@@ -309,6 +319,16 @@ export interface RemoteResetArgs {
 }
 
 export async function runRemoteReset(workspace: string, args: RemoteResetArgs): Promise<RemoteResult> {
+    // Validate repo name — reject path traversal
+    const repoCheck = validateRepoName(args.repo);
+    if (!repoCheck.ok) {
+        return {
+            ok: false, action: 'remote', remoteAction: 'reset', changed: [],
+            diagnostics: [{ level: 'error', message: repoCheck.reason === 'empty' ? T('remote.invalidRepoName') : `${T('remote.invalidRepoNameChars')}: ${args.repo}` }],
+            nextAction: 'forja remote reset <repo> <paths...>',
+        };
+    }
+
     const resolved = resolveRemoteConfig(workspace, args.server);
     if (!resolved.config) {
         return {

@@ -23,7 +23,7 @@ function resolveSshPassword(server: ServerConfig): string | null {
     return server.password || process.env.FORJA_SSH_PASSWORD || null;
 }
 
-export function formatDoctorText(result: DoctorResult, locale: Locale): string {
+export function formatDoctorText(result: DoctorResult, _locale: Locale): string {
     const lines: string[] = [];
     const statusIcon: Record<CheckStatus, string> = {
         ready: '✓',

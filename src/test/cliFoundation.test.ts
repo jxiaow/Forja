@@ -5,14 +5,12 @@ import * as os from 'os';
 import * as path from 'path';
 import {
     loadWorkspacesRegistry,
-    saveWorkspacesRegistry,
     loadWorkspaceConfig,
     saveWorkspaceConfig,
     resolveWorkroot,
     registerWorkroot,
     isWorkrootRegistered,
     generateTargetId,
-    getActiveTarget,
     createEmptyWorkspaceConfig,
     normalizePath,
     type TargetProfile,

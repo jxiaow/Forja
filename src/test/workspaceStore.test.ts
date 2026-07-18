@@ -9,17 +9,13 @@ import {
     loadWorkspaceConfig,
     saveWorkspaceConfig,
     resolveWorkroot,
-    registerWorkroot,
-    isWorkrootRegistered,
     generateTargetId,
     getActiveTarget,
     createEmptyWorkspaceConfig,
     normalizePath,
     workspaceConfigPath,
     workspacesRegistryPath,
-    workspacesDir,
     type WorkspaceConfig,
-    type TargetProfile,
 } from '../core/workspaceStore';
 
 const _tmpDirs: string[] = [];
@@ -57,7 +53,7 @@ test('saveWorkspacesRegistry round-trips', () => {
 });
 
 test('loadWorkspacesRegistry throws on corrupted JSON', () => {
-    const dir = freshConfigDir();
+    freshConfigDir();
     fs.mkdirSync(path.dirname(workspacesRegistryPath()), { recursive: true });
     fs.writeFileSync(workspacesRegistryPath(), '{not valid json', 'utf8');
     assert.throws(() => loadWorkspacesRegistry(), /损坏/);
@@ -123,7 +119,7 @@ test('saveWorkspaceConfig round-trips with all fields', () => {
 });
 
 test('loadWorkspaceConfig throws on corrupted JSON', () => {
-    const dir = freshConfigDir();
+    freshConfigDir();
     const workroot = 'C:/Code/corrupt';
     const filePath = workspaceConfigPath(workroot);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -158,7 +154,7 @@ test('sanitizeWorkspaceConfig handles unknown fields gracefully', () => {
     const loaded = loadWorkspaceConfig(workroot);
     assert.equal(loaded.activeTarget, 'qt-app-debug-x64');
     assert.equal(loaded.targets['qt-app-debug-x64'].toolchain.qtPath, 'D:/Qt');
-    assert.equal((loaded.targets['qt-app-debug-x64'] as any).extraField, undefined);
+    assert.equal((loaded.targets['qt-app-debug-x64'] as unknown as Record<string, unknown>).extraField, undefined);
 });
 
 // ── Legacy isolation ──

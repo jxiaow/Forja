@@ -39,7 +39,7 @@ export interface ListResult extends ForjaJsonResult {
     envSubCategory?: EnvSubCategory;
 }
 
-export function formatListText(result: ListResult, locale: Locale): string {
+export function formatListText(result: ListResult, _locale: Locale): string {
     const lines: string[] = [];
 
     if (!result.ok) {

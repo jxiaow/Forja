@@ -22,6 +22,8 @@ import {
     initRemoteDiagnostics,
     executeRemoteBuild, executeRemoteActionWithProgress, startForegroundRemoteRun,
 } from './remoteHelpers';
+import type { InternalListCategory } from '../cli/commands/list';
+import type { RemoteResult } from '../cli/commands/remote';
 
 /**
  * Register all Forja commands.
@@ -127,8 +129,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 const text = formatStatusText(result, locale);
                 const ch = getOutputChannel();
                 if (ch) { ch.clear(); ch.appendLine(text); ch.show(true); }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -145,8 +148,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 if (result.ok) {
                     vscode.window.showInformationMessage('Forja: 初始化完成');
                 }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -173,12 +177,13 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 const { runList, formatListText } = await import('../cli/commands/list');
                 const { resolveProjectRoot } = await import('./workspaceResolver');
                 const ws = resolveProjectRoot('cpp') || resolveProjectRoot('qt') || workspace();
-                const result = await runList(ws, category as any);
-                const text = formatListText(result as any, locale);
+                const result = await runList(ws, category as InternalListCategory);
+                const text = formatListText(result, locale);
                 const ch = getOutputChannel();
                 if (ch) { ch.clear(); ch.appendLine(text); ch.show(true); }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -270,8 +275,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     const kindLabel = kindFilter === 'cpp' ? 'C++' : kindFilter === 'qt' ? 'Qt' : '';
                     vscode.window.showInformationMessage(`No ${kindLabel} targets found. Run "Forja: Init" first.`);
                 }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -322,7 +328,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 if (!selected?.command) { return; }
 
                 const ch = getOutputChannel();
-                const showResult = (r: any) => {
+                const showResult = (r: RemoteResult) => {
                     const text = formatRemoteText(r, locale);
                     if (ch) { ch.clear(); ch.appendLine(text); ch.show(true); }
                 };
@@ -385,8 +391,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         break;
                     }
                 }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -448,8 +455,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         }
                     }
                 }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -673,8 +681,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     const msg = `Doctor: ${blocked.length} blocked, ${warnings.length} warnings`;
                     vscode.window.showWarningMessage(msg);
                 }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -685,8 +694,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             try {
                 const { executeSyncChangedFiles } = await import('./syncWatcher');
                 await executeSyncChangedFiles(uri);
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );

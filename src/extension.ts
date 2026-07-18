@@ -26,21 +26,21 @@ import { listSyncStates } from './core/syncState';
 
 const logger = createLogger('Extension');
 
-/** 启动时后台清理不存在的工作区对应的配置和同步状态 */
-function autoCleanupStaleConfigs(): void {
-    let removed = 0;
+/** 启动时后台检测不存在的工作区对应的配置和同步状态（只记录日志，不自动删除） */
+function auditStaleConfigs(): void {
+    const stale: string[] = [];
     for (const config of listProjectConfigs()) {
         if (!fs.existsSync(config.workspace)) {
-            try { fs.unlinkSync(config.filePath); removed++; } catch { /* ignore */ }
+            stale.push(config.workspace);
         }
     }
     for (const ss of listSyncStates()) {
         if (!fs.existsSync(ss.workspace)) {
-            try { fs.unlinkSync(ss.filePath); removed++; } catch { /* ignore */ }
+            stale.push(ss.workspace);
         }
     }
-    if (removed > 0) {
-        logger.info(`自动清理了 ${removed} 个残留配置`);
+    if (stale.length > 0) {
+        logger.info(`检测到 ${stale.length} 个工作区不可访问的配置（未自动删除）: ${stale.join(', ')}`);
     }
 }
 
@@ -84,8 +84,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 检查 workroot 是否已注册，未注册时提示用户初始化
     checkWorkrootRegistration();
 
-    // 后台清理残留配置（不阻塞启动）
-    setTimeout(() => { try { autoCleanupStaleConfigs(); } catch { /* ignore */ } }, 5000);
+    // 后台检测残留配置（不阻塞启动，不自动删除）
+    setTimeout(() => { try { auditStaleConfigs(); } catch { /* ignore */ } }, 5000);
 
     createStatusBar(context);
 

@@ -756,6 +756,8 @@ Options:
     'remote.restoreUsage':              { en: 'forja remote restore requires <repo> and at least one <path>', zh: 'forja remote restore 需要 <repo> 和至少一个 <path>' },
     'remote.resetUsage':                { en: 'forja remote reset requires <repo> and at least one <path>', zh: 'forja remote reset 需要 <repo> 和至少一个 <path>' },
     'remote.invalidPath':               { en: 'Invalid path (must be relative, no \'..\')', zh: '无效路径（必须是相对路径，不能包含 \'..\'）' },
+    'remote.invalidRepoName':           { en: 'Invalid repo name',                        zh: '无效仓库名' },
+    'remote.invalidRepoNameChars':      { en: 'Invalid repo name (no \'..\'  / \\ ~ allowed)', zh: '无效仓库名（不能包含 \'..\'  / \\ ~）' },
     'remote.cleanFailedWarning':        { en: 'Clean untracked files failed after reset', zh: '重置后清理未跟踪文件失败' },
     'remote.setUpdated':               { en: 'Remote set updated',                     zh: '远程设置已更新' },
     'remote.restoreUpdated':           { en: 'Remote restore updated',                  zh: '远程恢复已更新' },

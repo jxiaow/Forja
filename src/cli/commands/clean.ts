@@ -105,7 +105,7 @@ function extractCleanError(executed: { errors?: string[]; stderr?: string }): st
 
 export async function runClean(workspace: string, options: { plan?: boolean; json?: boolean } = {}): Promise<CleanResult> {
     const wantsJson = options.json ?? false;
-    let targetResult = requireActiveTarget(workspace);
+    const targetResult = requireActiveTarget(workspace);
 
     if ('error' in targetResult) {
         return {

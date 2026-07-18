@@ -28,7 +28,7 @@ export interface ConfigSummary {
 
 // ── Text formatting ──
 
-export function formatUseText(result: UseResult, locale: Locale): string {
+export function formatUseText(result: UseResult, _locale: Locale): string {
     // For target scope, delegate to the new formatter
     if (result.useScope === 'target') {
         return formatUseTargetText(result as UseTargetResult);

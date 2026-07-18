@@ -9,7 +9,7 @@ import { ForjaJsonResult, Diagnostic, ServerDetail, ServerSummary, Locale, T } f
 import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
 import * as path from 'path';
 
-export function formatServerText(result: ServerResult, locale: Locale): string {
+export function formatServerText(result: ServerResult, _locale: Locale): string {
     const lines: string[] = [];
 
     if (!result.ok) {

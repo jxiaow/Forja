@@ -1,7 +1,7 @@
 /**
  * useTarget module — shared types.
  */
-import { TargetCandidate, Diagnostic, Question, ForjaJsonResult } from '../types';
+import { TargetCandidate, Question, ForjaJsonResult } from '../types';
 import type { TargetProfile } from '../../../core/workspaceStore';
 
 // ── Detection context ──

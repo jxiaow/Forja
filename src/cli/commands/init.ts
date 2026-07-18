@@ -3,12 +3,12 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { T, diag, Diagnostic, Question } from './types';
+import { T, Diagnostic, Question } from './types';
 import type { ForjaJsonResult } from './types';
 import {
     resolveWorkroot, isWorkrootRegistered, registerWorkroot, unregisterWorkroot,
     loadWorkspaceConfig, saveWorkspaceConfig, createEmptyWorkspaceConfig,
-    generateTargetId, getActiveTarget,
+    generateTargetId,
     type WorkspaceConfig, type TargetProfile,
 } from '../../core/workspaceStore';
 import { scanProFiles } from '../../qt/shared/projectScanner';

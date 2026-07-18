@@ -5,7 +5,7 @@ import { getState, setState } from '../../vscode/qtState';
 import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig, updateRemoteSelectedServer } from '../../core/serverStore';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, updateRemoteSelectedServer } from '../../core/serverStore';
 import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
 import { executeTestConnection, refreshSyncStatusBar } from '../../vscode/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';

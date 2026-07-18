@@ -2,7 +2,7 @@
  * Unit tests for init.ts and candidates.ts core logic.
  * Tests detectToolchain, auto-select, path normalization, and CMake support.
  */
-import test, { before, after } from 'node:test';
+import test, { after } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
