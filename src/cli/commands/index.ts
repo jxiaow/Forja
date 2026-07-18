@@ -178,6 +178,14 @@ function extractFlag(argv: string[], flag: string): string | undefined {
     return undefined;
 }
 
+/** Check if a flag was provided with an empty value (e.g., --flag "") */
+function hasEmptyFlagValue(argv: string[], flag: string): boolean {
+    const idx = argv.indexOf(flag);
+    if (idx < 0) return false;
+    const next = argv[idx + 1];
+    return !next || next.startsWith('--') || next === '';
+}
+
 function hasFlag(argv: string[], flag: string): boolean {
     return argv.includes(flag);
 }
@@ -352,7 +360,13 @@ async function handleInit(argv: string[], workroot: string, wantsJson: boolean, 
     let answers: Record<string, string> | undefined;
     if (answersFile) {
         try {
-            answers = JSON.parse(fs.readFileSync(answersFile, 'utf8'));
+            const parsed = JSON.parse(fs.readFileSync(answersFile, 'utf8'));
+            if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: `Answers file must contain a JSON object: ${answersFile}` }] }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            answers = parsed;
         } catch {
             outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('initAnswersFileFailed', [answersFile])}` }] }, wantsJson);
             process.exitCode = 1;
@@ -384,14 +398,6 @@ async function handleInit(argv: string[], workroot: string, wantsJson: boolean, 
 // ── List ──
 
 async function handleList(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const listKnown = new Set<string>(['--all']);
-    const listUnknown = findUnknownFlags(argv, listKnown, new Set<string>());
-    if (listUnknown.length > 0) {
-        outputResult({ ok: false, action: 'list', diagnostics: [{ level: 'error', message: unknownFlagsMessage(listUnknown, listKnown) }], nextAction: 'forja list targets' }, wantsJson);
-        process.exitCode = 1;
-        return;
-    }
-
     // Determine category from first positional arg after 'list'
     const categoryArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
     const validCategories = ['targets', 'env'];
@@ -433,6 +439,21 @@ async function handleList(argv: string[], workroot: string, wantsJson: boolean, 
     }
 
     const category = categoryArg as ListCategory;
+
+    // Build known flags set based on category
+    const listKnown = new Set<string>(['--all']);
+    if (category === 'env') {
+        listKnown.add('--qt');
+        listKnown.add('--vs');
+        listKnown.add('--jom');
+        listKnown.add('--make');
+    }
+    const listUnknown = findUnknownFlags(argv, listKnown, new Set<string>());
+    if (listUnknown.length > 0) {
+        outputResult({ ok: false, action: 'list', diagnostics: [{ level: 'error', message: unknownFlagsMessage(listUnknown, listKnown) }], nextAction: 'forja list targets' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
 
     // Reject env filter flags when category is not 'env'
     if (category !== 'env') {
@@ -513,6 +534,15 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 process.exitCode = 1;
                 return;
             }
+            // Check for empty flag values
+            const emptyFlags = ['--project', '--mode', '--arch', '--qt', '--vs', '--jom', '--run-at'];
+            for (const f of emptyFlags) {
+                if (hasEmptyFlagValue(argv, f)) {
+                    outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: `${f} requires a non-empty value` }], nextAction: 'forja use target' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+            }
             const result = await runUseTarget(workroot, {
                 project: extractFlag(argv, '--project') || (argv[2] && !argv[2].startsWith('--') ? argv[2] : undefined),
                 mode: extractFlag(argv, '--mode') as 'debug' | 'release' | undefined,
@@ -574,6 +604,16 @@ async function handleRemote(argv: string[], workroot: string, wantsJson: boolean
 
     switch (subCmd) {
         case 'set': {
+            if (hasEmptyFlagValue(argv, '--server')) {
+                outputResult({ ok: false, action: 'remote', remoteAction: 'set', changed: [], diagnostics: [{ level: 'error', message: '--server requires a non-empty value' }], nextAction: 'forja remote set' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            if (hasEmptyFlagValue(argv, '--remote-path')) {
+                outputResult({ ok: false, action: 'remote', remoteAction: 'set', changed: [], diagnostics: [{ level: 'error', message: '--remote-path requires a non-empty value' }], nextAction: 'forja remote set' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
             const result = runRemoteSet(workroot, {
                 server: extractFlag(argv, '--server'),
                 remotePath: extractFlag(argv, '--remote-path'),
@@ -842,6 +882,11 @@ async function handleBuild(argv: string[], workroot: string, wantsJson: boolean,
         process.exitCode = 1;
         return;
     }
+    if (hasEmptyFlagValue(argv, '--project')) {
+        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: '--project requires a non-empty value' }], nextAction: 'forja build' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
     const subArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
     let buildAction: BuildAction = 'default';
     if (subArg === 'fresh') { buildAction = 'fresh'; }
@@ -1044,6 +1089,11 @@ async function handleSync(argv: string[], workroot: string, wantsJson: boolean, 
     const syncUnknown = findUnknownFlags(argv, new Set(['--yes', '--file', '--force', '--dry-run', '--add', '--rm']), new Set(['--file', '--add', '--rm']));
     if (syncUnknown.length > 0) {
         outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `${T('sync.unknownFlag')}: ${syncUnknown.join(', ')}` }], nextAction: 'forja sync' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+    if (hasEmptyFlagValue(argv, '--file')) {
+        outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: '--file requires a non-empty value' }], nextAction: 'forja sync' }, wantsJson);
         process.exitCode = 1;
         return;
     }

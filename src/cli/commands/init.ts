@@ -86,6 +86,13 @@ export async function runInit(cwd: string, options: InitOptions): Promise<InitRe
         };
     }
 
+    if (!fs.statSync(workroot).isDirectory()) {
+        return {
+            ok: false, action: 'init',
+            diagnostics: [{ level: 'error', message: `Workroot must be a directory: ${workroot}` }],
+        };
+    }
+
     const alreadyRegistered = isWorkrootRegistered(workroot);
 
     if (alreadyRegistered) {

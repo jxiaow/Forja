@@ -1476,3 +1476,123 @@ test('12.36 主要命令 text 输出行数合理 (5-200 行)', () => {
         assert.ok(lines.length < 200, `${cmd}: must have fewer than 200 lines, got ${lines.length}`);
     }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 13: Edge Case Validation (14 tests)
+// ═══════════════════════════════════════════════════════════════
+
+test('13.1  init --answers 非对象 JSON (string)', () => {
+    const f = path.join(TEST_DIR, 'bad-answers-string.json');
+    fs.writeFileSync(f, '"hello"');
+    const j = json(`init --answers "${f}"`);
+    assert.ok(j);
+    assert.equal(j.ok, false, 'non-object JSON must be rejected');
+    assert.ok(j.diagnostics?.[0]?.message?.includes('JSON object'), 'must mention JSON object requirement');
+});
+
+test('13.2  init --answers 非对象 JSON (array)', () => {
+    const f = path.join(TEST_DIR, 'bad-answers-array.json');
+    fs.writeFileSync(f, '[1,2,3]');
+    const j = json(`init --answers "${f}"`);
+    assert.ok(j);
+    assert.equal(j.ok, false, 'array JSON must be rejected');
+});
+
+test('13.3  init --answers 非对象 JSON (null)', () => {
+    const f = path.join(TEST_DIR, 'bad-answers-null.json');
+    fs.writeFileSync(f, 'null');
+    const j = json(`init --answers "${f}"`);
+    assert.ok(j);
+    assert.equal(j.ok, false, 'null JSON must be rejected');
+});
+
+test('13.4  init --workroot 指向文件', () => {
+    const f = path.join(TEST_DIR, 'not-a-dir.txt');
+    fs.writeFileSync(f, 'hello');
+    const j = json(`init --workroot "${f}"`);
+    assert.ok(j);
+    assert.equal(j.ok, false, 'file as workroot must be rejected');
+    assert.ok(j.diagnostics?.[0]?.message?.includes('directory'), 'must mention directory requirement');
+});
+
+test('13.5  use target --project "" 空值报错', () => {
+    const j = json('use target --project ""');
+    assert.ok(j);
+    // Empty --project should either be rejected or treated as missing (both are ok=false)
+    assert.equal(j.ok, false, 'empty --project must not succeed silently');
+});
+
+test('13.6  use target --mode "" 空值报错', () => {
+    const j = json('use target --mode ""');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'empty --mode must be rejected');
+});
+
+test('13.7  use target --run-at "" 空值报错', () => {
+    const j = json('use target --run-at ""');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'empty --run-at must be rejected');
+});
+
+test('13.8  build --project "" 空值报错', () => {
+    const j = json('build --project ""');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'empty --project must be rejected');
+});
+
+test('13.9  remote set --server "" 空值报错', () => {
+    const j = json('remote set --server ""');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'empty --server must be rejected');
+});
+
+test('13.10 remote set --remote-path "" 空值报错', () => {
+    const j = json('remote set --remote-path ""');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'empty --remote-path must be rejected');
+});
+
+test('13.11 sync --file "" 空值报错', () => {
+    const j = json('sync --file ""');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'empty --file must be rejected');
+});
+
+test('13.12 use target --arch "" 空值报错', () => {
+    const j = json('use target --arch ""');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'empty --arch must be rejected');
+});
+
+test('13.13 use target --qt "" 空值报错', () => {
+    const j = json('use target --qt ""');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'empty --qt must be rejected');
+});
+
+test('13.14 use target --vs "" 空值报错', () => {
+    const j = json('use target --vs ""');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'empty --vs must be rejected');
+});
+
+test('13.15 list env --qt 过滤器正常工作', () => {
+    const j = json('list env --qt');
+    assert.ok(j);
+    assert.equal(j.ok, true, 'list env --qt must be accepted');
+    assert.equal(j.category, 'env');
+    assert.equal(j.envSubCategory, 'qt');
+});
+
+test('13.16 list env --vs 过滤器正常工作', () => {
+    const j = json('list env --vs');
+    assert.ok(j);
+    assert.equal(j.ok, true, 'list env --vs must be accepted');
+    assert.equal(j.envSubCategory, 'vs');
+});
+
+test('13.17 list targets --qt 报错（env flag 不能用于 targets）', () => {
+    const j = json('list targets --qt');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'list targets --qt must be rejected');
+});
