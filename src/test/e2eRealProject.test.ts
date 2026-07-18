@@ -1596,3 +1596,15 @@ test('13.17 list targets --qt 报错（env flag 不能用于 targets）', () => 
     assert.ok(j);
     assert.equal(j.ok, false, 'list targets --qt must be rejected');
 });
+
+test('13.18 server add --port 3.14 报错（非整数）', () => {
+    const j = json('server add --name "test" --host "1.2.3.4" --username "user" --port 3.14');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'float port must be rejected');
+});
+
+test('13.19 server add --port abc 报错（非数字）', () => {
+    const j = json('server add --name "test" --host "1.2.3.4" --username "user" --port abc');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'non-numeric port must be rejected');
+});

@@ -735,6 +735,22 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
             const portStr = extractFlag(argv, '--port');
             let port: number | undefined;
             if (portStr) {
+                // Reject non-integer values (e.g., "3.14", "abc")
+                if (!/^\d+$/.test(portStr)) {
+                    outputResult({
+                        ok: false,
+                        action: 'server',
+                        serverAction: 'add',
+                        changed: [],
+                        diagnostics: [{
+                            level: 'error',
+                            message: `${T('idx.invalidPort')}: ${portStr}. ${T('idx.invalidPortHint')}`,
+                        }],
+                        nextAction: 'forja server add --port 22',
+                    }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
                 port = parseInt(portStr, 10);
                 if (isNaN(port) || port < 1 || port > 65535) {
                     outputResult({
@@ -785,6 +801,22 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
             const portStr = extractFlag(argv, '--port');
             let port: number | undefined;
             if (portStr) {
+                // Reject non-integer values (e.g., "3.14", "abc")
+                if (!/^\d+$/.test(portStr)) {
+                    outputResult({
+                        ok: false,
+                        action: 'server',
+                        serverAction: 'add',
+                        changed: [],
+                        diagnostics: [{
+                            level: 'error',
+                            message: `${T('idx.invalidPort')}: ${portStr}. ${T('idx.invalidPortHint')}`,
+                        }],
+                        nextAction: 'forja server add --port 22',
+                    }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
                 port = parseInt(portStr, 10);
                 if (isNaN(port) || port < 1 || port > 65535) {
                     outputResult({
