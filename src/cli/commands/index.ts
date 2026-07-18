@@ -514,7 +514,7 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 return;
             }
             const result = await runUseTarget(workroot, {
-                project: extractFlag(argv, '--project'),
+                project: extractFlag(argv, '--project') || (argv[2] && !argv[2].startsWith('--') ? argv[2] : undefined),
                 mode: extractFlag(argv, '--mode') as 'debug' | 'release' | undefined,
                 arch: extractFlag(argv, '--arch') as 'x86' | 'x64' | undefined,
                 qtPath: extractFlag(argv, '--qt'),

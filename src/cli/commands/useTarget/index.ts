@@ -447,6 +447,22 @@ export async function runUpdateModeArch(workspace: string, args: {
         };
     }
 
+    // Validate mode/arch values before applying
+    if (args.mode && args.mode !== 'debug' && args.mode !== 'release') {
+        return {
+            ok: false, action: 'use', useScope: 'target', changed: [],
+            diagnostics: [{ level: 'error', message: `${T('use.invalidMode')}: ${args.mode}` }],
+            nextAction: 'forja use target --mode debug',
+        };
+    }
+    if (args.arch && args.arch !== 'x86' && args.arch !== 'x64') {
+        return {
+            ok: false, action: 'use', useScope: 'target', changed: [],
+            diagnostics: [{ level: 'error', message: `${T('use.invalidArch')}: ${args.arch}` }],
+            nextAction: 'forja use target --arch x64',
+        };
+    }
+
     const changed: string[] = [];
     const updated: TargetProfile = { ...currentTarget, toolchain: { ...currentTarget.toolchain } };
 
