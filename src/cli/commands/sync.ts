@@ -246,6 +246,19 @@ export function runSyncIgnoreList(workspace: string): SyncResult {
 }
 
 export function runSyncIgnoreAdd(workspace: string, pattern: string): SyncResult {
+    // Reject whitespace-only patterns
+    if (!pattern || !pattern.trim()) {
+        return {
+            ok: false,
+            action: 'sync',
+            syncAction: 'ignore',
+            ignoreAction: 'add',
+            workspace,
+            ignore: readProjectSyncConfig(workspace).ignore,
+            ignorePattern: pattern,
+            diagnostics: [diag('error', 'Ignore pattern cannot be empty or whitespace-only')],
+        };
+    }
     const sync = readProjectSyncConfig(workspace);
     if (sync.ignore.includes(pattern)) {
         return {

@@ -1608,3 +1608,9 @@ test('13.19 server add --port abc 报错（非数字）', () => {
     assert.ok(j);
     assert.equal(j.ok, false, 'non-numeric port must be rejected');
 });
+
+test('13.20 sync ignore --add "   " 报错（空白 pattern）', () => {
+    const j = json('sync ignore --add "   "');
+    assert.ok(j);
+    assert.equal(j.ok, false, 'whitespace-only pattern must be rejected');
+});
