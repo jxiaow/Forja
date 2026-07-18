@@ -112,6 +112,13 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
             nextAction: 'forja server add --port 22',
         };
     }
+    if (args.authMode && args.authMode !== 'key' && args.authMode !== 'password') {
+        return {
+            ok: false, action: 'server', serverAction: 'add', changed: [],
+            diagnostics: [{ level: 'error', message: `Invalid auth mode: ${args.authMode}. Use 'key' or 'password'` }],
+            nextAction: 'forja server add --auth-mode key',
+        };
+    }
     if (!args.name) {
         diagnostics.push({ level: 'error', message: T('srv.missingName') });
     }
@@ -185,6 +192,13 @@ export function runServerUpdate(id: string, updates: Partial<ServerAddArgs>): Se
             ok: false, action: 'server', serverAction: 'update', changed: [],
             diagnostics: [{ level: 'error', message: `${T('srv.serverNotFound')}: ${id}` }],
             nextAction: 'forja server',
+        };
+    }
+    if (updates.authMode && updates.authMode !== 'key' && updates.authMode !== 'password') {
+        return {
+            ok: false, action: 'server', serverAction: 'update', changed: [],
+            diagnostics: [{ level: 'error', message: `Invalid auth mode: ${updates.authMode}. Use 'key' or 'password'` }],
+            nextAction: 'forja server update --auth-mode key',
         };
     }
     const patch: Partial<Omit<ServerConfig, 'id'>> = {};

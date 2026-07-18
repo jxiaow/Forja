@@ -7,7 +7,7 @@ import {
     loadRemoteSettings, saveRemoteSettings,
     RemoteRepoSettings, RemoteBuildOrderItem, RemoteTransferSettings,
 } from '../../core/settingsIO';
-import { resolveServerSelector } from '../../core/serverStore';
+import { resolveServerSelector, getServerById } from '../../core/serverStore';
 import { executeRemoteRestore } from '../../remote/core/restore';
 import { executeRemoteCleanUntracked } from '../../remote/core/cleanUntracked';
 import { createSshRunner, remoteCommand } from '../../remote/core/shell';
@@ -209,6 +209,13 @@ export function runRemoteSet(workspace: string, args: RemoteSetArgs): RemoteResu
     }
 
     if (args.remotePath && remote.selectedServer) {
+        if (!getServerById(remote.selectedServer)) {
+            return {
+                ok: false, action: 'remote', remoteAction: 'set', changed: [],
+                diagnostics: [{ level: 'error', message: `${T('use.serverNotFound')}: ${remote.selectedServer}` }],
+                nextAction: 'forja remote set --server <name>',
+            };
+        }
         remote.remotePaths[remote.selectedServer] = args.remotePath;
         changed.push('remote.remotePath');
     } else if (args.remotePath && !remote.selectedServer) {

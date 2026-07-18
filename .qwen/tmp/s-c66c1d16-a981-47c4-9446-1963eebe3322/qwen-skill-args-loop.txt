@@ -1,1 +1,0 @@
-梳理每个 CLI 命令并更新 @docs/operations/command-consolidation/v2/ 相关cli文档，并解决梳理过程中存在的一系列问题

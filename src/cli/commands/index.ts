@@ -1013,6 +1013,15 @@ async function handleDoctor(argv: string[], workroot: string, wantsJson: boolean
             process.exitCode = 1;
             return;
         }
+        if (!/^[a-zA-Z0-9_.:-]+$/.test(unlockId)) {
+            outputResult({
+                ok: false, action: 'doctor',
+                diagnostics: [{ level: 'error', message: `Invalid lock ID format: ${unlockId}. Only alphanumeric, underscore, dot, colon, hyphen allowed.` }],
+                nextAction: 'forja doctor',
+            }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
     } else if (subArg) {
         outputResult({ ok: false, action: 'doctor', diagnostics: [{ level: 'error', message: `${T('idx.unknownSubcommand')}: ${subArg}. ${T('idx.doctorSubcommands')}` }] }, wantsJson);
         process.exitCode = 1;

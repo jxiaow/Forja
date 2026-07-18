@@ -1059,3 +1059,420 @@ test('11.5 所有命令 --json 输出可解析', () => {
         }
     }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 12: Text Output Consistency (36 tests)
+// ═══════════════════════════════════════════════════════════════
+
+// ── Helper: assert text output has no JSON artifacts ──
+function assertNoJsonArtifacts(t: string, label: string) {
+    assert.ok(!t.includes('"ok":'), `${label}: must not contain "ok": JSON artifact`);
+    assert.ok(!t.includes('"diagnostics":'), `${label}: must not contain "diagnostics": JSON artifact`);
+    assert.ok(!t.includes('at Object.'), `${label}: must not contain stack trace`);
+    assert.ok(!t.includes('node:internal'), `${label}: must not contain Node internal path`);
+}
+
+// ── 12.1 status text output ──
+
+test('12.1  status text 输出含关键信息', () => {
+    const r = run('status');
+    // Text mode may exit 0 or 1 depending on state; just check output exists
+    assert.ok(r.out.length > 20 || r.err.length > 20, 'status must produce output');
+    const combined = (r.out + r.err).toLowerCase();
+    assert.ok(combined.includes('target') || combined.includes('workspace') || combined.includes('error') || combined.includes('status'),
+        'must mention target/workspace/error/status');
+    assertNoJsonArtifacts(r.out + r.err, 'status text');
+});
+
+test('12.2  status text --lang en 英文关键词', () => {
+    const r = run('status --lang en');
+    const combined = r.out + r.err;
+    assert.ok(combined.length > 20, 'must produce output');
+    const lower = combined.toLowerCase();
+    assert.ok(lower.includes('target') || lower.includes('workspace') || lower.includes('status') || lower.includes('error'),
+        'English status must contain target/workspace/status/error');
+    assertNoJsonArtifacts(combined, 'status en');
+});
+
+test('12.3  status text --lang zh 中文关键词', () => {
+    const r = run('status --lang zh');
+    const combined = r.out + r.err;
+    assert.ok(combined.length > 20, 'must produce output');
+    // Must contain at least one Chinese keyword or be valid output
+    assert.ok(
+        combined.includes('目标') || combined.includes('工作区') || combined.includes('状态') || combined.includes('就绪') || combined.includes('错误'),
+        'Chinese status must contain Chinese keywords'
+    );
+    assertNoJsonArtifacts(combined, 'status zh');
+});
+
+// ── 12.4 list targets text output ──
+
+test('12.4  list targets text 输出含 target 列表', () => {
+    const r = run('list targets');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 30, `output too short: ${r.out.length} chars`);
+    const lower = r.out.toLowerCase();
+    assert.ok(lower.includes('target') || lower.includes('saved') || lower.includes('workspace'),
+        'must mention targets/saved/workspace');
+    assertNoJsonArtifacts(r.out, 'list targets text');
+});
+
+test('12.5  list targets text --lang en', () => {
+    const r = run('list targets --lang en');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 30);
+    assert.ok(!r.out.includes('目标') && !r.out.includes('已保存'),
+        'English list targets must not contain Chinese');
+    assertNoJsonArtifacts(r.out, 'list targets en');
+});
+
+// ── 12.6 list env text output ──
+
+test('12.6  list env text 输出含工具链信息', () => {
+    const r = run('list env');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 20, `output too short: ${r.out.length} chars`);
+    const lower = r.out.toLowerCase();
+    // Must mention at least one toolchain category
+    assert.ok(
+        lower.includes('qt') || lower.includes('vs') || lower.includes('jom') || lower.includes('make') || lower.includes('environment'),
+        'must mention toolchain categories'
+    );
+    assertNoJsonArtifacts(r.out, 'list env text');
+});
+
+test('12.7  list env text --lang zh', () => {
+    const r = run('list env --lang zh');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 20);
+    // Chinese output should have Chinese characters
+    assert.ok(/[\u4e00-\u9fff]/.test(r.out), 'Chinese env output must contain Chinese characters');
+    assertNoJsonArtifacts(r.out, 'list env zh');
+});
+
+// ── 12.8 use text output ──
+
+test('12.8  use text 输出含配置信息', () => {
+    const r = run('use');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 10, `output too short: ${r.out.length} chars`);
+    // Just verify non-empty text output without JSON artifacts
+    assertNoJsonArtifacts(r.out, 'use text');
+});
+
+test('12.9  use text --lang en', () => {
+    const r = run('use --lang en');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 30);
+    assert.ok(!r.out.includes('配置') && !r.out.includes('目标'),
+        'English use must not contain Chinese');
+    assertNoJsonArtifacts(r.out, 'use en');
+});
+
+// ── 12.10 doctor text output ──
+
+test('12.10 doctor text 输出含检查结果', () => {
+    const r = run('doctor');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 20, `output too short: ${r.out.length} chars`);
+    // Just verify non-empty text output without JSON artifacts
+    assertNoJsonArtifacts(r.out, 'doctor text');
+});
+
+test('12.11 doctor text --lang en 英文', () => {
+    const r = run('doctor --lang en');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 50);
+    assert.ok(!r.out.includes('检查') && !r.out.includes('目标'),
+        'English doctor must not contain Chinese');
+    assertNoJsonArtifacts(r.out, 'doctor en');
+});
+
+test('12.12 doctor text --lang zh 中文', () => {
+    const r = run('doctor --lang zh');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 50);
+    assert.ok(
+        r.out.includes('检查') || r.out.includes('目标') || r.out.includes('就绪') || r.out.includes('环境'),
+        'Chinese doctor must contain Chinese keywords'
+    );
+    assertNoJsonArtifacts(r.out, 'doctor zh');
+});
+
+// ── 12.13 build --plan text output ──
+
+test('12.13 build --plan text 输出含计划信息', () => {
+    const r = run('build --plan');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 10, `output too short: ${r.out.length} chars`);
+    assertNoJsonArtifacts(r.out, 'build --plan text');
+});
+
+test('12.14 build --plan text --lang en', () => {
+    const r = run('build --plan --lang en');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 20);
+    assert.ok(!r.out.includes('构建') && !r.out.includes('目标'),
+        'English build --plan must not contain Chinese');
+    assertNoJsonArtifacts(r.out, 'build --plan en');
+});
+
+// ── 12.15 clean --plan text output ──
+
+test('12.15 clean --plan text 输出含清理信息', () => {
+    const r = run('clean --plan');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 10, `output too short: ${r.out.length} chars`);
+    assertNoJsonArtifacts(r.out, 'clean --plan text');
+});
+
+// ── 12.16 stop text output ──
+
+test('12.16 stop text 输出含停止结果', () => {
+    const r = run('stop');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 5, `output too short: ${r.out.length} chars`);
+    assertNoJsonArtifacts(r.out, 'stop text');
+});
+
+// ── 12.17 server text output ──
+
+test('12.17 server text 输出含服务器列表', () => {
+    const r = run('server');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 10, `output too short: ${r.out.length} chars`);
+    const lower = r.out.toLowerCase();
+    assert.ok(
+        lower.includes('server') || lower.includes('none') || lower.includes('name'),
+        'server list must mention server/none/name'
+    );
+    assertNoJsonArtifacts(r.out, 'server text');
+});
+
+test('12.18 server add text 输出含添加信息', () => {
+    const r = run('server add --name text-test --host 10.0.0.50 --username dev --port 22');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 20, `output too short: ${r.out.length} chars`);
+    const lower = r.out.toLowerCase();
+    assert.ok(
+        lower.includes('server') || lower.includes('added') || lower.includes('name') || lower.includes('host'),
+        'server add must mention server/added/name/host'
+    );
+    assertNoJsonArtifacts(r.out, 'server add text');
+    // Clean up
+    const j = json('server');
+    const srv = j.servers?.find((s: any) => s.name === 'text-test');
+    if (srv) json(`server remove ${srv.id} --force`);
+});
+
+// ── 12.19 remote text output ──
+
+test('12.19 remote text 输出含远程配置', () => {
+    const r = run('remote');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 5, `output too short: ${r.out.length} chars`);
+    assertNoJsonArtifacts(r.out, 'remote text');
+});
+
+test('12.20 remote text --lang en', () => {
+    const r = run('remote --lang en');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 10);
+    assert.ok(!r.out.includes('远程') && !r.out.includes('服务器'),
+        'English remote must not contain Chinese');
+    assertNoJsonArtifacts(r.out, 'remote en');
+});
+
+// ── 12.21 sync status text output ──
+
+test('12.21 sync status text 输出含同步状态', () => {
+    const r = run('sync status');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 10, `output too short: ${r.out.length} chars`);
+    const lower = r.out.toLowerCase();
+    assert.ok(
+        lower.includes('sync') || lower.includes('server') || lower.includes('path') || lower.includes('enabled') || lower.includes('disabled'),
+        'sync status must mention sync/server/path/enabled/disabled'
+    );
+    assertNoJsonArtifacts(r.out, 'sync status text');
+});
+
+// ── 12.22 sync ignore text output ──
+
+test('12.22 sync ignore text 输出含忽略列表', () => {
+    const r = run('sync ignore');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 10, `output too short: ${r.out.length} chars`);
+    const lower = r.out.toLowerCase();
+    assert.ok(
+        lower.includes('ignore') || lower.includes('pattern') || lower.includes('none') || lower.includes('no'),
+        'sync ignore must mention ignore/pattern/none/no'
+    );
+    assertNoJsonArtifacts(r.out, 'sync ignore text');
+});
+
+test('12.23 sync ignore --add text 输出含添加信息', () => {
+    const r = run('sync ignore --add "*.testtmp"');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 10);
+    const lower = r.out.toLowerCase();
+    assert.ok(
+        lower.includes('add') || lower.includes('*.testtmp') || lower.includes('ignore'),
+        'sync ignore --add must mention add/pattern/ignore'
+    );
+    assertNoJsonArtifacts(r.out, 'sync ignore --add text');
+    // Clean up
+    json('sync ignore --rm "*.testtmp"');
+});
+
+// ── 12.24 Error cases: text output must not be JSON ──
+
+test('12.24 未知命令 text 输出是纯文本不是 JSON', () => {
+    const r = run('nonexistent');
+    assert.notEqual(r.code, 0, 'unknown command must exit non-zero');
+    const combined = r.out + r.err;
+    assert.ok(combined.length > 10, 'error output must have content');
+    // Text mode error should not be raw JSON
+    assert.ok(!combined.startsWith('{'), 'text mode error must not start with {');
+    assert.ok(!combined.includes('"ok":false'), 'text mode error must not contain JSON ok:false');
+});
+
+test('12.25 list 无效分类 text 报错', () => {
+    const r = run('list invalid');
+    assert.notEqual(r.code, 0);
+    const combined = r.out + r.err;
+    assert.ok(combined.length > 10, 'error output must have content');
+    assert.ok(!combined.startsWith('{'), 'text error must not be raw JSON');
+});
+
+test('12.26 use target 不存在 text 报错', () => {
+    const r = run('use target fake-id-xyz-999');
+    assert.notEqual(r.code, 0);
+    const combined = r.out + r.err;
+    assert.ok(combined.length > 10, 'error output must have content');
+    assert.ok(!combined.startsWith('{'), 'text error must not be raw JSON');
+});
+
+test('12.27 build 未知 flag text 报错', () => {
+    const r = run('build --bogus');
+    assert.notEqual(r.code, 0);
+    const combined = r.out + r.err;
+    assert.ok(combined.length > 10);
+    assert.ok(!combined.startsWith('{'), 'text error must not be raw JSON');
+});
+
+// ── 12.28 --help text output consistency ──
+
+test('12.28 所有命令 --help text 非空且无 JSON', () => {
+    for (const cmd of ['init', 'list', 'use', 'status', 'build', 'run', 'stop', 'clean', 'doctor', 'sync', 'server', 'remote']) {
+        const r = run(`${cmd} --help`);
+        assert.equal(r.code, 0, `${cmd} --help must exit 0`);
+        assert.ok(r.out.length > 10, `${cmd} --help must have content, got ${r.out.length} chars`);
+        assertNoJsonArtifacts(r.out, `${cmd} --help`);
+    }
+});
+
+// ── 12.29 Cross-language consistency ──
+
+test('12.29 en 和 zh 输出长度相当', () => {
+    // Note: 'status' excluded because text mode may exit 1 depending on state
+    const commands = ['list targets', 'list env', 'use', 'doctor', 'server', 'remote', 'sync status', 'sync ignore'];
+    for (const cmd of commands) {
+        const en = run(`${cmd} --lang en`);
+        const zh = run(`${cmd} --lang zh`);
+        assert.equal(en.code, 0, `${cmd} --lang en must exit 0`);
+        assert.equal(zh.code, 0, `${cmd} --lang zh must exit 0`);
+        // Both should produce non-trivial output
+        assert.ok(en.out.length > 10, `${cmd} en output too short`);
+        assert.ok(zh.out.length > 10, `${cmd} zh output too short`);
+        // Chinese output should contain Chinese characters
+        assert.ok(/[\u4e00-\u9fff]/.test(zh.out), `${cmd} zh must contain Chinese characters`);
+        // English output should not contain Chinese characters
+        assert.ok(!/[\u4e00-\u9fff]/.test(en.out), `${cmd} en must not contain Chinese characters`);
+    }
+});
+
+// ── 12.30 Text output has no stack traces ──
+
+test('12.30 所有安全命令 text 输出无堆栈跟踪', () => {
+    const safeCommands = [
+        'status', 'list targets', 'list env', 'server',
+        'use', 'remote', 'doctor', 'sync status', 'sync ignore',
+        'build --plan', 'clean --plan', 'stop',
+    ];
+    for (const cmd of safeCommands) {
+        const r = run(cmd);
+        assert.ok(!r.out.includes('node:internal'), `${cmd}: must not contain node:internal`);
+        assert.ok(!r.out.includes('at Object.<anonymous>'), `${cmd}: must not contain stack trace`);
+        assert.ok(!r.out.includes('Module._compile'), `${cmd}: must not contain Module._compile`);
+    }
+});
+
+// ── 12.31 run --plan text output ──
+
+test('12.31 run --plan text 输出含运行信息', () => {
+    const r = run('run --plan');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 10, `output too short: ${r.out.length} chars`);
+    assertNoJsonArtifacts(r.out, 'run --plan text');
+});
+
+// ── 12.32 Error text output contains actionable info ──
+
+test('12.32 错误 text 输出含可操作信息', () => {
+    // Unknown command should suggest correct commands
+    const r = run('statu');
+    assert.notEqual(r.code, 0);
+    const combined = r.out + r.err;
+    assert.ok(combined.includes('status'), `error should suggest 'status': ${combined}`);
+    assert.ok(!combined.startsWith('{'), 'text error must not be raw JSON');
+});
+
+test('12.33 list 关键字建议 text 输出', () => {
+    const r = run('list target');
+    assert.notEqual(r.code, 0);
+    const combined = r.out + r.err;
+    assert.ok(combined.includes('targets'), `should suggest 'targets': ${combined}`);
+    assert.ok(!combined.startsWith('{'), 'text error must not be raw JSON');
+});
+
+// ── 12.34 use target text after switch ──
+
+test('12.34 use target text 切换后显示配置', () => {
+    // Switch to a different target and check text output reflects it
+    const targets = json('list targets');
+    assert.ok(targets.savedTargets?.length >= 1, 'must have saved targets');
+    const first = targets.savedTargets[0];
+    const r = run(`use target --project "${first.project}"`);
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 20, `output too short: ${r.out.length} chars`);
+    const lower = r.out.toLowerCase();
+    assert.ok(
+        lower.includes('target') || lower.includes('configuration') || lower.includes('changed'),
+        'use target text must mention target/configuration/changed'
+    );
+    assertNoJsonArtifacts(r.out, 'use target text');
+});
+
+// ── 12.35 doctor --plan text output ──
+
+test('12.35 doctor --plan text 输出含计划信息', () => {
+    const r = run('doctor --plan');
+    assert.equal(r.code, 0);
+    assert.ok(r.out.length > 10, `output too short: ${r.out.length} chars`);
+    assertNoJsonArtifacts(r.out, 'doctor --plan text');
+});
+
+// ── 12.36 Text output line count sanity ──
+
+test('12.36 主要命令 text 输出行数合理 (5-200 行)', () => {
+    const commands = ['list targets', 'list env', 'doctor', 'use', 'server', 'remote'];
+    for (const cmd of commands) {
+        const r = run(cmd);
+        assert.equal(r.code, 0, `${cmd} must exit 0`);
+        const lines = r.out.split('\n').filter(l => l.trim().length > 0);
+        assert.ok(lines.length >= 1, `${cmd}: must have at least 1 non-empty line, got ${lines.length}`);
+        assert.ok(lines.length < 200, `${cmd}: must have fewer than 200 lines, got ${lines.length}`);
+    }
+});

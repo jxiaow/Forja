@@ -273,6 +273,17 @@ export async function runRun(workspace: string, options: {
 async function handleDesigner(workspace: string, uiFile: string): Promise<RunResult> {
     const resolvedPath = path.isAbsolute(uiFile) ? uiFile : path.join(workspace, uiFile);
 
+    if (!fs.existsSync(resolvedPath)) {
+        return {
+            ok: false,
+            action: 'run',
+            runAction: 'designer',
+            workspace,
+            diagnostics: [diag('error', `File not found: ${resolvedPath}`)],
+            nextAction: 'forja run designer <file.ui>',
+        };
+    }
+
     const workroot = resolveWorkroot(workspace);
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const designerPath = wsConfig?.qtModulePrefs.designerPath || '';
