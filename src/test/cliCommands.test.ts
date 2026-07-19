@@ -571,3 +571,418 @@ test('forja --version 显示版本号', () => {
     assert.equal(r.code, 0);
     assert.match(r.out, /\d+\.\d+\.\d+/, '必须包含版本号');
 });
+
+// ═══════════════════════════════════════════════════════════════
+// 15. E2E 边界测试（使用真实工作区）
+// ═══════════════════════════════════════════════════════════════
+
+const REAL_WORKSPACE = 'C:\\Code\\workspace\\260627';
+
+function runE2E(args: string): { code: number; out: string; err: string } {
+    const cliPath = path.join(process.cwd(), 'out', 'cli', 'index.js');
+    try {
+        const out = execSync(`node ${cliPath} ${args}`, {
+            cwd: REAL_WORKSPACE,
+            encoding: 'utf8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+            timeout: 30000,
+        });
+        return { code: 0, out, err: '' };
+    } catch (e: unknown) {
+        const err = e as { status?: number; stdout?: string; stderr?: string };
+        return { code: err.status || 1, out: err.stdout || '', err: err.stderr || '' };
+    }
+}
+
+function jsonE2E(args: string): any {
+    const r = runE2E(`${args} --json`);
+    try { return JSON.parse(r.out); } catch { return null; }
+}
+
+// ── 15.1 无效的 mode/arch 值 ──
+
+test('use target with invalid mode value', () => {
+    const j = jsonE2E('use target --mode invalid-mode');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with invalid arch value', () => {
+    const j = jsonE2E('use target --arch invalid-arch');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with empty mode', () => {
+    const j = jsonE2E('use target --mode ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('use target with empty arch', () => {
+    const j = jsonE2E('use target --arch ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.2 无效的端口值（边界测试）──
+
+test('server add with port 0', () => {
+    const j = jsonE2E('server add --name test-port-0 --host 192.168.1.100 --username testuser --port 0');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add with port 65536 (above max)', () => {
+    const j = jsonE2E('server add --name test-port-max --host 192.168.1.100 --username testuser --port 65536');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add with negative port', () => {
+    const j = jsonE2E('server add --name test-port-neg --host 192.168.1.100 --username testuser --port -1');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add with non-numeric port', () => {
+    const j = jsonE2E('server add --name test-port-str --host 192.168.1.100 --username testuser --port abc');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add with float port', () => {
+    const j = jsonE2E('server add --name test-port-float --host 192.168.1.100 --username testuser --port 22.5');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.3 缺少必填参数 ──
+
+test('server add without required name', () => {
+    const j = jsonE2E('server add --host 192.168.1.100 --username testuser --port 22');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add without required host', () => {
+    const j = jsonE2E('server add --name test-no-host --username testuser --port 22');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add without required username', () => {
+    const j = jsonE2E('server add --name test-no-user --host 192.168.1.100 --port 22');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+// ── 15.4 未知 flag ──
+
+test('status with unknown flag', () => {
+    const j = jsonE2E('status --unknown-flag');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('list with unknown flag', () => {
+    const j = jsonE2E('list targets --invalid-option');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('use target with unknown flag', () => {
+    const j = jsonE2E('use target --nonexistent-option');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.5 无效的子命令 ──
+
+test('list with invalid category', () => {
+    const j = jsonE2E('list invalid-category');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use with invalid subcommand', () => {
+    const j = jsonE2E('use invalid-subcommand');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('server with invalid subcommand', () => {
+    const j = jsonE2E('server invalid-action');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.6 无效的 run-at 值 ──
+
+test('use target with invalid run-at value', () => {
+    const j = jsonE2E('use target --run-at invalid-location');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with empty run-at', () => {
+    const j = jsonE2E('use target --run-at ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.7 无效的 auth-mode 值 ──
+
+test('server add with invalid auth-mode', () => {
+    const j = jsonE2E('server add --name test-auth --host 192.168.1.100 --username testuser --port 22 --auth-mode invalid-auth');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add with empty auth-mode', () => {
+    const j = jsonE2E('server add --name test-auth-empty --host 192.168.1.100 --username testuser --port 22 --auth-mode ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.8 空值/空白值 ──
+
+test('server add with whitespace name', () => {
+    const j = jsonE2E('server add --name "   " --host 192.168.1.100 --username testuser --port 22');
+    assert.ok(j);
+    assert.ok(j.ok !== undefined);
+});
+
+test('server add with whitespace host', () => {
+    const j = jsonE2E('server add --name test-ws-host --host "   " --username testuser --port 22');
+    assert.ok(j);
+    assert.ok(j.ok !== undefined);
+});
+
+test('server add with whitespace username', () => {
+    const j = jsonE2E('server add --name test-ws-user --host 192.168.1.100 --username "   " --port 22');
+    assert.ok(j);
+    assert.ok(j.ok !== undefined);
+});
+
+// ── 15.9 冲突的 flag ──
+
+test('sync with both --dry-run and --yes', () => {
+    const j = jsonE2E('sync --dry-run --yes');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+// ── 15.10 无效的项目路径 ──
+
+test('use target with nonexistent project', () => {
+    const j = jsonE2E('use target --project /nonexistent/path/to/project.pro');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with empty project path', () => {
+    const j = jsonE2E('use target --project ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.11 无效的工作区路径 ──
+
+test('init with nonexistent workspace', () => {
+    const j = jsonE2E('init --workspace /nonexistent/workspace/path');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('init with empty workspace', () => {
+    const j = jsonE2E('init --workspace ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.12 无效的服务器 ID ──
+
+test('server update with nonexistent ID', () => {
+    const j = jsonE2E('server update nonexistent-server-id --name new-name');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server remove with nonexistent ID', () => {
+    const j = jsonE2E('server remove nonexistent-server-id --force');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server update with empty ID', () => {
+    const j = jsonE2E('server update "" --name new-name');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('server remove with empty ID', () => {
+    const j = jsonE2E('server remove "" --force');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.13 无效的锁 ID ──
+
+test('doctor unlock with nonexistent lock ID', () => {
+    const j = jsonE2E('doctor unlock nonexistent-lock-id');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('doctor unlock with empty lock ID', () => {
+    const j = jsonE2E('doctor unlock ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.14 无效的文件路径 ──
+
+test('sync with nonexistent file', () => {
+    const j = jsonE2E('sync --file /nonexistent/file.txt');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('sync with empty file path', () => {
+    const j = jsonE2E('sync --file ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.15 多个未知 flag ──
+
+test('status with multiple unknown flags', () => {
+    const j = jsonE2E('status --unknown1 --unknown2 --unknown3');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('list with multiple unknown flags', () => {
+    const j = jsonE2E('list targets --invalid1 --invalid2');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.16 混合有效和无效 flag ──
+
+test('use target with valid mode and invalid flag', () => {
+    const j = jsonE2E('use target --mode debug --unknown-flag');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('server add with valid params and unknown flag', () => {
+    const j = jsonE2E('server add --name test-mixed --host 192.168.1.100 --username testuser --port 22 --invalid-option');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.17 无效的远程路径 ──
+
+test('remote set with empty remote path', () => {
+    const j = jsonE2E('remote set --server test-server --remote-path ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('remote set with whitespace remote path', () => {
+    const j = jsonE2E('remote set --server test-server --remote-path "   "');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.18 无效的忽略模式 ──
+
+test('sync ignore with empty pattern', () => {
+    const j = jsonE2E('sync ignore --add ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('sync ignore with whitespace pattern', () => {
+    const j = jsonE2E('sync ignore --add "   "');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('sync ignore remove with nonexistent pattern', () => {
+    const j = jsonE2E('sync ignore --rm nonexistent-pattern-xyz');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+// ── 15.19 无效的工具链路径 ──
+
+test('use target with nonexistent Qt path', () => {
+    const j = jsonE2E('use target --qt /nonexistent/qt/path');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with empty Qt path', () => {
+    const j = jsonE2E('use target --qt ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('use target with nonexistent VS path', () => {
+    const j = jsonE2E('use target --vs /nonexistent/vs/path');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with empty VS path', () => {
+    const j = jsonE2E('use target --vs ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.20 特殊字符边界情况 ──
+
+test('server add with special characters in name', () => {
+    const j = jsonE2E('server add --name "test@server#1" --host 192.168.1.100 --username testuser --port 22');
+    assert.ok(j);
+    assert.ok(j.ok !== undefined);
+});
+
+test('server add with unicode in name', () => {
+    const j = jsonE2E('server add --name "测试服务器" --host 192.168.1.100 --username testuser --port 22');
+    assert.ok(j);
+    assert.ok(j.ok !== undefined);
+});
+
+test('use target with special characters in project path', () => {
+    const j = jsonE2E('use target --project "test@project#1.pro"');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
