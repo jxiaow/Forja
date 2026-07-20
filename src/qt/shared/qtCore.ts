@@ -82,6 +82,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         qmakeArgs,
         jomPath
     });
+    const resolvedProject = project
+        ? path.join(buildConfig.projectDir, buildConfig.proFile)
+        : null;
     let commands: string[] = [];
 
     if (options.action === 'qmake') {
@@ -107,7 +110,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                     qmakeCmds = shellBuilder.qmakeCommands(buildConfig).commands;
                 }
             }
-            const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
+            const runtimeTarget = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
             // Deduplicate env init when combining qmake + build
             if (qmakeCmds.length > 0) {
                 const initLen = shellBuilder.initCommands(buildConfig).length;
@@ -150,7 +153,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             if (targets.length > 0 && rccNeedsRebuild(targets)) {
                 let outputDir: string | null = null;
                 if (project) {
-                    const rt = resolveRuntimeTarget(path.dirname(project), mode, arch);
+                    const rt = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
                     if (rt) { outputDir = path.dirname(rt.exePath); }
                 }
                 rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
@@ -160,13 +163,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
 
         // Append run command (launch executable) for both dry-run and execute
         if (project) {
-            const runCmd = buildRunCommand(project, mode, arch, qtPath);
+            const runCmd = buildRunCommand(resolvedProject!, mode, arch, qtPath);
             // Deduplicate env init when combining qmake + build
             // Only dedup when no rcc commands are inserted between them (rcc may change cwd)
             const initLen = shellBuilder.initCommands(buildConfig).length;
             const dedupedBuildCmds = (qmakeCmds.length > 0 && rccCmds.length === 0) ? buildCmds.slice(initLen) : buildCmds;
             if (runCmd) {
-                const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
+                const runtimeTarget = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
                 commands = [...qmakeCmds, ...rccCmds, ...dedupedBuildCmds, runCmd];
                 result.executablePath = runtimeTarget?.exePath;
             } else {
@@ -204,7 +207,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         // 解析可执行文件输出目录
         let outputDir: string | null = null;
         if (project) {
-            const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
+            const runtimeTarget = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
             if (runtimeTarget) { outputDir = path.dirname(runtimeTarget.exePath); }
         }
         // rcc 只需要 Qt bin 在 PATH，不需要 VS 环境

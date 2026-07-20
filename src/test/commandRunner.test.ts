@@ -93,6 +93,34 @@ test('runCliResult treats foreground app exit as successful run after build succ
     assert.equal(result.diagnostics.some(d => d.level === 'error'), false);
 });
 
+test('runCliResult resolves a relative project cwd from workspace', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-runner-'));
+    _tmpDirs.push(workspace);
+    const projectDir = path.join(workspace, 'src', 'app');
+    fs.mkdirSync(projectDir, { recursive: true });
+    const result = await runCliResult({
+        ok: true,
+        action: 'run',
+        mode: 'execute',
+        workspace,
+        project: 'src/app/demo.pro',
+        commands: ['node -e "process.exit(0)"', 'node -e "console.log(process.cwd())"'],
+        shellCommand: '',
+        exitCode: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+        errors: [],
+        logFile: null,
+        executablePath: path.join(projectDir, 'demo'),
+        diagnostics: [],
+        resolved: null
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(result.stdout, new RegExp(projectDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+});
+
 test('runCliResult still fails foreground run when build fails', async () => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-runner-'));
     _tmpDirs.push(workspace);

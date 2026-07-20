@@ -10,6 +10,14 @@ function logFileFor(workspace: string, action: string): string {
     return path.join(logsDir(workspace), `${stamp}-${action}.log`);
 }
 
+function resolveProjectCwd(result: CliResult): string {
+    if (!result.project) { return result.workspace; }
+    const projectPath = path.isAbsolute(result.project)
+        ? result.project
+        : path.resolve(result.workspace, result.project);
+    return path.dirname(projectPath);
+}
+
 /** Clean up stale .bat/.vbs launcher scripts from previous detach runs */
 function cleanDetachScripts(dir: string): void {
     try {
@@ -295,7 +303,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         fs.mkdirSync(path.dirname(logFile), { recursive: true });
         cleanDetachScripts(path.dirname(logFile));
 
-        const cwd = result.project ? path.dirname(result.project) : result.workspace;
+        const cwd = resolveProjectCwd(result);
         const isWin = process.platform === 'win32';
         const previousExecutablePids = result.executablePath ? findExecutablePids(result.executablePath) : [];
 
@@ -408,8 +416,8 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         }
 
         const runResult = options?.streaming
-            ? await executeStreaming(runCommand, result.project ? path.dirname(result.project) : result.workspace, result.executablePath, suppressed)
-            : await execute(runCommand, result.project ? path.dirname(result.project) : result.workspace, suppressed);
+            ? await executeStreaming(runCommand, resolveProjectCwd(result), result.executablePath, suppressed)
+            : await execute(runCommand, resolveProjectCwd(result), suppressed);
         const durationMs = Date.now() - started;
         fs.writeFileSync(filePath, [
             `$ ${buildLine}`,
@@ -448,7 +456,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         cleanDetachScripts(path.dirname(logFile));
 
         const commandLine = commandParts.join(' && ');
-        const cwd = result.project ? path.dirname(result.project) : result.workspace;
+        const cwd = resolveProjectCwd(result);
         const isWin = process.platform === 'win32';
 
         let child: cp.ChildProcess;
