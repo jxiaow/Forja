@@ -4,7 +4,7 @@ import { loadRemoteSettings, RemoteBuildOrderItem, RemoteRepoAssetSettings, Remo
 import { executeRemoteBootstrap, findBootstrapArtifact, findPackageRoot } from '../core/bootstrap';
 import { executeRemoteBridge, RemoteBridgeAction, RemoteBridgeTarget } from '../core/bridge';
 import { executeRemoteCleanUntracked } from '../core/cleanUntracked';
-import { resolveRemoteActionPath, resolveRemoteConfig, resolveRemotePrimaryActionPath } from '../core/config';
+import { resolveRemoteActionPath, resolveRemoteConfig, resolveRemotePrimaryActionPath, resolveRemoteServer } from '../core/config';
 import { buildRemoteDoctor } from '../core/doctor';
 import { executeRemoteUnlock } from '../core/lock';
 import { executePreparedRemoteAction } from '../core/pipeline';
@@ -109,8 +109,8 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             return;
         }
         if (options.action === 'bootstrap') {
-            const resolved = resolveRemoteConfig(options.workspace);
-            if (!resolved.config) {
+            const resolved = resolveRemoteServer(options.workspace);
+            if (!resolved.server) {
                 process.exitCode = 1;
                 writeOutput(blockedResult('bootstrap', resolved.diagnostics, resolved.nextAction), options.json);
                 return;
@@ -121,9 +121,9 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
                 writeOutput({ action: 'bootstrap', mode: 'remote', remoteBin: '$HOME/.forja/bin/forja', ...artifact }, options.json);
                 return;
             }
-            const password = resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null;
-            const runner = createSshRunner(resolved.config.server, password);
-            const uploader = createScpUploader(resolved.config.server, password);
+            const password = resolved.server.password || process.env.FORJA_SSH_PASSWORD || null;
+            const runner = createSshRunner(resolved.server, password);
+            const uploader = createScpUploader(resolved.server, password);
             const result = await executeRemoteBootstrap({ artifact, runner, uploader });
             if (!result.ok) { process.exitCode = 1; }
             writeOutput(result, options.json);

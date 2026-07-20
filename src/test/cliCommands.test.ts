@@ -563,14 +563,14 @@ test('remote bootstrap is routed to the existing bootstrap workflow', () => {
             '  error: No server selected',
             '',
             'Next',
-            '  forja remote set --server <name> --remote-path <path>',
+            '  forja remote set --server <name>',
         ]);
 
         const r = json('remote bootstrap', workspace);
         assert.ok(r);
         assert.equal(r.action, 'bootstrap');
         assert.equal(r.ok, false);
-        assert.equal(r.nextAction, 'forja remote set --server <name> --remote-path <path>');
+        assert.equal(r.nextAction, 'forja remote set --server <name>');
         assert.doesNotMatch(r.diagnostics?.[0]?.message ?? '', /unknown remote|未知 remote/i);
     } finally {
         fs.rmSync(workspace, { recursive: true, force: true });

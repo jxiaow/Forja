@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { getServerById } from '../../core/serverStore';
+import { getServerById, ServerConfig } from '../../core/serverStore';
 import { loadRemoteSettings, loadSyncSettings, RemoteSettings, SyncSettings } from '../../core/settingsIO';
 import { stagedWorkspaceRepoPath } from './stagedWorkspace';
 import { RemoteConfig, RemoteDiagnostic, RemoteLayer } from './types';
@@ -7,6 +7,12 @@ import { RemoteConfig, RemoteDiagnostic, RemoteLayer } from './types';
 export interface ResolveRemoteConfigResult {
     config?: RemoteConfig;
     layer: RemoteLayer;
+    diagnostics: RemoteDiagnostic[];
+    nextAction?: string;
+}
+
+export interface ResolveRemoteServerResult {
+    server?: ServerConfig;
     diagnostics: RemoteDiagnostic[];
     nextAction?: string;
 }
@@ -21,20 +27,15 @@ export function resolveRemoteConfigFrom(
     sync: SyncSettings,
     serverOverride?: string,
 ): ResolveRemoteConfigResult {
-    const serverId = serverOverride || remote.selectedServer;
-    if (!serverId) {
+    const resolvedServer = resolveRemoteServerFrom(remote, serverOverride);
+    if (!resolvedServer.server) {
         return blocked(
-            'No server selected',
-            'forja remote set --server <name> --remote-path <path>',
+            resolvedServer.diagnostics[0].message,
+            resolvedServer.nextAction!,
         );
     }
-    const server = getServerById(serverId);
-    if (!server) {
-        return blocked(
-            `Server not found: ${serverId}`,
-            'forja remote set --server <name> --remote-path <path>',
-        );
-    }
+    const server = resolvedServer.server;
+    const serverId = server.id;
     const remotePath = remote.remotePaths[serverId] || '';
     if (!remotePath) {
         return blocked(
@@ -57,6 +58,11 @@ export function resolveRemoteConfig(workspace: string, serverOverride?: string):
     const remote = loadRemoteSettings(resolvedWorkspace);
     const sync = loadSyncSettings(resolvedWorkspace);
     return resolveRemoteConfigFrom(resolvedWorkspace, remote, sync, serverOverride);
+}
+
+export function resolveRemoteServer(workspace: string, serverOverride?: string): ResolveRemoteServerResult {
+    const remote = loadRemoteSettings(path.resolve(workspace));
+    return resolveRemoteServerFrom(remote, serverOverride);
 }
 
 export function resolveRemoteActionPath(workspace: string, remotePath: string): string {
@@ -87,4 +93,22 @@ function blocked(message: string, nextAction: string): ResolveRemoteConfigResult
         diagnostics: [{ level: 'error', message }],
         nextAction,
     };
+}
+
+function resolveRemoteServerFrom(remote: RemoteSettings, serverOverride?: string): ResolveRemoteServerResult {
+    const serverId = serverOverride || remote.selectedServer;
+    if (!serverId) {
+        return {
+            diagnostics: [{ level: 'error', message: 'No server selected' }],
+            nextAction: 'forja remote set --server <name>',
+        };
+    }
+    const server = getServerById(serverId);
+    if (!server) {
+        return {
+            diagnostics: [{ level: 'error', message: `Server not found: ${serverId}` }],
+            nextAction: 'forja remote set --server <name>',
+        };
+    }
+    return { server, diagnostics: [] };
 }

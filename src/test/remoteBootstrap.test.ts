@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { addServer } from '../core/serverStore';
+import { loadRemoteSettings, saveRemoteSettings } from '../core/settingsIO';
 import { executeRemoteBootstrap, findBootstrapArtifact, findPackageRoot, RemoteUploader } from '../remote/core/bootstrap';
+import { resolveRemoteConfig, resolveRemoteServer } from '../remote/core/config';
 import { RemoteRunner } from '../remote/core/types';
 
 test('remote bootstrap stops before upload when node or npm is unavailable', async () => {
@@ -42,6 +45,43 @@ test('remote bootstrap stops before upload when node or npm is unavailable', asy
     assert.equal(result.stages[0].name, 'preflight');
     assert.match(result.diagnostics.map(item => item.message).join('\n'), /node.*npm|npm.*node/);
     assert.ok(!!result.nextAction);
+});
+
+test('remote bootstrap server resolution does not require a project remote path', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-bootstrap-server-'));
+    const oldConfigDir = process.env.FORJA_CONFIG_DIR;
+    process.env.FORJA_CONFIG_DIR = path.join(root, 'config');
+    try {
+        const workspace = path.join(root, 'workspace');
+        fs.mkdirSync(workspace);
+        const server = addServer({
+            name: 'bootstrap-only',
+            host: '127.0.0.1',
+            port: 22,
+            username: 'dev',
+            authMode: 'key',
+            privateKeyPath: 'id_rsa',
+            password: '',
+        });
+        const settings = loadRemoteSettings(workspace);
+        settings.selectedServer = server.id;
+        saveRemoteSettings(workspace, settings);
+
+        const bootstrapServer = resolveRemoteServer(workspace);
+        assert.equal(bootstrapServer.server?.id, server.id);
+        assert.equal(bootstrapServer.diagnostics.length, 0);
+
+        const projectRemote = resolveRemoteConfig(workspace);
+        assert.equal(projectRemote.config, undefined);
+        assert.match(projectRemote.diagnostics[0].message, /remotePath not configured/);
+    } finally {
+        if (oldConfigDir === undefined) {
+            delete process.env.FORJA_CONFIG_DIR;
+        } else {
+            process.env.FORJA_CONFIG_DIR = oldConfigDir;
+        }
+        fs.rmSync(root, { recursive: true, force: true });
+    }
 });
 
 test('bootstrap artifact resolves nearest package from nested standalone cli files', () => {
