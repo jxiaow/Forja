@@ -67,9 +67,14 @@ export function formatListText(result: ListResult, _locale: Locale): string {
             if (saved.length > 0) {
                 // Only show section header when both sections are present
                 if (hasDiscovered) { lines.push(`  ${T('lst.savedTargets')}:`); }
-                for (const t of saved) {
+                // Extract project name (strip trailing mode/arch from name)
+                const displayNames = saved.map(t => t.name.replace(/\s+(debug|release)\s+(x86|x64)$/, ''));
+                const maxLen = Math.max(...displayNames.map(n => n.length));
+                for (let i = 0; i < saved.length; i++) {
+                    const t = saved[i];
                     const marker = t.active ? '* ' : '  ';
-                    lines.push(`  ${marker}${t.name} — ${t.mode}|${t.arch} — ${t.project}`);
+                    const displayName = displayNames[i];
+                    lines.push(`  ${marker}${displayName.padEnd(maxLen)}  —  ${t.project}`);
                 }
                 if (hasDiscovered) { lines.push(''); }
             }
@@ -78,10 +83,15 @@ export function formatListText(result: ListResult, _locale: Locale): string {
             const targets = result.targets || [];
             if (targets.length > 0) {
                 lines.push(`  ${T('lst.discoveredTargets')}:`);
-                for (const t of targets) {
-                    const marker = t.current ? '* ' : '  ';
+                const targetLabels = targets.map(t => {
                     const cfg = t.configured ? `${T('configuredMark')} ` : '';
-                    lines.push(`  ${marker}${cfg}${t.label} — ${t.project}`);
+                    return `${cfg}${t.label}`;
+                });
+                const maxTargetLen = Math.max(...targetLabels.map(l => l.length));
+                for (let i = 0; i < targets.length; i++) {
+                    const t = targets[i];
+                    const marker = t.current ? '* ' : '  ';
+                    lines.push(`  ${marker}${targetLabels[i].padEnd(maxTargetLen)}  —  ${t.project}`);
                 }
             } else if (saved.length === 0) {
                 lines.push(`  ${T('noneFound')}`);

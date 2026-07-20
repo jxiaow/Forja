@@ -21,6 +21,7 @@ import { readRunState, resolveRunProcessStatus } from '../../qt/shared/localStat
 import { getServerById } from '../../core/serverStore';
 import { resolveRemoteConfigFrom } from '../../remote/core/config';
 import { detectMake } from '../../cpp/cli/envDetector';
+import { detectJomSync } from '../../qt/env/envDetector';
 import { validateMakefile } from '../../qt/shared/runtimeTarget';
 
 export interface StatusResult extends ForjaJsonResult {
@@ -376,7 +377,12 @@ function buildToolchainSummary(target: TargetProfile): ToolchainSummary {
             summary.qt = { version: target.toolchain.qtVersion || undefined };
         }
         if (target.toolchain.vsInstall) { summary.vs = { version: extractVsVersion(target.toolchain.vsInstall) }; }
-        if (target.toolchain.jomPath) { summary.jom = target.toolchain.jomPath; }
+        if (target.toolchain.jomPath) {
+            summary.jom = target.toolchain.jomPath;
+        } else if (process.platform === 'win32') {
+            const detected = detectJomSync(target.toolchain.qtPath);
+            if (detected) { summary.jom = detected; }
+        }
         if (process.platform !== 'win32') {
             summary.make = !!detectMake();
         }
