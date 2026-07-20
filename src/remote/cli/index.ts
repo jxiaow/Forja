@@ -118,7 +118,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const artifact = findBootstrapArtifact(cliPackageRoot());
             if (!artifact.ok) {
                 process.exitCode = 1;
-                writeOutput({ action: 'bootstrap', mode: 'remote', remoteBin: '$HOME/.local/bin/forja', ...artifact }, options.json);
+                writeOutput({ action: 'bootstrap', mode: 'remote', remoteBin: 'forja', ...artifact }, options.json);
                 return;
             }
             const password = resolved.server.password || process.env.FORJA_SSH_PASSWORD || null;
@@ -897,7 +897,7 @@ function formatRemoteStatus(out: {
     if (out.server) { lines.push('server: ' + out.server); }
     if (out.remotePath) { lines.push('remotePath: ' + out.remotePath); }
     if (out.remoteSettings) {
-        lines.push('remoteForjaBin: ' + (out.remoteSettings.remoteForjaBin || '$HOME/.local/bin/forja'));
+        lines.push('remoteForjaBin: ' + (out.remoteSettings.remoteForjaBin || 'forja'));
         lines.push('buildOrder: ' + (out.remoteSettings.buildOrder.configured ? out.remoteSettings.buildOrder.items.join(', ') : 'not configured'));
         const transfer = out.remoteSettings.transfer;
         lines.push('transfer: ' + (transfer.configured ? `${transfer.deployServer} -> ${transfer.deployPath} (${transfer.artifactCount} artifact${transfer.artifactCount === 1 ? '' : 's'})` : 'not configured'));

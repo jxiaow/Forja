@@ -398,7 +398,7 @@ function buildRemoteForjaVersionCommand(remoteForjaBin: string): string {
     if (remoteForjaBin) {
         return `${remoteCommand([remoteForjaBin])} --version`;
     }
-    return '$HOME/.local/bin/forja --version';
+    return 'forja --version';
 }
 
 function trimMessage(value: string): string {

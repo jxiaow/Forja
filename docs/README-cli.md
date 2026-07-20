@@ -314,7 +314,7 @@ forja remote bootstrap
 
 ```
 
-bootstrap 使用远端用户级 npm prefix `$HOME/.local`，命令入口为 `$HOME/.local/bin/forja`。如果该目录尚未加入远端 `PATH`，结果会给出配置提示。
+bootstrap 复用远端 npm 已配置的全局 prefix，与手动执行 `npm install -g` 的位置一致；安装后通过 `command -v forja` 返回真实入口。
 
 当前版本的 repo/build-order/transfer 高级配置尚未纳入公开 CLI 契约，不能在脚本中使用。
 

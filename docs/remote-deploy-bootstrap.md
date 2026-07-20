@@ -29,7 +29,7 @@ dist/forja-<version>/cli/forja-cli-<version>.tgz
 
 - `remote test` 检测远端 version 不一致时失败
 - `remote test --bootstrap` 可以安装 exact version 后复测
-- `remote bootstrap` 安装成功后必须从非安装目录执行 `~/.local/bin/forja --version`
+- `remote bootstrap` 安装成功后必须从非安装目录执行 `command -v forja` 和 `forja --version`
 - version 输出不等于本地 package version 时安装失败
 
 后续如需 semver range 兼容，需要单独设计 JSON 协议版本。
@@ -41,15 +41,15 @@ dist/forja-<version>/cli/forja-cli-<version>.tgz
 - POSIX-compatible shell
 - Node.js `>=18`
 - npm 可用
-- 当前用户可写 `~/.forja/` 和 `~/.local/`
+- 当前用户可写 `~/.forja/` 和 npm 已配置的全局 prefix
 - 不使用 sudo
 
 安装目录：
 
 ```text
 ~/.forja/bootstrap/
-~/.local/lib/node_modules/forja/
-~/.local/bin/forja
+<npm prefix -g>/lib/node_modules/forja/
+<command -v forja>
 ```
 
 安装流程：
@@ -57,16 +57,16 @@ dist/forja-<version>/cli/forja-cli-<version>.tgz
 1. 上传 tgz 到 `~/.forja/bootstrap/forja-cli-<version>.tgz.tmp`
 2. 校验 sha256
 3. rename 为 `forja-cli-<version>.tgz`
-4. `npm install -g --prefix ~/.local <tgz>`
-5. 从 `/tmp` 验证 `~/.local/bin/forja --version`
-6. 删除旧入口 `~/.forja/bin/forja`
-7. 验证 `PATH` 中的 `forja --version`
+4. `npm install -g <tgz>`
+5. 从 `/tmp` 执行 `command -v forja`，记录真实入口
+6. 从 `/tmp` 验证 `forja --version`
+7. 删除旧入口 `~/.forja/bin/forja`
 
-如果 `~/.local/bin` 尚未进入远端 `PATH`，安装仍成功，但结果会返回 warning 和配置 PATH 的 next action。
+如果 npm 安装成功但 `command -v forja` 找不到入口，bootstrap 失败并提示检查远端 npm prefix 与 PATH。
 
 ## Cleanup
 
-安装成功后 npm 用户级 prefix 中只保留当前安装版本，并保留当前 bootstrap tgz。
+安装成功后 npm 全局 prefix 中保留当前安装版本，并保留当前 bootstrap tgz。
 
 bootstrap 不清理 remote project settings、overlay manifest、underlay backup、run-state 或 lock。
 
@@ -80,12 +80,13 @@ bootstrap 不清理 remote project settings、overlay manifest、underlay backup
   "version": "0.7.42",
   "artifact": "dist/forja-0.7.42/cli/forja-cli-0.7.42.tgz",
   "sha256": "<sha256>",
-  "remoteBin": "~/.local/bin/forja",
+  "remoteBin": "/home/dev/.nvm/versions/node/v22.0.0/bin/forja",
   "stages": [
     { "stage": "upload", "ok": true },
     { "stage": "install", "ok": true },
+    { "stage": "locateBin", "ok": true },
     { "stage": "verifyPublicBin", "ok": true },
-    { "stage": "verifyPath", "ok": true }
+    { "stage": "removeLegacyBin", "ok": true }
   ],
   "diagnostics": []
 }

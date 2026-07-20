@@ -157,7 +157,7 @@ function packPackage(packageRoot: string, version: string): BootstrapArtifactRes
 
 export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOptions): Promise<ExecuteRemoteBootstrapResult> {
     const artifact = options.artifact;
-    const remoteBin = '$HOME/.local/bin/forja';
+    let remoteBin = 'forja';
     const stages: ExecuteRemoteBootstrapResult['stages'] = [];
     const diagnostics: RemoteDiagnostic[] = [...artifact.diagnostics];
 
@@ -170,18 +170,16 @@ export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOpti
     const artifactName = path.basename(artifact.artifactPath);
     const remoteArtifact = `.forja/bootstrap/${artifactName}`;
     const remoteArtifactForShell = homePath('.forja', 'bootstrap', artifactName);
-    const installPrefix = homePath('.local');
-    const publicBin = homePath('.local', 'bin', 'forja');
 
-    const preflight = await options.runner.run(`command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 && mkdir -p ${homePath('.forja', 'bootstrap')} ${installPrefix} && test -w ${homePath('.forja')} && test -w ${installPrefix}`, 10000);
+    const preflight = await options.runner.run(`command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 && mkdir -p ${homePath('.forja', 'bootstrap')} && test -w ${homePath('.forja')}`, 10000);
     stages.push({ name: 'preflight', ok: preflight.exitCode === 0, message: trim(preflight.stderr) });
     if (preflight.exitCode !== 0) {
         const detail = trim(preflight.stderr);
-        diagnostics.push({ level: 'error', message: '远端缺少 node 或 npm，或 ~/.forja、~/.local 不可写，无法执行 bootstrap 安装' + (detail ? ': ' + detail : '') });
+        diagnostics.push({ level: 'error', message: '远端缺少 node 或 npm，或 ~/.forja 不可写，无法执行 bootstrap 安装' + (detail ? ': ' + detail : '') });
         return failure(artifact, remoteBin, stages, diagnostics, bootstrapFallbackAction());
     }
 
-    const prepare = await options.runner.run(`mkdir -p ${homePath('.forja', 'bootstrap')} ${installPrefix}`, 10000);
+    const prepare = await options.runner.run(`mkdir -p ${homePath('.forja', 'bootstrap')}`, 10000);
     stages.push({ name: 'prepare', ok: prepare.exitCode === 0, message: trim(prepare.stderr) });
     if (prepare.exitCode !== 0) {
         diagnostics.push({ level: 'error', message: trim(prepare.stderr) || '远端 bootstrap 目录创建失败' });
@@ -198,14 +196,23 @@ export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOpti
         return failure(artifact, remoteBin, stages, diagnostics);
     }
 
-    const install = await options.runner.run(`npm install -g --prefix ${installPrefix} ${remoteArtifactForShell}`, 120000);
+    const install = await options.runner.run(`npm install -g ${remoteArtifactForShell}`, 120000);
     stages.push({ name: 'install', ok: install.exitCode === 0, message: trim(install.stderr) });
     if (install.exitCode !== 0) {
         diagnostics.push({ level: 'error', message: trim(install.stderr) || '远端 npm install 失败' });
         return failure(artifact, remoteBin, stages, diagnostics);
     }
 
-    const publicVersion = await options.runner.run(`cd /tmp && ${publicBin} --version`, 10000);
+    const locateBin = await options.runner.run('cd /tmp && command -v forja', 10000);
+    const locatedBin = locateBin.stdout.trim().split(/\r?\n/)[0] || '';
+    stages.push({ name: 'locateBin', ok: locateBin.exitCode === 0 && !!locatedBin, message: locatedBin || trim(locateBin.stderr) });
+    if (locateBin.exitCode !== 0 || !locatedBin) {
+        diagnostics.push({ level: 'error', message: 'npm 全局安装完成，但 PATH 中未找到 forja' });
+        return failure(artifact, remoteBin, stages, diagnostics, '检查远端 npm prefix 和 PATH 配置');
+    }
+    remoteBin = locatedBin;
+
+    const publicVersion = await options.runner.run('cd /tmp && forja --version', 10000);
     const publicVersionText = publicVersion.stdout.trim();
     stages.push({ name: 'verifyPublicBin', ok: publicVersion.exitCode === 0 && publicVersionText === version, message: publicVersionText || trim(publicVersion.stderr) });
     if (publicVersion.exitCode !== 0 || publicVersionText !== version) {
@@ -220,17 +227,6 @@ export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOpti
         return failure(artifact, remoteBin, stages, diagnostics);
     }
 
-    const pathVersion = await options.runner.run('cd /tmp && command -v forja >/dev/null 2>&1 && forja --version', 10000);
-    const pathVersionText = pathVersion.stdout.trim();
-    const pathReady = pathVersion.exitCode === 0 && pathVersionText === version;
-    stages.push({ name: 'verifyPath', ok: pathReady, message: pathVersionText || trim(pathVersion.stderr) });
-    if (!pathReady) {
-        diagnostics.push({
-            level: 'warning',
-            message: '$HOME/.local/bin 尚未在远端 PATH 中生效；请将 export PATH="$HOME/.local/bin:$PATH" 加入 shell profile 后重新登录'
-        });
-    }
-
     return {
         ok: true,
         action: 'bootstrap',
@@ -240,8 +236,7 @@ export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOpti
         sha256: artifact.sha256,
         remoteBin,
         stages,
-        diagnostics,
-        nextAction: pathReady ? undefined : '将 $HOME/.local/bin 加入远端 PATH 后重新登录'
+        diagnostics
     };
 }
 
