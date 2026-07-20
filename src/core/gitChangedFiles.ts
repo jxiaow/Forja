@@ -78,12 +78,13 @@ export async function getGitChangedFiles(workspaceRoot: string): Promise<string[
 export function isIgnored(relativePath: string, ignoreList: string[]): boolean {
     const parts = relativePath.split(/[\\/]/);
     for (const pattern of ignoreList) {
+        const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+        const wildcardRegex = pattern.includes('*')
+            ? new RegExp('^' + escapedPattern.replace(/\*/g, '.*') + '$')
+            : null;
         for (const part of parts) {
             if (part === pattern) { return true; }
-            if (pattern.includes('*')) {
-                const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-                if (regex.test(part)) { return true; }
-            }
+            if (wildcardRegex?.test(part)) { return true; }
         }
     }
     return false;

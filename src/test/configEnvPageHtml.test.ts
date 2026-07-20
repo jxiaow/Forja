@@ -192,6 +192,23 @@ test('environment page allows reopened custom select lists to overflow expanded 
     assert.match(html, /\.csel-list\{[^}]*position:absolute/);
 });
 
+test('config panel validates server identity, credentials, and duplicate names', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'messageHandler.ts'), 'utf8');
+    const html = getPageHtml('sync', createTemplateData());
+    const submitBlock = html.match(/window\.submitServerForm=function\(\)\{[\s\S]*?window\.confirmRemoveServer/)?.[0] ?? '';
+
+    assert.match(source, /!newServerData\.name\.trim\(\)/);
+    assert.match(source, /newServerData\.authMode === 'key' && !newServerData\.privateKeyPath\.trim\(\)/);
+    assert.match(source, /!Number\.isInteger\(newServerData\.port\)/);
+    assert.match(source, /!updates\.name\.trim\(\)/);
+    assert.match(source, /updates\.authMode === 'key' && !updates\.privateKeyPath\.trim\(\)/);
+    assert.match(source, /!Number\.isInteger\(updates\.port\)/);
+    assert.match(source, /s\.id !== serverId && s\.name === updates\.name/);
+    assert.match(submitBlock, /Number\.isInteger\(s\.port\)/);
+    assert.match(submitBlock, /_authMode==="key"&&!s\.privateKeyPath/);
+    assert.doesNotMatch(submitBlock, /hideServerForm\(\)/);
+});
+
 test('sync page shows specific readiness hints when configuration is incomplete', () => {
     const html = getPageHtml('sync', {
         ...createTemplateData(),

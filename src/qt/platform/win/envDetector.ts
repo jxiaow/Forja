@@ -199,7 +199,7 @@ async function detectJom(qt: QtInfo | null): Promise<string | null> {
 }
 
 /**
- * Synchronous jom detection — filesystem checks only (no PATH lookup).
+ * Synchronous jom detection — filesystem checks including PATH entries.
  * Used by status command where async detection is not available.
  */
 export function detectJomSync(qtPath?: string): string | null {
@@ -219,7 +219,14 @@ export function detectJomSync(qtPath?: string): string | null {
             dir = parent;
         }
     }
-    // 3. 常见固定路径
+    // 3. 系统 PATH
+    for (const entry of (process.env.PATH || '').split(path.delimiter)) {
+        const dir = entry.trim().replace(/^"(.*)"$/, '$1');
+        if (!dir) { continue; }
+        const jomPath = path.join(dir, 'jom.exe');
+        if (fs.existsSync(jomPath)) { return jomPath; }
+    }
+    // 4. 常见固定路径
     const knownPaths = ['C:\\Qt', 'C:\\QtCompile', 'D:\\Qt', 'E:\\Qt'];
     for (const root of knownPaths) {
         const jomPath = path.join(root, 'Tools', 'QtCreator', 'bin', 'jom', 'jom.exe');

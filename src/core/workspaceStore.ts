@@ -327,6 +327,11 @@ export function generateTargetId(kind: 'qt' | 'cpp', projectPath: string, mode: 
     if (existingIds && existingIds.has(id)) {
         const hash = crypto.createHash('sha256').update(`${projectPath}:${mode}:${arch}`).digest('hex').slice(0, 6);
         id = `${kind}-${basename}-${mode}-${arch}-${hash}`;
+        const hashedId = id;
+        let suffix = 2;
+        while (existingIds.has(id)) {
+            id = `${hashedId}-${suffix++}`;
+        }
     }
 
     return id;

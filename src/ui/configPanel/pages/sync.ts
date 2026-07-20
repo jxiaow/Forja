@@ -288,9 +288,10 @@ function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0]
     h += 'document.getElementById("sf-pwd-row").style.display=""}};';
 
     h += 'window.submitServerForm=function(){';
+    h += 'var portEl=document.getElementById("sf-port");var port=Number(portEl.value);';
     h += 'var s={name:document.getElementById("sf-name").value.trim(),';
     h += 'host:document.getElementById("sf-host").value.trim(),';
-    h += 'port:parseInt(document.getElementById("sf-port").value)||22,';
+    h += 'port:port,';
     h += 'username:document.getElementById("sf-username").value.trim(),';
     h += 'authMode:_authMode,';
     h += 'privateKeyPath:document.getElementById("sf-privateKeyPath").value.trim(),';
@@ -303,11 +304,14 @@ function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0]
     h += 'document.getElementById("sf-host").style.borderColor=!s.host?errBorder:"";';
     h += 'document.getElementById("sf-username").style.borderColor=!s.username?errBorder:"";';
     h += 'return}';
+    h += 'if(!Number.isInteger(s.port)||s.port<1||s.port>65535){alert("端口必须是 1 到 65535 之间的整数");return}';
+    h += 'if(_authMode==="key"&&!s.privateKeyPath){alert("密钥认证需要私钥路径");return}';
+    h += 'if(_authMode==="password"&&!s.password&&!(_editMode&&_currentServer&&_currentServer.password)){alert("密码认证需要密码");return}';
     h += 'if(!remotePath){rpInput.style.borderColor="var(--vscode-inputValidation-errorBorder,#EF4444)";rpInput.placeholder="必填：远程目录路径";return}';
     h += 'rpInput.style.borderColor="";';
     h += 'if(_editMode){s.id=_editId;vscode.postMessage({command:"updateServer",server:s,remotePath:remotePath})}';
     h += 'else{vscode.postMessage({command:"addServer",server:s,remotePath:remotePath})}';
-    h += 'hideServerForm()};';
+    h += '};';
 
     h += 'window.confirmRemoveServer=function(btn,id){';
     h += 'if(btn.dataset.confirmed){vscode.postMessage({command:"removeServer",id:id});return}';
@@ -315,13 +319,15 @@ function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0]
     h += 'setTimeout(function(){delete btn.dataset.confirmed;btn.textContent="删除"},3000)};';
 
     h += 'window.testFormConnection=function(){';
+    h += 'var port=Number(document.getElementById("sf-port").value);';
     h += 'var s={host:document.getElementById("sf-host").value.trim(),';
-    h += 'port:parseInt(document.getElementById("sf-port").value)||22,';
+    h += 'port:port,';
     h += 'username:document.getElementById("sf-username").value.trim(),';
     h += 'authMode:_authMode,';
     h += 'privateKeyPath:document.getElementById("sf-privateKeyPath").value.trim(),';
     h += 'password:document.getElementById("sf-password").value};';
     h += 'if(!s.host||!s.username){alert("请先填写主机地址和用户名");return}';
+    h += 'if(!Number.isInteger(s.port)||s.port<1||s.port>65535){alert("端口必须是 1 到 65535 之间的整数");return}';
     h += 'vscode.postMessage({command:"testFormConnection",server:s})};';
 
     // ── 消息监听 ──

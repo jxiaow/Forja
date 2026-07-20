@@ -309,6 +309,9 @@ forja sync --dry-run                    # 预览待同步文件
 # 配置远程执行目标
 forja remote set --server server-1 --remote-path /home/dev/workspace
 
+# 将当前本地 CLI 打包并安装/更新到远端
+forja remote bootstrap
+
 ```
 
 当前版本的 repo/build-order/transfer 高级配置尚未纳入公开 CLI 契约，不能在脚本中使用。

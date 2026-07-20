@@ -64,3 +64,28 @@ test('bootstrap artifact resolves nearest package from nested standalone cli fil
         fs.rmSync(root, { recursive: true, force: true });
     }
 });
+
+test('bootstrap artifact packs the currently compiled local CLI', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-bootstrap-compiled-'));
+    const version = `0.1.0-compiled.${Date.now()}`;
+    const packageVersion = `0.1.0-extension.${Date.now()}`;
+    try {
+        fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+            name: 'forja',
+            version: packageVersion,
+            bin: { forja: './out/cli/index.js' }
+        }));
+        fs.mkdirSync(path.join(root, 'out', 'cli'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'out', 'cli', 'index.js'), '#!/usr/bin/env node\nconsole.log("compiled");\n');
+        fs.writeFileSync(path.join(root, 'out', 'version.js'), `exports.VERSION = "${version}";\n`);
+
+        const artifact = findBootstrapArtifact(root);
+
+        assert.equal(artifact.ok, true);
+        assert.equal(artifact.version, version);
+        assert.ok(artifact.artifactPath?.endsWith('.tgz'));
+        assert.equal(fs.existsSync(artifact.artifactPath || ''), true);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});

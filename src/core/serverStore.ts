@@ -131,7 +131,7 @@ export function writeServers(servers: ServerConfig[]): void {
         authMode: s.authMode,
         privateKeyPath: s.privateKeyPath,
         password: s.password || undefined,
-        strictHostKeyChecking: s.strictHostKeyChecking || undefined
+        strictHostKeyChecking: s.strictHostKeyChecking
     }));
     atomicWriteJson(_serversFilePath(), stored);
     // 收紧文件权限（仅当前用户可读写）— Windows 上 chmod 无效但不报错

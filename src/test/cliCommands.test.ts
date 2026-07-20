@@ -10,11 +10,21 @@
  * 6. i18n 正确性 - 所有输出跟随 locale
  * 7. 路径分隔符一致性 - current 字段正确匹配
  */
-import test, { before, after } from 'node:test';
+import test, { after } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
+import { formatListText } from '../cli/commands/list';
+import { setGlobalLocale } from '../cli/commands/types';
+import { runSwitchTarget } from '../cli/commands/useTarget';
+import {
+    createEmptyWorkspaceConfig,
+    loadWorkspaceConfig,
+    registerWorkroot,
+    saveWorkspaceConfig,
+    unregisterWorkroot,
+} from '../core/workspaceStore';
 
 // ── 测试环境 ──
 const TEST_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'forja-deep-test-'));
@@ -30,8 +40,13 @@ const cleanup = () => {
 
 function run(args: string, cwd?: string): { code: number; out: string; err: string } {
     const cliPath = path.join(process.cwd(), 'out', 'cli', 'index.js');
+    const argv = (args.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map(value => {
+        const quoted = (value.startsWith('"') && value.endsWith('"'))
+            || (value.startsWith("'") && value.endsWith("'"));
+        return quoted ? value.slice(1, -1) : value;
+    });
     try {
-        const out = execSync(`node ${cliPath} ${args}`, {
+        const out = execFileSync(process.execPath, [cliPath, ...argv], {
             cwd: cwd || TEST_DIR,
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'pipe'],
@@ -48,12 +63,6 @@ function json(args: string, cwd?: string) {
     const r = run(`${args} --json`, cwd);
     try { return JSON.parse(r.out); } catch { return null; }
 }
-
-before(() => {
-    try { execSync('forja --version', { stdio: 'pipe' }); } catch {
-        throw new Error('forja CLI not installed');
-    }
-});
 
 after(cleanup);
 
@@ -227,6 +236,104 @@ test('server update 实际修改了数据', () => {
     assert.equal(found?.host, '2.2.2.2', 'host 必须已更新');
 
     run(`server remove ${addResult.server.id} --force`);
+});
+
+test('switching a non-active target variant preserves the active target entry', async () => {
+    const workroot = fs.mkdtempSync(path.join(TEST_DIR, 'switch-target-'));
+    const activeId = 'qt-active-debug-x86';
+    const selectedId = 'qt-selected-debug-x86';
+    registerWorkroot(workroot);
+    const config = createEmptyWorkspaceConfig(workroot);
+    config.targets[activeId] = {
+        id: activeId,
+        name: 'active debug x86',
+        kind: 'qt',
+        project: path.join(workroot, 'active.pro'),
+        mode: 'debug',
+        arch: 'x86',
+        runAt: 'local',
+        toolchain: {},
+    };
+    config.targets[selectedId] = {
+        id: selectedId,
+        name: 'selected debug x86',
+        kind: 'qt',
+        project: path.join(workroot, 'selected.pro'),
+        mode: 'debug',
+        arch: 'x86',
+        runAt: 'local',
+        toolchain: {},
+    };
+    config.activeTarget = activeId;
+    saveWorkspaceConfig(config);
+
+    try {
+        const result = await runSwitchTarget(workroot, {
+            project: selectedId,
+            mode: 'release',
+            interactive: false,
+            json: true,
+        });
+        assert.equal(result.ok, true);
+
+        const saved = loadWorkspaceConfig(workroot);
+        assert.ok(saved.targets[activeId], 'the previously active target must remain saved');
+        assert.equal(saved.targets[selectedId], undefined, 'the selected target old variant must be replaced');
+        assert.notEqual(saved.activeTarget, activeId);
+        assert.equal(saved.targets[saved.activeTarget!]?.mode, 'release');
+    } finally {
+        unregisterWorkroot(workroot);
+        fs.rmSync(workroot, { recursive: true, force: true });
+    }
+});
+
+test('switching to an existing target variant preserves its saved configuration', async () => {
+    const workroot = fs.mkdtempSync(path.join(TEST_DIR, 'switch-existing-'));
+    const debugId = 'qt-app-debug-x86';
+    const releaseId = 'qt-app-release-x86';
+    registerWorkroot(workroot);
+    const config = createEmptyWorkspaceConfig(workroot);
+    config.targets[debugId] = {
+        id: debugId,
+        name: 'app debug x86',
+        kind: 'qt',
+        project: 'app.pro',
+        mode: 'debug',
+        arch: 'x86',
+        runAt: 'local',
+        toolchain: { qtPath: 'debug-qt' },
+    };
+    config.targets[releaseId] = {
+        id: releaseId,
+        name: 'app release x86',
+        kind: 'qt',
+        project: 'app.pro',
+        mode: 'release',
+        arch: 'x86',
+        runAt: 'local',
+        toolchain: { qtPath: 'release-qt' },
+    };
+    config.activeTarget = debugId;
+    saveWorkspaceConfig(config);
+
+    try {
+        const result = await runSwitchTarget(workroot, {
+            project: debugId,
+            mode: 'release',
+            interactive: false,
+            json: true,
+        });
+        assert.equal(result.ok, true);
+
+        const saved = loadWorkspaceConfig(workroot);
+        assert.equal(saved.activeTarget, releaseId);
+        assert.equal(saved.targets[releaseId]?.toolchain.qtPath, 'release-qt');
+        assert.ok(saved.targets[debugId], 'the source variant must remain saved');
+        assert.equal(Object.keys(saved.targets).length, 2);
+    } finally {
+        unregisterWorkroot(workroot);
+        fs.rmSync(workroot, { recursive: true, force: true });
+    }
 });
 
 test('--lang 全局 flag 切换输出语言', () => {
@@ -446,6 +553,14 @@ test('remote --server 不存在的服务器报错', () => {
     assert.equal(r.ok, false);
 });
 
+test('remote bootstrap is routed to the existing bootstrap workflow', () => {
+    const r = json('remote bootstrap');
+    assert.ok(r);
+    assert.equal(r.action, 'bootstrap');
+    assert.equal(r.ok, false);
+    assert.doesNotMatch(r.diagnostics?.[0]?.message ?? '', /unknown remote|未知 remote/i);
+});
+
 // ═══════════════════════════════════════════════════════════════
 // 11. List 详细功能测试
 // ═════════════════════════════════════════════════════════════
@@ -481,6 +596,22 @@ test('list targets --all 显示项目信息', () => {
         assert.ok(typeof t.current === 'boolean', 'target 必须有 current 布尔值');
         assert.ok(typeof t.configured === 'boolean', 'target 必须有 configured 布尔值');
     }
+});
+
+test('list targets text distinguishes saved mode and arch variants', () => {
+    setGlobalLocale('en');
+    const text = formatListText({
+        ok: true,
+        action: 'list',
+        category: 'targets',
+        savedTargets: [
+            { id: 'qt-app-debug-x64', name: 'app debug x64', kind: 'qt', project: 'app.pro', mode: 'debug', arch: 'x64', active: true },
+            { id: 'qt-app-release-x64', name: 'app release x64', kind: 'qt', project: 'app.pro', mode: 'release', arch: 'x64', active: false },
+        ],
+    }, 'en');
+
+    assert.match(text, /app\s+debug\|x64\s+—\s+app\.pro/);
+    assert.match(text, /app\s+release\|x64\s+—\s+app\.pro/);
 });
 
 test('list env 显示工具链信息', () => {
@@ -573,30 +704,11 @@ test('forja --version 显示版本号', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 15. E2E 边界测试（使用真实工作区）
+// 15. E2E 边界测试（使用隔离临时工作区）
 // ═══════════════════════════════════════════════════════════════
 
-const REAL_WORKSPACE = 'C:\\Code\\workspace\\260627';
-
-function runE2E(args: string): { code: number; out: string; err: string } {
-    const cliPath = path.join(process.cwd(), 'out', 'cli', 'index.js');
-    try {
-        const out = execSync(`node ${cliPath} ${args}`, {
-            cwd: REAL_WORKSPACE,
-            encoding: 'utf8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-            timeout: 30000,
-        });
-        return { code: 0, out, err: '' };
-    } catch (e: unknown) {
-        const err = e as { status?: number; stdout?: string; stderr?: string };
-        return { code: err.status || 1, out: err.stdout || '', err: err.stderr || '' };
-    }
-}
-
-function jsonE2E(args: string): any {
-    const r = runE2E(`${args} --json`);
-    try { return JSON.parse(r.out); } catch { return null; }
+function jsonE2E(args: string) {
+    return json(args, TEST_DIR);
 }
 
 // ── 15.1 无效的 mode/arch 值 ──
@@ -758,24 +870,99 @@ test('server add with empty auth-mode', () => {
     assert.equal(j.ok, false);
 });
 
+test('server key auth requires a private key instead of an unused password', () => {
+    const j = jsonE2E('server add --name test-key-password --host 192.168.1.100 --username testuser --auth-mode key --password secret');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.match(j.diagnostics?.[0]?.message ?? '', /private-key-path/);
+});
+
+test('server password auth must be selected explicitly', () => {
+    const j = jsonE2E('server add --name implicit-password --host 192.168.1.100 --username testuser --password secret');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.match(j.diagnostics?.[0]?.message ?? '', /auth-mode password/);
+});
+
+test('server default key auth rejects an explicitly blank private key path', () => {
+    const j = jsonE2E('server add --name blank-key --host 192.168.1.100 --username testuser --private-key-path "   "');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.match(j.diagnostics?.[0]?.message ?? '', /private-key-path/);
+});
+
+test('server update rejects password when selecting key auth', () => {
+    const added = jsonE2E('server add --name update-key-auth --host 192.168.1.100 --username testuser --auth-mode password --password secret');
+    assert.equal(added.ok, true);
+
+    const updated = jsonE2E(`server update ${added.server.id} --auth-mode key --password secret`);
+    assert.equal(updated.ok, false);
+    assert.match(updated.diagnostics?.[0]?.message ?? '', /auth-mode password/);
+
+    run(`server remove ${added.server.id} --force`, TEST_DIR);
+});
+
+test('server update cannot store a password while remaining in key mode', () => {
+    const added = jsonE2E('server add --name update-key-password --host 192.168.1.100 --username testuser --auth-mode key --private-key-path id_rsa');
+    assert.equal(added.ok, true);
+
+    const updated = jsonE2E(`server update ${added.server.id} --password secret`);
+    assert.equal(updated.ok, false);
+    assert.match(updated.diagnostics?.[0]?.message ?? '', /auth-mode password/);
+
+    run(`server remove ${added.server.id} --force`, TEST_DIR);
+});
+
+test('server rejects conflicting strict host key flags', () => {
+    const j = jsonE2E('server add --name strict-conflict --host 192.168.1.100 --username testuser --strict-host-key-checking --no-strict-host-key-checking');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.match(j.diagnostics?.[0]?.message ?? '', /strict-host-key-checking/);
+});
+
 // ── 15.8 空值/空白值 ──
 
 test('server add with whitespace name', () => {
     const j = jsonE2E('server add --name "   " --host 192.168.1.100 --username testuser --port 22');
     assert.ok(j);
-    assert.ok(j.ok !== undefined);
+    assert.equal(j.ok, false);
 });
 
 test('server add with whitespace host', () => {
     const j = jsonE2E('server add --name test-ws-host --host "   " --username testuser --port 22');
     assert.ok(j);
-    assert.ok(j.ok !== undefined);
+    assert.equal(j.ok, false);
 });
 
 test('server add with whitespace username', () => {
     const j = jsonE2E('server add --name test-ws-user --host 192.168.1.100 --username "   " --port 22');
     assert.ok(j);
-    assert.ok(j.ok !== undefined);
+    assert.equal(j.ok, false);
+});
+
+test('server update rejects whitespace required fields', () => {
+    const added = jsonE2E('server add --name update-ws --host 192.168.1.100 --username testuser --port 22');
+    assert.equal(added.ok, true);
+
+    for (const flag of ['--name', '--host', '--username']) {
+        const updated = jsonE2E(`server update ${added.server.id} ${flag} "   "`);
+        assert.equal(updated.ok, false);
+        assert.equal(updated.serverAction, 'update');
+    }
+
+    run(`server remove ${added.server.id} --force`, TEST_DIR);
+});
+
+test('server update invalid integer reports update protocol', () => {
+    const added = jsonE2E('server add --name update-port --host 192.168.1.100 --username testuser --port 22');
+    assert.equal(added.ok, true);
+
+    const updated = jsonE2E(`server update ${added.server.id} --port 22.5`);
+    assert.equal(updated.ok, false);
+    assert.equal(updated.serverAction, 'update');
+    assert.match(updated.nextAction, /^forja server update /);
+
+    run(`server remove ${added.server.id} --force`, TEST_DIR);
 });
 
 // ── 15.9 冲突的 flag ──

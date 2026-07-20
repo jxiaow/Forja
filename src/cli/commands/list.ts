@@ -69,12 +69,14 @@ export function formatListText(result: ListResult, _locale: Locale): string {
                 if (hasDiscovered) { lines.push(`  ${T('lst.savedTargets')}:`); }
                 // Extract project name (strip trailing mode/arch from name)
                 const displayNames = saved.map(t => t.name.replace(/\s+(debug|release)\s+(x86|x64)$/, ''));
+                const variants = saved.map(t => `${t.mode}|${t.arch}`);
                 const maxLen = Math.max(...displayNames.map(n => n.length));
+                const maxVariantLen = Math.max(...variants.map(v => v.length));
                 for (let i = 0; i < saved.length; i++) {
                     const t = saved[i];
                     const marker = t.active ? '* ' : '  ';
                     const displayName = displayNames[i];
-                    lines.push(`  ${marker}${displayName.padEnd(maxLen)}  —  ${t.project}`);
+                    lines.push(`  ${marker}${displayName.padEnd(maxLen)}  ${variants[i].padEnd(maxVariantLen)}  —  ${t.project}`);
                 }
                 if (hasDiscovered) { lines.push(''); }
             }

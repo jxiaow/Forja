@@ -24,6 +24,7 @@ import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
 import { resolveWorkroot } from '../../core/workspaceStore';
 import { ClassifiedChanges } from '../../sync/cli';
+import { runRemoteCli } from '../../remote/cli';
 
 type Command = 'status' | 'list' | 'use' | 'remote' | 'server' | 'build' | 'run' | 'stop' | 'clean' | 'doctor' | 'sync' | 'init';
 
@@ -603,6 +604,10 @@ async function handleRemote(argv: string[], workroot: string, wantsJson: boolean
     const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
 
     switch (subCmd) {
+        case 'bootstrap': {
+            await runRemoteCli(['bootstrap', '--workspace', workroot, ...(wantsJson ? ['--json'] : [])]);
+            return;
+        }
         case 'set': {
             if (hasEmptyFlagValue(argv, '--server')) {
                 outputResult({ ok: false, action: 'remote', remoteAction: 'set', changed: [], diagnostics: [{ level: 'error', message: '--server requires a non-empty value' }], nextAction: 'forja remote set' }, wantsJson);
@@ -723,6 +728,21 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
     const addUpdateKnown = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password','--strict-host-key-checking','--no-strict-host-key-checking']);
     const removeKnown = new Set(['--force']);
     const listKnown = new Set(['--detail']);
+    const strictHostKeyChecking = hasFlag(argv, '--strict-host-key-checking');
+    const noStrictHostKeyChecking = hasFlag(argv, '--no-strict-host-key-checking');
+
+    if ((subCmd === 'add' || subCmd === 'update') && strictHostKeyChecking && noStrictHostKeyChecking) {
+        outputResult({
+            ok: false,
+            action: 'server',
+            serverAction: subCmd,
+            changed: [],
+            diagnostics: [{ level: 'error', message: T('srv.strictHostFlagsConflict') }],
+            nextAction: `forja server ${subCmd}`,
+        }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
 
     switch (subCmd) {
         case 'add': {
@@ -776,7 +796,7 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
                 authMode: extractFlag(argv, '--auth-mode') as 'key' | 'password' | undefined,
                 privateKeyPath: extractFlag(argv, '--private-key-path'),
                 password: extractFlag(argv, '--password'),
-                strictHostKeyChecking: hasFlag(argv, '--strict-host-key-checking') ? true : hasFlag(argv, '--no-strict-host-key-checking') ? false : undefined,
+                strictHostKeyChecking: strictHostKeyChecking ? true : noStrictHostKeyChecking ? false : undefined,
             });
             outputResult(result, wantsJson, (r) => formatServerText(r, locale));
             return;
@@ -806,13 +826,13 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
                     outputResult({
                         ok: false,
                         action: 'server',
-                        serverAction: 'add',
+                        serverAction: 'update',
                         changed: [],
                         diagnostics: [{
                             level: 'error',
                             message: `${T('idx.invalidPort')}: ${portStr}. ${T('idx.invalidPortHint')}`,
                         }],
-                        nextAction: 'forja server add --port 22',
+                        nextAction: `forja server update ${id} --port 22`,
                     }, wantsJson);
                     process.exitCode = 1;
                     return;
@@ -828,7 +848,7 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
                             level: 'error',
                             message: `${T('idx.invalidPort')}: ${portStr}. ${T('idx.invalidPortHint')}`,
                         }],
-                        nextAction: 'forja server update <id> --port 22',
+                        nextAction: `forja server update ${id} --port 22`,
                     }, wantsJson);
                     process.exitCode = 1;
                     return;
@@ -842,7 +862,7 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
                 authMode: extractFlag(argv, '--auth-mode') as 'key' | 'password' | undefined,
                 privateKeyPath: extractFlag(argv, '--private-key-path'),
                 password: extractFlag(argv, '--password'),
-                strictHostKeyChecking: hasFlag(argv, '--strict-host-key-checking') ? true : hasFlag(argv, '--no-strict-host-key-checking') ? false : undefined,
+                strictHostKeyChecking: strictHostKeyChecking ? true : noStrictHostKeyChecking ? false : undefined,
             });
             outputResult(result, wantsJson, (r) => formatServerText(r, locale));
             return;

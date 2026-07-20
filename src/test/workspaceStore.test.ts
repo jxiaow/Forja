@@ -263,6 +263,16 @@ test('generateTargetId appends hash on collision', () => {
     assert.ok(id.startsWith('qt-app-debug-x64-'));
 });
 
+test('generateTargetId remains unique when the hashed ID also exists', () => {
+    const existing = new Set(['qt-app-debug-x64']);
+    const hashedId = generateTargetId('qt', 'app/app.pro', 'debug', 'x64', existing);
+    existing.add(hashedId);
+
+    const id = generateTargetId('qt', 'app/app.pro', 'debug', 'x64', existing);
+    assert.notEqual(id, hashedId);
+    assert.ok(id.startsWith(`${hashedId}-`));
+});
+
 test('getActiveTarget returns null when no active target', () => {
     const config = createEmptyWorkspaceConfig('C:/Code/test');
     assert.equal(getActiveTarget(config), null);

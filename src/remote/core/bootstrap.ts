@@ -48,13 +48,19 @@ export function findBootstrapArtifact(root: string = process.cwd()): BootstrapAr
         return missing('未找到 package.json');
     }
     const raw = JSON.parse(fs.readFileSync(packagePath, 'utf8')) as { version?: unknown; bin?: Record<string, unknown> };
-    const version = typeof raw.version === 'string' ? raw.version : '';
-    if (!version) {
+    const packageVersion = typeof raw.version === 'string' ? raw.version : '';
+    if (!packageVersion) {
         return missing('package.json 缺少 version');
     }
-    let artifactPath = path.join(packageRoot, 'dist', `forja-${version}`, 'cli', `forja-cli-${version}.tgz`);
-    if (!fs.existsSync(artifactPath) && raw.bin?.forja === './cli/index.js') {
-        const packed = packStandalonePackage(packageRoot, version);
+    const binEntry = raw.bin?.forja;
+    const version = resolveCliVersion(packageRoot, binEntry, packageVersion);
+    let artifactPath = path.join(packageRoot, 'dist', `forja-${packageVersion}`, 'cli', `forja-cli-${version}.tgz`);
+    if (!fs.existsSync(artifactPath) && binEntry === './cli/index.js') {
+        const packed = packPackage(packageRoot, version);
+        if (!packed.ok) { return packed; }
+        artifactPath = packed.artifactPath!;
+    } else if (!fs.existsSync(artifactPath) && binEntry === './out/cli/index.js') {
+        const packed = packCompiledPackage(packageRoot, version);
         if (!packed.ok) { return packed; }
         artifactPath = packed.artifactPath!;
     }
@@ -71,6 +77,15 @@ export function findBootstrapArtifact(root: string = process.cwd()): BootstrapAr
     return { ok: true, version, artifactPath, sha256, diagnostics: [] };
 }
 
+function resolveCliVersion(packageRoot: string, binEntry: unknown, fallback: string): string {
+    const versionFile = binEntry === './out/cli/index.js'
+        ? path.join(packageRoot, 'out', 'version.js')
+        : path.join(packageRoot, 'version.js');
+    if (!fs.existsSync(versionFile)) { return fallback; }
+    const source = fs.readFileSync(versionFile, 'utf8');
+    return source.match(/exports\.VERSION\s*=\s*['"]([^'"]+)['"]/)?.[1] || fallback;
+}
+
 export function findPackageRoot(start: string): string | null {
     let current = path.resolve(start);
     while (true) {
@@ -85,7 +100,38 @@ export function findPackageRoot(start: string): string | null {
     }
 }
 
-function packStandalonePackage(packageRoot: string, version: string): BootstrapArtifactResult {
+function packCompiledPackage(packageRoot: string, version: string): BootstrapArtifactResult {
+    const compiledRoot = path.join(packageRoot, 'out');
+    const entryPoint = path.join(compiledRoot, 'cli', 'index.js');
+    if (!fs.existsSync(entryPoint)) {
+        return missing(`本地 CLI 尚未编译: ${entryPoint}`, 'npm run compile');
+    }
+
+    const stagingRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-bootstrap-compiled-'));
+    try {
+        fs.cpSync(compiledRoot, path.join(stagingRoot, 'out'), {
+            recursive: true,
+            filter: source => {
+                const relative = path.relative(compiledRoot, source);
+                if (!relative) { return true; }
+                const firstSegment = relative.split(path.sep)[0];
+                return firstSegment !== 'test' && !source.endsWith('.map');
+            }
+        });
+        fs.writeFileSync(path.join(stagingRoot, 'package.json'), JSON.stringify({
+            name: 'forja',
+            version,
+            bin: { forja: './out/cli/index.js' },
+            files: ['out/**', 'package.json'],
+            engines: { node: '>=18.0.0' }
+        }, null, 2) + '\n');
+        return packPackage(stagingRoot, version);
+    } finally {
+        fs.rmSync(stagingRoot, { recursive: true, force: true });
+    }
+}
+
+function packPackage(packageRoot: string, version: string): BootstrapArtifactResult {
     const outDir = path.join(os.tmpdir(), 'forja-bootstrap-artifacts', version);
     fs.mkdirSync(outDir, { recursive: true });
     try {
@@ -229,6 +275,6 @@ function trim(value: string): string {
     return value.trim().split(/\r?\n/).slice(0, 3).join('\n');
 }
 
-function missing(message: string): BootstrapArtifactResult {
-    return { ok: false, diagnostics: [{ level: 'error', message }], nextAction: 'npm run build:cli' };
+function missing(message: string, nextAction = 'npm run build:cli'): BootstrapArtifactResult {
+    return { ok: false, diagnostics: [{ level: 'error', message }], nextAction };
 }

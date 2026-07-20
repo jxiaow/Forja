@@ -119,21 +119,30 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
             nextAction: 'forja server add --auth-mode key',
         };
     }
-    if (!args.name) {
+    if (!args.name.trim()) {
         diagnostics.push({ level: 'error', message: T('srv.missingName') });
     }
-    if (!args.host) {
+    if (!args.host.trim()) {
         diagnostics.push({ level: 'error', message: T('srv.missingHost') });
     }
-    if (!args.username) {
+    if (!args.username.trim()) {
         diagnostics.push({ level: 'error', message: T('srv.missingUsername') });
     }
-    // Validate auth mode — only block when explicitly specified; missing credentials without explicit auth-mode are warnings
-    if (args.authMode === 'key' && !args.privateKeyPath && !args.password) {
+    const effectiveAuthMode = args.authMode ?? 'key';
+    // Preserve credential-free implicit key mode as a warning; validate any explicitly supplied auth fields.
+    if (effectiveAuthMode === 'key' &&
+        (args.authMode === 'key' || args.privateKeyPath !== undefined) &&
+        !args.privateKeyPath?.trim()) {
         diagnostics.push({ level: 'error', message: T('srv.keyRequiresKeyOrPassword') });
     }
     if (args.authMode === 'password' && !args.password) {
         diagnostics.push({ level: 'error', message: T('srv.passwordRequiresPassword') });
+    }
+    if (args.password !== undefined && effectiveAuthMode !== 'password') {
+        diagnostics.push({ level: 'error', message: T('srv.passwordRequiresPasswordMode') });
+    }
+    if (args.privateKeyPath !== undefined && effectiveAuthMode !== 'key') {
+        diagnostics.push({ level: 'error', message: T('srv.keyPathRequiresKeyMode') });
     }
     if (!args.authMode && !args.privateKeyPath && !args.password) {
         diagnostics.push({ level: 'warning', message: T('srv.noCredentials') });
@@ -162,9 +171,9 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
             host: args.host,
             username: args.username,
             port: args.port ?? 22,
-            authMode: args.authMode ?? 'key',
-            privateKeyPath: args.privateKeyPath ?? '',
-            password: args.password ?? '',
+            authMode: effectiveAuthMode,
+            privateKeyPath: effectiveAuthMode === 'key' ? (args.privateKeyPath ?? '') : '',
+            password: effectiveAuthMode === 'password' ? (args.password ?? '') : '',
             strictHostKeyChecking: args.strictHostKeyChecking,
         });
         return {
@@ -194,11 +203,50 @@ export function runServerUpdate(id: string, updates: Partial<ServerAddArgs>): Se
             nextAction: 'forja server',
         };
     }
+    const requiredDiagnostics: Diagnostic[] = [];
+    if (updates.name !== undefined && !updates.name.trim()) {
+        requiredDiagnostics.push({ level: 'error', message: T('srv.missingName') });
+    }
+    if (updates.host !== undefined && !updates.host.trim()) {
+        requiredDiagnostics.push({ level: 'error', message: T('srv.missingHost') });
+    }
+    if (updates.username !== undefined && !updates.username.trim()) {
+        requiredDiagnostics.push({ level: 'error', message: T('srv.missingUsername') });
+    }
+    if (requiredDiagnostics.length > 0) {
+        return {
+            ok: false, action: 'server', serverAction: 'update', changed: [],
+            diagnostics: requiredDiagnostics,
+            nextAction: `forja server update ${id}`,
+        };
+    }
     if (updates.authMode && updates.authMode !== 'key' && updates.authMode !== 'password') {
         return {
             ok: false, action: 'server', serverAction: 'update', changed: [],
             diagnostics: [{ level: 'error', message: `Invalid auth mode: ${updates.authMode}. Use 'key' or 'password'` }],
             nextAction: 'forja server update --auth-mode key',
+        };
+    }
+    const effectiveAuthMode = updates.authMode ?? existing.authMode;
+    if (updates.password !== undefined && effectiveAuthMode === 'key') {
+        return {
+            ok: false, action: 'server', serverAction: 'update', changed: [],
+            diagnostics: [{ level: 'error', message: T('srv.passwordRequiresPasswordMode') }],
+            nextAction: `forja server update ${id} --auth-mode password --password <password>`,
+        };
+    }
+    if (updates.privateKeyPath !== undefined && effectiveAuthMode === 'password') {
+        return {
+            ok: false, action: 'server', serverAction: 'update', changed: [],
+            diagnostics: [{ level: 'error', message: T('srv.keyPathRequiresKeyMode') }],
+            nextAction: `forja server update ${id} --auth-mode key --private-key-path <path>`,
+        };
+    }
+    if (updates.privateKeyPath !== undefined && effectiveAuthMode === 'key' && !updates.privateKeyPath.trim()) {
+        return {
+            ok: false, action: 'server', serverAction: 'update', changed: [],
+            diagnostics: [{ level: 'error', message: T('srv.keyRequiresKeyOrPassword') }],
+            nextAction: `forja server update ${id} --private-key-path <path>`,
         };
     }
     const patch: Partial<Omit<ServerConfig, 'id'>> = {};
@@ -222,7 +270,7 @@ export function runServerUpdate(id: string, updates: Partial<ServerAddArgs>): Se
     if (updates.authMode) {
         const resultKeyPath = updates.privateKeyPath ?? existing.privateKeyPath;
         const resultPassword = updates.password ?? existing.password;
-        if (updates.authMode === 'key' && !resultKeyPath && !resultPassword) {
+        if (updates.authMode === 'key' && !resultKeyPath.trim()) {
             return {
                 ok: false, action: 'server', serverAction: 'update', changed: [],
                 diagnostics: [{ level: 'error', message: T('srv.keyRequiresKeyOrPassword') }],

@@ -160,27 +160,40 @@ export async function runSwitchTarget(workspace: string, args: {
 
         const finalizeSwitch = (matched: TargetProfile): UseTargetResult => {
             const changed: string[] = ['activeTarget'];
-            const oldId = wsConfig.activeTarget;
+            const originalMatchedId = matched.id;
             let target = matched;
+            const desiredMode = args.mode ?? matched.mode;
+            const desiredArch = args.arch ?? matched.arch;
 
-            if (args.mode && args.mode !== matched.mode) {
-                matched.mode = args.mode;
+            if (desiredMode !== matched.mode) {
                 changed.push('mode');
             }
-            if (args.arch && args.arch !== matched.arch) {
-                matched.arch = args.arch;
+            if (desiredArch !== matched.arch) {
                 changed.push('arch');
             }
 
             if (changed.length > 1) {
-                const newId = wsMod.generateTargetId(matched.kind, matched.project, matched.mode, matched.arch, new Set(Object.keys(wsConfig.targets)));
-                if (newId !== matched.id) {
-                    matched.id = newId;
-                    matched.name = `${path.basename(matched.project).replace(/\.\w+$/, '')} ${matched.mode} ${matched.arch}`;
-                    if (oldId && oldId !== newId) { delete wsConfig.targets[oldId]; }
+                const existingVariant = savedTargets.find(t =>
+                    t.id !== originalMatchedId &&
+                    t.kind === matched.kind &&
+                    t.project === matched.project &&
+                    t.mode === desiredMode &&
+                    t.arch === desiredArch
+                );
+                if (existingVariant) {
+                    target = { ...existingVariant, toolchain: { ...existingVariant.toolchain } };
+                } else {
+                    matched.mode = desiredMode;
+                    matched.arch = desiredArch;
+                    const newId = wsMod.generateTargetId(matched.kind, matched.project, matched.mode, matched.arch, new Set(Object.keys(wsConfig.targets)));
+                    if (newId !== matched.id) {
+                        matched.id = newId;
+                        matched.name = `${path.basename(matched.project).replace(/\.\w+$/, '')} ${matched.mode} ${matched.arch}`;
+                        delete wsConfig.targets[originalMatchedId];
+                    }
+                    wsConfig.targets[newId] = matched;
+                    target = matched;
                 }
-                wsConfig.targets[newId] = matched;
-                target = matched;
             }
 
             wsConfig.activeTarget = target.id;

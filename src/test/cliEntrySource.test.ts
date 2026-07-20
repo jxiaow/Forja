@@ -34,6 +34,13 @@ test('remote CLI bootstrap resolves artifacts from package root instead of calle
     assert.match(source, /findBootstrapArtifact\(cliPackageRoot\(\)\)/);
 });
 
+test('unified CLI exposes the existing remote bootstrap workflow', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'index.ts'), 'utf8');
+
+    assert.match(source, /import \{ runRemoteCli \} from '\.\.\/\.\.\/remote\/cli'/);
+    assert.match(source, /case 'bootstrap':[\s\S]*runRemoteCli\(\['bootstrap', '--workspace', workroot/);
+});
+
 test('remote CLI workspace-affecting actions use staged action path', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'cli', 'index.ts'), 'utf8');
     assert.match(source, /if \(options\.action === 'bridge'\) \{[\s\S]*const actionRemotePath = resolveRemotePrimaryActionPath\(resolved\.config\.workspace, resolved\.config\.remotePath\)[\s\S]*executeRemoteBridge\(\{/);

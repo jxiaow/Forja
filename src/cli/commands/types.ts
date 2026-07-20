@@ -587,6 +587,7 @@ Target 选项:
   forja remote                                    Show remote configuration
   forja remote set --server <name> --remote-path <path>
                                                   Set remote server and path
+  forja remote bootstrap                         Package and install the current local CLI remotely
   forja remote restore <repo> <paths...>          Restore remote workspace
   forja remote reset <repo> <paths...> [--all] [--force]
                                                   Reset remote workspace (--force for non-interactive)`,
@@ -595,6 +596,7 @@ Target 选项:
   forja remote                                    显示远程配置
   forja remote set --server <名称> --remote-path <路径>
                                                   设置远程服务器和路径
+  forja remote bootstrap                         打包当前本地 CLI 并安装到远端
   forja remote restore <仓库> <路径...>            恢复远程工作区
   forja remote reset <仓库> <路径...> [--all] [--force]
                                                   重置远程工作区（非交互模式需 --force）`,
@@ -777,7 +779,10 @@ Options:
     'srv.missingName':                  { en: 'Missing required: --name',           zh: '缺少必填参数：--name' },
     'srv.missingHost':                  { en: 'Missing required: --host',           zh: '缺少必填参数：--host' },
     'srv.missingUsername':              { en: 'Missing required: --username',       zh: '缺少必填参数：--username' },
-    'srv.keyRequiresKeyOrPassword':     { en: 'auth-mode=key requires --private-key-path or password', zh: 'auth-mode=key 需要 --private-key-path 或 password' },
+    'srv.keyRequiresKeyOrPassword':     { en: 'auth-mode=key requires --private-key-path', zh: 'auth-mode=key 需要 --private-key-path' },
+    'srv.passwordRequiresPasswordMode': { en: '--password requires --auth-mode password', zh: '--password 需要同时指定 --auth-mode password' },
+    'srv.keyPathRequiresKeyMode':       { en: '--private-key-path requires --auth-mode key', zh: '--private-key-path 需要同时指定 --auth-mode key' },
+    'srv.strictHostFlagsConflict':      { en: 'Specify only one of --strict-host-key-checking and --no-strict-host-key-checking', zh: '--strict-host-key-checking 和 --no-strict-host-key-checking 只能指定一个' },
     'srv.passwordRequiresPassword':     { en: 'auth-mode=password requires --password', zh: 'auth-mode=password 需要 --password' },
     'srv.noCredentials':                { en: 'No credentials provided; server will default to key auth. Use --private-key-path or --password to configure', zh: '未提供凭证；服务器将默认使用密钥认证。请使用 --private-key-path 或 --password 配置' },
     'srv.failedToSave':                 { en: 'Failed to save',                     zh: '保存失败' },

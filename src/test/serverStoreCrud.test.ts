@@ -66,6 +66,22 @@ test('removeServer deletes by id', () => {
     assert.equal(readServers().length, 0);
 });
 
+test('strictHostKeyChecking=false survives persistence round-trip', () => {
+    const added = addServer({
+        name: 'insecure-host-key-test',
+        host: '10.0.0.3',
+        port: 22,
+        username: 'dev',
+        authMode: 'key',
+        privateKeyPath: '/key',
+        password: '',
+        strictHostKeyChecking: false,
+    });
+
+    assert.equal(getServerById(added.id)?.strictHostKeyChecking, false);
+    removeServer(added.id);
+});
+
 test('readServers handles malformed JSON gracefully', () => {
     fs.writeFileSync(SERVERS_PATH, '{invalid json', 'utf-8');
     setOutputWriter(() => undefined);
