@@ -574,7 +574,7 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
             const ver = t.toolchain.vsVersion ? `${t.toolchain.vsVersion} ` : '';
             tcParts.push(`VS ${ver}(${shortPath(t.toolchain.vsInstall)})`);
         }
-        if (t.toolchain.jomPath) { tcParts.push('jom'); }
+        if (t.toolchain.jomPath) { tcParts.push(buildToolLabel(t.toolchain.jomPath)); }
         if (tcParts.length > 0) { lines.push(`${indent}${T('toolchainLabel')}: ${tcParts.join(', ')}`); }
     }
 
@@ -642,4 +642,9 @@ function shortPath(p: string): string {
     const parts = p.replace(/\\/g, '/').split('/').filter(Boolean);
     if (parts.length <= 2) { return p; }
     return parts.slice(-2).join('/');
+}
+
+function buildToolLabel(executablePath: string): 'jom' | 'make' {
+    const executable = executablePath.split(/[\\/]/).pop() || '';
+    return /^jom(?:\.exe)?$/i.test(executable) ? 'jom' : 'make';
 }

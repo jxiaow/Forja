@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { formatListText } from '../cli/commands/list';
+import { formatStatusText, StatusResult } from '../cli/commands/status';
 import { setGlobalLocale } from '../cli/commands/types';
 import { runSwitchTarget } from '../cli/commands/useTarget';
 import { getServerById } from '../core/serverStore';
@@ -553,6 +554,44 @@ test('remote --server 不存在的服务器报错', () => {
     const r = json('remote set --server nonexistent-server');
     assert.ok(r);
     assert.equal(r.ok, false);
+});
+
+test('status 工具链摘要按实际可执行文件区分 make 和 jom', () => {
+    setGlobalLocale('zh');
+    const base: StatusResult = {
+        ok: true,
+        action: 'status',
+        workspace: '/workspace/app',
+        activeTarget: {
+            id: 'qt-app-release-x64',
+            name: 'qt-app',
+            kind: 'qt',
+            project: 'app.pro',
+            mode: 'release',
+            arch: 'x64',
+            runAt: 'local',
+            toolchain: {
+                qtPath: '/usr/local/qt5.13.2',
+                qtVersion: '5.13.2',
+                jomPath: '/usr/bin/make',
+            },
+        },
+        readiness: { target: 'ready', toolchain: 'ready' },
+        diagnostics: [],
+    };
+
+    const makeText = formatStatusText(base, 'zh');
+    assert.match(makeText, /工具链: .*make/);
+    assert.doesNotMatch(makeText, /工具链: .*jom/);
+
+    const jomText = formatStatusText({
+        ...base,
+        activeTarget: {
+            ...base.activeTarget!,
+            toolchain: { ...base.activeTarget!.toolchain, jomPath: 'C:\\Qt\\Tools\\jom\\jom.exe' },
+        },
+    }, 'zh');
+    assert.match(jomText, /工具链: .*jom/);
 });
 
 test('remote bootstrap is routed to the existing bootstrap workflow', () => {
