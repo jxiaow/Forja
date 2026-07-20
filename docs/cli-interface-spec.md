@@ -314,10 +314,16 @@ interface SyncResult extends ForjaJsonResult {
     "username": "dev",
     "authMode": "key",
     "privateKeyPath": "~/.ssh/id_rsa",
-    "password": ""
+    "password": "",
+    "remotePathHistory": [
+      "/home/dev/project-a",
+      "/home/dev/project-b"
+    ]
   }
 ]
 ```
+
+`remotePathHistory` 为可选的服务器级目录历史，按最近使用优先排列；当前项目实际选择的目录仍保存在项目 remote 配置中。
 
 ---
 

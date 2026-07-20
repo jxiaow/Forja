@@ -272,7 +272,7 @@ export function runStatus(workspace: string): StatusResult {
                 fix: 'forja remote set',
             });
         } else {
-            // Check remote Forja bin - not an error since it defaults to $HOME/.forja/bin/forja
+            // Check remote Forja bin - not an error since it defaults to $HOME/.local/bin/forja
             if (!remoteConfig.remoteForjaBin) {
                 diagnostics.push({
                     level: 'info',

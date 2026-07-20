@@ -18,6 +18,7 @@ import { execFileSync } from 'child_process';
 import { formatListText } from '../cli/commands/list';
 import { setGlobalLocale } from '../cli/commands/types';
 import { runSwitchTarget } from '../cli/commands/useTarget';
+import { getServerById } from '../core/serverStore';
 import {
     createEmptyWorkspaceConfig,
     loadWorkspaceConfig,
@@ -539,9 +540,10 @@ test('remote --server 设置服务器', () => {
     assert.ok(addResult.ok);
 
     // 设置远程
-    const r = json(`remote set --server ${name}`);
+    const r = json(`remote set --server ${name} --remote-path /srv/projects/cli-app`);
     assert.ok(r);
     assert.equal(r.ok, true);
+    assert.deepEqual(getServerById(addResult.server.id)?.remotePathHistory, ['/srv/projects/cli-app']);
 
     // 清理
     run(`server remove ${addResult.server.id} --force`);

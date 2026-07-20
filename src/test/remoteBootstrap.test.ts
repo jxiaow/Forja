@@ -47,6 +47,81 @@ test('remote bootstrap stops before upload when node or npm is unavailable', asy
     assert.ok(!!result.nextAction);
 });
 
+test('remote bootstrap installs the CLI in the standard user prefix and verifies it outside the install directory', async () => {
+    const commands: string[] = [];
+    const uploads: string[] = [];
+    const version = '0.1.0';
+    const runner: RemoteRunner = {
+        async run(command: string) {
+            commands.push(command);
+            if (command.includes('$HOME/.local/bin/forja --version') || command.includes('command -v forja')) {
+                return { exitCode: 0, stdout: version + '\n', stderr: '' };
+            }
+            return { exitCode: 0, stdout: '', stderr: '' };
+        }
+    };
+    const uploader: RemoteUploader = {
+        async upload(_localPath, remotePath) {
+            uploads.push(remotePath);
+        }
+    };
+
+    const result = await executeRemoteBootstrap({
+        artifact: {
+            ok: true,
+            version,
+            artifactPath: '/tmp/forja-cli-0.1.0.tgz',
+            sha256: 'abc',
+            diagnostics: []
+        },
+        runner,
+        uploader
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.remoteBin, '$HOME/.local/bin/forja');
+    assert.deepEqual(uploads, ['.forja/bootstrap/forja-cli-0.1.0.tgz']);
+    assert.ok(commands.some(command => command.includes('npm install -g --prefix $HOME/.local ')));
+    assert.ok(commands.some(command => command === 'cd /tmp && $HOME/.local/bin/forja --version'));
+    assert.ok(commands.some(command => command === 'rm -f $HOME/.forja/bin/forja'));
+    assert.ok(commands.some(command => command === 'cd /tmp && command -v forja >/dev/null 2>&1 && forja --version'));
+    assert.equal(commands.some(command => command.includes('.forja/runtime')), false);
+    assert.equal(result.diagnostics.length, 0);
+    assert.equal(result.nextAction, undefined);
+});
+
+test('remote bootstrap reports how to enable the user bin directory when it is absent from PATH', async () => {
+    const version = '0.1.0';
+    const runner: RemoteRunner = {
+        async run(command: string) {
+            if (command.includes('command -v forja')) {
+                return { exitCode: 1, stdout: '', stderr: '' };
+            }
+            if (command.includes('$HOME/.local/bin/forja --version')) {
+                return { exitCode: 0, stdout: version + '\n', stderr: '' };
+            }
+            return { exitCode: 0, stdout: '', stderr: '' };
+        }
+    };
+
+    const result = await executeRemoteBootstrap({
+        artifact: {
+            ok: true,
+            version,
+            artifactPath: '/tmp/forja-cli-0.1.0.tgz',
+            sha256: 'abc',
+            diagnostics: []
+        },
+        runner,
+        uploader: { async upload() {} }
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(result.diagnostics[0]?.message || '', /\.local\/bin.*PATH/);
+    assert.match(result.nextAction || '', /\.local\/bin.*PATH/);
+    assert.equal(result.stages.find(stage => stage.name === 'verifyPath')?.ok, false);
+});
+
 test('remote bootstrap server resolution does not require a project remote path', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-bootstrap-server-'));
     const oldConfigDir = process.env.FORJA_CONFIG_DIR;

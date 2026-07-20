@@ -193,7 +193,7 @@ forja build --json
 
 # 远程高级配置
 forja use remote repo set --local qt_client --remote qt_client --role primary --json
-forja use remote forja-bin set --path /home/dev/.forja/bin/forja --json
+forja use remote forja-bin set --path /home/dev/.local/bin/forja --json
 forja use remote build-order set qt:build sdk:rebuild --json
 forja use remote transfer set --server server-2 --path /deploy/app --artifact out/app --json
 ```

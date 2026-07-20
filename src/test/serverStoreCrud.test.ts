@@ -5,7 +5,7 @@ import * as path from 'path';
 import { tmpdir } from 'os';
 import {
     readServers, addServer, removeServer,
-    updateServer, getServerById
+    updateServer, getServerById, rememberServerRemotePath,
 } from '../core/serverStore';
 import { setOutputWriter, setSilent } from '../core/loggerBase';
 
@@ -52,6 +52,18 @@ test('updateServer modifies fields', () => {
     assert.equal(updated.host, '10.0.0.2');
     assert.equal(updated.port, 2222);
     assert.equal(updated.name, 'test-srv'); // unchanged
+});
+
+test('remote path history is persisted, deduplicated, and ordered by recent use', () => {
+    const id = readServers()[0].id;
+    assert.equal(rememberServerRemotePath(id, ' /srv/projects/app-a '), true);
+    assert.equal(rememberServerRemotePath(id, '/srv/projects/app-b'), true);
+    assert.equal(rememberServerRemotePath(id, '/srv/projects/app-a'), true);
+
+    assert.deepEqual(getServerById(id)?.remotePathHistory, [
+        '/srv/projects/app-a',
+        '/srv/projects/app-b',
+    ]);
 });
 
 test('updateServer returns false for non-existent id', () => {

@@ -243,7 +243,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     noSyncServer:                  { en: 'No sync server added',         zh: '未添加同步服务器' },
     remotePathNotConfigured:       { en: 'Remote path not configured',   zh: '远程路径未配置' },
     remoteNoServer:                { en: 'runAt=remote but no server configured', zh: '执行位置=远程但未配置服务器' },
-    remoteForjaBinDefault:         { en: 'Remote Forja bin not configured, will use default: $HOME/.forja/bin/forja', zh: '远程 Forja 二进制未配置，将使用默认值：$HOME/.forja/bin/forja' },
+    remoteForjaBinDefault:         { en: 'Remote Forja bin not configured, will use default: $HOME/.local/bin/forja', zh: '远程 Forja 二进制未配置，将使用默认值：$HOME/.local/bin/forja' },
     qtNotFound:                    { en: 'Qt not found at configured path', zh: '在配置路径未找到 Qt' },
     vsNotFound:                    { en: 'VS dev environment not found', zh: '未找到 VS 开发环境' },
     vsNotFoundDetail:              { en: 'VS dev environment not found (vsDevShell)', zh: '未找到 VS 开发环境（vsDevShell）' },

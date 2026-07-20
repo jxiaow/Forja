@@ -5,7 +5,7 @@ import { getState, setState } from '../../vscode/qtState';
 import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, updateRemoteSelectedServer } from '../../core/serverStore';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, updateRemoteSelectedServer, updateRemotePath } from '../../core/serverStore';
 import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
 import { executeTestConnection, refreshSyncStatusBar } from '../../vscode/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
@@ -283,12 +283,12 @@ export async function handleMessage(
                     const newVal = String(msg.value || '');
                     // 不用空值覆盖已有路径（防止页面重渲染时 onblur 误触发）
                     if (newVal || !remoteCfg.remotePaths[serverId]) {
-                        remoteCfg.remotePaths[serverId] = newVal;
-                        saveRemoteSettings(ws3, remoteCfg);
+                        updateRemotePath(ws3, serverId, newVal);
                     }
                 }
             }
             refreshSyncStatusBar();
+            updateHtml();
             break;
         }
         case 'saveSyncIgnore': {
@@ -344,9 +344,7 @@ export async function handleMessage(
                 updateRemoteSelectedServer(wsAdd, created.id);
                 updateProjectSyncField(wsAdd, 'enabled', true);
                 if (msg.remotePath) {
-                    const remoteCfg = loadRemoteSettings(wsAdd);
-                    remoteCfg.remotePaths[created.id] = String(msg.remotePath);
-                    saveRemoteSettings(wsAdd, remoteCfg);
+                    updateRemotePath(wsAdd, created.id, String(msg.remotePath));
                 }
             }
             refreshSyncStatusBar();
@@ -451,9 +449,7 @@ export async function handleMessage(
             if (wsUpd) {
                 updateRemoteSelectedServer(wsUpd, serverId);
                 if (msg.remotePath !== undefined) {
-                    const remoteCfgUpd = loadRemoteSettings(wsUpd);
-                    remoteCfgUpd.remotePaths[serverId] = String(msg.remotePath || '');
-                    saveRemoteSettings(wsUpd, remoteCfgUpd);
+                    updateRemotePath(wsUpd, serverId, String(msg.remotePath || ''));
                 }
             }
             _pushServerList(webview, serverId);

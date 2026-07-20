@@ -118,7 +118,7 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const artifact = findBootstrapArtifact(cliPackageRoot());
             if (!artifact.ok) {
                 process.exitCode = 1;
-                writeOutput({ action: 'bootstrap', mode: 'remote', remoteBin: '$HOME/.forja/bin/forja', ...artifact }, options.json);
+                writeOutput({ action: 'bootstrap', mode: 'remote', remoteBin: '$HOME/.local/bin/forja', ...artifact }, options.json);
                 return;
             }
             const password = resolved.server.password || process.env.FORJA_SSH_PASSWORD || null;
@@ -791,6 +791,7 @@ function writeOutput(result: unknown, json: boolean): void {
         remote?: { stdout?: string };
         diagnostics?: Array<{ level?: string; message: string }>;
         nextAction?: string;
+        remoteBin?: string;
         server?: string;
         remotePath?: string;
         remoteSettings?: {
@@ -824,6 +825,16 @@ function writeOutput(result: unknown, json: boolean): void {
     }
     if (out.action === 'preparedAction' && out.remote?.stdout) {
         console.log(out.remote.stdout.trim());
+        return;
+    }
+    if (out.action === 'bootstrap' && out.ok !== false) {
+        const lines = ['Remote bootstrap: ok'];
+        if (out.remoteBin) { lines.push('remoteBin: ' + out.remoteBin); }
+        for (const item of out.diagnostics || []) {
+            lines.push(`${item.level || 'warning'}: ${item.message}`);
+        }
+        if (out.nextAction) { lines.push('next: ' + out.nextAction); }
+        console.log(lines.join('\n'));
         return;
     }
     if (out.ok === false && out.diagnostics && out.diagnostics.length > 0) {
@@ -886,7 +897,7 @@ function formatRemoteStatus(out: {
     if (out.server) { lines.push('server: ' + out.server); }
     if (out.remotePath) { lines.push('remotePath: ' + out.remotePath); }
     if (out.remoteSettings) {
-        lines.push('remoteForjaBin: ' + (out.remoteSettings.remoteForjaBin || '$HOME/.forja/bin/forja'));
+        lines.push('remoteForjaBin: ' + (out.remoteSettings.remoteForjaBin || '$HOME/.local/bin/forja'));
         lines.push('buildOrder: ' + (out.remoteSettings.buildOrder.configured ? out.remoteSettings.buildOrder.items.join(', ') : 'not configured'));
         const transfer = out.remoteSettings.transfer;
         lines.push('transfer: ' + (transfer.configured ? `${transfer.deployServer} -> ${transfer.deployPath} (${transfer.artifactCount} artifact${transfer.artifactCount === 1 ? '' : 's'})` : 'not configured'));

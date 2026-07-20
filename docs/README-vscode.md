@@ -91,7 +91,7 @@ forja use target --run-at remote
 
 切换后，状态栏 Build/Run 自动走远程路径。远程诊断：`forja doctor --remote`。
 
-远程 Forja 二进制默认安装在 `$HOME/.forja/bin/forja`，可通过 `forja remote forja-bin set --path <path>` 覆盖。
+远程 Forja 二进制默认安装在 `$HOME/.local/bin/forja`，可通过 `forja remote forja-bin set --path <path>` 覆盖。
 
 ## 同步
 
@@ -120,7 +120,7 @@ forja doctor fix --remote   # 自动修复：部署/更新远程 Forja
 |------|------|
 | `~/.forja/workspaces.json` | 已注册 workroot |
 | `~/.forja/workspaces/<hash>.json` | 当前 workspace 的 Qt/C++/sync/remote 配置 |
-| `~/.forja/servers.json` | 服务器列表 |
+| `~/.forja/servers.json` | 服务器列表及最近使用的远端目录 |
 | `.forja/sync-state.json` | 同步运行状态 |
 
 主要配置项：

@@ -359,13 +359,43 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         break;
                     }
                     case '__set_path__': {
-                        const pathVal = await vscode.window.showInputBox({
-                            prompt: 'Remote workspace path',
-                            value: remote?.remotePath || '',
-                        });
+                        const server = remote?.selectedServer ? getServerById(remote.selectedServer) : null;
+                        const history = Array.from(new Set([
+                            remote?.remotePath,
+                            ...(server?.remotePathHistory ?? []),
+                        ].filter((item): item is string => !!item)));
+                        let pathVal: string | undefined;
+                        if (history.length > 0) {
+                            type RemotePathItem = vscode.QuickPickItem & { remotePath?: string; addNew?: boolean };
+                            const pathItems: RemotePathItem[] = [
+                                ...history.map(remotePath => ({
+                                    label: '$(folder) ' + remotePath,
+                                    remotePath,
+                                    detail: remotePath === remote?.remotePath ? '(current)' : undefined,
+                                })),
+                                { label: '$(add) Enter new remote path', addNew: true },
+                            ];
+                            const picked = await vscode.window.showQuickPick(pathItems, {
+                                placeHolder: 'Select a previous remote path or enter a new one',
+                            });
+                            if (!picked) { break; }
+                            pathVal = picked.remotePath;
+                            if (picked.addNew) {
+                                pathVal = await vscode.window.showInputBox({
+                                    prompt: 'Remote workspace path',
+                                    validateInput: value => value.trim() ? undefined : 'Remote path is required',
+                                });
+                            }
+                        } else {
+                            pathVal = await vscode.window.showInputBox({
+                                prompt: 'Remote workspace path',
+                                value: remote?.remotePath || '',
+                                validateInput: value => value.trim() ? undefined : 'Remote path is required',
+                            });
+                        }
                         if (pathVal !== undefined) {
                             const { runRemoteSet } = await import('../cli/commands/remote');
-                            const r = runRemoteSet(ws, { remotePath: pathVal });
+                            const r = runRemoteSet(ws, { remotePath: pathVal.trim() });
                             showResult(r);
                         }
                         break;

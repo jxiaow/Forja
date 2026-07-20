@@ -299,7 +299,7 @@ forja sync --dry-run                    # 预览待同步文件
 | --- | --- |
 | `reset` | 清除同步状态 |
 
-服务器列表存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/workspaces/<hash>.json`。
+服务器列表和每台服务器最近使用的远端目录存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、当前路径和忽略列表存储在 `~/.forja/workspaces/<hash>.json`。
 
 ## Remote 配置
 
@@ -313,6 +313,8 @@ forja remote set --server server-1 --remote-path /home/dev/workspace
 forja remote bootstrap
 
 ```
+
+bootstrap 使用远端用户级 npm prefix `$HOME/.local`，命令入口为 `$HOME/.local/bin/forja`。如果该目录尚未加入远端 `PATH`，结果会给出配置提示。
 
 当前版本的 repo/build-order/transfer 高级配置尚未纳入公开 CLI 契约，不能在脚本中使用。
 

@@ -7,7 +7,7 @@ import {
     loadRemoteSettings, saveRemoteSettings,
     RemoteRepoSettings, RemoteBuildOrderItem, RemoteTransferSettings,
 } from '../../core/settingsIO';
-import { resolveServerSelector, getServerById } from '../../core/serverStore';
+import { resolveServerSelector, getServerById, rememberServerRemotePath } from '../../core/serverStore';
 import { executeRemoteRestore } from '../../remote/core/restore';
 import { executeRemoteCleanUntracked } from '../../remote/core/cleanUntracked';
 import { createSshRunner, remoteCommand } from '../../remote/core/shell';
@@ -216,7 +216,7 @@ export function runRemoteSet(workspace: string, args: RemoteSetArgs): RemoteResu
                 nextAction: 'forja remote set --server <name>',
             };
         }
-        remote.remotePaths[remote.selectedServer] = args.remotePath;
+        remote.remotePaths[remote.selectedServer] = args.remotePath.trim();
         changed.push('remote.remotePath');
     } else if (args.remotePath && !remote.selectedServer) {
         return {
@@ -227,7 +227,12 @@ export function runRemoteSet(workspace: string, args: RemoteSetArgs): RemoteResu
     }
 
     if (changed.length > 0) {
-        const saveResult = safeSave(() => saveRemoteSettings(workspace, remote), 'Remote settings');
+        const saveResult = safeSave(() => {
+            saveRemoteSettings(workspace, remote);
+            if (args.remotePath && remote.selectedServer) {
+                rememberServerRemotePath(remote.selectedServer, args.remotePath);
+            }
+        }, 'Remote settings');
         if (!saveResult.ok) {
             return { ok: false, action: 'remote', remoteAction: 'set', changed: [],
                 diagnostics: [{ level: 'error', message: saveResult.error }],

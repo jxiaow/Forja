@@ -38,7 +38,7 @@ export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): 
     if (options.json && !remoteArgs.includes('--json')) {
         remoteArgs.push('--json');
     }
-    const remoteBin = options.remoteForjaBin ? remoteCommand([options.remoteForjaBin]) : '$HOME/.forja/bin/forja';
+    const remoteBin = options.remoteForjaBin ? remoteCommand([options.remoteForjaBin]) : '$HOME/.local/bin/forja';
     const command = `cd ${remoteCommand([options.remotePath])} && ${remoteBin} ${remoteCommand(remoteArgs)}`;
     const timeoutMs = options.timeoutMs ?? (options.action === 'run' && !options.json ? 24 * 60 * 60 * 1000 : 120000);
     const executed = await options.runner.run(command, timeoutMs, options.stream);

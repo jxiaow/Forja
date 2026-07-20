@@ -63,8 +63,12 @@ export function buildSyncPage(data: TemplateData): string {
             ? data.syncPendingCount + ' 个文件待同步' : '已同步';
         const last = data.syncLastTime ? ' · 上次: ' + esc(data.syncLastTime) : '';
         h += `<div class="ecp" style="font-family:var(--vscode-font-family);margin-top:4px">${pending}${last}</div>`;
-        // 远程路径（在卡片内，纯展示）
-        h += `<div class="ecp" style="margin-top:6px">${esc(data.syncRemotePath || '未设置')}</div>`;
+        // 当前项目远程目录：可从服务器历史选择，也可直接输入新目录
+        h += '<div class="ecp" style="margin-top:8px">项目远程目录</div>';
+        h += '<div class="input-row" style="margin-top:4px">';
+        h += `<input id="syncRemotePathInput" class="sf-input" list="syncRemotePathOptions" value="${esc(data.syncRemotePath)}" placeholder="/home/user/project" `;
+        h += 'onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveProjectRemotePath()}"/>';
+        h += '<button class="btn btn-sm" onclick="saveProjectRemotePath()">保存</button></div>';
         h += '<div class="eca">';
         h += '<button class="btn btn-sm" onclick="vscode.postMessage({command:\'testSyncConnection\'})">测试连接</button>';
         h += `<button class="btn btn-sm" onclick="showServerForm('edit')">编辑</button>`;
@@ -102,6 +106,12 @@ export function buildSyncPage(data: TemplateData): string {
         h += '</div>';
     }
     h += '</div>';
+
+    h += '<datalist id="syncRemotePathOptions">';
+    for (const remotePath of srv?.remotePathHistory ?? []) {
+        h += `<option value="${esc(remotePath)}"></option>`;
+    }
+    h += '</datalist>';
 
     // ── 服务器添加/编辑表单（默认隐藏） ──
     h += buildServerForm(data, srv);
@@ -173,7 +183,7 @@ function buildServerForm(_data: TemplateData, _srv: TemplateData['syncServers'][
 
     // 远程路径
     h += '<div class="sf-row"><label class="sf-label">远程路径 <span style="color:#EF4444;font-size:11px">*必填</span></label>';
-    h += '<input id="sf-remotePath" class="sf-input" placeholder="/home/user/project"/></div>';
+    h += '<input id="sf-remotePath" class="sf-input" list="syncRemotePathOptions" placeholder="可选择历史目录或输入新目录"/></div>';
 
     // 操作按钮
     h += '<div class="sf-actions">';
@@ -275,6 +285,13 @@ function buildSyncScript(data: TemplateData, srv: TemplateData['syncServers'][0]
 
     h += 'window.hideServerForm=function(){';
     h += 'document.getElementById("serverFormSection").style.display="none"};';
+
+    h += 'window.saveProjectRemotePath=function(){';
+    h += 'var el=document.getElementById("syncRemotePathInput");if(!el)return;';
+    h += 'var value=el.value.trim();';
+    h += 'if(!value){el.style.borderColor="var(--vscode-inputValidation-errorBorder,#EF4444)";return}';
+    h += 'el.style.borderColor="";';
+    h += 'vscode.postMessage({command:"saveSyncRemotePath",value:value})};';
 
     h += 'window.setAuthMode=function(mode){';
     h += '_authMode=mode;';

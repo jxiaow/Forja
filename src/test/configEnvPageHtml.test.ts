@@ -224,6 +224,37 @@ test('sync page shows specific readiness hints when configuration is incomplete'
     assert.match(html, /未设置远程路径/);
 });
 
+test('sync page offers previous server paths and allows saving a new project path', () => {
+    const html = getPageHtml('sync', {
+        ...createTemplateData(),
+        syncEnabled: true,
+        syncSelectedServer: 'server-1',
+        syncServers: [{
+            id: 'server-1',
+            name: 'dev',
+            host: 'dev.example.com',
+            port: 22,
+            username: 'dev',
+            authMode: 'key',
+            privateKeyPath: '~/.ssh/id_rsa',
+            password: '',
+            remotePathHistory: ['/srv/projects/app-a', '/srv/projects/app-b'],
+        }],
+        syncRemotePath: '',
+    });
+
+    assert.match(html, /id="syncRemotePathInput"/);
+    assert.match(html, /list="syncRemotePathOptions"/);
+    assert.match(html, /option value="\/srv\/projects\/app-a"/);
+    assert.match(html, /option value="\/srv\/projects\/app-b"/);
+    assert.match(html, /saveProjectRemotePath/);
+    assert.match(html, /command:"saveSyncRemotePath",value:value/);
+
+    const commandsSource = fs.readFileSync(path.join(process.cwd(), 'src', 'vscode', 'commands.ts'), 'utf8');
+    assert.match(commandsSource, /server\?\.remotePathHistory/);
+    assert.match(commandsSource, /Enter new remote path/);
+});
+
 test('sync page does not render stale remote path or fallback server when selected id is invalid', () => {
     const html = getPageHtml('sync', {
         ...createTemplateData(),
@@ -237,7 +268,8 @@ test('sync page does not render stale remote path or fallback server when select
             username: 'dev',
             authMode: 'key',
             privateKeyPath: '~/.ssh/id_rsa',
-            password: ''
+            password: '',
+            remotePathHistory: [],
         }],
         syncRemotePath: '/legacy/path',
         syncReadinessIssues: ['已选择服务器不存在', '未设置远程路径']
