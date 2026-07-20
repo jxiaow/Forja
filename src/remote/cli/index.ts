@@ -789,7 +789,7 @@ function writeOutput(result: unknown, json: boolean): void {
         overall?: string;
         stdout?: string;
         remote?: { stdout?: string };
-        diagnostics?: Array<{ message: string }>;
+        diagnostics?: Array<{ level?: string; message: string }>;
         nextAction?: string;
         server?: string;
         remotePath?: string;
@@ -827,7 +827,14 @@ function writeOutput(result: unknown, json: boolean): void {
         return;
     }
     if (out.ok === false && out.diagnostics && out.diagnostics.length > 0) {
-        console.log(out.diagnostics.map(item => item.message).join('\\n'));
+        const lines = ['Error'];
+        for (const item of out.diagnostics) {
+            lines.push(`  ${item.level || 'error'}: ${item.message}`);
+        }
+        if (out.nextAction) {
+            lines.push('', 'Next', `  ${out.nextAction}`);
+        }
+        console.log(lines.join('\n'));
         return;
     }
     console.log('Remote ' + (out.action || 'command') + ': ' + (out.ok === false ? 'failed' : 'ok'));

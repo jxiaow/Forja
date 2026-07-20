@@ -554,11 +554,27 @@ test('remote --server 不存在的服务器报错', () => {
 });
 
 test('remote bootstrap is routed to the existing bootstrap workflow', () => {
-    const r = json('remote bootstrap');
-    assert.ok(r);
-    assert.equal(r.action, 'bootstrap');
-    assert.equal(r.ok, false);
-    assert.doesNotMatch(r.diagnostics?.[0]?.message ?? '', /unknown remote|未知 remote/i);
+    const workspace = fs.mkdtempSync(path.join(require('os').tmpdir(), 'forja-bootstrap-no-server-'));
+    try {
+        const text = run('remote bootstrap', workspace);
+        assert.equal(text.code, 1);
+        assert.deepEqual(text.out.trimEnd().split(/\r?\n/), [
+            'Error',
+            '  error: No server selected',
+            '',
+            'Next',
+            '  forja remote set --server <name> --remote-path <path>',
+        ]);
+
+        const r = json('remote bootstrap', workspace);
+        assert.ok(r);
+        assert.equal(r.action, 'bootstrap');
+        assert.equal(r.ok, false);
+        assert.equal(r.nextAction, 'forja remote set --server <name> --remote-path <path>');
+        assert.doesNotMatch(r.diagnostics?.[0]?.message ?? '', /unknown remote|未知 remote/i);
+    } finally {
+        fs.rmSync(workspace, { recursive: true, force: true });
+    }
 });
 
 // ═══════════════════════════════════════════════════════════════

@@ -898,6 +898,7 @@ Options:
         en: `Usage: forja server [<add|update|remove>] [options] [--json]
 
   forja server                  List all servers
+  forja server --detail <id>    Show detailed info for a server
   forja server add              Add a new server
   forja server update <id>      Update an existing server
   forja server remove <id> [--force]
@@ -905,6 +906,7 @@ Options:
         zh: `用法: forja server [<add|update|remove>] [选项] [--json]
 
   forja server                  列出所有服务器
+  forja server --detail <id>    查看指定服务器详细信息
   forja server add              添加新服务器
   forja server update <id>      更新已有服务器
   forja server remove <id> [--force]

@@ -23,15 +23,24 @@ export function resolveRemoteConfigFrom(
 ): ResolveRemoteConfigResult {
     const serverId = serverOverride || remote.selectedServer;
     if (!serverId) {
-        return blocked('No server selected');
+        return blocked(
+            'No server selected',
+            'forja remote set --server <name> --remote-path <path>',
+        );
     }
     const server = getServerById(serverId);
     if (!server) {
-        return blocked(`Server not found: ${serverId}`);
+        return blocked(
+            `Server not found: ${serverId}`,
+            'forja remote set --server <name> --remote-path <path>',
+        );
     }
     const remotePath = remote.remotePaths[serverId] || '';
     if (!remotePath) {
-        return blocked(`Server ${server.name || server.id}: remotePath not configured`);
+        return blocked(
+            `Server ${server.name || server.id}: remotePath not configured`,
+            'forja remote set --remote-path <path>',
+        );
     }
     return {
         config: { workspace: resolvedWorkspace, server, remotePath, ignore: sync.ignore },
@@ -67,15 +76,15 @@ export function resolveRemotePrimaryActionPath(workspace: string, remotePath: st
     return primary ? stagedWorkspaceRepoPath(settings.remoteWorkspace, primary.remoteName) : settings.remoteWorkspace;
 }
 
-function blocked(message: string): ResolveRemoteConfigResult {
+function blocked(message: string, nextAction: string): ResolveRemoteConfigResult {
     return {
         layer: {
             name: 'syncConfig',
             ok: false,
             message,
-            nextAction: 'forja remote set'
+            nextAction,
         },
         diagnostics: [{ level: 'error', message }],
-        nextAction: 'forja remote set'
+        nextAction,
     };
 }
