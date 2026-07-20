@@ -200,7 +200,7 @@ Next:
 |--------|---------|
 | 远程路径 | `/home/<username>/<workspace-basename>` |
 | repo 映射 | 扫描本地 git repos，按目录名自动映射 |
-| forja-bin | 默认使用 PATH 中的 `forja` |
+| forja-bin | 默认使用 `$(npm prefix -g)/bin/forja` |
 | build-order | 按检测到的 target 自动生成 |
 | sync | 默认启用，使用同一服务器和路径 |
 
@@ -222,7 +222,7 @@ Next:
 | `use remote repo set --local x --remote y --role z` | `use remote repo --local x --remote y --role z` |
 | `use remote repo remove --local x` | `use remote repo --remove --local x` |
 | `use remote repo clear` | `use remote repo --clear` |
-| `use remote forja-bin set --path /x` | 删除（默认使用 PATH 中的 `forja`） |
+| `use remote forja-bin set --path /x` | 删除（默认使用 `$(npm prefix -g)/bin/forja`） |
 | `use remote forja-bin clear` | 删除 |
 | `use remote build-order set qt:build sdk:build` | `use remote build-order qt:build sdk:build` |
 | `use remote build-order clear` | `use remote build-order --clear` |

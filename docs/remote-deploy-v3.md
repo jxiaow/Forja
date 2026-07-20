@@ -144,7 +144,7 @@ interface RemoteSettings {
 `remoteForjaBin` 默认使用：
 
 ```text
-PATH 中的 `forja`
+`$(npm prefix -g)/bin/forja`
 ```
 
 后续如果需要记录 UI 偏好、bootstrap 偏好或阶段开关，应继续放在 `type=remote` 文件中。
@@ -200,8 +200,8 @@ bootstrap 是显式动作，不在 build/run 中静默安装。
 2. 上传到远端临时目录
 3. 检查远端 node/npm 或运行时要求
 4. 安装到远端用户目录，不使用 sudo
-5. 通过 `command -v forja` 获取真实入口
-6. 从非安装目录执行 `forja --version` 验证
+5. 通过 `npm prefix -g` 推导真实入口
+6. 从非安装目录执行 `<prefix>/bin/forja --version` 验证
 
 第一版本地输入是当前 package version 对应的 CLI package artifact；开发验证可用 `npm run build:cli` 生成，正式发布用 `npm run package:all`。bootstrap 不隐式执行 package/version bump。缺少 artifact 时提示先打包。远端至少需要可用 node/npm；缺失时 bootstrap 失败并返回诊断，不退回 shell fallback。artifact、版本和清理策略见 `docs/remote-deploy-bootstrap.md`。
 
@@ -209,12 +209,12 @@ bootstrap 是显式动作，不在 build/run 中静默安装。
 
 ```text
 <npm prefix -g>/lib/node_modules/forja/
-<command -v forja>
+<npm prefix -g>/bin/forja
 ```
 
 remote 执行优先使用 `remoteForjaBin`，不依赖远端 PATH。
 
-bootstrap 复用远端 npm 已配置的全局 prefix；新入口验证成功后删除旧的 `~/.forja/bin/forja`。安装后必须能通过 PATH 直接调用 `forja`。
+bootstrap 复用远端 npm 已配置的全局 prefix；新入口验证成功后删除旧的 `~/.forja/bin/forja`。远端自动化调用使用 `$(npm prefix -g)/bin/forja`，不依赖 SSH 非交互 shell 的 PATH。
 
 ## 仓库和路径模型
 

@@ -157,7 +157,7 @@ function packPackage(packageRoot: string, version: string): BootstrapArtifactRes
 
 export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOptions): Promise<ExecuteRemoteBootstrapResult> {
     const artifact = options.artifact;
-    let remoteBin = 'forja';
+    let remoteBin = '$(npm prefix -g)/bin/forja';
     const stages: ExecuteRemoteBootstrapResult['stages'] = [];
     const diagnostics: RemoteDiagnostic[] = [...artifact.diagnostics];
 
@@ -203,16 +203,16 @@ export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOpti
         return failure(artifact, remoteBin, stages, diagnostics);
     }
 
-    const locateBin = await options.runner.run('cd /tmp && command -v forja', 10000);
-    const locatedBin = locateBin.stdout.trim().split(/\r?\n/)[0] || '';
-    stages.push({ name: 'locateBin', ok: locateBin.exitCode === 0 && !!locatedBin, message: locatedBin || trim(locateBin.stderr) });
-    if (locateBin.exitCode !== 0 || !locatedBin) {
-        diagnostics.push({ level: 'error', message: 'npm 全局安装完成，但 PATH 中未找到 forja' });
-        return failure(artifact, remoteBin, stages, diagnostics, '检查远端 npm prefix 和 PATH 配置');
+    const resolvePrefix = await options.runner.run('npm prefix -g', 10000);
+    const npmPrefix = resolvePrefix.stdout.trim().split(/\r?\n/)[0]?.replace(/\/+$/, '') || '';
+    stages.push({ name: 'resolvePrefix', ok: resolvePrefix.exitCode === 0 && !!npmPrefix, message: npmPrefix || trim(resolvePrefix.stderr) });
+    if (resolvePrefix.exitCode !== 0 || !npmPrefix) {
+        diagnostics.push({ level: 'error', message: 'npm 全局安装完成，但无法读取 npm 全局 prefix' });
+        return failure(artifact, remoteBin, stages, diagnostics, '检查远端 npm prefix 配置');
     }
-    remoteBin = locatedBin;
+    remoteBin = `${npmPrefix}/bin/forja`;
 
-    const publicVersion = await options.runner.run('cd /tmp && forja --version', 10000);
+    const publicVersion = await options.runner.run(`cd /tmp && ${remoteCommand([remoteBin])} --version`, 10000);
     const publicVersionText = publicVersion.stdout.trim();
     stages.push({ name: 'verifyPublicBin', ok: publicVersion.exitCode === 0 && publicVersionText === version, message: publicVersionText || trim(publicVersion.stderr) });
     if (publicVersion.exitCode !== 0 || publicVersionText !== version) {

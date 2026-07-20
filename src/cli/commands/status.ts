@@ -272,7 +272,7 @@ export function runStatus(workspace: string): StatusResult {
                 fix: 'forja remote set',
             });
         } else {
-            // Check remote Forja bin - not an error since it defaults to forja from PATH
+            // Check remote Forja bin - not an error since it defaults to npm's global prefix
             if (!remoteConfig.remoteForjaBin) {
                 diagnostics.push({
                     level: 'info',

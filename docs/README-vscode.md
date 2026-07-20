@@ -91,7 +91,7 @@ forja use target --run-at remote
 
 切换后，状态栏 Build/Run 自动走远程路径。远程诊断：`forja doctor --remote`。
 
-远程 Forja 二进制安装到远端 npm 已配置的全局 prefix，默认从 `PATH` 调用 `forja`，可通过 `forja remote forja-bin set --path <path>` 覆盖。
+远程 Forja 二进制安装到远端 npm 已配置的全局 prefix，默认调用 `$(npm prefix -g)/bin/forja`，可通过 `forja remote forja-bin set --path <path>` 覆盖。
 
 ## 同步
 

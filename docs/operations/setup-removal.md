@@ -471,7 +471,7 @@ Forja use
 | 探测/创建服务器 | `forja server add`（已有） | 交互创建或 flag 创建 |
 | 设置远程路径 | `forja remote set --server X --remote-path Y` | 写 remote settings |
 | 启用同步 | `forja sync`（首次交互引导） | sync 未配置时自动引导 |
-| 部署 forja 到远程 | `forja doctor fix --remote` | 检测 PATH 中的 `forja`，不存在则 SCP bootstrap |
+| 部署 forja 到远程 | `forja doctor fix --remote` | 检测 `$(npm prefix -g)/bin/forja`，不存在则 SCP bootstrap |
 | 远程 init | `forja doctor fix --remote` | 通过 bridge 执行远程 `forja init` |
 | 切换执行位置 | `forja use execution --remote`（已有） | 更新 activeTarget.runAt |
 | 高级远程配置 | `forja use remote workspace/repo/forja-bin/build-order/transfer`（已有） | 低频操作 |

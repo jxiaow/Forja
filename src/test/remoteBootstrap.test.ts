@@ -47,7 +47,7 @@ test('remote bootstrap stops before upload when node or npm is unavailable', asy
     assert.ok(!!result.nextAction);
 });
 
-test('remote bootstrap uses the configured npm global prefix and discovers the CLI from PATH', async () => {
+test('remote bootstrap uses the configured npm global prefix without relying on PATH', async () => {
     const commands: string[] = [];
     const uploads: string[] = [];
     const version = '0.1.0';
@@ -55,10 +55,10 @@ test('remote bootstrap uses the configured npm global prefix and discovers the C
     const runner: RemoteRunner = {
         async run(command: string) {
             commands.push(command);
-            if (command === 'cd /tmp && command -v forja') {
-                return { exitCode: 0, stdout: installedBin + '\n', stderr: '' };
+            if (command === 'npm prefix -g') {
+                return { exitCode: 0, stdout: '/home/dev/.nvm/versions/node/v22.0.0\n', stderr: '' };
             }
-            if (command === 'cd /tmp && forja --version') {
+            if (command === `cd /tmp && '${installedBin}' --version`) {
                 return { exitCode: 0, stdout: version + '\n', stderr: '' };
             }
             return { exitCode: 0, stdout: '', stderr: '' };
@@ -87,19 +87,20 @@ test('remote bootstrap uses the configured npm global prefix and discovers the C
     assert.deepEqual(uploads, ['.forja/bootstrap/forja-cli-0.1.0.tgz']);
     assert.ok(commands.some(command => command === 'npm install -g $HOME/.forja/bootstrap/forja-cli-0.1.0.tgz'));
     assert.equal(commands.some(command => command.includes('--prefix')), false);
-    assert.ok(commands.some(command => command === 'cd /tmp && command -v forja'));
-    assert.ok(commands.some(command => command === 'cd /tmp && forja --version'));
+    assert.ok(commands.some(command => command === 'npm prefix -g'));
+    assert.ok(commands.some(command => command === `cd /tmp && '${installedBin}' --version`));
+    assert.equal(commands.some(command => command.includes('command -v forja')), false);
     assert.ok(commands.some(command => command === 'rm -f $HOME/.forja/bin/forja'));
     assert.equal(commands.some(command => command.includes('.forja/runtime')), false);
     assert.equal(result.diagnostics.length, 0);
     assert.equal(result.nextAction, undefined);
 });
 
-test('remote bootstrap fails clearly when npm global install is not exposed through PATH', async () => {
+test('remote bootstrap fails clearly when npm global prefix cannot be resolved', async () => {
     const version = '0.1.0';
     const runner: RemoteRunner = {
         async run(command: string) {
-            if (command === 'cd /tmp && command -v forja') {
+            if (command === 'npm prefix -g') {
                 return { exitCode: 1, stdout: '', stderr: '' };
             }
             return { exitCode: 0, stdout: '', stderr: '' };
@@ -119,9 +120,9 @@ test('remote bootstrap fails clearly when npm global install is not exposed thro
     });
 
     assert.equal(result.ok, false);
-    assert.match(result.diagnostics[0]?.message || '', /PATH.*forja|forja.*PATH/);
-    assert.match(result.nextAction || '', /npm prefix.*PATH/);
-    assert.equal(result.stages.find(stage => stage.name === 'locateBin')?.ok, false);
+    assert.match(result.diagnostics[0]?.message || '', /npm.*prefix/);
+    assert.match(result.nextAction || '', /npm prefix/);
+    assert.equal(result.stages.find(stage => stage.name === 'resolvePrefix')?.ok, false);
 });
 
 test('remote bootstrap server resolution does not require a project remote path', () => {

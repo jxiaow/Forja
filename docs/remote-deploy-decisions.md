@@ -49,7 +49,7 @@ remote wrapper 负责追加 `--workspace <remotePath>` 和 JSON 模式下的 `--
 - artifact: `dist/forja-<version>/cli/forja-cli-<version>.tgz`
 - version: exact match
 - install: `npm install -g <tgz>`
-- remote bin: `command -v forja` 的结果
+- remote bin: `<npm prefix -g>/bin/forja`
 - retention: npm 全局 prefix 中的当前版本
 
 完整规则见 `docs/remote-deploy-bootstrap.md`。

@@ -29,7 +29,7 @@ dist/forja-<version>/cli/forja-cli-<version>.tgz
 
 - `remote test` 检测远端 version 不一致时失败
 - `remote test --bootstrap` 可以安装 exact version 后复测
-- `remote bootstrap` 安装成功后必须从非安装目录执行 `command -v forja` 和 `forja --version`
+- `remote bootstrap` 安装成功后必须读取 `npm prefix -g`，并从非安装目录执行 `<prefix>/bin/forja --version`
 - version 输出不等于本地 package version 时安装失败
 
 后续如需 semver range 兼容，需要单独设计 JSON 协议版本。
@@ -49,7 +49,7 @@ dist/forja-<version>/cli/forja-cli-<version>.tgz
 ```text
 ~/.forja/bootstrap/
 <npm prefix -g>/lib/node_modules/forja/
-<command -v forja>
+<npm prefix -g>/bin/forja
 ```
 
 安装流程：
@@ -58,11 +58,11 @@ dist/forja-<version>/cli/forja-cli-<version>.tgz
 2. 校验 sha256
 3. rename 为 `forja-cli-<version>.tgz`
 4. `npm install -g <tgz>`
-5. 从 `/tmp` 执行 `command -v forja`，记录真实入口
-6. 从 `/tmp` 验证 `forja --version`
+5. 执行 `npm prefix -g`，推导并记录 `<prefix>/bin/forja`
+6. 从 `/tmp` 验证 `<prefix>/bin/forja --version`
 7. 删除旧入口 `~/.forja/bin/forja`
 
-如果 npm 安装成功但 `command -v forja` 找不到入口，bootstrap 失败并提示检查远端 npm prefix 与 PATH。
+bootstrap 不使用 `command -v forja` 判断安装结果，避免 SSH 非交互 shell 未加载登录 PATH 时产生假失败。
 
 ## Cleanup
 
@@ -84,7 +84,7 @@ bootstrap 不清理 remote project settings、overlay manifest、underlay backup
   "stages": [
     { "stage": "upload", "ok": true },
     { "stage": "install", "ok": true },
-    { "stage": "locateBin", "ok": true },
+    { "stage": "resolvePrefix", "ok": true },
     { "stage": "verifyPublicBin", "ok": true },
     { "stage": "removeLegacyBin", "ok": true }
   ],

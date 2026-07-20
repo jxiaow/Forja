@@ -314,7 +314,7 @@ forja remote bootstrap
 
 ```
 
-bootstrap 复用远端 npm 已配置的全局 prefix，与手动执行 `npm install -g` 的位置一致；安装后通过 `command -v forja` 返回真实入口。
+bootstrap 复用远端 npm 已配置的全局 prefix，与手动执行 `npm install -g` 的位置一致；安装后通过 `npm prefix -g` 推导并验证真实入口，不依赖 SSH 非交互 shell 的 PATH。
 
 当前版本的 repo/build-order/transfer 高级配置尚未纳入公开 CLI 契约，不能在脚本中使用。
 
