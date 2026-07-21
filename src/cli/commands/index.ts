@@ -221,6 +221,7 @@ const KEYWORD_SUGGESTIONS: Record<string, Record<string, { hint: string; params:
         'arch':      { hint: 'forja use target', params: ['--arch <x86|x64>', '--mode <debug|release>', '--project <path>'],                         next: 'forja use target --arch <x86|x64>' },
         'project':   { hint: 'forja use target', params: ['--project <path>', '--mode <debug|release>', '--arch <x86|x64>'],                         next: 'forja use target --project <path>' },
         'qt-path':   { hint: 'forja use target', params: ['--qt <path>'],                                                                       next: 'forja use target --qt <path>' },
+        'qmake-target': { hint: 'forja use target', params: ['--qmake-target <name>'],                                                          next: 'forja use target --qmake-target <name>' },
         'server':    { hint: 'forja remote set', params: ['--server <name>'],                                                                        next: 'forja remote set --server <name>' },
         'lang':      { hint: 'forja init --lang',   params: ['<zh|en>'],                                                                             next: 'forja init --lang <zh|en>' },
         'execution': { hint: 'forja use target --run-at', params: ['local|remote'],                                                                  next: 'forja use target --run-at local' },
@@ -521,8 +522,8 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 outputResult(result, wantsJson, (r) => formatUseText(r, locale));
                 return;
             }
-            const targetKnown = new Set(['--project', '--mode', '--arch', '--qt', '--vs', '--jom', '--run-at', '--reset']);
-            const targetWithVal = new Set(['--project', '--mode', '--arch', '--qt', '--vs', '--jom', '--run-at']);
+            const targetKnown = new Set(['--project', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target', '--run-at', '--reset']);
+            const targetWithVal = new Set(['--project', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target', '--run-at']);
             const targetUnknown = findUnknownFlags(argv, targetKnown, targetWithVal);
             if (targetUnknown.length > 0) {
                 outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(targetUnknown, targetKnown) }], nextAction: 'forja use target' }, wantsJson);
@@ -536,7 +537,7 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 return;
             }
             // Check for empty flag values
-            const emptyFlags = ['--project', '--mode', '--arch', '--qt', '--vs', '--jom', '--run-at'];
+            const emptyFlags = ['--project', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target', '--run-at'];
             for (const f of emptyFlags) {
                 if (hasEmptyFlagValue(argv, f)) {
                     outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: `${f} requires a non-empty value` }], nextAction: 'forja use target' }, wantsJson);
@@ -551,6 +552,7 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 qtPath: extractFlag(argv, '--qt'),
                 vsInstall: extractFlag(argv, '--vs'),
                 jomPath: extractFlag(argv, '--jom'),
+                qmakeTarget: extractFlag(argv, '--qmake-target'),
                 runAt: runAtVal as 'local' | 'remote' | undefined,
                 reset: hasFlag(argv, '--reset'),
                 interactive: !wantsJson,

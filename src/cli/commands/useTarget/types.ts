@@ -55,6 +55,7 @@ export interface ResolveOptions {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
+    qmakeTarget?: string;
     mode?: string;
     arch?: string;
     answers?: Record<string, string>;

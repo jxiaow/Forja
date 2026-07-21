@@ -5,9 +5,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-/** 检测目录是否是 git 仓库（含 .git 目录） */
+/** 检测目录是否是 git 仓库（.git 目录需含 HEAD，.git 文件视为有效） */
 export function isGitRepo(dir: string): boolean {
-    return fs.existsSync(path.join(dir, '.git'));
+    const dotGit = path.join(dir, '.git');
+    try {
+        const stat = fs.statSync(dotGit);
+        if (stat.isFile()) { return true; }
+        if (stat.isDirectory()) { return fs.existsSync(path.join(dotGit, 'HEAD')); }
+    } catch { /* not found or inaccessible */ }
+    return false;
 }
 
 /**

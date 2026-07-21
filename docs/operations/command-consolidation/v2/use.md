@@ -7,7 +7,7 @@
 **语法**：
 ```
 forja use target [--project <name|path>] [--mode <debug|release>] [--arch <x86|x64>]
-forja use target [--qt <path>] [--vs <path>] [--jom <path>]
+forja use target [--qt <path>] [--vs <path>] [--jom <path>] [--qmake-target <name>]
 forja use target [--reset]
 forja use target suppress-warnings [<codes>] [--add <code>] [--rm <code>]
 forja use execution --local | --remote
@@ -28,6 +28,7 @@ forja use                              # 无参数：显示当前配置或弹出
 | `--project <name\|path>` | 切换 target。支持按 ID、ID 前缀、名字子串匹配已保存 targets |
 | `--mode`/`--arch` | 更新当前 active target 的 mode/arch |
 | `--qt`/`--vs`/`--jom` | 更新当前 active target 的工具链路径 |
+| `--qmake-target` | 更新当前 active target 的 qmake TARGET |
 | `--reset` | 忽略已有配置，强制重新检测 |
 | 无 flag | 弹出交互式选择器（有 saved targets 时）或走完整配置流程 |
 
@@ -94,7 +95,7 @@ interface UseResult extends ForjaJsonResult {
 
 | 路径 | 接受的 flags |
 |------|-------------|
-| `use target` | `--project`, `--mode`, `--arch`, `--qt`, `--vs`, `--jom`, `--reset` |
+| `use target` | `--project`, `--mode`, `--arch`, `--qt`, `--vs`, `--jom`, `--qmake-target`, `--reset` |
 | `use target suppress-warnings` | `--add`, `--rm` |
 | `use execution` | `--local`, `--remote` |
 | `use lang` | 无 flags |

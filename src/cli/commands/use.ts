@@ -84,6 +84,7 @@ export interface UseTargetArgs {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
+    qmakeTarget?: string;
     runAt?: 'local' | 'remote';
     reset?: boolean;
     interactive?: boolean;
@@ -165,12 +166,13 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
             arch: args.arch,
         });
     }
-    // Toolchain-only update: --qt / --vs / --jom without --project
-    else if (args.qtPath || args.vsInstall || args.jomPath) {
+    // Toolchain-only update: --qt / --vs / --jom / --qmake-target without --project
+    else if (args.qtPath || args.vsInstall || args.jomPath || args.qmakeTarget) {
         result = await runUpdateToolchain(workspace, {
             qtPath: args.qtPath,
             vsInstall: args.vsInstall,
             jomPath: args.jomPath,
+            qmakeTarget: args.qmakeTarget,
         });
     }
     // Execution location update: --run-at alone

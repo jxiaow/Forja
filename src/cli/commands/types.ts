@@ -563,6 +563,7 @@ Target options:
   --qt <path>             Set Qt installation path
   --vs <path>             Set Visual Studio installation path
   --jom <path>            Set jom installation path
+  --qmake-target <name>   Set qmake TARGET override
   --run-at <local|remote> Set execution location
   suppress-warnings [codes]     Manage suppressed warnings (no args = show)
     --add <codes>               Add to list
@@ -576,6 +577,7 @@ Target 选项:
   --qt <路径>             设置 Qt 安装路径
   --vs <路径>             设置 Visual Studio 安装路径
   --jom <路径>            设置 jom 安装路径
+  --qmake-target <名称>   设置 qmake TARGET 覆盖值
   --run-at <local|remote> 设置执行位置
   suppress-warnings [代码]      管理被过滤的构建警告（无参数=查看）
     --add <代码>                追加到列表

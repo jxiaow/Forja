@@ -28,6 +28,7 @@ export interface UseTargetEntryOptions {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
+    qmakeTarget?: string;
     mode?: string;
     arch?: string;
     answers?: string;  // file path
@@ -79,6 +80,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
         qtPath: options.qtPath,
         vsInstall: options.vsInstall,
         jomPath: options.jomPath,
+        qmakeTarget: options.qmakeTarget,
         mode: options.mode,
         arch: options.arch,
         answers: parsedAnswers,
@@ -523,6 +525,7 @@ export async function runUpdateToolchain(workspace: string, args: {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
+    qmakeTarget?: string;
 }): Promise<UseTargetResult> {
     const { getActiveTarget, setActiveTarget } = await import('../activeTarget');
     const currentTarget = getActiveTarget(workspace);
@@ -563,6 +566,10 @@ export async function runUpdateToolchain(workspace: string, args: {
     if (args.jomPath && args.jomPath !== currentTarget.toolchain.jomPath) {
         updated.toolchain.jomPath = args.jomPath;
         changed.push('jomPath');
+    }
+    if (args.qmakeTarget && args.qmakeTarget !== currentTarget.toolchain.qmakeTarget) {
+        updated.toolchain.qmakeTarget = args.qmakeTarget;
+        changed.push('qmakeTarget');
     }
 
     if (changed.length > 0) {

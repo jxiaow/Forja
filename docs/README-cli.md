@@ -210,6 +210,9 @@ forja remote reset <repo> <path>... --all
 
 # 配置 Qt/C++ 工具链
 forja use target --qt /path/to/Qt --vs "C:/Program Files/Microsoft Visual Studio/2022/Community" --jom /path/to/jom
+
+# 修改 qmake TARGET
+forja use target --qmake-target MyApp
 ```
 
 ### `forja server`

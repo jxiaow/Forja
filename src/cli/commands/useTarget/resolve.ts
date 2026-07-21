@@ -172,6 +172,7 @@ async function resolveTarget(ctx: DetectContext, options: ResolveOptions, needTa
 }
 
 async function resolveQmakeTarget(ctx: DetectContext, proProject: string, options: ResolveOptions): Promise<string | undefined> {
+    if (options.qmakeTarget) return options.qmakeTarget;
     if (!options.reset && ctx.existingQt.target) return ctx.existingQt.target;
 
     if (options.interactive) {
