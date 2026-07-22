@@ -613,6 +613,12 @@ test('remote bootstrap is routed to the existing bootstrap workflow', () => {
         assert.equal(r.ok, false);
         assert.equal(r.nextAction, 'forja remote set --server <name>');
         assert.doesNotMatch(r.diagnostics?.[0]?.message ?? '', /unknown remote|未知 remote/i);
+
+        const forced = json('remote bootstrap --force', workspace);
+        assert.ok(forced);
+        assert.equal(forced.action, 'bootstrap');
+        assert.equal(forced.ok, false);
+        assert.doesNotMatch(forced.diagnostics?.[0]?.message ?? '', /--force.*只能用于/i);
     } finally {
         fs.rmSync(workspace, { recursive: true, force: true });
     }

@@ -593,7 +593,8 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
 // ── Remote ──
 
 async function handleRemote(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
-    const remoteKnown = new Set(['--server', '--remote-path']);
+    const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+    const remoteKnown = new Set(['--server', '--remote-path', ...(subCmd === 'bootstrap' ? ['--force'] : [])]);
     const remoteWithVal = new Set(['--server', '--remote-path']);
     const remoteUnknown = findUnknownFlags(argv, remoteKnown, remoteWithVal);
     if (remoteUnknown.length > 0) {
@@ -603,11 +604,9 @@ async function handleRemote(argv: string[], workroot: string, wantsJson: boolean
     }
 
     const fmt = (r: RemoteResult) => formatRemoteText(r, locale);
-    const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
-
     switch (subCmd) {
         case 'bootstrap': {
-            await runRemoteCli(['bootstrap', '--workspace', workroot, ...(wantsJson ? ['--json'] : [])]);
+            await runRemoteCli(['bootstrap', '--workspace', workroot, ...(hasFlag(argv, '--force') ? ['--force'] : []), ...(wantsJson ? ['--json'] : [])]);
             return;
         }
         case 'set': {

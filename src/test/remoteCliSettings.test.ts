@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { writeServers } from '../core/serverStore';
 import { DEFAULT_REMOTE, DEFAULT_SYNC, loadRemoteSettings, saveRemoteSettings, saveSyncSettings } from '../core/settingsIO';
-import { runRemoteCli } from '../remote/cli';
+import { persistRemoteForjaBin, runRemoteCli } from '../remote/cli';
 
 const oldConfigDir = process.env.FORJA_CONFIG_DIR;
 const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-remote-cli-settings-'));
@@ -195,6 +195,14 @@ test('remote forja-bin use and clear persist remote forja binary override', asyn
     await runRemoteCli(['forja-bin', 'clear', '--workspace', workspace, '--json']);
     settings = loadRemoteSettings(workspace);
     assert.equal(settings.remoteForjaBin, '');
+});
+
+test('remote bootstrap persistence records the verified remote forja binary', () => {
+    const workspace = makeWorkspace();
+
+    persistRemoteForjaBin(workspace, '/home/xw/.forja/npm/bin/forja');
+
+    assert.equal(loadRemoteSettings(workspace).remoteForjaBin, '/home/xw/.forja/npm/bin/forja');
 });
 
 test('remote workspace use accepts legacy staged mode as staged compatibility', async () => {

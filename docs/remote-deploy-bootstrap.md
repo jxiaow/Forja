@@ -50,6 +50,7 @@ dist/forja-<version>/cli/forja-cli-<version>.tgz
 ~/.forja/bootstrap/
 <npm prefix -g>/lib/node_modules/forja/
 <npm prefix -g>/bin/forja
+~/.forja/npm/（默认全局 prefix 无写权限时的用户级 fallback）
 ```
 
 安装流程：
@@ -57,10 +58,14 @@ dist/forja-<version>/cli/forja-cli-<version>.tgz
 1. 上传 tgz 到 `~/.forja/bootstrap/forja-cli-<version>.tgz.tmp`
 2. 校验 sha256
 3. rename 为 `forja-cli-<version>.tgz`
-4. `npm install -g <tgz>`
+4. `npm install -g <tgz>`；当远端启用了 npm 的 engine-strict 且 Node.js 版本低于包的 `engines` 要求时，可用 `forja remote bootstrap --force` 执行 `npm install -g --engine-strict=false <tgz>`
 5. 执行 `npm prefix -g`，推导并记录 `<prefix>/bin/forja`
 6. 从 `/tmp` 验证 `<prefix>/bin/forja --version`
 7. 删除旧入口 `~/.forja/bin/forja`
+
+若默认 npm 全局目录返回 `EACCES` 或 `EPERM`，bootstrap 会改用 `~/.forja/npm` 作为用户级 npm prefix，不修改系统目录。它会把该 prefix 写入 `~/.npmrc`，并把 `~/.forja/npm/bin` 加到 bash/zsh 的登录与交互启动文件（`.profile`、`.bashrc`、`.bash_profile`、`.bash_login`、`.zshrc`、`.zprofile`）；新的 SSH 会话可直接执行 `forja`。
+
+bootstrap 成功后会把已验证的绝对入口路径保存到当前工作区的 `remoteForjaBin`，后续远程命令直接调用该路径，不依赖远端 `PATH`。
 
 bootstrap 不使用 `command -v forja` 判断安装结果，避免 SSH 非交互 shell 未加载登录 PATH 时产生假失败。
 

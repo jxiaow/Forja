@@ -49,6 +49,12 @@ interface RemoteCliOptions {
     repo: string;
 }
 
+export function persistRemoteForjaBin(workspace: string, remoteBin: string): void {
+    const settings = loadRemoteSettings(workspace);
+    settings.remoteForjaBin = remoteBin;
+    saveRemoteSettings(workspace, settings);
+}
+
 export async function runRemoteCli(argv: string[]): Promise<void> {
     const wantsJson = argv.includes('--json');
     try {
@@ -124,7 +130,19 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
             const password = resolved.server.password || process.env.FORJA_SSH_PASSWORD || null;
             const runner = createSshRunner(resolved.server, password);
             const uploader = createScpUploader(resolved.server, password);
-            const result = await executeRemoteBootstrap({ artifact, runner, uploader });
+            const result = await executeRemoteBootstrap({ artifact, runner, uploader, ignoreEngines: options.force });
+            if (result.ok) {
+                try {
+                    persistRemoteForjaBin(options.workspace, result.remoteBin);
+                } catch (error) {
+                    result.ok = false;
+                    result.diagnostics.push({
+                        level: 'error',
+                        message: `远端 forja 已安装，但无法保存 remoteForjaBin: ${error instanceof Error ? error.message : String(error)}`
+                    });
+                    result.nextAction = `forja remote forja-bin use --path ${result.remoteBin}`;
+                }
+            }
             if (!result.ok) { process.exitCode = 1; }
             writeOutput(result, options.json);
             return;
@@ -505,7 +523,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
                 break;
             }
             case '--force':
-                if (options.action !== 'unlock') { throw new Error('--force 只能用于 remote unlock'); }
+                if (options.action !== 'unlock' && options.action !== 'bootstrap') { throw new Error('--force 只能用于 remote unlock/bootstrap'); }
                 options.force = true;
                 break;
             case '--recursive':
@@ -932,7 +950,7 @@ function helpText(): string {
         '  forja remote status [--json]',
         '  forja remote doctor [--bootstrap] [--json]',
         '  forja remote test [--bootstrap] [--json]',
-        '  forja remote bootstrap [--json]',
+        '  forja remote bootstrap [--force] [--json]',
         '  forja remote unlock --lock-id <id> --force [--json]',
         '  forja remote workspace status|use|clear [--json]',
         '  forja remote repo list|set|remove|clear [--asset local[=remote]] [--json]',

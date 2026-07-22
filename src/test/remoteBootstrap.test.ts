@@ -96,6 +96,127 @@ test('remote bootstrap uses the configured npm global prefix without relying on 
     assert.equal(result.nextAction, undefined);
 });
 
+test('remote bootstrap disables strict engine checks only when requested', async () => {
+    const commands: string[] = [];
+    const runner: RemoteRunner = {
+        async run(command: string) {
+            commands.push(command);
+            if (command === 'npm prefix -g') {
+                return { exitCode: 0, stdout: '/home/dev/.nvm/versions/node/v22.0.0\n', stderr: '' };
+            }
+            if (command.includes('--version')) {
+                return { exitCode: 0, stdout: '0.1.0\n', stderr: '' };
+            }
+            return { exitCode: 0, stdout: '', stderr: '' };
+        }
+    };
+
+    const result = await executeRemoteBootstrap({
+        artifact: { ok: true, version: '0.1.0', artifactPath: '/tmp/forja-cli-0.1.0.tgz', sha256: 'abc', diagnostics: [] },
+        runner,
+        uploader: { async upload() {} },
+        ignoreEngines: true,
+    });
+
+    assert.equal(result.ok, true);
+    assert.ok(commands.includes('npm install -g --engine-strict=false $HOME/.forja/bootstrap/forja-cli-0.1.0.tgz'));
+    assert.equal(commands.some(command => command.includes(' --force')), false);
+});
+
+test('remote bootstrap preserves npm errors after engine warnings', async () => {
+    const runner: RemoteRunner = {
+        async run(command: string) {
+            if (command.startsWith('npm install -g')) {
+                return {
+                    exitCode: 1,
+                    stdout: '',
+                    stderr: 'npm WARN EBADENGINE Unsupported engine\n' +
+                        "npm WARN EBADENGINE   package: 'forja@0.1.0'\n" +
+                        'npm WARN EBADENGINE   required: { node: \'>=18.0.0\' }\n' +
+                        'npm ERR! code EACCES\n' +
+                        'npm ERR! syscall rename\n' +
+                        'npm ERR! path /usr/local/lib/node_modules/forja'
+                };
+            }
+            return { exitCode: 0, stdout: '', stderr: '' };
+        }
+    };
+
+    const result = await executeRemoteBootstrap({
+        artifact: { ok: true, version: '0.1.0', artifactPath: '/tmp/forja-cli-0.1.0.tgz', sha256: 'abc', diagnostics: [] },
+        runner,
+        uploader: { async upload() {} },
+        ignoreEngines: true,
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(result.diagnostics.map(item => item.message).join('\n'), /npm ERR! code EACCES/);
+    assert.match(result.stages.find(stage => stage.name === 'install')?.message || '', /npm ERR! path/);
+});
+
+test('remote bootstrap retries in a user-owned prefix after a global npm permission error', async () => {
+    const commands: string[] = [];
+    const version = '0.1.0';
+    const runner: RemoteRunner = {
+        async run(command: string) {
+            commands.push(command);
+            if (command === 'npm install -g --engine-strict=false $HOME/.forja/bootstrap/forja-cli-0.1.0.tgz') {
+                return { exitCode: 1, stdout: '', stderr: 'npm ERR! code EACCES\nnpm ERR! syscall rename' };
+            }
+            if (command === 'npm prefix -g --prefix $HOME/.forja/npm') {
+                return { exitCode: 0, stdout: '/home/dev/.forja/npm\n', stderr: '' };
+            }
+            if (command === "cd /tmp && '/home/dev/.forja/npm/bin/forja' --version") {
+                return { exitCode: 0, stdout: version + '\n', stderr: '' };
+            }
+            return { exitCode: 0, stdout: '', stderr: '' };
+        }
+    };
+
+    const result = await executeRemoteBootstrap({
+        artifact: { ok: true, version, artifactPath: '/tmp/forja-cli-0.1.0.tgz', sha256: 'abc', diagnostics: [] },
+        runner,
+        uploader: { async upload() {} },
+        ignoreEngines: true,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.remoteBin, '/home/dev/.forja/npm/bin/forja');
+    assert.ok(commands.includes('npm install -g --engine-strict=false --prefix $HOME/.forja/npm $HOME/.forja/bootstrap/forja-cli-0.1.0.tgz'));
+    assert.ok(commands.some(command => command.includes('npm config set prefix $HOME/.forja/npm')));
+    assert.ok(commands.some(command => command.includes('$HOME/.bashrc')));
+    assert.ok(commands.some(command => command.includes('$HOME/.bash_profile')));
+    assert.ok(commands.some(command => command.includes('$HOME/.zprofile')));
+    assert.equal(result.stages.find(stage => stage.name === 'installUserPrefix')?.ok, true);
+    assert.equal(result.stages.find(stage => stage.name === 'configureUserPrefix')?.ok, true);
+});
+
+test('remote bootstrap configures shell PATH for an existing user-owned npm prefix', async () => {
+    const commands: string[] = [];
+    const runner: RemoteRunner = {
+        async run(command: string) {
+            commands.push(command);
+            if (command === 'npm prefix -g') {
+                return { exitCode: 0, stdout: '/home/dev/.forja/npm\n', stderr: '' };
+            }
+            if (command === "cd /tmp && '/home/dev/.forja/npm/bin/forja' --version") {
+                return { exitCode: 0, stdout: '0.1.0\n', stderr: '' };
+            }
+            return { exitCode: 0, stdout: '', stderr: '' };
+        }
+    };
+
+    const result = await executeRemoteBootstrap({
+        artifact: { ok: true, version: '0.1.0', artifactPath: '/tmp/forja-cli-0.1.0.tgz', sha256: 'abc', diagnostics: [] },
+        runner,
+        uploader: { async upload() {} },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.stages.find(stage => stage.name === 'configureUserPath')?.ok, true);
+    assert.ok(commands.some(command => command.includes('$HOME/.bash_profile')));
+});
+
 test('remote bootstrap fails clearly when npm global prefix cannot be resolved', async () => {
     const version = '0.1.0';
     const runner: RemoteRunner = {

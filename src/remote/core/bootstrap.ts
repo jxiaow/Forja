@@ -23,6 +23,7 @@ export interface ExecuteRemoteBootstrapOptions {
     artifact: BootstrapArtifactResult;
     runner: RemoteRunner;
     uploader: RemoteUploader;
+    ignoreEngines?: boolean;
 }
 
 export interface ExecuteRemoteBootstrapResult {
@@ -196,14 +197,32 @@ export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOpti
         return failure(artifact, remoteBin, stages, diagnostics);
     }
 
-    const install = await options.runner.run(`npm install -g ${remoteArtifactForShell}`, 120000);
-    stages.push({ name: 'install', ok: install.exitCode === 0, message: trim(install.stderr) });
+    const engineOption = options.ignoreEngines ? ' --engine-strict=false' : '';
+    const userPrefixForShell = homePath('.forja', 'npm');
+    let installPrefixForShell = '';
+    let install = await options.runner.run(`npm install -g${engineOption} ${remoteArtifactForShell}`, 120000);
+    stages.push({ name: 'install', ok: install.exitCode === 0, message: trim(install.stderr, 20) });
     if (install.exitCode !== 0) {
-        diagnostics.push({ level: 'error', message: trim(install.stderr) || '远端 npm install 失败' });
-        return failure(artifact, remoteBin, stages, diagnostics);
+        if (!isNpmPermissionError(install.stderr)) {
+            diagnostics.push({ level: 'error', message: trim(install.stderr, 20) || '远端 npm install 失败' });
+            return failure(artifact, remoteBin, stages, diagnostics);
+        }
+        installPrefixForShell = userPrefixForShell;
+        install = await options.runner.run(`npm install -g${engineOption} --prefix ${installPrefixForShell} ${remoteArtifactForShell}`, 120000);
+        stages.push({ name: 'installUserPrefix', ok: install.exitCode === 0, message: trim(install.stderr, 20) });
+        if (install.exitCode !== 0) {
+            diagnostics.push({ level: 'error', message: trim(install.stderr, 20) || '远端用户目录 npm install 失败' });
+            return failure(artifact, remoteBin, stages, diagnostics);
+        }
+        const configureUserPrefix = await options.runner.run(buildUserPrefixSetupCommand(installPrefixForShell), 10000);
+        stages.push({ name: 'configureUserPrefix', ok: configureUserPrefix.exitCode === 0, message: trim(configureUserPrefix.stderr, 20) });
+        if (configureUserPrefix.exitCode !== 0) {
+            diagnostics.push({ level: 'error', message: trim(configureUserPrefix.stderr, 20) || '远端用户 npm prefix 配置失败' });
+            return failure(artifact, remoteBin, stages, diagnostics);
+        }
     }
 
-    const resolvePrefix = await options.runner.run('npm prefix -g', 10000);
+    const resolvePrefix = await options.runner.run(`npm prefix -g${installPrefixForShell ? ` --prefix ${installPrefixForShell}` : ''}`, 10000);
     const npmPrefix = resolvePrefix.stdout.trim().split(/\r?\n/)[0]?.replace(/\/+$/, '') || '';
     stages.push({ name: 'resolvePrefix', ok: resolvePrefix.exitCode === 0 && !!npmPrefix, message: npmPrefix || trim(resolvePrefix.stderr) });
     if (resolvePrefix.exitCode !== 0 || !npmPrefix) {
@@ -211,6 +230,15 @@ export async function executeRemoteBootstrap(options: ExecuteRemoteBootstrapOpti
         return failure(artifact, remoteBin, stages, diagnostics, '检查远端 npm prefix 配置');
     }
     remoteBin = `${npmPrefix}/bin/forja`;
+
+    if (!installPrefixForShell && isForjaUserPrefix(npmPrefix)) {
+        const configureUserPath = await options.runner.run(buildUserPathSetupCommand(), 10000);
+        stages.push({ name: 'configureUserPath', ok: configureUserPath.exitCode === 0, message: trim(configureUserPath.stderr, 20) });
+        if (configureUserPath.exitCode !== 0) {
+            diagnostics.push({ level: 'error', message: trim(configureUserPath.stderr, 20) || '远端用户 PATH 配置失败' });
+            return failure(artifact, remoteBin, stages, diagnostics);
+        }
+    }
 
     const publicVersion = await options.runner.run(`cd /tmp && ${remoteCommand([remoteBin])} --version`, 10000);
     const publicVersionText = publicVersion.stdout.trim();
@@ -269,8 +297,25 @@ function homePath(...segments: string[]): string {
     return '$HOME/' + segments.map(segment => /^[A-Za-z0-9._-]+$/.test(segment) ? segment : remoteCommand([segment])).join('/');
 }
 
-function trim(value: string): string {
-    return value.trim().split(/\r?\n/).slice(0, 3).join('\n');
+function trim(value: string, maxLines = 3): string {
+    return value.trim().split(/\r?\n/).slice(0, maxLines).join('\n');
+}
+
+function isNpmPermissionError(stderr: string): boolean {
+    return /npm ERR! code (EACCES|EPERM)/.test(stderr);
+}
+
+function buildUserPrefixSetupCommand(prefix: string): string {
+    return `npm config set prefix ${prefix} && ${buildUserPathSetupCommand()}`;
+}
+
+function buildUserPathSetupCommand(): string {
+    const pathLine = 'export PATH="$HOME/.forja/npm/bin:$PATH"';
+    return `for profile in $HOME/.profile $HOME/.bashrc $HOME/.bash_profile $HOME/.bash_login $HOME/.zshrc $HOME/.zprofile; do grep -qxF '${pathLine}' "$profile" 2>/dev/null || printf '\\n${pathLine}\\n' >> "$profile"; done`;
+}
+
+function isForjaUserPrefix(prefix: string): boolean {
+    return prefix.endsWith('/.forja/npm');
 }
 
 function missing(message: string, nextAction = 'npm run build:cli'): BootstrapArtifactResult {
