@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cp from 'child_process';
-import { createLogger } from '../../core/logger';
+import { createLogger } from '../../vscode/logger';
 import { filterNeedsSync, markSyncedBatch } from '../../core/syncState';
 import { ServerConfig } from '../../core/serverStore';
 import { ResolvedSyncConfig } from './resolver';
@@ -103,7 +103,7 @@ export interface SyncResult {
     failed: { file: string; error: string }[];
 }
 
-export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRoot: string): Promise<SyncResult> {
+export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRoot: string, token?: { isCancellationRequested: boolean }): Promise<SyncResult> {
     const { server, remotePath, ignore } = resolved;
     const result: SyncResult = { uploaded: [], skipped: [], failed: [] };
 
@@ -134,13 +134,21 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
     const successFiles: string[] = [];
 
     for (const relativePath of needSync) {
+        if (token?.isCancellationRequested) { break; }
         const localFile = path.join(workspaceRoot, relativePath);
         const remoteFile = remotePath.replace(/\/$/, '') + '/' + relativePath.replace(/\\/g, '/');
         const remoteDir = path.posix.dirname(remoteFile);
 
         if (!remoteDirs.has(remoteDir)) {
-            await ensureRemoteDir(server, remoteDir, password);
-            remoteDirs.add(remoteDir);
+            try {
+                await ensureRemoteDir(server, remoteDir, password);
+                remoteDirs.add(remoteDir);
+            } catch (e) {
+                const dirErr = e instanceof Error ? e.message : String(e);
+                logger.error(`创建远程目录失败: ${remoteDir} - ${dirErr}`);
+                result.failed.push({ file: relativePath, error: `mkdir 失败: ${dirErr}` });
+                continue;
+            }
         }
 
         try {

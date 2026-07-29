@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
-import { getState, setState } from '../../core/qtState';
+import { getState, setState } from '../../vscode/qtState';
 import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
          getScanExcludeDirs, getPinnedProject, getTarget, getManualProPath, getDesignerPath, getQtSourcePath,
          getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../qt/services/configService';
-import { createLogger } from '../../core/logger';
+import { getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
+import { resolveProjectRoot } from '../../vscode/workspaceResolver';
+import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { getSyncPendingInfo } from '../../core/syncState';
@@ -62,10 +64,15 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                 .catch(e => console.warn('[compilot] configPanel message error:', (e as Error).message))
         );
 
-        // 监听 sync-state.json 变化，同步完成后刷新面板中的待同步数
+        // 监听 sync-state 变化，同步完成后刷新面板中的待同步数
         const wsRoot = getWorkspaceRoot();
         if (wsRoot) {
-            const syncStatePattern = new vscode.RelativePattern(wsRoot, '.compilot/sync-state.json');
+            const os = require('os');
+            const crypto = require('crypto');
+            const normalized = wsRoot.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+            const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
+            const syncStateDir = vscode.Uri.file(require('path').join(os.homedir(), '.compilot', 'sync'));
+            const syncStatePattern = new vscode.RelativePattern(syncStateDir, `${hash}.json`);
             const syncStateWatcher = vscode.workspace.createFileSystemWatcher(syncStatePattern);
             const refreshIfVisible = () => { if (webviewView.visible) { this._updateHtml(); } };
             syncStateWatcher.onDidChange(refreshIfVisible);
@@ -111,6 +118,8 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             project,
             vsDevShellPath: getVsDevShellPath(),
             pinnedProject: getPinnedProject(),
+            mode: getQtSetting('mode'),
+            arch: getQtSetting('arch'),
             cStandard: getCStandard(),
             cppStandard: getCppStandard(),
             scanExcludeDirs: getScanExcludeDirs().join(', '),
@@ -128,20 +137,26 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             version: this._version,
             ...(() => {
                 const wsRoot = getWorkspaceRoot();
-                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'] };
+                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'], remotePaths: {} };
                 const servers = readServers();
                 const pendingInfo = wsRoot ? getSyncPendingInfo(wsRoot, sync.ignore) : { count: 0, lastTime: '' };
 
                 return {
                     syncEnabled: sync.enabled,
                     syncSelectedServer: sync.selectedServer,
-                    syncServers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, authMode: s.authMode, privateKeyPath: s.privateKeyPath, password: s.password, remotePath: s.remotePath })),
+                    syncServers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, authMode: s.authMode, privateKeyPath: s.privateKeyPath, password: s.password })),
                     syncIgnore: sync.ignore.join(', '),
-                    syncRemotePath: sync.remotePath || '',
+                    syncRemotePath: sync.remotePaths[sync.selectedServer] || '',
                     syncPendingCount: pendingInfo.count,
                     syncLastTime: pendingInfo.lastTime
                 };
-            })()
+            })(),
+            sdkProjectName: getSdkSetting('pinnedProject') || '未选择',
+            sdkMode: getSdkSetting('mode'),
+            sdkArch: getSdkSetting('arch'),
+            sdkVsInstall: getSdkSetting('vsInstall') || '',
+            qtActive: !!resolveProjectRoot('qt'),
+            sdkActive: !!resolveProjectRoot('sdk')
         };
         this._view.webview.html = getHtml(data);
     }

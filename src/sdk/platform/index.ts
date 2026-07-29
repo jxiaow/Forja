@@ -1,5 +1,5 @@
 import * as os from 'os';
-import { Platform } from '../types';
+import { Arch, Platform } from '../types';
 
 export function getCurrentPlatform(): Platform {
   return os.platform() === 'win32' ? 'windows' : 'linux';
@@ -7,3 +7,7 @@ export function getCurrentPlatform(): Platform {
 
 export const isWindows = getCurrentPlatform() === 'windows';
 export const isLinux = getCurrentPlatform() === 'linux';
+
+export function getDefaultArch(): Arch {
+  return isWindows ? 'x86' : 'x64';
+}

@@ -37,6 +37,24 @@ test('SDK CLI rejects invalid --arch value', async () => {
     assert.ok(parsed.diagnostics[0].message.includes('--arch'));
 });
 
+test('SDK CLI rejects unsupported --arch value on single-arch platforms', async () => {
+    if (os.platform() === 'win32') { return; }
+
+    const output = await captureOutput(() => runSdkCli(['status', '--json', '--arch', 'x86']));
+    assert.equal(process.exitCode, 1);
+    const parsed = JSON.parse(output);
+    assert.equal(parsed.ok, false);
+    assert.ok(parsed.diagnostics[0].message.includes('--arch'));
+});
+
+test('SDK CLI rejects extra positional arguments', async () => {
+    const output = await captureOutput(() => runSdkCli(['status', '--json', 'extra']));
+    assert.equal(process.exitCode, 1);
+    const parsed = JSON.parse(output);
+    assert.equal(parsed.ok, false);
+    assert.ok(parsed.diagnostics[0].message.includes('extra'));
+});
+
 test('SDK CLI rejects unknown run action', async () => {
     const output = await captureOutput(() => runSdkCli(['run', '--json']));
     assert.equal(process.exitCode, 1);
@@ -45,12 +63,465 @@ test('SDK CLI rejects unknown run action', async () => {
     assert.ok(parsed.diagnostics[0].message.includes('未知动作'));
 });
 
-test('SDK CLI accepts valid build with --plan', async () => {
-    const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--mode', 'release', '--arch', 'x64']));
-    const parsed = JSON.parse(output);
-    if (!parsed.ok) {
-        assert.ok(parsed.diagnostics[0].message.includes('未找到') || parsed.action === 'build');
+test('SDK CLI accepts use config options', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-use-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
+
+        const output = await captureOutput(() => runSdkCli([
+            'use',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'Makefile',
+            '--mode',
+            'release',
+            '--arch',
+            'x64'
+        ]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(parsed.ok, true);
+        assert.equal(parsed.action, 'use');
+        assert.equal(parsed.resolved.project, 'Makefile');
+        assert.equal(parsed.resolved.mode, 'release');
+        assert.equal(parsed.resolved.arch, 'x64');
+        assert.deepEqual(parsed.nextActions, ['compilot sdk status --json']);
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
     }
+});
+
+test('SDK CLI rejects config options on non-use actions', async () => {
+    const restrictedFlags = ['--project', '--mode', '--arch', '--vs-dev-cmd'];
+    for (const action of ['init', 'status', 'env', 'projects', 'build', 'rebuild', 'clean']) {
+        for (const flag of restrictedFlags) {
+            const value = flag === '--mode' ? 'release'
+                : flag === '--arch' ? 'x64'
+                    : flag === '--vs-dev-cmd' ? '/tmp/VsDevCmd.bat'
+                        : 'Makefile';
+            const output = await captureOutput(() => runSdkCli([action, '--json', flag, value]));
+            const parsed = JSON.parse(output);
+
+            assert.equal(process.exitCode, 1);
+            assert.equal(parsed.ok, false);
+            assert.ok(parsed.diagnostics[0].message.includes(`${flag} 不能用于 ${action}`));
+            process.exitCode = undefined;
+        }
+    }
+});
+
+test('SDK CLI build accepts --plan and routes missing config to status', async () => {
+    const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan']));
+    const parsed = JSON.parse(output);
+    assert.equal(process.exitCode, 1);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.action, 'build');
+    assert.deepEqual(parsed.nextActions, ['compilot sdk status --json']);
+});
+
+test('SDK CLI build plan inherits mode and arch saved by use', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-config-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
+
+        const initOutput = await captureOutput(() => runSdkCli([
+            'init',
+            '--json',
+            '--workspace',
+            ws
+        ]));
+        const initParsed = JSON.parse(initOutput);
+        assert.equal(initParsed.ok, true);
+
+        const useOutput = await captureOutput(() => runSdkCli([
+            'use',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'Makefile',
+            '--mode',
+            'release',
+            '--arch',
+            'x64'
+        ]));
+        assert.equal(JSON.parse(useOutput).ok, true);
+
+        const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(parsed.ok, true);
+        assert.equal(parsed.resolved.mode, 'release');
+        assert.equal(parsed.resolved.arch, 'x64');
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI use updates only explicit fields and build plan inherits saved settings', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-use-inherit-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
+        fs.mkdirSync(path.join(ws, 'app'));
+        fs.writeFileSync(path.join(ws, 'app', 'Makefile'), 'all:\n\t@echo app\n', 'utf-8');
+
+        const initOutput = await captureOutput(() => runSdkCli([
+            'init',
+            '--json',
+            '--workspace',
+            ws
+        ]));
+        assert.equal(JSON.parse(initOutput).ok, true);
+
+        const useOutput = await captureOutput(() => runSdkCli([
+            'use',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            path.join('app', 'Makefile'),
+            '--mode',
+            'release'
+        ]));
+        const useParsed = JSON.parse(useOutput);
+        assert.equal(useParsed.ok, true);
+        assert.equal(useParsed.resolved.project, path.join('app', 'Makefile'));
+        assert.equal(useParsed.resolved.mode, 'release');
+        assert.equal(useParsed.resolved.arch, 'x64');
+
+        const planOutput = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const planParsed = JSON.parse(planOutput);
+        assert.equal(planParsed.ok, true);
+        assert.equal(planParsed.project, path.join('app', 'Makefile'));
+        assert.equal(planParsed.resolved.mode, 'release');
+        assert.equal(planParsed.resolved.arch, 'x64');
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI use rejects a missing project', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-use-missing-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        const output = await captureOutput(() => runSdkCli([
+            'use',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'MissingMakefile'
+        ]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(process.exitCode, 1);
+        assert.equal(parsed.ok, false);
+        assert.ok(parsed.diagnostics[0].message.includes('项目文件不存在'));
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI init uses the platform default arch when no SDK config exists', async () => {
+    if (os.platform() === 'win32') { return; }
+
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-default-arch-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        const output = await captureOutput(() => runSdkCli(['init', '--json', '--workspace', ws]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(parsed.ok, true);
+        assert.equal(parsed.resolved.arch, 'x64');
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI use resolves relative --project from workspace', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-project-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
+
+        const useOutput = await captureOutput(() => runSdkCli([
+            'use',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'Makefile'
+        ]));
+        const useParsed = JSON.parse(useOutput);
+        assert.equal(useParsed.ok, true);
+        assert.equal(useParsed.resolved.project, 'Makefile');
+
+        const planOutput = await captureOutput(() => runSdkCli([
+            'build',
+            '--json',
+            '--plan',
+            '--workspace',
+            ws
+        ]));
+        const planParsed = JSON.parse(planOutput);
+        assert.equal(planParsed.ok, true);
+        assert.equal(planParsed.project, 'Makefile');
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI init rejects explicit project options', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-missing-init-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        const output = await captureOutput(() => runSdkCli([
+            'init',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'MissingMakefile'
+        ]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(process.exitCode, 1);
+        assert.equal(parsed.ok, false);
+        assert.ok(parsed.diagnostics[0].message.includes('--project 不能用于 init'));
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI build plan rejects a stale pinned project instead of building another candidate', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-stale-project-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        const pinnedProject = path.join(ws, 'Makefile');
+        fs.writeFileSync(pinnedProject, 'all:\n\t@echo old\n', 'utf-8');
+
+        const initOutput = await captureOutput(() => runSdkCli([
+            'init',
+            '--json',
+            '--workspace',
+            ws
+        ]));
+        assert.equal(JSON.parse(initOutput).ok, true);
+
+        const useOutput = await captureOutput(() => runSdkCli([
+            'use',
+            '--json',
+            '--workspace',
+            ws,
+            '--project',
+            'Makefile'
+        ]));
+        assert.equal(JSON.parse(useOutput).ok, true);
+
+        fs.unlinkSync(pinnedProject);
+        createSdkProjectFile(ws, 'other');
+
+        const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(process.exitCode, 1);
+        assert.equal(parsed.ok, false);
+        assert.ok(parsed.diagnostics[0].message.includes('项目文件不存在'));
+        assert.notEqual(parsed.project, path.join('other', os.platform() === 'win32' ? 'App.sln' : 'Makefile'));
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI build plan requires saved SDK config even when one candidate exists', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-no-config-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
+
+        const output = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(process.exitCode, 1);
+        assert.equal(parsed.ok, false);
+        assert.deepEqual(parsed.nextActions, ['compilot sdk status --json']);
+        assert.ok(parsed.diagnostics[0].message.includes('尚未初始化'));
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+test('SDK CLI status requires a saved project after init even when one candidate exists', async () => {
+    const oldHome = process.env.HOME;
+    const oldUserProfile = process.env.USERPROFILE;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-home-'));
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-status-one-unsaved-'));
+    _tmpDirs.push(tempHome);
+    _tmpDirs.push(ws);
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+
+    try {
+        fs.writeFileSync(path.join(ws, 'Makefile'), 'all:\n\t@echo ok\n', 'utf-8');
+
+        const initOutput = await captureOutput(() => runSdkCli(['init', '--json', '--workspace', ws]));
+        assert.equal(JSON.parse(initOutput).ok, true);
+
+        const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
+        const parsed = JSON.parse(output);
+
+        assert.equal(parsed.ok, true);
+        assert.equal(parsed.ready, true);
+        assert.equal(parsed.project, 'Makefile');
+        assert.equal(parsed.nextAction, 'build');
+
+        const planOutput = await captureOutput(() => runSdkCli(['build', '--json', '--plan', '--workspace', ws]));
+        const planParsed = JSON.parse(planOutput);
+        assert.equal(planParsed.ok, true);
+        assert.equal(planParsed.project, 'Makefile');
+    } finally {
+        if (oldHome === undefined) { delete process.env.HOME; }
+        else { process.env.HOME = oldHome; }
+        if (oldUserProfile === undefined) { delete process.env.USERPROFILE; }
+        else { process.env.USERPROFILE = oldUserProfile; }
+    }
+});
+
+function createSdkProjectFile(workspace: string, relativeDir: string): string {
+    const dir = path.join(workspace, relativeDir);
+    fs.mkdirSync(dir, { recursive: true });
+    const filename = os.platform() === 'win32' ? 'App.sln' : 'Makefile';
+    const filePath = path.join(dir, filename);
+    fs.writeFileSync(filePath, os.platform() === 'win32' ? '' : 'all:\n\t@echo ok\n', 'utf-8');
+    return filePath;
+}
+
+test('SDK CLI status reports missing project without failing', async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-status-empty-'));
+    _tmpDirs.push(ws);
+
+    const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
+    const parsed = JSON.parse(output);
+
+    assert.equal(process.exitCode, undefined);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.ready, false);
+    assert.equal(parsed.project, null);
+    assert.deepEqual(parsed.candidates, []);
+    assert.ok(parsed.missing.includes('project'));
+});
+
+test('SDK CLI status reports candidate projects when workspace has multiple projects', async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-sdk-status-multi-'));
+    _tmpDirs.push(ws);
+    createSdkProjectFile(ws, 'app');
+    createSdkProjectFile(ws, 'lib');
+
+    const output = await captureOutput(() => runSdkCli(['status', '--json', '--workspace', ws]));
+    const parsed = JSON.parse(output);
+
+    assert.equal(process.exitCode, undefined);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.ready, false);
+    assert.equal(parsed.project, null);
+    assert.equal(parsed.candidates.length, 2);
+    assert.ok(parsed.missing.includes('project'));
+    assert.ok(parsed.diagnostics.some((d: { message: string }) => d.message.includes('发现 2 个项目文件')));
 });
 
 

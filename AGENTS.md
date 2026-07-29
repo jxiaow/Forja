@@ -8,19 +8,30 @@
 
 ### 自动触发规则（不需要用户提醒）
 
-以下场景**自动进入**对应流程，禁止跳过：
+触发判定基于**实际改动范围**，不基于用户措辞。每次动手前评估：
 
-| 触发条件                                        | 自动进入                         | 起始 gate / 额外动作                                            |
-| ----------------------------------------------- | -------------------------------- | --------------------------------------------------------------- |
-| 用户说"修复/bug/错误/问题"                      | bug-fix 模板                     | Scope + Build gate                                              |
-| 用户说"重构/优化/整理"                          | refactor 模板                    | Scope + Build gate                                              |
-| 用户说"新增/添加/实现"                          | new-feature 模板                 | Scope + Build gate                                              |
-| 用户说"调整/修改/改样式"                        | ui-adjustment 模板               | Scope + Build gate                                              |
-| 用户说"跨模块/影响多个"                         | cross-module-change 模板         | Scope + Build gate                                              |
-| 用户说"整体结构/目录调整/workspace/迁移/根目录" | cross-module-change + 长周期整改 | Scope + Plan gate + todo/checklist + `docs/operations/`         |
-| 编码完成后                                      | —                                | Build + Close gate                                              |
+| 改动范围 | 分类 | 流程 |
+| --- | --- | --- |
+| 单文件、≤15 行、不改接口/类型/导出 | Patch | 直接执行，无 gate |
+| 多文件、改接口、改数据结构、新命令/协议、跨目录 | Task | Scope → Build → Close |
 
-**关键规则：** 以上触发不需要用户提醒，识别到关键词就必须自动进入对应流程。
+累积升级（同一会话内满足任一即升级为 Task）：
+- 改动文件 ≥ 5 个
+- 修改了 interface / type / export 签名
+- 跨越 ≥ 2 个顶层 src/ 目录
+- 变更了存储数据格式
+
+详见 `harness/core/rules/iterative-scope-control.md`。
+
+Task 分类参考（用于 Scope gate 的 task type 字段）：
+
+| 场景特征 | 任务类型 | 参考模板 |
+| --- | --- | --- |
+| 修复已有功能的错误 | bug-fix | `templates/bug-fix.md` |
+| 新增功能或入口 | new-feature | `templates/new-feature.md` |
+| 不改行为只改结构 | refactor | `templates/refactor.md` |
+| 视觉/交互调整 | ui-adjustment | `templates/ui-adjustment.md` |
+| 跨多个模块的改动 | cross-module | `templates/cross-module-change.md` |
 
 若任务涉及以下任一项，也必须**自动升级**为"长周期 / 多阶段 / 全局目标"处理：
 
@@ -71,9 +82,9 @@ Scope → [Plan] → Build → Close
 
 ## Hard Constraints
 
-- **无论改动多小**，都**必须**先过对应 gate
-- **禁止**跳过模板和 gate 直接开始写实现
+- **Task 级改动必须**先过 Scope gate 再实现；Patch 级可直接执行
 - **禁止**把 gate 输出当作暂停理由
+- **累积升级不可逆**：同一会话内一旦触发，后续全部按 Task 处理
 - **默认自动推进**；除真实阻塞外，不得用提问替代可自行完成的动作
 - 长周期任务**必须先写阶段级 todo/checklist**
 - 命中根目录 / workspace / 目录迁移时，**必须先创建 `docs/operations/<initiative>/`**
@@ -112,6 +123,7 @@ Scope → [Plan] → Build → Close
 通用规则：
 - `token-efficiency.md` — 低 token 执行与最小化命令范围
 - `test-failure-triage.md` — 测试失败分流
+- `iterative-scope-control.md` — 迭代式对话的范围控制与累积升级
 
 项目规则：
 - `architecture-dependencies.md` — 架构分层、依赖方向

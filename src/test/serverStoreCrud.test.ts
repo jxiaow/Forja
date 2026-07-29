@@ -35,7 +35,7 @@ test('readServers returns empty array when file has []', () => {
 });
 
 test('addServer creates server with generated id', () => {
-    const s = addServer({ name: 'test-srv', host: '10.0.0.1', port: 22, username: 'dev', authMode: 'key', privateKeyPath: '/key', password: '', remotePath: '/home/dev' });
+    const s = addServer({ name: 'test-srv', host: '10.0.0.1', port: 22, username: 'dev', authMode: 'key', privateKeyPath: '/key', password: '' });
     assert.ok(s.id, 'should have generated id');
     assert.equal(s.name, 'test-srv');
     assert.equal(s.host, '10.0.0.1');

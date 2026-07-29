@@ -41,7 +41,7 @@ src/
 2. **Qt Sync Chain**: extension → qt/sync/syncWatcher → core/serverStore → qt/sync/transport → SSH/SCP
 3. **SDK Build Chain**: extension → sdk/sdkExtension → sdk/modules/sdkBuilder → task execution
 4. **CLI Chain**: cli/index → qt/cli or sdk/cli → qt/shared or sdk/cli logic → stdout
-5. **Config Panel**: extension → ui/configPanel → core/settingsStore → .compilot/ files
+5. **Config Panel**: extension → ui/configPanel → vscode/settingsStore → .compilot/ files
 6. **Status Bar**: extension → ui/unifiedStatusBar → qt state + sdk state → display
 
 ## Module Placement
@@ -70,7 +70,7 @@ src/
 | `src/extension.ts` | 扩展入口，签名和导出不可变 |
 | `package.json` contributes | 命令 ID、activationEvents 已发布 |
 | `src/core/settingsIO.ts` | Qt 配置持久化，格式变更影响用户数据 |
-| `src/core/settingsStore.ts` | 配置存储中枢，多模块依赖 |
+| `src/vscode/settingsStore.ts` | 配置存储中枢，多模块依赖 |
 | `src/core/serverStore.ts` | 全局服务器列表，格式变更影响 CLI + 扩展 |
 | `src/qt/shared/` | CLI 和扩展共用，不可引入 vscode |
 | `scripts/build-cli.js` | CLI 打包逻辑，路径变更导致产物缺失 |
@@ -105,7 +105,7 @@ src/
 - 不把平台相关逻辑写进 `shared/`（shared 必须不依赖 vscode）
 - 不在 CLI 模块中引入 `vscode` 依赖
 - 不在 Qt 模块中使用 `vscode.workspace.getConfiguration`（应走 settingsStore）
-- 不在 SDK 模块中使用 Qt 的 settingsStore（应走 vscode settings）
+- SDK 扩展模块通过 `vscode/settingsStore` 读写统一项目配置；SDK CLI 走 `core/settingsIO`
 - 不让 `sdk/` 和 `qt/` 之间产生直接 import 依赖
 - 新增命令后同步 `package.json` contributes 和 `extension.ts` 注册
 - 新增配置项后同步 `package.json` configuration（SDK）或 `core/settingsIO.ts`（Qt）

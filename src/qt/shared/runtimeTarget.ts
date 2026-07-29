@@ -124,10 +124,11 @@ export function resolveRuntimeTarget(projectDir: string, mode: string, arch: str
             return null;
         }
 
+        const exePath = destDirTarget.replace(/\\/g, path.sep);
         return {
-            target: path.basename(destDirTarget.replace(/\.exe$/i, '')),
-            destDir: path.dirname(destDirTarget).replace(/\\/g, '/'),
-            exePath: path.join(projectDir, destDirTarget.replace(/\\/g, path.sep))
+            target: path.win32.basename(destDirTarget.replace(/\.exe$/i, '')),
+            destDir: path.win32.dirname(destDirTarget).replace(/\\/g, '/'),
+            exePath: path.join(projectDir, exePath)
         };
     }
 

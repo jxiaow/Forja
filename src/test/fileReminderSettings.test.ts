@@ -10,6 +10,8 @@ function createTemplateData(): TemplateData {
         project: null,
         vsDevShellPath: '',
         pinnedProject: '',
+        mode: 'debug',
+        arch: 'x86',
         cStandard: 'c11',
         cppStandard: 'c++17',
         scanExcludeDirs: '',
@@ -31,7 +33,13 @@ function createTemplateData(): TemplateData {
         syncIgnore: '.git, node_modules, out',
         syncRemotePath: '',
         syncPendingCount: 0,
-        syncLastTime: ''
+        syncLastTime: '',
+        sdkProjectName: '',
+        sdkMode: 'debug',
+        sdkArch: 'x86',
+        sdkVsInstall: '',
+        qtActive: true,
+        sdkActive: false
     };
 }
 

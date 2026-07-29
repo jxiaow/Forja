@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { EnvInfo, QtInfo, execAsync, hasQmake, parseQtInfo, scanQt } from '../../env/envDetector';
-import { log } from '../../../core/logger';
+import { log } from '../../../core/loggerBase';
 
 // Linux 默认编译器从路径推断
 function detectCompiler(qtPath: string): string {

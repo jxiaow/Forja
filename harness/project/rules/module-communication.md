@@ -6,17 +6,17 @@ Prevent tight coupling between Qt and SDK modules; ensure state changes propagat
 
 ## Repo Facts
 
-- Qt state: `src/core/qtState.ts` (get/set/subscribe pattern)
+- Qt state: `src/vscode/qtState.ts` (get/set/subscribe pattern)
 - SDK state: `src/sdk/modules/stateManager.ts` (class-based, config-backed)
-- Settings (Qt): `src/core/settingsStore.ts` → reads from `.compilot/settings.json`
-- Settings (SDK): VSCode `workspace.getConfiguration('compilot.sdk')`
+- Settings (Qt): `src/vscode/settingsStore.ts` → reads from `~/.compilot/projects/*.json`
+- Settings (SDK): `src/vscode/settingsStore.ts` → reads from `~/.compilot/projects/*.json`
 - UI sync: `src/ui/unifiedStatusBar.ts` imports state from both modules
 - Config panel: Webview ↔ extension via `postMessage` / `onDidReceiveMessage`
 
 ## Core Rules
 
 1. Qt modules read config via `settingsStore` (never `vscode.workspace.getConfiguration`)
-2. SDK modules read config via `vscode.workspace.getConfiguration` (never Qt's settingsStore)
+2. SDK extension modules read config via `settingsStore`; SDK CLI reads the pure IO APIs in `core/settingsIO`
 3. Cross-module state observation goes through `ui/unifiedStatusBar.ts` — no direct qt↔sdk import
 4. Webview communication uses typed message interfaces (defined in configPanel)
 5. File-based config changes trigger watchers; do not poll
@@ -30,12 +30,12 @@ Prevent tight coupling between Qt and SDK modules; ensure state changes propagat
 ## Implementation Checklist
 
 - [ ] Qt config access uses `getSettings()` / `updateSettings()` from settingsStore
-- [ ] SDK config access uses `vscode.workspace.getConfiguration`
+- [ ] SDK config access uses `getSdkSetting()` / `setSdkSetting()` in extension code, or `loadSdkSettings()` / `saveSdkSettings()` from pure CLI settings helpers
 - [ ] New state fields added to the appropriate state manager with subscriber notification
 - [ ] Webview messages have a `type` discriminator field
 
 ## Common Smells
 
 - Importing `qtState` in SDK code to "just check one flag"
-- Reading `.compilot/settings.json` directly with `fs` instead of going through settingsStore
+- Reading project config JSON directly with `fs` instead of going through settingsStore or settingsIO
 - Passing vscode context objects into shared/core modules

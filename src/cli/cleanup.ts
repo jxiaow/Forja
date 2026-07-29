@@ -6,17 +6,25 @@
  */
 import * as fs from 'fs';
 import { listProjectConfigs } from '../core/settingsIO';
+import { listSyncStates } from '../core/syncState';
 
 export function runCleanup(argv: string[]): void {
     const wantsJson = argv.includes('--json');
     const dryRun = argv.includes('--plan') || argv.includes('--dry-run');
 
     const configs = listProjectConfigs();
+    const syncStates = listSyncStates();
     const stale: Array<{ filePath: string; workspace: string; type: string }> = [];
 
     for (const config of configs) {
         if (!fs.existsSync(config.workspace)) {
             stale.push(config);
+        }
+    }
+
+    for (const ss of syncStates) {
+        if (!fs.existsSync(ss.workspace)) {
+            stale.push({ filePath: ss.filePath, workspace: ss.workspace, type: 'sync' });
         }
     }
 

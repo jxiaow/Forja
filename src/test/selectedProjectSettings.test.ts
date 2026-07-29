@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decodePinnedProject, encodePinnedProject } from '../qt/project/pinnedProject';
 
-test('pinnedProject setting is managed in .compilot/settings.json (not in package.json contributes)', () => {
-    // Configuration is now self-managed in .compilot/settings.json
+test('pinnedProject setting is managed in Compilot local settings (not in package.json contributes)', () => {
+    // Configuration is self-managed in Compilot's local settings store.
     // This test verifies the codec still works correctly with the expected format
     const encoded = encodePinnedProject('C:/workspace', 'app/demo.pro');
     assert.deepEqual(encoded, { root: 'C:/workspace', relative: 'app/demo.pro' });

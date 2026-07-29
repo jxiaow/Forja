@@ -5,7 +5,7 @@ import { SdkProjectInfo } from '../types';
 import { EXCLUDE_DIRS, EXCLUDE_PATH_SEGMENTS, DEFAULT_SCAN_DEPTH, SCAN_TIMEOUT_MS } from '../constants';
 import { isWindows } from '../platform';
 import { log, logError } from '../utils/logger';
-import { getSdkSetting } from '../../core/settingsStore';
+import { getSdkSetting } from '../../vscode/settingsStore';
 
 export class ProjectScanner {
   private _projects: SdkProjectInfo[] = [];
@@ -23,7 +23,6 @@ export class ProjectScanner {
       return [];
     }
 
-    const wsRoot = workspaceFolders[0].uri.fsPath;
     const maxDepth = getSdkSetting('scanDepth') || DEFAULT_SCAN_DEPTH;
     const filePattern = isWindows ? /\.sln$/i : /^(Makefile|makefile|GNUmakefile)$/;
 
@@ -33,9 +32,10 @@ export class ProjectScanner {
 
     try {
       await this.scanWithTimeout(() => {
+        const deadline = Date.now() + SCAN_TIMEOUT_MS;
         for (const folder of workspaceFolders) {
           const wsRoot = folder.uri.fsPath;
-          this.walk(wsRoot, wsRoot, 0, maxDepth, filePattern, allResults);
+          this.walk(wsRoot, wsRoot, 0, maxDepth, filePattern, allResults, deadline);
         }
       });
       log(`fs 遍历返回 ${allResults.length} 个文件`);
@@ -55,8 +55,10 @@ export class ProjectScanner {
     currentDepth: number,
     maxDepth: number,
     filePattern: RegExp,
-    results: vscode.Uri[]
+    results: vscode.Uri[],
+    deadline: number
   ): void {
+    if (Date.now() > deadline) { throw new Error('Scan timed out'); }
     if (currentDepth > maxDepth) { return; }
 
     let entries: fs.Dirent[];
@@ -73,8 +75,12 @@ export class ProjectScanner {
         // 检查路径片段排除
         const relativePath = path.relative(wsRoot, subDir).replace(/\\/g, '/');
         if (EXCLUDE_PATH_SEGMENTS.some(seg => relativePath.includes(seg))) { continue; }
-        this.walk(subDir, wsRoot, currentDepth + 1, maxDepth, filePattern, results);
+        this.walk(subDir, wsRoot, currentDepth + 1, maxDepth, filePattern, results, deadline);
       } else if (entry.isFile() && filePattern.test(entry.name)) {
+        // 同目录或父目录有 .pro 文件说明是 Qt 项目，跳过
+        if (this.isQtProjectDir(dir)) {
+          continue;
+        }
         results.push(vscode.Uri.file(path.join(dir, entry.name)));
       }
     }
@@ -108,6 +114,23 @@ export class ProjectScanner {
       : path.basename(path.dirname(filePath));
 
     return { name, path: filePath, type };
+  }
+
+  /** 检查目录是否属于 Qt 项目（当前目录或父目录包含 .pro 文件） */
+  private isQtProjectDir(dir: string): boolean {
+    if (this.hasPro(dir)) { return true; }
+    const parent = path.dirname(dir);
+    if (parent !== dir && this.hasPro(parent)) { return true; }
+    return false;
+  }
+
+  private hasPro(dir: string): boolean {
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      return entries.some(e => e.isFile() && e.name.endsWith('.pro'));
+    } catch {
+      return false;
+    }
   }
 
   /** 根据扫描结果解析当前项目 */

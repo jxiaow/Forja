@@ -22,7 +22,6 @@ const dirs = [
     'qt/cli',
     'qt/shared',
     'qt/env',
-    'qt/platform',
     'qt/platform/win',
     'qt/platform/linux',
     'sdk/cli'
@@ -36,7 +35,6 @@ const syncFiles = [
 
 // Individual files needed from core/
 const coreFiles = [
-    'core/logger.js',
     'core/loggerBase.js',
     'core/settingsIO.js',
     'core/types.js',
@@ -45,6 +43,13 @@ const coreFiles = [
     'core/ssh.js',
     'core/gitChangedFiles.js',
     'core/gitRepoResolver.js'
+];
+
+// Individual files needed from qt/platform/ (exclude builder.js, which depends on vscode)
+const platformFiles = [
+    'qt/platform/platformConfig.js',
+    'qt/platform/requirements.js',
+    'qt/platform/shellPlan.js'
 ];
 
 // Version file at root of out/
@@ -119,6 +124,16 @@ for (const file of rootFiles) {
 
 // Copy individual sync files (non-vscode only)
 for (const file of syncFiles) {
+    const srcFile = path.join(srcOut, file);
+    const dstFile = path.join(tmpBuild, file);
+    if (fs.existsSync(srcFile)) {
+        fs.mkdirSync(path.dirname(dstFile), { recursive: true });
+        fs.copyFileSync(srcFile, dstFile);
+    }
+}
+
+// Copy individual platform files (non-vscode only)
+for (const file of platformFiles) {
     const srcFile = path.join(srcOut, file);
     const dstFile = path.join(tmpBuild, file);
     if (fs.existsSync(srcFile)) {

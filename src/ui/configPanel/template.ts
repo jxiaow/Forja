@@ -3,12 +3,15 @@ import * as path from 'path';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { EnvInfo, QtInfo, VSInfo } from '../../qt/env/envDetector';
 import type { ProjectInfo } from '../../qt/project/projectManager';
+import { jsLiteral } from './jsLiteral';
 
 export interface TemplateData {
     env: EnvInfo | null;
     project: ProjectInfo | null;
     vsDevShellPath: string;
     pinnedProject: string;
+    mode: string;
+    arch: string;
     cStandard: string;
     cppStandard: string;
     scanExcludeDirs: string;
@@ -26,11 +29,19 @@ export interface TemplateData {
     version: string;
     syncEnabled: boolean;
     syncSelectedServer: string;
-    syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string; remotePath: string }[];
+    syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string }[];
     syncIgnore: string;
     syncRemotePath: string;
     syncPendingCount: number;
     syncLastTime: string;
+    // SDK
+    sdkProjectName: string;
+    sdkMode: string;
+    sdkArch: string;
+    sdkVsInstall: string;
+    // 模块激活状态
+    qtActive: boolean;
+    sdkActive: boolean;
 }
 
 let _templateCache: string | null = null;
@@ -117,7 +128,7 @@ export function getHtml(data: TemplateData): string {
         'selCpp17': _sel(cppStandard, 'c++17'),
         'selCpp20': _sel(cppStandard, 'c++20'),
         'selCpp23': _sel(cppStandard, 'c++23'),
-        scanExcludeDirs: _escapeHtml(scanExcludeDirs),
+        scanExcludeDirs: jsLiteral(scanExcludeDirs),
         effectiveTarget: _escapeHtml(effectiveTarget),
         defaultTarget: _escapeHtml(defaultTarget),
         savedTarget: _escapeHtml(target),
@@ -153,8 +164,8 @@ export function getHtml(data: TemplateData): string {
                 .map(s => `<option value="${_escapeHtml(s.id)}" ${s.id === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
                 .join('')
             : '<option value="">— 无服务器 —</option>',
-        syncServerData: JSON.stringify(data.syncServers).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/<\//g, '<\\/'),
-        syncIgnore: _escapeHtml(data.syncIgnore),
+        syncServerData: jsLiteral(JSON.stringify(data.syncServers)),
+        syncIgnore: jsLiteral(data.syncIgnore),
         syncEnabledChecked: data.syncEnabled ? 'checked' : '',
         syncRemotePath: _escapeHtml(data.syncRemotePath),
         syncPendingCount: String(data.syncPendingCount),

@@ -5,11 +5,12 @@
 import * as vscode from 'vscode';
 import { ConfigPageId } from './configNavTree';
 import { handleMessage } from './messageHandler';
-import { getState, setState } from '../../core/qtState';
+import { getState, setState } from '../../vscode/qtState';
 import { detectEnv } from '../../qt/env/envDetector';
 import { getPageHtml } from './pageTemplate';
 import { buildTemplateData } from './templateData';
-import { createLogger } from '../../core/logger';
+import { createLogger } from '../../vscode/logger';
+import { onSettingsChange, getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
 
 const logger = createLogger('ConfigPagePanel');
 
@@ -26,6 +27,32 @@ export class ConfigPageManager {
 
     constructor(context: vscode.ExtensionContext) {
         this._context = context;
+
+        // 监听 mode/arch 变化，推送到已打开的 project 页面
+        const disposable = onSettingsChange((section, key) => {
+            if (section === 'qt' && (key === 'mode' || key === 'arch')) {
+                const projectPanel = this._panels.get('project');
+                if (projectPanel) {
+                    projectPanel.webview.postMessage({
+                        command: 'settingsUpdated',
+                        mode: getQtSetting('mode'),
+                        arch: getQtSetting('arch')
+                    });
+                }
+            }
+            if (section === 'sdk' && (key === 'mode' || key === 'arch' || key === 'pinnedProject')) {
+                const projectPanel = this._panels.get('project');
+                if (projectPanel) {
+                    projectPanel.webview.postMessage({
+                        command: 'sdkSettingsUpdated',
+                        sdkMode: getSdkSetting('mode'),
+                        sdkArch: getSdkSetting('arch'),
+                        sdkProjectName: getSdkSetting('pinnedProject') || '未选择'
+                    });
+                }
+            }
+        });
+        context.subscriptions.push(disposable);
     }
 
     /** 打开或聚焦指定配置页 */

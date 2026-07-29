@@ -8,7 +8,8 @@
 compilot <subcommand> <action> [options]
 ```
 
-- 子命令：`qt` | `sdk` | `remote`
+- 当前已实现子命令：`qt` | `sdk` | `cleanup`
+- `remote` 相关内容是远程部署设计稿，当前 CLI dispatcher 尚未实现 `compilot remote ...`
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -19,14 +20,73 @@ compilot <subcommand> <action> [options]
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--workspace <path>` | string | `process.cwd()` | 工作区根目录 |
-| `--project <path>` | string | 自动检测 | 项目文件路径（.pro / .sln / Makefile） |
-| `--mode <mode>` | `debug` \| `release` | `debug` | 构建模式 |
-| `--arch <arch>` | `x86` \| `x64` | `x86` | 目标架构 |
-| `--plan` | boolean | `false` | 仅输出命令计划，不执行 |
+| `--workspace <path>` | string | `process.cwd()` | 操作根目录，用于定位本地配置、扫描项目和执行命令 |
 | `--json` | boolean | `false` | JSON 格式输出 |
 
-## 远程模式参数
+`--workspace` 不是 `.pro` 文件路径。Qt 多项目仓库中，`--workspace` 指向仓库/工作区根目录，具体 `.pro` 通过 `compilot qt use --project <relative.pro>` 选择；`build` / `run` / `clean` / `qmake` 只读取该 workspace 已保存的项目和构建配置。
+
+## Qt 命令参数矩阵
+
+`status` 是推荐第一条命令。`build` / `run` / `clean` / `qmake` / `stop` 只读取已保存配置，不接受构建配置参数；缺项目、mode/arch 未确认或配置不完整时返回 `compilot qt status --json`，由 `status` 统一给出后续动作。
+
+| 命令 | 允许参数 |
+|------|----------|
+| `status` | `--workspace`, `--json` |
+| `init` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `use` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--project`, `--mode`, `--arch`, `--qt-path`, `--vs-dev-shell`, `--target` |
+| `env` | `--workspace`, `--json` |
+| `projects` | `--workspace`, `--json` |
+| `qmake` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `build` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `run` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--detach` |
+| `clean` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `stop` | `--workspace`, `--json` |
+| `ps` | `--workspace`, `--json` |
+| `sync` | `--workspace`, `--json`, `--plan`, `--dry-run`, `--server`, `--repo` |
+| `rcc` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+
+`sync --plan` / `sync --dry-run` 只做本地预览，返回目标服务器、远程路径、仓库列表、待同步文件和跳过文件，不执行 SSH/SCP。
+
+## Qt use 配置参数
+
+以下参数只允许用于 `compilot qt use`。`compilot qt init` 只做自动初始化，不接收显式构建配置：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--project <path>` | string | 自动检测 / 已保存值 | 当前项目文件路径（.pro） |
+| `--mode <mode>` | `debug` \| `release` | `debug` / 已保存值 | 构建模式；默认值只是 `status` 建议，需 `use` 写入确认 |
+| `--arch <arch>` | `x86` \| `x64` | 平台默认值 / 已保存值 | 目标架构；单架构平台由 `init` 自动写入，多架构平台需 `use` 写入确认 |
+| `--qt-path <path>` | string | 自动检测 / 已保存值 | Qt 安装路径 |
+| `--vs-dev-shell <path>` | string | 自动检测 / 已保存值 | VS DevShell 路径 |
+| `--target <name>` | string | `.pro` TARGET / 已保存值 | QMake TARGET 覆盖 |
+
+## SDK 命令参数矩阵
+
+`status` 是 SDK 推荐第一条命令。`build` / `rebuild` / `clean` 只读取已保存配置，不接受构建配置参数；缺项目、缺本地配置或配置不完整时返回 `compilot sdk status --json`，由 `status` 统一给出后续动作。
+
+| 命令 | 允许参数 |
+|------|----------|
+| `status` | `--workspace`, `--json` |
+| `init` | `--workspace`, `--json` |
+| `use` | `--workspace`, `--json`, `--project`, `--mode`, `--arch`, `--vs-dev-cmd` |
+| `env` | `--workspace`, `--json` |
+| `projects` | `--workspace`, `--json` |
+| `build` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `rebuild` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+| `clean` | `--workspace`, `--json`, `--plan`, `--dry-run` |
+
+## SDK use 配置参数
+
+以下参数只允许用于 `compilot sdk use`。`compilot sdk init` 只做自动初始化，不接收显式构建配置：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--project <path>` | string | 自动检测 / 已保存值 | 当前 SDK 项目入口文件（Windows `.sln`，非 Windows `Makefile`） |
+| `--mode <mode>` | `debug` \| `release` | `debug` / 已保存值 | 构建模式 |
+| `--arch <arch>` | `x86` \| `x64` | 平台默认值 / 已保存值 | 目标架构；非 Windows 只支持 `x64` |
+| `--vs-dev-cmd <path>` | string | 自动检测 / 已保存值 | Windows `VsDevCmd.bat` 路径 |
+
+## 远程模式参数（设计稿，暂未实现）
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -60,12 +120,14 @@ interface QtCliResult {
   exitCode: number | null;        // 进程退出码（execute 模式）
   durationMs: number;             // 执行耗时（ms）
   logFile: string | null;         // 日志文件路径（--detach 模式）
+  executablePath?: string;        // run 成功时解析出的可执行文件绝对路径
+  pid?: number;                   // run --detach 成功时解析出的目标进程 PID
   stdout: string;                 // 进程标准输出（execute 模式）
   stderr: string;                 // 进程标准错误（execute 模式）
   rccProjectPath: string | null;  // RCC 项目路径
 }
 
-type CliAction = "init" | "status" | "qmake" | "build" | "clean" | "run" | "stop" | "sync" | "logs" | "rcc";
+type CliAction = "init" | "use" | "status" | "env" | "projects" | "qmake" | "build" | "clean" | "run" | "stop" | "sync" | "ps" | "rcc";
 
 interface Diagnostic {
   level: "info" | "warning" | "error";
@@ -97,6 +159,8 @@ JSON 模式省略空/默认值字段，只保留非空字段：
 | `exitCode` | 非 null 时保留 |
 | `errors` | 非空数组时保留 |
 | `logFile` | 非空时保留 |
+| `executablePath` | 非空时保留，通常在 `run` 成功或 `run --plan` 可解析目标时返回 |
+| `pid` | `run --detach` 成功解析到目标进程 PID 时保留 |
 | `project` | 非空时保留 |
 | `commands` | 非空数组时保留 |
 | `shellCommand` | 非空时保留 |
@@ -119,6 +183,8 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
   "ok": true,
   "action": "status",
   "resolved": { "mode": "debug", "arch": "x86", "qtPath": "C:/Qt/5.15.2/msvc2019", ... },
+  "nextAction": "build",
+  "nextActions": ["compilot qt build --json"],
   "candidates": ["app/app.pro", "lib/lib.pro"],
   "rccProjectPath": "XYRcc/XYRcc.pro",
   "diagnostics": []
@@ -128,6 +194,8 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 - 不执行任何命令，只返回环境状态
 - `candidates` 列出所有找到的 .pro 文件
 - `resolved` 反映当前配置（settings + 环境检测）
+- `nextAction` 是摘要动作；`nextActions` 是可直接执行的建议命令
+- 没有本地配置时返回 `init`；已有配置但缺项目时返回 `projects` 并建议 `use --project`；mode/arch 未确认时返回 `use` 并建议写入默认建议值；缺工具链时返回 `env` 并建议 `use --qt-path` / `use --vs-dev-shell`
 
 ### `build` / `run` / `clean` / `qmake`
 
@@ -145,9 +213,10 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 // execute 模式成功
 {
   "ok": true,
-  "action": "build",
+  "action": "run",
   "mode": "execute",
   "exitCode": 0,
+  "executablePath": "C:/workspace/debug/app.exe",
   "durationMs": 12345,
   "commands": [...]
 }
@@ -169,10 +238,27 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 // detach 成功
 {
   "ok": true,
-  "action": "build",
+  "action": "run",
   "exitCode": 0,
-  "logFile": "C:/Users/.../compilot-logs/workspace/build-20260516.log",
-  "resolved": { "mode": "debug", "arch": "x86" }
+  "pid": 13228,
+  "logFile": "C:/Users/.../compilot-logs/workspace/run.log",
+  "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
+  "resolved": { "mode": "release", "arch": "x86" }
+}
+```
+
+`run --detach --json` 成功时 `pid` 只表示目标可执行文件进程。若后台启动后无法在超时时间内解析目标 PID，命令返回失败诊断，不用启动器 PID 顶替。
+
+`ps --json` 返回最近一次 `run --detach` 的运行状态，不返回 workspace，不读取日志内容：
+
+```jsonc
+{
+  "ok": true,
+  "action": "ps",
+  "running": true,
+  "pid": 13228,
+  "executablePath": "C:/workspace/release/x86/XYWinQT.exe",
+  "logFile": "C:/Users/.../compilot-logs/workspace/run.log"
 }
 ```
 
@@ -188,18 +274,19 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 
 // 未找到 .pro 文件
 {
-  "ok": true,
+  "ok": false,
   "action": "build",
-  "diagnostics": [{ "level": "warning", "message": "未找到 .pro 文件" }],
-  "nextActions": ["在工作区中创建 .pro 文件，或使用 --project 指定路径"]
+  "diagnostics": [{ "level": "error", "message": "未配置项目" }],
+  "nextActions": ["compilot qt status --json"]
 }
 
 // Qt 环境未配置
 {
   "ok": true,
-  "action": "build",
-  "diagnostics": [{ "level": "warning", "message": "Qt 路径未配置" }],
-  "nextActions": ["compilot qt init --json", "compilot qt build --qt-path C:/Qt/5.15.2/msvc2019 --json"]
+  "action": "status",
+  "diagnostics": [{ "level": "warning", "message": "未配置 Qt" }],
+  "nextAction": "env",
+  "nextActions": ["compilot qt env --json", "compilot qt use --qt-path <path> --json"]
 }
 ```
 
@@ -211,19 +298,28 @@ detach 成功时 `resolved` 只含 `{ mode, arch }`。
 
 ```typescript
 interface SdkCliResult {
-  ok: boolean;
-  action: "build" | "rebuild" | "clean" | "status";
-  workspace: string;
-  target: string | null;          // 项目名（文件名去扩展名）
-  project: string | null;         // 项目文件路径
+  ok: boolean;                    // 是否成功
+  action: "init" | "use" | "env" | "projects" | "status" | "build" | "rebuild" | "clean";
+  workspace?: string;             // 工作区绝对路径（status 时返回）
+  ready?: boolean;                // 配置是否可直接执行 build（status 时）
+  checks?: Record<string, boolean>; // settings/project/vsDevCmd/make 检查项
+  missing?: string[];             // 缺失项
+  nextAction?: string;            // status 建议的下一条动作
+  nextActions?: string[];         // 错误或 use 后建议的命令
+  project?: string | null;        // 当前项目路径（相对于 workspace）
   candidates?: string[];          // 候选项目列表（status 时）
-  commands: string[];             // shell 命令列表
-  shellCommand: string | null;    // 拼接命令（--plan 时返回，execute 时为 null）
-  exitCode: number | null;        // 执行退出码
-  errors: string[];               // 错误信息
-  diagnostics: Diagnostic[];      // 诊断信息
-  mode?: string;                  // 构建模式（status 时）
-  arch?: string;                  // 架构（status 时）
+  resolved?: {
+    mode: "debug" | "release";
+    arch: "x86" | "x64";
+    vsDevCmdPath?: string;
+    project?: string;
+  };
+  commands?: string[];            // shell 命令列表（--plan 时）
+  shellCommand?: string;          // 拼接后的 shell 命令（--plan 时）
+  exitCode?: number;              // 执行退出码（execute 模式）
+  durationMs?: number;            // 执行耗时（execute 模式）
+  errors?: string[];              // 编译错误行
+  diagnostics?: Diagnostic[];     // 诊断信息
 }
 ```
 
@@ -234,11 +330,34 @@ interface SdkCliResult {
   "ok": true,
   "action": "status",
   "workspace": "C:/projects/myapp",
-  "target": "MyApp",
-  "project": "C:/projects/myapp/MyApp.sln",
+  "ready": true,
+  "checks": {
+    "settings": true,
+    "project": true,
+    "vsDevCmd": true
+  },
+  "nextAction": "build",
+  "project": "MyApp.sln",
   "candidates": ["MyApp.sln"],
-  "mode": "debug",
-  "arch": "x86"
+  "resolved": {
+    "mode": "debug",
+    "arch": "x86"
+  }
+}
+```
+
+### `use`
+
+```jsonc
+{
+  "ok": true,
+  "action": "use",
+  "resolved": {
+    "mode": "release",
+    "arch": "x64",
+    "project": "Makefile"
+  },
+  "nextActions": ["compilot sdk status --json"]
 }
 ```
 
@@ -248,12 +367,13 @@ interface SdkCliResult {
 {
   "ok": true,
   "action": "build",
-  "target": "MyApp",
-  "commands": ["msbuild MyApp.sln /p:Configuration=Debug /p:Platform=x86"],
-  "shellCommand": "msbuild MyApp.sln /p:Configuration=Debug /p:Platform=x86",
-  "exitCode": null,
-  "diagnostics": [],
-  "errors": []
+  "project": "MyApp.sln",
+  "commands": ["msbuild \"C:/projects/myapp/MyApp.sln\" /t:Build /p:Configuration=Debug /p:Platform=Win32 /m"],
+  "shellCommand": "msbuild \"C:/projects/myapp/MyApp.sln\" /t:Build /p:Configuration=Debug /p:Platform=Win32 /m",
+  "resolved": {
+    "mode": "debug",
+    "arch": "x86"
+  }
 }
 ```
 
@@ -263,15 +383,16 @@ interface SdkCliResult {
 {
   "ok": false,
   "action": "build",
-  "diagnostics": [{ "level": "error", "message": "未找到 .sln 或 Makefile 项目文件" }]
+  "diagnostics": [{ "level": "error", "message": "尚未初始化" }],
+  "nextActions": ["compilot sdk status --json"]
 }
 ```
 
 ---
 
-## Remote 模式输出结构
+## Remote 模式输出结构（设计稿，暂未实现）
 
-`--remote` 模式返回 `DeployResult`：
+以下协议尚未接入当前 CLI 入口，不能作为已发布命令调用。`--remote` 模式计划返回 `DeployResult`：
 
 ```typescript
 interface DeployResult {
@@ -328,7 +449,7 @@ type DeployStage = "preCheck" | "branchSync" | "sync" | "baselineCheck" | "build
 
 ---
 
-## `compilot remote test` 输出结构
+## `compilot remote test` 输出结构（设计稿，暂未实现）
 
 ```typescript
 interface RemoteTestResult {
@@ -363,10 +484,13 @@ interface RemoteCheck {
 
 ## 配置文件格式
 
-### `.compilot/settings.json`
+### `~/.compilot/projects/<hash>.json`
+
+项目级配置由 `src/core/settingsIO.ts` 管理，按 workspace hash 存储到用户数据目录。文件通过 `type` 区分 Qt、SDK 和 sync 配置。
 
 ```jsonc
 {
+  "type": "qt",
   "mode": "debug",                    // "debug" | "release"
   "arch": "x86",                      // "x86" | "x64"
   "qtPath": "",                       // Qt 安装路径
@@ -381,6 +505,18 @@ interface RemoteCheck {
   "cppStandard": "c++17",            // C++ 标准
   "fileSyncPromptEnabled": true,      // .pri 文件同步提示
   "qmakeReminderEnabled": true        // QMake 提醒
+}
+```
+
+同步配置也保存在同一目录：
+
+```jsonc
+{
+  "type": "sync",
+  "syncEnabled": true,
+  "syncSelectedServer": "server-uuid",
+  "syncRemotePath": "/home/dev/project",
+  "syncIgnore": "node_modules, build"
 }
 ```
 
@@ -402,38 +538,9 @@ interface RemoteCheck {
 ]
 ```
 
-### `.compilot/sync-config.json`
+### `.compilot/sync-state.json`
 
-```jsonc
-{
-  "selectedServer": "server-uuid",
-  "syncEnabled": true,
-  "syncIgnore": ["build", "*.o", "node_modules"],
-  "branchSync": {
-    "enabled": true,
-    "pinned": {
-      "repo-name": "feature/branch"
-    }
-  },
-  "buildOrder": [
-    { "workspace": ".", "type": "qt" },
-    { "workspace": "./core-lib", "type": "sdk" }
-  ]
-}
-```
-
-### `.compilot/deploy.json`
-
-```jsonc
-{
-  "version": 1,
-  "server": "deploy-server-uuid",
-  "launch": {
-    "command": "./bin/MyApp",
-    "mode": "bg"                    // "bg" (后台) | "fg" (前台)
-  }
-}
-```
+同步运行状态写入项目目录下的 `.compilot/sync-state.json`。远程部署、branchSync 和 buildOrder 仍属于设计稿，当前实现不读取独立 deploy 配置文件。
 
 ---
 

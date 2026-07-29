@@ -2,15 +2,16 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
-import { setState, getState } from '../../core/qtState';
+import { setState, getState } from '../../vscode/qtState';
 import { getBuildConfig, getRccProjectPath } from '../services/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
 import { winConfig, getVsDevCmd } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
 import { getMakefileInfo, parseLibPaths } from '../project/projectManager';
-import { createLogger } from '../../core/logger';
-import { resolveProjectRoot } from '../../core/workspaceResolver';
+import { createLogger } from '../../vscode/logger';
+import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from '../shared/rccResolver';
+import { validateMakefile } from '../shared/runtimeTarget';
 import { TASK_SOURCE_QT } from '../constants';
 
 const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
@@ -23,6 +24,48 @@ function _ensureEnvReady(): boolean {
     if (!env) {
         vscode.window.showWarningMessage('环境检测尚未完成，请稍后再试');
         logger.warn('操作被阻止：envInfo 为 null（环境检测未完成）');
+        return false;
+    }
+    return true;
+}
+
+/**
+ * 检查 Makefile 是否与当前配置匹配。
+ * 不匹配或不存在时自动执行 qmake 并等待完成。
+ * 返回 true 表示 Makefile 已就绪可以继续 build；返回 false 表示 qmake 失败。
+ */
+async function _ensureMakefileFresh(cfg: ReturnType<typeof getBuildConfig>): Promise<boolean> {
+    if (!cfg.projectDir) { return true; }
+    const validation = validateMakefile(cfg.projectDir, {
+        mode: cfg.mode,
+        arch: cfg.arch,
+        qtPath: cfg.qtPath,
+        proFile: cfg.proFile,
+        target: cfg.target
+    });
+    if (validation.exists && validation.matches) { return true; }
+
+    // Makefile 不存在或与当前配置不匹配，自动执行 qmake
+    const reason = !validation.exists
+        ? '未找到 Makefile'
+        : `Makefile 与当前配置不匹配（${validation.mismatch!.join(', ')}）`;
+    logger.info(`自动 QMake：${reason}`);
+
+    const { commands, matcher } = builder.qmakeCommands(cfg);
+    const execution = await runTask(`QMake ${cfg.mode}`, commands, matcher);
+
+    // 等待 qmake 任务完成
+    const exitCode = await new Promise<number | undefined>(resolve => {
+        const d = vscode.tasks.onDidEndTaskProcess(e => {
+            if (e.execution === execution) {
+                d.dispose();
+                resolve(e.exitCode);
+            }
+        });
+    });
+
+    if (exitCode !== 0) {
+        vscode.window.showErrorMessage('QMake 失败，无法继续构建');
         return false;
     }
     return true;
@@ -107,9 +150,10 @@ export function qmakeForDebug(): Thenable<vscode.TaskExecution> {
     return runTask(taskName, commands, matcher);
 }
 
-export function build(): Thenable<vscode.TaskExecution> {
+export async function build(): Promise<vscode.TaskExecution> {
     if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
+    if (!await _ensureMakefileFresh(cfg)) { return Promise.reject(new Error('需要先运行 QMake')); }
     const { commands, matcher } = builder.buildCommands(cfg);
     return runTask(`Build ${cfg.mode}`, commands, matcher);
 }
@@ -136,6 +180,7 @@ function _rccNeedsRebuild(): boolean {
 export async function run(): Promise<void> {
     if (!_ensureEnvReady()) { return; }
     const cfg = getBuildConfig();
+    if (!await _ensureMakefileFresh(cfg)) { return; }
     setState('isBuilding', true);
     setState('buildAction', 'run');
     setState('isRunning', false);

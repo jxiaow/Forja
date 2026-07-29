@@ -5,36 +5,26 @@ import { readServers, readProjectSyncConfig, ServerConfig } from '../../core/ser
 import { syncChangedFiles, askPassword, clearPasswordCache } from './sftpClient';
 import { testConnection } from './transport';
 import { getWorkspaceRoot } from '../services/configService';
-import { createLogger } from '../../core/logger';
+import { createLogger } from '../../vscode/logger';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
+import { onSettingsChange } from '../../vscode/settingsStore';
 
 const logger = createLogger('SyncManager');
 
 let _statusItem: vscode.StatusBarItem | null = null;
 const _hostKeyWarningShown = new Set<string>();
 
-/** 首次连接时提示用户 StrictHostKeyChecking 状态 */
-function _warnHostKeyCheckingIfNeeded(server: ServerConfig): void {
-    if (server.strictHostKeyChecking) { return; }
-    if (_hostKeyWarningShown.has(server.id)) { return; }
-    _hostKeyWarningShown.add(server.id);
-    vscode.window.showInformationMessage(
-        `服务器 "${server.name}" 未启用主机密钥检查（StrictHostKeyChecking=no）。如连接公网服务器，建议在服务器配置中启用。`,
-        '知道了'
-    );
+/** 首次连接时提示用户 StrictHostKeyChecking 状态（已禁用） */
+function _warnHostKeyCheckingIfNeeded(_server: ServerConfig): void {
+    // 内网场景为主，不再弹出提示
 }
 
 export function registerSyncWatcher(context: vscode.ExtensionContext): void {
-    const wsRoot = getWorkspaceRoot();
-    if (wsRoot) {
-        // 监听 settings.json 变化来刷新状态栏（sync 配置已合并到 settings.json）
-        const syncPattern = new vscode.RelativePattern(wsRoot, '.compilot/settings.json');
-        const syncWatcher = vscode.workspace.createFileSystemWatcher(syncPattern);
-        syncWatcher.onDidChange(() => _refreshStatusBar());
-        syncWatcher.onDidCreate(() => _refreshStatusBar());
-        syncWatcher.onDidDelete(() => _refreshStatusBar());
-        context.subscriptions.push(syncWatcher);
-    }
+    context.subscriptions.push(onSettingsChange((section) => {
+        if (section === 'sync') {
+            _refreshStatusBar();
+        }
+    }));
 
     // 监听全局 servers.json（位于 ~/.compilot/）
     const os = require('os') as typeof import('os');
@@ -76,11 +66,16 @@ function _refreshStatusBar(): void {
         _statusItem.tooltip = `Compilot: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
         _statusItem.command = 'compilot.qt.syncChangedFiles';
     } else {
-        _statusItem.text = '$(cloud-download)';
-        _statusItem.tooltip = 'Compilot: 同步未就绪，请选择服务器并设置远程路径';
+        _statusItem.text = '$(cloud)';
+        _statusItem.tooltip = 'Compilot: 同步未就绪，点击配置远程服务器';
         _statusItem.command = 'compilot.qt.showSyncTab';
     }
     _statusItem.show();
+}
+
+/** 供外部调用刷新同步状态栏图标（如配置面板切换开关后） */
+export function refreshSyncStatusBar(): void {
+    _refreshStatusBar();
 }
 
 export async function executeSyncChangedFiles(): Promise<void> {
@@ -135,8 +130,8 @@ export async function executeSyncChangedFiles(): Promise<void> {
     await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: `正在同步到 ${resolved.server.name}...`,
-        cancellable: false
-    }, async () => {
+        cancellable: true
+    }, async (_progress, token) => {
         _warnHostKeyCheckingIfNeeded(resolved.server);
         try {
             let totalUploaded = 0;
@@ -144,11 +139,12 @@ export async function executeSyncChangedFiles(): Promise<void> {
             const totalFailed: { file: string; error: string }[] = [];
 
             for (const { dir: gitDir, name: gitName } of selectedRoots) {
+                if (token.isCancellationRequested) { break; }
                 const repoResolved: ResolvedSyncConfig = {
                     ...resolved,
                     remotePath: resolved.remotePath.replace(/\/$/, '') + '/' + gitName
                 };
-                const result = await syncChangedFiles(repoResolved, gitDir);
+                const result = await syncChangedFiles(repoResolved, gitDir, token);
                 totalUploaded += result.uploaded.length;
                 totalSkipped += result.skipped.length;
                 totalFailed.push(...result.failed.map(f => ({ file: `${gitName}/${f.file}`, error: f.error })));

@@ -3,7 +3,7 @@
   "displayName": "Compilot",
   "publisher": "compilot",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.26",
+  "version": "0.7.41",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -131,13 +131,14 @@
       "compilot": [
         {
           "id": "compilot.configView",
-          "name": "配置"
+          "name": "配置",
+          "when": "workspaceFolderCount > 0"
         }
       ]
     }
   },
   "scripts": {
-    "copy-html": "powershell -Command \"Copy-Item -Path src/ui/configPanel/configPanel.html -Destination out/ui/configPanel/ -Force\"",
+    "copy-html": "node scripts/copy-html.js",
     "compile": "tsc -p ./ && npm run copy-html",
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test --test-reporter=spec out/test",

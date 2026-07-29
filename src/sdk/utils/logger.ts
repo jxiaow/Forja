@@ -3,7 +3,7 @@
  * 保持与已有调用方的 API 兼容（initLogger、log、logError、getOutputChannel）。
  */
 import type * as vscode from 'vscode';
-import { initLogger as _coreInit, createLogger } from '../../core/logger';
+import { initLogger as _coreInit, createLogger } from '../../vscode/logger';
 
 const sdkLogger = createLogger('SDK');
 

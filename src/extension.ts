@@ -1,26 +1,48 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { setState, loadPersistedState } from './core/qtState';
+import { setState, loadPersistedState } from './vscode/qtState';
 import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, updateConfig, getJomPath } from './qt/services/configService';
-import { createUnifiedStatusBar, setActiveModule, setSdkState } from './ui/unifiedStatusBar';
+import { createUnifiedStatusBar } from './ui/unifiedStatusBar';
 import { registerPriWatcher } from './qt/project/priWatcher';
 import { ConfigNavTreeProvider } from './ui/configPanel/configNavTree';
 import { ConfigPageManager } from './ui/configPanel/configPagePanel';
 import { selectProject, parseProFile } from './qt/project/projectManager';
 import { registerDebugSessionWatcher } from './qt/build/debugger';
 import { generateCppProperties } from './qt/build/configGenerator';
-import { createLogger, initLogger } from './core/logger';
+import { createLogger, initLogger } from './vscode/logger';
 import { detectEnv } from './qt/env/envDetector';
 import { ensureLocalStateDir } from './qt/shared/localState';
 import { registerSyncWatcher } from './qt/sync/syncWatcher';
-import { initSettingsStore } from './core/settingsStore';
-import { registerWorkspaceWatcher } from './core/workspaceResolver';
+import { initSettingsStore } from './vscode/settingsStore';
+import { registerWorkspaceWatcher } from './vscode/workspaceResolver';
 import { activateSdk } from './sdk/sdkExtension';
 import { registerQtCommands } from './qt/commands';
 import { TASK_SOURCE_QT } from './qt/constants';
+import { normalizeConfigPageId } from './ui/configPanel/pageIds';
+
+import { listProjectConfigs } from './core/settingsIO';
+import { listSyncStates } from './core/syncState';
 
 const logger = createLogger('Extension');
+
+/** 启动时后台清理不存在的工作区对应的配置和同步状态 */
+function autoCleanupStaleConfigs(): void {
+    let removed = 0;
+    for (const config of listProjectConfigs()) {
+        if (!fs.existsSync(config.workspace)) {
+            try { fs.unlinkSync(config.filePath); removed++; } catch { /* ignore */ }
+        }
+    }
+    for (const ss of listSyncStates()) {
+        if (!fs.existsSync(ss.workspace)) {
+            try { fs.unlinkSync(ss.filePath); removed++; } catch { /* ignore */ }
+        }
+    }
+    if (removed > 0) {
+        logger.info(`自动清理了 ${removed} 个残留配置`);
+    }
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const channel = initLogger();
@@ -34,16 +56,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     initSettingsStore(context);
     loadPersistedState();
 
+    // 后台清理残留配置（不阻塞启动）
+    setTimeout(() => { try { autoCleanupStaleConfigs(); } catch { /* ignore */ } }, 5000);
+
     createUnifiedStatusBar(context);
 
     const navTree = new ConfigNavTreeProvider();
     const pageManager = new ConfigPageManager(context);
+    const configTreeView = vscode.window.createTreeView(ConfigNavTreeProvider.viewId, { treeDataProvider: navTree });
+    configTreeView.title = `配置 v${context.extension.packageJSON.version || ''}`;
+    context.subscriptions.push(configTreeView);
     context.subscriptions.push(
-        vscode.window.registerTreeDataProvider(ConfigNavTreeProvider.viewId, navTree)
-    );
-    context.subscriptions.push(
-        vscode.commands.registerCommand('compilot.config.openPage', (pageId: string) => {
-            pageManager.openPage(pageId as 'project' | 'env' | 'sync' | 'advanced');
+        vscode.commands.registerCommand('compilot.config.openPage', (pageId?: string) => {
+            pageManager.openPage(normalizeConfigPageId(pageId));
         })
     );
     context.subscriptions.push(
@@ -70,17 +95,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // 环境检测（一次，全量扫描获取完整候选列表）
-    detectEnv().then(async (env) => {
-        setState('envInfo', env);
-        logger.info('启动环境检测完成');
-
-        // 自动写入检测结果到配置（如果用户未手动设置过）
-        await autoWriteDetectedEnv(env);
-    }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
-
     // 启动时优先恢复手动指定项目，其次再走工作区扫描/记忆选择
-    let project = null;
+    let project: import('./core/types').ProjectInfo | null = null;
     const manualProPath = getManualProPath();
     if (manualProPath && fs.existsSync(manualProPath)) {
         const info = parseProFile(manualProPath);
@@ -91,6 +107,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         project = await selectProject(context);
     }
     setState('currentProject', project);
+
+    // 环境检测（一次，全量扫描获取完整候选列表）
+    detectEnv().then(async (env) => {
+        setState('envInfo', env);
+        logger.info('启动环境检测完成');
+
+        // 自动写入检测结果到配置（仅当工作区包含相关项目时）
+        if (project) {
+            await autoWriteDetectedEnv(env);
+        }
+    }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
 
     // 有项目时确保 .compilot/ 目录存在
     if (project) {

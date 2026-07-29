@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { StateManager } from './stateManager';
 import { ConfigService } from './configService';
 import { BuildAction } from '../types';
@@ -7,7 +9,6 @@ import { getCurrentPlatform, isWindows } from '../platform';
 import { buildWindowsCommand, getWindowsShellOptions } from '../platform/windows';
 import { buildLinuxCommand } from '../platform/linux';
 import { log, logError } from '../utils/logger';
-import * as path from 'path';
 
 export class SdkBuilder {
   constructor(
@@ -36,6 +37,13 @@ export class SdkBuilder {
     if (!this.stateManager.currentProject) {
       log(`${action}: 无当前项目，提示用户选择`);
       vscode.window.showWarningMessage('SDK Pilot: 请先选择一个 SDK 项目');
+      return;
+    }
+    if (!fs.existsSync(this.stateManager.currentProject.path)) {
+      log(`${action}: 当前项目文件不存在: ${this.stateManager.currentProject.path}`);
+      vscode.window.showWarningMessage('SDK Pilot: 当前 SDK 项目文件不存在，请重新选择项目');
+      this.stateManager.currentProject = null;
+      await this.stateManager.persistToConfig();
       return;
     }
 

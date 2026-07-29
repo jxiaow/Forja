@@ -3,7 +3,7 @@
  * 抽取为独立模块，供 WebviewPanel 和旧 WebviewViewProvider 共用。
  */
 import * as vscode from 'vscode';
-import { getState } from '../../core/qtState';
+import { getState } from '../../vscode/qtState';
 import { TemplateData } from './template';
 import {
     getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
@@ -11,6 +11,8 @@ import {
     getDesignerPath, getQtSourcePath, getFileSyncPromptEnabled,
     getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot
 } from '../../qt/services/configService';
+import { getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
+import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { getSyncPendingInfo } from '../../core/syncState';
 
@@ -21,7 +23,7 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
     const wsRoot = getWorkspaceRoot();
     const sync = wsRoot
         ? readProjectSyncConfig(wsRoot)
-        : { enabled: false, selectedServer: '', remotePath: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'] };
+        : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'], remotePaths: {} };
     const servers = readServers();
     const pendingInfo = wsRoot ? getSyncPendingInfo(wsRoot, sync.ignore) : { count: 0, lastTime: '' };
 
@@ -30,6 +32,8 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         project,
         vsDevShellPath: getVsDevShellPath(),
         pinnedProject: getPinnedProject(),
+        mode: getQtSetting('mode'),
+        arch: getQtSetting('arch'),
         cStandard: getCStandard(),
         cppStandard: getCppStandard(),
         scanExcludeDirs: getScanExcludeDirs().join(', '),
@@ -50,12 +54,18 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         syncServers: servers.map(s => ({
             id: s.id, name: s.name, host: s.host, port: s.port,
             username: s.username, authMode: s.authMode,
-            privateKeyPath: s.privateKeyPath, password: s.password,
-            remotePath: s.remotePath
+            privateKeyPath: s.privateKeyPath, password: s.password
         })),
         syncIgnore: sync.ignore.join(', '),
-        syncRemotePath: sync.remotePath || '',
+        syncRemotePath: sync.remotePaths[sync.selectedServer] || '',
         syncPendingCount: pendingInfo.count,
-        syncLastTime: pendingInfo.lastTime
+        syncLastTime: pendingInfo.lastTime,
+        // SDK
+        sdkProjectName: getSdkSetting('pinnedProject') || '未选择',
+        sdkMode: getSdkSetting('mode'),
+        sdkArch: getSdkSetting('arch'),
+        sdkVsInstall: getSdkSetting('vsInstall') || '',
+        qtActive: !!resolveProjectRoot('qt'),
+        sdkActive: !!resolveProjectRoot('sdk'),
     };
 }

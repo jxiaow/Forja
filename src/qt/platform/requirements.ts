@@ -19,14 +19,14 @@ const windowsRequirements: PlatformRequirement[] = [
         key: 'qtPath',
         label: 'Qt',
         cliFlag: '--qt-path <path>',
-        missingHint: '使用 --qt-path 指定 Qt 安装路径',
+        missingHint: '使用 compilot qt use --qt-path <path> 保存 Qt 安装路径',
         check: (s) => !!s.qtPath
     },
     {
         key: 'vsInstall',
         label: 'Visual Studio',
         cliFlag: '--vs-dev-shell <path>',
-        missingHint: '使用 --vs-dev-shell 指定 Launch-VsDevShell.ps1 路径',
+        missingHint: '使用 compilot qt use --vs-dev-shell <path> 保存 Launch-VsDevShell.ps1 路径',
         check: (s) => !!s.vsInstall
     },
     {
@@ -42,7 +42,7 @@ const linuxRequirements: PlatformRequirement[] = [
         key: 'qtPath',
         label: 'Qt',
         cliFlag: '--qt-path <path>',
-        missingHint: '使用 --qt-path 指定 Qt 安装路径',
+        missingHint: '使用 compilot qt use --qt-path <path> 保存 Qt 安装路径',
         check: (s) => !!s.qtPath
     }
 ];

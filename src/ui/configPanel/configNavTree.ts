@@ -4,8 +4,9 @@
  * 点击后在编辑器区打开对应的 WebviewPanel 配置页。
  */
 import * as vscode from 'vscode';
+import { ConfigPageId } from './pageIds';
 
-export type ConfigPageId = 'project' | 'env' | 'sync' | 'advanced';
+export type { ConfigPageId };
 
 export interface ConfigNavItem {
     id: ConfigPageId;

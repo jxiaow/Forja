@@ -10,6 +10,8 @@ function createTemplateData(): TemplateData {
         project: null,
         vsDevShellPath: '',
         pinnedProject: '',
+        mode: 'debug',
+        arch: 'x86',
         cStandard: 'c11',
         cppStandard: 'c++17',
         scanExcludeDirs: '',
@@ -31,7 +33,13 @@ function createTemplateData(): TemplateData {
         syncIgnore: '.git, node_modules, out',
         syncRemotePath: '',
         syncPendingCount: 0,
-        syncLastTime: ''
+        syncLastTime: '',
+        sdkProjectName: '',
+        sdkMode: 'debug',
+        sdkArch: 'x86',
+        sdkVsInstall: '',
+        qtActive: true,
+        sdkActive: false
     };
 }
 
@@ -131,6 +139,27 @@ test('config panel project name prefers qmake target override', () => {
         /<span class="project-hero-name">OverrideApp<\/span>/,
         'config panel should show the effective qmake target as the project name'
     );
+});
+
+test('config panel tag initialization serializes user text as JavaScript literals', () => {
+    const html = getHtml({
+        ...createTemplateData(),
+        scanExcludeDirs: "build', </script><script>alert(1)</script>",
+        syncIgnore: "node_modules', </script><script>alert(2)</script>"
+    });
+
+    assert.doesNotMatch(
+        html,
+        /initTags\('scanExcludeDirsWrap', '.*<\/script>/,
+        'scan exclude dirs should not be injected as a raw single-quoted script string'
+    );
+    assert.doesNotMatch(
+        html,
+        /initTags\('syncIgnoreWrap', '.*<\/script>/,
+        'sync ignore dirs should not be injected as a raw single-quoted script string'
+    );
+    assert.match(html, /initTags\('scanExcludeDirsWrap', "build', <\\\/script>/);
+    assert.match(html, /initTags\('syncIgnoreWrap', "node_modules', <\\\/script>/);
 });
 
 test('browse buttons preserve existing values when picker is cancelled', () => {

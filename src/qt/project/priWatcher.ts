@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getFileSyncPromptEnabled, getQmakeReminderEnabled } from '../services/configService';
-import { resolveProjectRoot } from '../../core/workspaceResolver';
+import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 
 // 找到文件所在目录最近的 .pri 或 .pro 文件
 function findPriOrPro(dir: string, root: string): string | null {

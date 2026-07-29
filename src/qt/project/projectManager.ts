@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { createLogger } from '../../core/logger';
+import { createLogger } from '../../vscode/logger';
 import { decodePinnedProject, encodePinnedProject } from './pinnedProject';
 import { getEffectiveProjectName, getProjectSelectionLabel } from './projectDisplay';
 import { getTarget } from '../services/configService';
-import { getState } from '../../core/qtState';
-import { getQtSetting, setQtSetting } from '../../core/settingsStore';
-import { setProjectRoot } from '../../core/workspaceResolver';
+import { getState } from '../../vscode/qtState';
+import { getQtSetting, setQtSetting } from '../../vscode/settingsStore';
+import { setProjectRoot } from '../../vscode/workspaceResolver';
 import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../shared/projectScanner';
 import { resolveRuntimeTarget, parseRuntimeLibPaths } from '../shared/runtimeTarget';
 
