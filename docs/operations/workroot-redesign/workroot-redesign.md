@@ -1,6 +1,6 @@
 # Workroot Redesign: 基于显式 workroot 的 Target 管理重构
 
-> Status date: 2026-07-14
+> Status date: 2026-07-16
 
 ## 1. 问题
 
@@ -40,8 +40,9 @@
 
 - 不依赖 git
 - 不在项目目录放配置文件
-- 不做旧数据迁移——用户从零开始
-- 不做向后兼容——旧 CLI 入口、旧配置文件、QtSettings target 字段全部移除
+- 不做旧数据迁移——用户从零开始配置
+- 不做向后兼容——旧 CLI 入口、旧配置文件、QtSettings target 字段全部不读取
+- 旧文件不主动删除，只作为遗留文件保留；新版本不得因旧文件存在而改变行为
 
 ## 4. 存储模型
 
@@ -53,7 +54,7 @@
   workspaces.json            ← 轻量注册表（只有路径列表）
   workspaces/
     <workroot-hash>.json     ← 每个 workspace 的完整数据
-  projects/                  ← 旧配置不再读写，保留为历史文件
+  projects/                  ← 旧配置遗留目录，新版本不读取
 ```
 
 ### 4.2 workspaces.json（注册表）
@@ -74,6 +75,7 @@
 
 ```json
 {
+  "schemaVersion": 1,
   "workroot": "C:/Code/myapp",
   "activeTarget": "qt-app-debug-x64",
   "targets": {
@@ -96,7 +98,7 @@
     "sdk-lib-release-x86": {
       "id": "sdk-lib-release-x86",
       "name": "SDK Lib Release",
-      "kind": "sdk",
+      "kind": "cpp",
       "project": "lib/lib.sln",
       "mode": "release",
       "arch": "x86",
@@ -120,9 +122,11 @@
     "fileSyncPromptEnabled": true,
     "qmakeReminderEnabled": true
   },
-  "sdkModulePrefs": {
+  "cppModulePrefs": {
     "scanDepth": 8
-  }
+  },
+  "remote": {},
+  "sync": {}
 }
 ```
 
@@ -143,11 +147,11 @@
 | `targetToolchains` (ConfigType) | `workspace.targets[id].toolchain` |
 | Qt settings 模块偏好（qmakeArgs, c/cppStandard, designerPath, scanExcludeDirs, customCommands, suppressedWarnings, fileSyncPromptEnabled, qmakeReminderEnabled） | `workspace.qtModulePrefs` |
 | Qt `manualProPath` / `rccProjectPath` | `workspace.qtModulePrefs`（非 target 特定，是项目级路径偏好） |
-| SDK settings 模块偏好（scanDepth） | `workspace.sdkModulePrefs` |
+| SDK/C++ settings 模块偏好（scanDepth） | `workspace.cppModulePrefs` |
 
 ### 4.5 Remote/Sync 配置
 
-Remote/Sync 也统一使用 workroot 解析 workspace。由于 hash key 从 cwd 变为 workroot，旧的 remote/sync 配置文件不再被找到，用户需要重新配置。
+Remote/Sync 也统一使用 workroot 解析 workspace。新版本只读写 workspace store 中的 remote/sync 字段；旧的 remote/sync 配置文件不再被找到，用户需要重新配置。
 
 Server store — 不变（全局，不依赖 workspace）。
 
@@ -446,15 +450,14 @@ forja._selectTarget
 
 ## 9. 验证计划
 
-### 9.0 测试迁移
+### 9.0 测试策略
 
-现有测试大量引用旧类型（`ActiveTargetSettings`、`QtSettings.pinnedProject` 等）和旧函数（`loadActiveTarget`、`saveActiveTarget`、`projectConfigPath` 等）。Phase 1 修改这些类型后，相关测试必须同步更新：
+本 initiative 不迁移旧配置测试，而是建立全新配置 fixture：
 
-- `src/test/cliFoundation.test.ts` — 多处引用旧 activeTarget 函数
-- 所有使用 `FORJA_CONFIG_DIR` 做测试隔离的测试文件 — 需适配新的 workspaces.json + per-workspace 文件结构
-- `src/test/qtCore.test.ts` — 50+ 处调用 `createActionPlan`，需传入完整参数（不再允许 null 回退）
-
-测试迁移与对应工作包同步进行，不单独列为工作包。
+- 测试只初始化新的 `workspaces.json` + per-workspace 文件；
+- 明确验证存在 `~/.forja/projects/` 时不会被读取；
+- `createActionPlan` 测试必须传入完整参数，不允许旧配置回退；
+- 旧类型和旧函数的测试不作为新契约依据，随旧代码清理删除或隔离。
 
 ### 9.1 单元测试
 
@@ -481,14 +484,17 @@ forja._selectTarget
 
 ### Phase 1
 
-1. **WS-01**: workspaceStore core API + 类型定义
-2. **WS-02**: resolveWorkroot 实现
-3. **WS-03**: `forja init` 命令
-4. **WS-04**: CLI target 命令迁移 (use/list/status)
-5. **WS-05**: build/run/clean + createActionPlan 纯参数化
-6. **WS-06**: Phase 1 验证
+1. **WS-00**: 冻结 `forja init` 与新 JSON 契约
+2. **WS-01**: workspaceStore core API + 类型定义
+3. **WS-02**: resolveWorkroot 实现
+4. **WS-03**: `forja init` 命令
+5. **WS-04**: CLI target 命令迁移 (use/list/status)
+6. **WS-05**: build/run/clean + createActionPlan 纯参数化
 
 ### Phase 2
 
-7. **WS-07**: VSCode 侧迁移
-8. **WS-08**: 旧代码清理 + 验证
+7. **WS-06**: VSCode 首次初始化与生命周期
+8. **WS-07**: multi-root 与 CMake
+9. **WS-08**: remote 安全与 destructive action 防护
+10. **WS-09**: 测试、CI、打包和文档
+11. **WS-10**: 旧代码清理 + 验证

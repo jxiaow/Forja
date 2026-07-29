@@ -33,7 +33,7 @@ test('CLI and shared source files do not import vscode adapters', () => {
         path.join(process.cwd(), 'src', 'qt', 'env'),
         path.join(process.cwd(), 'src', 'qt', 'platform', 'win'),
         path.join(process.cwd(), 'src', 'qt', 'platform', 'linux'),
-        path.join(process.cwd(), 'src', 'sdk', 'cli'),
+        path.join(process.cwd(), 'src', 'cpp', 'cli'),
         path.join(process.cwd(), 'src', 'qt', 'shared')
     ];
     const files = [

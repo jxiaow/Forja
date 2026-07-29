@@ -24,7 +24,7 @@ test('package contributes only v2 commands', () => {
 
     // Old commands should not exist
     assert.ok(!commands.includes('forja.qt.build'));
-    assert.ok(!commands.includes('forja.sdk.build'));
+    assert.ok(!commands.includes('forja.cpp.build'));
     assert.ok(!commands.includes('forja.remote.status'));
     assert.ok(!commands.includes('forja.syncChangedFiles'));
 
@@ -64,7 +64,7 @@ test('extension registers commands', () => {
 });
 
 test('sync test connection quick pick resolves duplicate server names by id', () => {
-    const watcher = fs.readFileSync(path.join(repoRoot, 'src', 'sync', 'syncWatcher.ts'), 'utf-8');
+    const watcher = fs.readFileSync(path.join(repoRoot, 'src', 'vscode', 'syncWatcher.ts'), 'utf-8');
 
     assert.match(watcher, /servers\.map\(s => \(\{[\s\S]*?serverId: s\.id[\s\S]*?\}\)\)/);
     assert.match(watcher, /servers\.find\(s => s\.id === pick\.serverId\)/);
@@ -72,7 +72,7 @@ test('sync test connection quick pick resolves duplicate server names by id', ()
 });
 
 test('sync failure clears cached password on authentication errors', () => {
-    const watcher = fs.readFileSync(path.join(repoRoot, 'src', 'sync', 'syncWatcher.ts'), 'utf-8');
+    const watcher = fs.readFileSync(path.join(repoRoot, 'src', 'vscode', 'syncWatcher.ts'), 'utf-8');
 
     assert.match(watcher, /isAuthenticationError/);
     assert.match(watcher, /if \(isAuthenticationError\(msg\)\) \{\s*clearPasswordCache\(\);\s*\}/);

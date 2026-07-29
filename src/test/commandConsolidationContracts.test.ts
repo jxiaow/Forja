@@ -17,16 +17,16 @@ function between(text: string, start: string, end: string): string {
     return text.slice(startIndex, endIndex);
 }
 
-test('VSCode foreground remote run keeps SDK rejection before remote dispatch and passes target kind', () => {
+test('VSCode foreground remote run keeps C++ rejection before remote dispatch and passes target kind', () => {
     const commands = source('src/vscode/commands.ts');
     const runBlock = between(commands, "registerCommand('forja.run'", "registerCommand('forja.debug'");
-    const normalRunBlock = runBlock.slice(runBlock.indexOf("// SDK doesn't support run - check before remote dispatch"));
+    const normalRunBlock = runBlock.slice(runBlock.indexOf("// C++ doesn't support run - check before remote dispatch"));
 
-    const sdkGuard = normalRunBlock.indexOf("target?.kind === 'sdk'");
+    const cppGuard = normalRunBlock.indexOf("target?.kind === 'cpp'");
     const remoteDispatch = normalRunBlock.indexOf("target?.runAt === 'remote'");
-    assert.ok(sdkGuard >= 0, 'forja.run must keep the SDK unsupported guard');
+    assert.ok(cppGuard >= 0, 'forja.run must keep the C++ unsupported guard');
     assert.ok(remoteDispatch >= 0, 'forja.run must keep remote dispatch');
-    assert.ok(sdkGuard < remoteDispatch, 'SDK targets must be rejected before remote foreground run');
+    assert.ok(cppGuard < remoteDispatch, 'C++ targets must be rejected before remote foreground run');
     assert.match(normalRunBlock, /startForegroundRemoteRun\(context,\s*workspace\(\),\s*target\.kind\)/);
 
     const remoteHelpers = source('src/vscode/remoteHelpers.ts');
@@ -51,15 +51,15 @@ test('doctor and list env expose POSIX make through typed imports and blocking d
     const doctor = source('src/cli/commands/doctor.ts');
     const list = source('src/cli/commands/list.ts');
 
-    assert.match(doctor, /import\s+\{\s*detectMake\s*\}\s+from\s+'..\/..\/sdk\/cli\/envDetector'/);
-    assert.doesNotMatch(doctor, /require\('..\/..\/sdk\/cli\/envDetector'\)/);
+    assert.match(doctor, /import\s+\{\s*detectMake\s*\}\s+from\s+'..\/..\/cpp\/cli\/envDetector'/);
+    assert.doesNotMatch(doctor, /require\('..\/..\/cpp\/cli\/envDetector'\)/);
     assert.doesNotMatch(doctor, /check\('toolchain-make',\s*'warning'/);
     assert.doesNotMatch(doctor, /check\('toolchain-make',\s*'warning'/);
     assert.match(doctor, /check\('toolchain-make',\s*'blocked'/);
     assert.match(doctor, /diag\('error',\s*T\('doctorMakeNotFound'\)\)/);
 
-    assert.match(list, /import\s+\{[^}]*detectMake[^}]*\}\s+from\s+'..\/..\/sdk\/cli\/envDetector'/);
-    assert.doesNotMatch(list, /require\('..\/..\/sdk\/cli\/envDetector'\)/);
+    assert.match(list, /import\s+\{[^}]*detectMake[^}]*\}\s+from\s+'..\/..\/cpp\/cli\/envDetector'/);
+    assert.doesNotMatch(list, /require\('..\/..\/cpp\/cli\/envDetector'\)/);
     assert.match(list, /env\.make/);
 });
 
@@ -80,9 +80,9 @@ test('status remote readiness does not report ok=true with an error for default 
     assert.match(remoteForjaBlock, /level:\s*'info'/);
 });
 
-test('status POSIX SDK next action does not suggest unsupported project selection command', () => {
+test('status POSIX C++ next action does not suggest unsupported project selection command', () => {
     const status = source('src/cli/commands/status.ts');
 
-    assert.doesNotMatch(status, /forja use sdk --project <path>/);
+    assert.doesNotMatch(status, /forja use cpp --project <path>/);
     assert.match(status, /forja list env/);
 });

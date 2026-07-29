@@ -5,20 +5,15 @@
 import { requireActiveTarget } from './activeTarget';
 import { readRunState, clearRunState, resolveRunProcessStatus, isProcessRunning } from '../../qt/shared/localState';
 import { executeRemotePlan } from '../../remote/core/plan';
-import { ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
+import { ForjaJsonResult, Diagnostic, RuntimeState, diag, T } from './types';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { getServerById } from '../../core/serverStore';
 import * as cp from 'child_process';
 
-export interface StopResult {
-    ok: boolean;
+export interface StopResult extends ForjaJsonResult {
     action: 'stop';
-    workspace?: string;
-    activeTarget?: ActiveTarget;
     state: 'stopped' | 'not-running' | 'unsupported' | 'running';
     runtime?: RuntimeState;
-    diagnostics?: Diagnostic[];
-    nextAction?: string;
 }
 
 function terminateProcess(pid: number): { ok: boolean; error?: string } {
@@ -54,14 +49,14 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
     }
     const target = targetResult.target;
 
-    if (target.kind === 'sdk') {
+    if (target.kind === 'cpp') {
         return {
-            ok: false,
+            ok: true,
             action: 'stop',
             workspace,
             activeTarget: target,
             state: 'unsupported',
-            diagnostics: [diag('error', T('stopSdkUnsupported'))],
+            diagnostics: [diag('info', T('stopCppUnsupported'))],
             nextAction: 'forja status',
         };
     }
@@ -72,6 +67,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
             target: 'qt',
             action: 'stop',
             json: options.json ?? false,
+            activeProject: target.project,
         });
 
         return {
@@ -79,7 +75,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
             action: 'stop',
             workspace,
             activeTarget: target,
-            state: remoteResult.ok ? 'stopped' : 'not-running',
+            state: remoteResult.ok ? 'stopped' : 'running',
             diagnostics: remoteResult.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
             nextAction: remoteResult.nextAction,
         };
@@ -106,6 +102,20 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
     const result = terminateProcess(pid);
 
     if (!result.ok) {
+        // On Windows, taskkill fails if the process already exited (race condition).
+        // Check if the process is actually still running before reporting failure.
+        if (!isProcessRunning(pid)) {
+            clearRunState(workspace);
+            return {
+                ok: true,
+                action: 'stop',
+                workspace,
+                activeTarget: target,
+                state: 'stopped',
+                runtime: { running: false, pid, executablePath: state?.executablePath, logFile: state?.logFile },
+                nextAction: 'forja run',
+            };
+        }
         return {
             ok: false,
             action: 'stop',
@@ -117,15 +127,24 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
         };
     }
 
-    // Verify process actually exited (SIGTERM is graceful on POSIX)
-    if (process.platform !== 'win32') {
-        let stillRunning = true;
-        for (let i = 0; i < 10; i++) {
-            await delay(200);
-            if (!isProcessRunning(pid)) { stillRunning = false; break; }
-        }
-        if (stillRunning) {
-            // Escalate to SIGKILL
+    // Verify process actually exited
+    let stillRunning = true;
+    for (let i = 0; i < 10; i++) {
+        await delay(200);
+        if (!isProcessRunning(pid)) { stillRunning = false; break; }
+    }
+    if (stillRunning) {
+        if (process.platform === 'win32') {
+            // Windows: taskkill /F may not have taken effect yet — retry once
+            try {
+                cp.execFileSync('taskkill', ['/F', '/T', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true });
+                for (let i = 0; i < 5; i++) {
+                    await delay(200);
+                    if (!isProcessRunning(pid)) { stillRunning = false; break; }
+                }
+            } catch { /* ignore */ }
+        } else {
+            // POSIX: escalate to SIGKILL
             try {
                 process.kill(pid, 'SIGKILL');
                 for (let i = 0; i < 5; i++) {
@@ -133,18 +152,18 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
                     if (!isProcessRunning(pid)) { stillRunning = false; break; }
                 }
             } catch { /* ignore — process may have exited */ }
+        }
 
-            if (stillRunning) {
-                return {
-                    ok: false,
-                    action: 'stop',
-                    workspace,
-                    activeTarget: target,
-                    state: 'running',
-                    diagnostics: [diag('warning', `${T('cmd.stopStillRunningDetail')} (pid ${pid})`)],
-                    nextAction: 'forja doctor',
-                };
-            }
+        if (stillRunning) {
+            return {
+                ok: false,
+                action: 'stop',
+                workspace,
+                activeTarget: target,
+                state: 'running',
+                diagnostics: [diag('warning', `${T('cmd.stopStillRunningDetail')} (pid ${pid})`)],
+                nextAction: 'forja doctor',
+            };
         }
     }
 
@@ -174,10 +193,12 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
             if (t.runAt === 'remote' && result.workspace) {
                 const remote = loadRemoteSettings(result.workspace);
                 const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-                console.log(`→ remote:${server?.name || remote.selectedServer}`);
+                console.log(T('execRemote', [server?.name || remote.selectedServer || '']));
             } else {
-                console.log('→ local');
+                console.log(T('execLocal'));
             }
+            console.log(`  ${T('target')}: ${t.project}`);
+            console.log(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         }
         if (result.state === 'stopped') {
             console.log(`${T('processStopped')} (${T('pidLabel')}: ${result.runtime?.pid ?? 'unknown'})`);
@@ -190,7 +211,9 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
         }
         if (result.diagnostics) {
             for (const d of result.diagnostics) {
-                if (d.level !== 'info') {
+                if (d.level === 'error' || d.level === 'warning') {
+                    console.log(`${T(d.level)}: ${d.message}`);
+                } else if (d.level === 'info' && result.state !== 'unsupported') {
                     console.log(`${T(d.level)}: ${d.message}`);
                 }
             }
@@ -200,4 +223,5 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
             console.log(`  ${result.nextAction}`);
         }
     }
+    if (!result.ok) { process.exitCode = 1; }
 }

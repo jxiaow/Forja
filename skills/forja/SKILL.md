@@ -175,7 +175,7 @@ forja stop --json
 forja build --plan --json
 
 # 同步：先看状态，再预览或单文件同步
-forja remote --json
+forja remote set --server dev --remote-path /remote/app --json
 forja server --json
 forja server add --name dev --host 127.0.0.1 --username dev --json
 forja use sync --server server-1 --remote-path /remote/app --enable --json

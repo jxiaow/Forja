@@ -5,14 +5,14 @@ import * as path from 'path';
 
 test('runtime-facing source and packaging comments use Forja branding', () => {
     const files = [
-        'src/sdk/sdkExtension.ts',
-        'src/sdk/modules/sdkBuilder.ts',
-        'src/sdk/modules/projectScanner.ts',
+        'src/cpp/cppExtension.ts',
+        'src/cpp/modules/cppBuilder.ts',
+        'src/cpp/modules/projectScanner.ts',
         'scripts/build-cli.js',
         'scripts/package-vs.js'
     ];
     const forbidden = [
-        /\bSDK Pilot\b/,
+        /\bC\+\+ Pilot\b/,
         /\bCompilot\b/,
         /\bcompilot\b/
     ];
@@ -52,7 +52,7 @@ test('current examples do not use legacy client project names', () => {
     assert.deepEqual(offenders, []);
 });
 
-test('current SDK CLI design docs use Forja command names', () => {
+test('current C++ CLI design docs use Forja command names', () => {
     const files = [
         'docs/superpowers/specs/2026-05-22-sdk-cli-use-design.md',
         'docs/superpowers/plans/2026-05-22-sdk-cli-use.md'
@@ -119,12 +119,10 @@ test('Qt environment source and docs do not keep legacy Qt Pilot env aliases', (
 });
 
 test('current CLI surfaces do not document removed --dry-run alias', () => {
+    // --dry-run was removed as an alias for --plan in build/run/clean/doctor.
+    // sync still uses --dry-run as its primary flag (not an alias).
     const files = [
-        'src/qt/cli/args.ts',
-        'src/sdk/cli/index.ts',
-        'src/sync/cli.ts',
         'docs/cli-interface-spec.md',
-        'docs/README-cli.md',
         'skills/forja/SKILL.md'
     ];
 
@@ -145,7 +143,7 @@ test('production source does not keep selected legacy compatibility helpers', ()
         'src/core/serverStore.ts',
         'src/sync/resolver.ts',
         'src/sync/cli.ts',
-        'src/sync/syncWatcher.ts',
+        'src/vscode/syncWatcher.ts',
         'src/ui/configPanel/templateData.ts',
         'src/core/syncState.ts'
     ];

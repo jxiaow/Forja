@@ -1,5 +1,7 @@
 # Forja 统一命令 API 文档
 
+> **状态：superseded。** 本文是早期 `setup` 主入口方案的历史记录，不再是当前契约。当前版本只采用 `forja init` 作为初始化入口，且不兼容、不迁移旧命令；请以 [`docs/cli-interface-spec.md`](../../cli-interface-spec.md) 和 [`workroot-redesign`](../workroot-redesign/workroot-redesign.md) 为准。
+
 本文档定义 Forja 收敛后的对外命令契约。它面向用户、脚本、AI 工具和 VSCode 适配层，描述每个公开命令的功能、输入、输出和错误语义。
 
 ## 公开命令集

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { setState, loadPersistedState } from './vscode/qtState';
-import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, updateConfig, getJomPath } from './qt/services/configService';
+import { getWorkspaceRoot, getManualProPath } from './qt/services/configService';
 import { createStatusBar } from './ui/statusBar';
 import { registerPriWatcher } from './qt/project/priWatcher';
 import { ConfigNavTreeProvider } from './ui/configPanel/configNavTree';
@@ -12,35 +12,61 @@ import { generateCppProperties } from './qt/build/configGenerator';
 import { createLogger, initLogger } from './vscode/logger';
 import { detectEnv } from './qt/env/envDetector';
 import { ensureLocalStateDir } from './qt/shared/localState';
-import { registerSyncWatcher } from './sync/syncWatcher';
+import { registerSyncWatcher } from './vscode/syncWatcher';
 import { registerCommands } from './vscode/commands';
 import { initSettingsStore } from './vscode/settingsStore';
 import { registerWorkspaceWatcher } from './vscode/workspaceResolver';
 import { ConfigPageManager } from './ui/configPanel/configPagePanel';
-import { activateSdk } from './sdk/sdkExtension';
+import { activateCpp } from './cpp/cppExtension';
 import { TASK_SOURCE_QT } from './qt/constants';
+import { resolveWorkroot } from './core/workspaceStore';
 
 import { listProjectConfigs } from './core/settingsIO';
 import { listSyncStates } from './core/syncState';
 
 const logger = createLogger('Extension');
 
-/** 启动时后台清理不存在的工作区对应的配置和同步状态 */
-function autoCleanupStaleConfigs(): void {
-    let removed = 0;
+/** 启动时后台检测不存在的工作区对应的配置和同步状态（只记录日志，不自动删除） */
+function auditStaleConfigs(): void {
+    const stale: string[] = [];
     for (const config of listProjectConfigs()) {
         if (!fs.existsSync(config.workspace)) {
-            try { fs.unlinkSync(config.filePath); removed++; } catch { /* ignore */ }
+            stale.push(config.workspace);
         }
     }
     for (const ss of listSyncStates()) {
         if (!fs.existsSync(ss.workspace)) {
-            try { fs.unlinkSync(ss.filePath); removed++; } catch { /* ignore */ }
+            stale.push(ss.workspace);
         }
     }
-    if (removed > 0) {
-        logger.info(`自动清理了 ${removed} 个残留配置`);
+    if (stale.length > 0) {
+        logger.info(`检测到 ${stale.length} 个工作区不可访问的配置（未自动删除）: ${stale.join(', ')}`);
     }
+}
+
+/** 检查当前 workspace folders 是否有匹配的 workroot，未注册时提示用户 */
+function checkWorkrootRegistration(): void {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) { return; }
+
+    let hasMatch = false;
+    try {
+        hasMatch = folders.some(f => resolveWorkroot(f.uri.fsPath) !== null);
+    } catch {
+        // workspaces.json 损坏 — 跳过检查，用户会在命令执行时看到错误
+        return;
+    }
+    if (hasMatch) { return; }
+
+    const action = '运行 forja init';
+    vscode.window.showInformationMessage(
+        '当前工作区尚未初始化 Forja 配置。运行 forja init 以注册工作区并配置构建目标。',
+        action
+    ).then(selected => {
+        if (selected === action) {
+            vscode.commands.executeCommand('forja.init');
+        }
+    });
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -55,8 +81,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     initSettingsStore(context);
     loadPersistedState();
 
-    // 后台清理残留配置（不阻塞启动）
-    setTimeout(() => { try { autoCleanupStaleConfigs(); } catch { /* ignore */ } }, 5000);
+    // 检查 workroot 是否已注册，未注册时提示用户初始化
+    checkWorkrootRegistration();
+
+    // 后台检测残留配置（不阻塞启动，不自动删除）
+    setTimeout(() => { try { auditStaleConfigs(); } catch { /* ignore */ } }, 5000);
 
     createStatusBar(context);
 
@@ -67,6 +96,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // 配置面板管理器
     const pageManager = new ConfigPageManager(context);
+    pageManager.setNavTree(navTree);
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.config.openPage', (pageId?: string) => {
             const { normalizeConfigPageId } = require('./ui/configPanel/pageIds');
@@ -97,8 +127,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     // 启动时优先恢复手动指定项目，其次再走工作区扫描/记忆选择
-    // 必须在 SDK 激活之前完成，否则 SDK 扫描完成时 qtState.currentProject 还没设置，
-    // 会导致混合 workspace 中状态栏错误切到 SDK 模块
+    // 必须在 C++ 激活之前完成，否则 C++ 扫描完成时 qtState.currentProject 还没设置，
+    // 会导致混合 workspace 中状态栏错误切到 C++ 模块
     let project: import('./core/types').ProjectInfo | null = null;
     const manualProPath = getManualProPath();
     if (manualProPath && fs.existsSync(manualProPath)) {
@@ -111,8 +141,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     setState('currentProject', project);
 
-    // SDK 模块激活（异步，不阻塞 Qt 启动；在 Qt 项目恢复之后，避免竞态）
-    activateSdk(context).catch((e: Error) => logger.error(`SDK 模块激活失败: ${e.message}`));
+    // C++ 模块激活（异步，不阻塞 Qt 启动；在 Qt 项目恢复之后，避免竞态）
+    activateCpp(context).catch((e: Error) => logger.error(`C++ 模块激活失败: ${e.message}`));
 
     // 环境检测（一次，全量扫描获取完整候选列表）
     detectEnv().then(async (env) => {
@@ -147,59 +177,4 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {
     // 资源清理由 context.subscriptions 自动处理
-}
-
-/**
- * 检测到环境后，如果配置中对应字段为空（用户未手动设置），自动写入。
- * 多候选时弹 QuickPick 让用户选择；单候选直接写入。
- */
-async function autoWriteDetectedEnv(env: Awaited<ReturnType<typeof detectEnv>>): Promise<void> {
-    // Qt 路径
-    if (!getQtPath() && env.qtCandidates && env.qtCandidates.length > 0) {
-        if (env.qtCandidates.length === 1) {
-            updateConfig('qtPath', env.qtCandidates[0].path);
-            logger.info(`自动写入 qtPath: ${env.qtCandidates[0].path}`);
-        } else {
-            const items = env.qtCandidates.map(c => ({
-                label: `Qt ${c.version} (${c.compiler})`,
-                detail: c.path,
-                path: c.path
-            }));
-            const picked = await vscode.window.showQuickPick(items, {
-                placeHolder: '检测到多个 Qt 版本，请选择一个作为默认'
-            });
-            if (picked) {
-                updateConfig('qtPath', picked.path);
-                logger.info(`用户选择 qtPath: ${picked.path}`);
-            }
-        }
-    }
-
-    // VS 路径
-    if (!getVsDevShellPath() && env.vsCandidates && env.vsCandidates.length > 0) {
-        const { inferVsInstall } = await import('./core/settingsIO');
-        if (env.vsCandidates.length === 1) {
-            updateConfig('vsInstall', inferVsInstall(env.vsCandidates[0].devShellPath));
-            logger.info(`自动写入 vsInstall: ${env.vsCandidates[0].devShellPath}`);
-        } else {
-            const items = env.vsCandidates.map(c => ({
-                label: `VS ${c.version} ${c.edition}`,
-                detail: c.devShellPath,
-                devShellPath: c.devShellPath
-            }));
-            const picked = await vscode.window.showQuickPick(items, {
-                placeHolder: '检测到多个 Visual Studio 版本，请选择一个作为默认'
-            });
-            if (picked) {
-                updateConfig('vsInstall', inferVsInstall(picked.devShellPath));
-                logger.info(`用户选择 vsInstall: ${picked.devShellPath}`);
-            }
-        }
-    }
-
-    // jom 路径
-    if (!getJomPath() && env.jom) {
-        updateConfig('jomPath', env.jom);
-        logger.info(`自动写入 jomPath: ${env.jom}`);
-    }
 }

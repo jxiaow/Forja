@@ -1,5 +1,9 @@
 # 远程命令体系重构设计
 
+> Status date: 2026-07-16
+>
+> **当前契约：`forja init`。** 本文早期版本中的 `forja setup` 入口已废弃，不属于新版本命令规范。新版本不兼容旧命令，不读取旧配置；远程配置在 workroot 初始化后通过 `server`、`remote`、`use execution` 等命令完成。
+
 ## 问题
 
 ### 1. 命令太多太碎
@@ -31,8 +35,8 @@ server add → use sync → use remote → use execution --remote → doctor fix
 
 ## 设计原则
 
-1. **`forja setup` 是主入口**：本地初始化通过 `forja setup`，远程通过 `forja setup remote`
-2. **setup 幂等**：已配置的部分自动跳过，只执行缺失步骤
+1. **`forja init` 是本地入口**：注册 workroot、扫描项目并创建首个 target
+2. **远程配置独立**：不把服务器连接、同步、部署和本地初始化强行捆绑为一个命令
 3. **细粒度命令保留**：`use remote` 等命令保留给脚本和高级用户，简化为 2 层
 4. **本地和远程独立可选**：不是所有项目都需要远程
 5. **自动检测 + 确认**：能推断的自动推断，只问不能推断的
@@ -44,15 +48,17 @@ server add → use sync → use remote → use execution --remote → doctor fix
 
 ### 初始配置
 ```
-forja setup                              # 本地初始化（扫描、检测、自动选择）
-forja setup remote                       # 远程初始化（服务器、同步、部署、init、切换执行模式）
+forja init                               # 本地初始化（注册 workroot、扫描、配置 target）
+forja server add                         # 添加远程服务器（可选）
+forja remote set                         # 设置远程配置（可选）
+forja use execution --remote             # 选择远程执行（可选）
 ```
 
 ### 后续修改
 
-**方式 1：重新运行 `forja setup` / `forja setup remote`（推荐）**
+**方式 1：重新运行 `forja init`（推荐）**
 
-已配置的步骤自动跳过，只执行缺失步骤。
+已配置的 workroot 可重新选择或更新 target；远程配置通过对应的细粒度命令修改。
 
 **方式 2：细粒度命令（脚本/高级用户）**
 ```
@@ -86,7 +92,9 @@ forja doctor fix --remote                # 自动修复（部署 forja 等）
 
 ---
 
-## `forja setup` 详细流程
+## 历史 `forja setup` 方案（不执行）
+
+以下内容保留用于记录早期一键 setup 设想；新版本实现不得依赖本节命令。
 
 ### Phase 1: 自动检测（本地，无网络）
 
@@ -203,7 +211,7 @@ Next:
 ### 删除的
 | 旧命令 | 替代方案 |
 |--------|---------|
-| `forja init` | `forja setup` |
+| `forja init` | 保持为当前本地初始化入口 |
 | `list remote-repos` | 合并到 `list remote` |
 
 ### 简化的（去掉 set/clear，保留核心）
@@ -243,18 +251,10 @@ Next:
 
 ## 验证
 
-1. `forja setup` 完成本地配置（扫描、检测、自动选择）
-2. `forja setup remote` 完成远程配置（服务器、同步、部署、init、切换执行模式）
-3. `forja setup` 重复执行幂等（跳过已配置步骤）
-4. `forja setup remote` 重复执行幂等（已配置步骤显示 skipped）
-5. `forja use remote --server <id>` 切换服务器
-6. `forja use remote --remote-path <path>` 改远程路径
-7. `forja use remote workspace --path /xxx --mode staged` 改 workspace
-8. `forja use remote build-order qt:build sdk:build` 改构建顺序
-9. `forja use remote transfer --server <id> --path <path>` 改部署目标
-10. `forja use remote workspace` 无参数显示当前值
-11. `forja use remote workspace --clear` 清除配置
-12. `forja list remote` 显示完整远程配置（含 repo 映射）
-13. `forja build` 远程构建成功
-14. VSCode `Forja: Setup` 命令可用
-15. 旧的 3 层嵌套命令（set/clear）不再可用
+1. `forja init` 完成本地配置（扫描、检测、保存 target）
+2. `forja server add` 配置远程服务器
+3. `forja remote set` 配置服务器和远程路径
+4. `forja use execution --remote` 切换远程执行
+5. `forja list remote` 显示完整远程配置（含 repo 映射）
+6. `forja build` 远程构建成功
+7. 旧的 `setup` 入口和三层 set/clear 语法不再作为当前契约

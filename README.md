@@ -12,7 +12,7 @@ code --install-extension forja-<version>.vsix
 code --install-extension forja-<version>-dev.vsix
 ```
 
-扩展和 CLI 共享配置存储（`~/.forja/projects/<hash>.json`），在任一侧做的变更在另一侧立即可见。
+扩展和 CLI 共享配置存储（`~/.forja/workspaces/<hash>.json`），在任一侧做的变更在另一侧立即可见。
 
 ## 快速开始
 
@@ -82,13 +82,10 @@ Forja 支持通过 SSH 在远程服务器上构建和运行：
 forja server add --name dev --host 192.168.1.10 --username dev
 
 # 2. 配置远程执行目标
-forja remote --server dev --remote-path /home/dev/workspace
+forja remote set --server dev --remote-path /home/dev/workspace
 
-# 3. 远程初始化
-forja init --remote
-
-# 4. 切换执行位置
-forja use execution --remote
+# 3. 切换执行位置
+forja use target --run-at remote
 ```
 
 切换后，状态栏 Build/Run 自动走远程路径。远程诊断：`forja doctor --remote`。
@@ -120,7 +117,7 @@ forja doctor fix --remote   # 自动修复：部署/更新远程 Forja
 
 | 文件 | 内容 |
 |------|------|
-| `~/.forja/projects/<hash>.json` | 当前 workspace 的 Qt/SDK/sync/remote 配置 |
+| `~/.forja/workspaces/<hash>.json` | 当前 workspace 的 Qt/C++/sync/remote 配置 |
 | `~/.forja/servers.json` | 服务器列表 |
 | `.forja/sync-state.json` | 同步运行状态 |
 

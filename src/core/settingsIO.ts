@@ -4,7 +4,7 @@
  * 配置存储在用户数据目录 ~/.forja/projects/ 下，
  * 文件名为 workspace 路径的 hash，内容平铺不加前缀分组。
  *
- * 每个 workspace 目录对应一个配置文件，只存一种配置（qt 或 sdk 或 sync）。
+ * 每个 workspace 目录对应一个配置文件，只存一种配置（qt 或 cpp 或 sync）。
  * 配置类型通过文件内的 `type` 字段区分。
  */
 import * as fs from 'fs';
@@ -38,7 +38,7 @@ export interface QtSettings {
     suppressedWarnings?: string[];
 }
 
-export interface SdkSettings {
+export interface CppSettings {
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';
     vsInstall: string;
@@ -52,7 +52,7 @@ export interface SyncSettings {
 }
 
 export interface RemoteBuildOrderItem {
-    target: 'qt' | 'sdk';
+    target: 'qt' | 'cpp';
     action: 'build' | 'rebuild' | 'clean' | 'qmake';
     args: string[];
 }
@@ -94,7 +94,7 @@ export interface RemoteSettings {
 
 export interface ForjaSettings {
     qt: QtSettings;
-    sdk: SdkSettings;
+    cpp: CppSettings;
     sync: SyncSettings;
     remote: RemoteSettings;
 }
@@ -123,7 +123,7 @@ export const DEFAULT_QT: Readonly<QtSettings> = {
     qmakeReminderEnabled: true
 };
 
-export const DEFAULT_SDK: Readonly<SdkSettings> = {
+export const DEFAULT_CPP: Readonly<CppSettings> = {
     mode: 'debug',
     arch: 'x86',
     vsInstall: '',
@@ -149,7 +149,7 @@ export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
 
 export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
     qt: DEFAULT_QT,
-    sdk: DEFAULT_SDK,
+    cpp: DEFAULT_CPP,
     sync: DEFAULT_SYNC,
     remote: DEFAULT_REMOTE
 };
@@ -199,7 +199,7 @@ export function saveGlobalConfig(config: Partial<GlobalConfig>): void {
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
-export type ConfigType = 'qt' | 'sdk' | 'sync' | 'remote' | 'activeTarget' | 'targetToolchains';
+export type ConfigType = 'qt' | 'cpp' | 'sync' | 'remote' | 'activeTarget' | 'targetToolchains';
 
 export function projectConfigPath(workspace: string, type: ConfigType): string {
     const normalized = workspace.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
@@ -235,7 +235,7 @@ function isDescendantWorkspace(parentWorkspace: string, childWorkspace: string):
     return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
-function resolveUniqueDescendantConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string | null {
+function resolveUniqueDescendantConfigPath(workspace: string, type: 'qt' | 'cpp' | 'sync'): string | null {
     const matches = listProjectConfigs()
         .filter(config => config.type === type && isDescendantWorkspace(workspace, config.workspace));
     return matches.length === 1 ? matches[0].filePath : null;
@@ -255,55 +255,32 @@ export function clearCorruptedConfigs(): void {
     _corruptedConfigs.length = 0;
 }
 
-// ── Qt 配置读写 ──
+// ── Qt 配置读写（已废弃 — workroot 模型下由 workspaceStore 替代） ──
+// loadQtSettings / saveQtSettings 已移除，无生产代码引用。
+// 旧配置 ~/.forja/projects/<hash>.json 不再被读取。
 
-export function loadQtSettings(workspace: string): QtSettings {
-    const filePath = resolveConfigPath(workspace, 'qt');
+// ── C++ 配置读写 ──
+
+export function loadCppSettings(workspace: string): CppSettings {
+    const filePath = resolveConfigPath(workspace, 'cpp');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            return sanitizeQt(raw);
+            return sanitizeCpp(raw);
         }
     } catch (e) {
         if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
-        warnSettingsLoadFailure('qt', filePath, e);
+        warnSettingsLoadFailure('cpp', filePath, e);
     }
-    return { ...DEFAULT_QT };
+    return { ...DEFAULT_CPP };
 }
 
-export function saveQtSettings(workspace: string, settings: QtSettings): void {
-    const filePath = projectConfigPath(workspace, 'qt');
+export function saveCppSettings(workspace: string, settings: CppSettings): void {
+    const filePath = projectConfigPath(workspace, 'cpp');
     _ensureDir(filePath);
     const data: Record<string, unknown> = {
         workspace,
-        type: 'qt',
-        ...settings
-    };
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
-}
-
-// ── SDK 配置读写 ──
-
-export function loadSdkSettings(workspace: string): SdkSettings {
-    const filePath = resolveConfigPath(workspace, 'sdk');
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            return sanitizeSdk(raw);
-        }
-    } catch (e) {
-        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
-        warnSettingsLoadFailure('sdk', filePath, e);
-    }
-    return { ...DEFAULT_SDK };
-}
-
-export function saveSdkSettings(workspace: string, settings: SdkSettings): void {
-    const filePath = projectConfigPath(workspace, 'sdk');
-    _ensureDir(filePath);
-    const data: Record<string, unknown> = {
-        workspace,
-        type: 'sdk',
+        type: 'cpp',
         ...settings
     };
     fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
@@ -436,49 +413,8 @@ function isBool(v: unknown): v is boolean { return typeof v === 'boolean'; }
 function isStringArray(v: unknown): v is string[] { return Array.isArray(v) && v.every(i => typeof i === 'string'); }
 function isNumber(v: unknown): v is number { return typeof v === 'number'; }
 
-function sanitizeQt(raw: Record<string, unknown>): QtSettings {
-    const d = DEFAULT_QT;
-
-    let pinnedProject: QtSettings['pinnedProject'] = null;
-    if (raw.pinnedProject && typeof raw.pinnedProject === 'object') {
-        const p = raw.pinnedProject as Record<string, unknown>;
-        if (isString(p.root) && isString(p.relative)) {
-            pinnedProject = { root: p.root, relative: p.relative };
-        }
-    }
-
-    let customCommands: QtSettings['customCommands'] = [];
-    if (Array.isArray(raw.customCommands)) {
-        customCommands = raw.customCommands.filter(
-            (c: unknown) => !!c && typeof c === 'object' && isString((c as Record<string, unknown>).name) && isString((c as Record<string, unknown>).command)
-        ) as QtSettings['customCommands'];
-    }
-
-    return {
-        mode: (raw.mode === 'debug' || raw.mode === 'release' || raw.mode === '') ? raw.mode : d.mode,
-        arch: (raw.arch === 'x86' || raw.arch === 'x64' || raw.arch === '') ? raw.arch : d.arch,
-        vsInstall: isString(raw.vsInstall) ? raw.vsInstall : d.vsInstall,
-        qtPath: isString(raw.qtPath) ? raw.qtPath : d.qtPath,
-        qtVersion: isString(raw.qtVersion) ? raw.qtVersion : d.qtVersion,
-        jomPath: isString(raw.jomPath) ? raw.jomPath : d.jomPath,
-        pinnedProject,
-        target: isString(raw.target) ? raw.target : d.target,
-        qmakeArgs: isString(raw.qmakeArgs) ? raw.qmakeArgs : d.qmakeArgs,
-        cStandard: isString(raw.cStandard) ? raw.cStandard : d.cStandard,
-        cppStandard: isString(raw.cppStandard) ? raw.cppStandard : d.cppStandard,
-        designerPath: isString(raw.designerPath) ? raw.designerPath : d.designerPath,
-        qtSourcePath: isString(raw.qtSourcePath) ? raw.qtSourcePath : d.qtSourcePath,
-        manualProPath: isString(raw.manualProPath) ? raw.manualProPath : d.manualProPath,
-        rccProjectPath: isString(raw.rccProjectPath) ? raw.rccProjectPath : d.rccProjectPath,
-        scanExcludeDirs: isStringArray(raw.scanExcludeDirs) ? raw.scanExcludeDirs : d.scanExcludeDirs,
-        customCommands,
-        fileSyncPromptEnabled: isBool(raw.fileSyncPromptEnabled) ? raw.fileSyncPromptEnabled : d.fileSyncPromptEnabled,
-        qmakeReminderEnabled: isBool(raw.qmakeReminderEnabled) ? raw.qmakeReminderEnabled : d.qmakeReminderEnabled,
-        suppressedWarnings: isStringArray(raw.suppressedWarnings) ? raw.suppressedWarnings : undefined
-    };
-}
-function sanitizeSdk(raw: Record<string, unknown>): SdkSettings {
-    const d = DEFAULT_SDK;
+function sanitizeCpp(raw: Record<string, unknown>): CppSettings {
+    const d = DEFAULT_CPP;
     return {
         mode: (raw.mode === 'debug' || raw.mode === 'release') ? raw.mode : d.mode,
         arch: (raw.arch === 'x86' || raw.arch === 'x64') ? raw.arch : d.arch,
@@ -504,7 +440,7 @@ function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
             const entry = item as Record<string, unknown>;
             const target = entry.target;
             const action = entry.action;
-            if ((target !== 'qt' && target !== 'sdk') || !isRemoteBuildOrderAction(target, action)) { continue; }
+            if ((target !== 'qt' && target !== 'cpp') || !isRemoteBuildOrderAction(target, action)) { continue; }
             buildOrder.push({
                 target,
                 action,
@@ -575,7 +511,7 @@ function sanitizeRemoteRepoAssets(raw: unknown): RemoteRepoAssetSettings[] {
     return assets;
 }
 
-function isRemoteBuildOrderAction(target: 'qt' | 'sdk', action: unknown): action is RemoteBuildOrderItem['action'] {
+function isRemoteBuildOrderAction(target: 'qt' | 'cpp', action: unknown): action is RemoteBuildOrderItem['action'] {
     if (target === 'qt') {
         return action === 'build' || action === 'clean' || action === 'qmake';
     }

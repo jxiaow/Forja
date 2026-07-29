@@ -29,7 +29,7 @@ function resolveRemoteIgnore(workspace: string): string[] {
 
 export async function executeRemoteBuild(
     workspace: string,
-    kind: 'qt' | 'sdk',
+    kind: 'qt' | 'cpp',
     remoteAction: 'build' | 'rebuild' | 'clean' | 'qmake',
 ): Promise<void> {
     await vscode.window.withProgress({
@@ -62,7 +62,7 @@ export async function executeRemoteBuild(
 
 export async function executeRemoteActionWithProgress(
     workspace: string,
-    kind: 'qt' | 'sdk',
+    kind: 'qt' | 'cpp',
     action: 'build' | 'rebuild' | 'clean' | 'run' | 'stop' | 'status',
     label: string,
     args?: string[],
@@ -98,7 +98,7 @@ export async function executeRemoteActionWithProgress(
 export function startForegroundRemoteRun(
     context: vscode.ExtensionContext,
     workspace: string,
-    kind: 'qt' | 'sdk' = 'qt',
+    kind: 'qt' | 'cpp' = 'qt',
 ): void {
     let activeChild: { kill(signal?: NodeJS.Signals): boolean } | null = null;
     let closed = false;
@@ -128,7 +128,7 @@ export function startForegroundRemoteRun(
 
 async function runForegroundRemote(
     workspace: string,
-    kind: 'qt' | 'sdk',
+    kind: 'qt' | 'cpp',
     terminal: { write(text: string): void; onSpawn(child: { kill(signal?: NodeJS.Signals): boolean }): void }
 ): Promise<number> {
     terminal.write('Forja Remote Run\r\n');
@@ -203,9 +203,14 @@ function publishProblemsIfApplicable(
     result: { ok: boolean; stdout?: string; stderr?: string; exitCode?: number; actionRemotePath?: string }
 ): void {
     if (!remoteDiagnostics) { return; }
+    // Try to parse structured result from stdout (remote forja outputs JSON)
+    let parsedResult: unknown = null;
+    if (result.stdout) {
+        try { parsedResult = JSON.parse(result.stdout); } catch { /* not JSON — stdout line parsing still works */ }
+    }
     const source = {
         remote: {
-            result: null,
+            result: parsedResult,
             stdout: result.stdout || '',
             stderr: result.stderr || '',
         },

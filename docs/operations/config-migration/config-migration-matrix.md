@@ -1,5 +1,7 @@
 # Verification Matrix
 
+> **状态：superseded。** 本矩阵不再作为当前版本验收依据。当前验收使用 `docs/operations/workroot-redesign/workroot-redesign-board.md` 中 WS-00~WS-10 的新配置契约。
+
 > Status date: 2026-05-20
 
 ## Verification Levels
@@ -17,7 +19,7 @@
 |--------------|-------|-------|------------------|--------|-----------------|
 | (pending) | | | | | |
 
-## Current Verification Conclusion
+## Historical Verification Conclusion
 
-- Strongest verification so far: settingsIO 稀疏写入已通过 compile + test
-- Biggest gap: 新路径方案尚未实施，无验证记录
+- 本矩阵只记录旧 `projects/` 方案，不代表新 workspace store 已完成。
+- 新版本不读取旧配置，因此不再补做旧格式迁移验证。

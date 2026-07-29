@@ -11,19 +11,20 @@
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { loadWorkspacesRegistry, normalizePath, workspacesRegistryPath } from '../core/workspaceStore';
+import { loadWorkspacesRegistry, normalizePath } from '../core/workspaceStore';
 import { forjaConfigDir } from '../core/settingsIO';
 
-export type ModuleType = 'qt' | 'sdk' | 'sync';
+export type ModuleType = 'qt' | 'cpp' | 'sync';
 
 let _resolvedQt: string | null = null;
-let _resolvedSdk: string | null = null;
+let _resolvedCpp: string | null = null;
 let _resolvedSync: string | null = null;
 let _watcherRegistered = false;
+let _activeFolderIndex: number = -1;
 
 function _resetResolvedRoots(): void {
     _resolvedQt = null;
-    _resolvedSdk = null;
+    _resolvedCpp = null;
     _resolvedSync = null;
 }
 
@@ -32,11 +33,29 @@ export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void
     if (_watcherRegistered) { return; }
     _watcherRegistered = true;
     context.subscriptions.push(
-        vscode.workspace.onDidChangeWorkspaceFolders(() => _resetResolvedRoots())
+        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            _resetResolvedRoots();
+            _activeFolderIndex = -1;
+        })
+    );
+
+    // 监听活跃编辑器变化，更新 active folder
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(editor => {
+            if (!editor) { return; }
+            const folders = vscode.workspace.workspaceFolders;
+            if (!folders || folders.length <= 1) { return; }
+            const fileUri = editor.document.uri;
+            if (fileUri.scheme !== 'file') { return; }
+            const idx = vscode.workspace.getWorkspaceFolder(fileUri);
+            if (idx && idx.index !== _activeFolderIndex) {
+                _activeFolderIndex = idx.index;
+                _resetResolvedRoots();
+            }
+        })
     );
 
     // 监听 workspaces.json 变化，重置缓存
-    const registryPath = workspacesRegistryPath();
     const configDir = forjaConfigDir();
     if (!fs.existsSync(configDir)) {
         fs.mkdirSync(configDir, { recursive: true });
@@ -55,7 +74,7 @@ export function registerWorkspaceWatcher(context: vscode.ExtensionContext): void
  * @param module 模块类型（保留参数以兼容调用方，实际不再区分）
  */
 export function resolveProjectRoot(module: ModuleType = 'qt'): string {
-    if (module === 'sdk') { return _resolveFromRegistry('sdk'); }
+    if (module === 'cpp') { return _resolveFromRegistry('cpp'); }
     if (module === 'sync') { return _resolveFromRegistry('sync'); }
     return _resolveFromRegistry('qt');
 }
@@ -65,9 +84,9 @@ export function setProjectRoot(root: string): void {
     _resolvedQt = root;
 }
 
-/** 当 SDK 项目变化后，更新缓存 */
-export function setSdkProjectRoot(root: string): void {
-    _resolvedSdk = root;
+/** 当 C++ 项目变化后，更新缓存 */
+export function setCppProjectRoot(root: string): void {
+    _resolvedCpp = root;
 }
 
 /** 重置缓存（用于测试或 workspace 变化时） */
@@ -78,18 +97,35 @@ export function resetProjectRoot(): void {
 // ── 从 workspaces.json 注册表匹配 ──
 
 function _resolveFromRegistry(_module: ModuleType): string {
-    const cacheKey = _module === 'sdk' ? '_resolvedSdk' : _module === 'sync' ? '_resolvedSync' : '_resolvedQt';
-    const cached = cacheKey === '_resolvedSdk' ? _resolvedSdk : cacheKey === '_resolvedSync' ? _resolvedSync : _resolvedQt;
+    const cacheKey = _module === 'cpp' ? '_resolvedCpp' : _module === 'sync' ? '_resolvedSync' : '_resolvedQt';
+    const cached = cacheKey === '_resolvedCpp' ? _resolvedCpp : cacheKey === '_resolvedSync' ? _resolvedSync : _resolvedQt;
     if (cached) { return cached; }
 
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) { return ''; }
 
-    const registry = loadWorkspacesRegistry();
+    let registry;
+    try {
+        registry = loadWorkspacesRegistry();
+    } catch {
+        // workspaces.json 损坏 — 返回空，命令执行时会报错
+        return '';
+    }
     if (registry.workroots.length === 0) { return ''; }
 
+    // 如果有 active folder（multi-root 场景下跟随活跃编辑器），优先尝试该 folder
+    const orderedFolders: vscode.WorkspaceFolder[] = [];
+    if (_activeFolderIndex >= 0 && _activeFolderIndex < folders.length) {
+        orderedFolders.push(folders[_activeFolderIndex]);
+        for (let i = 0; i < folders.length; i++) {
+            if (i !== _activeFolderIndex) { orderedFolders.push(folders[i]); }
+        }
+    } else {
+        orderedFolders.push(...folders);
+    }
+
     // 对每个 folder，查找匹配的 workroot（最深前缀匹配）
-    for (const folder of folders) {
+    for (const folder of orderedFolders) {
         const folderNorm = normalizePath(folder.uri.fsPath);
         let bestMatch: string | null = null;
         let bestLen = -1;
@@ -107,7 +143,7 @@ function _resolveFromRegistry(_module: ModuleType): string {
         if (bestMatch) {
             // 返回原始 folder 路径（保持大小写）
             const result = folder.uri.fsPath;
-            if (cacheKey === '_resolvedSdk') { _resolvedSdk = result; }
+            if (cacheKey === '_resolvedCpp') { _resolvedCpp = result; }
             else if (cacheKey === '_resolvedSync') { _resolvedSync = result; }
             else { _resolvedQt = result; }
             return result;

@@ -49,8 +49,9 @@ export async function executeRemoteBranchSync(options: ExecuteRemoteBranchSyncOp
         }
 
         const repoDiagnostics: RemoteDiagnostic[] = [];
-        const repoDir = resolvedRemoteRepoPath(options.remotePath, repo.name, repo.remotePath);
-        const overlay = await options.runner.run(buildOverlayRestoreCommand(options.targetId, repo.name, repoDir), 30000);
+        const effectiveRemoteName = repo.remoteName || repo.name;
+        const repoDir = resolvedRemoteRepoPath(options.remotePath, effectiveRemoteName, repo.remotePath);
+        const overlay = await options.runner.run(buildOverlayRestoreCommand(options.targetId, effectiveRemoteName, repoDir), 30000);
         if (overlay.exitCode !== 0) {
             const error = { level: 'error' as const, message: trim(overlay.stderr) || repo.name + ' overlay restore 失败' };
             diagnostics.push(error);

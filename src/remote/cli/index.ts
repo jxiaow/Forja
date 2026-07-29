@@ -392,7 +392,7 @@ function parseRemoteArgs(argv: string[]): RemoteCliOptions {
     };
 
     let start = first === argv[0] ? 1 : 0;
-    if (first === 'qt' || first === 'sdk') {
+    if (first === 'qt' || first === 'cpp') {
         const remoteAction = argv[1];
         if (remoteAction === 'restore' || remoteAction === 'reset' || remoteAction === 'clean-untracked') {
             options.action = remoteAction === 'clean-untracked' ? 'cleanUntracked' : remoteAction;
@@ -678,7 +678,7 @@ function remoteSupportMessage(target: RemoteBridgeTarget): string {
     if (target === 'qt') {
         return 'remote qt 仅支持 status/init/use/build/clean/qmake/run/stop/ps/restore/reset/clean-untracked';
     }
-    return 'remote sdk 仅支持 status/init/use/build/rebuild/clean/restore/reset/clean-untracked';
+    return 'remote cpp 仅支持 status/init/use/build/rebuild/clean/restore/reset/clean-untracked';
 }
 
 function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | 'reset' | 'cleanUntracked' | 'preparedAction' | 'transfer', diagnostics: RemoteDiagnostic[], nextAction?: string): Record<string, unknown> {
@@ -688,13 +688,13 @@ function blockedResult(action: 'bootstrap' | 'unlock' | 'bridge' | 'restore' | '
 function parseBuildOrderItems(items: string[]): RemoteBuildOrderItem[] {
     return items.map(item => {
         const [target, action, extra] = item.split(':');
-        if (extra !== undefined || (target !== 'qt' && target !== 'sdk')) {
+        if (extra !== undefined || (target !== 'qt' && target !== 'cpp')) {
             throw new Error('非法 build-order 项: ' + item);
         }
         if (target === 'qt' && (action === 'build' || action === 'clean' || action === 'qmake')) {
             return { target, action, args: [] };
         }
-        if (target === 'sdk' && (action === 'build' || action === 'rebuild' || action === 'clean')) {
+        if (target === 'cpp' && (action === 'build' || action === 'rebuild' || action === 'clean')) {
             return { target, action, args: [] };
         }
         throw new Error('非法 build-order 项: ' + item);
@@ -924,8 +924,8 @@ function helpText(): string {
         '  forja remote qt status|init|use|build|clean|qmake|run|stop|ps [--json]',
         '  forja remote qt restore|reset --repo <repo> -- <paths...> [--json]',
         '  forja remote qt clean-untracked --repo <repo> [--recursive] -- <paths...> [--json]',
-        '  forja remote sdk status|init|use|build|rebuild|clean [--json]',
-        '  forja remote sdk restore|reset --repo <repo> -- <paths...> [--json]',
-        '  forja remote sdk clean-untracked --repo <repo> [--recursive] -- <paths...> [--json]'
+        '  forja remote cpp status|init|use|build|rebuild|clean [--json]',
+        '  forja remote cpp restore|reset --repo <repo> -- <paths...> [--json]',
+        '  forja remote cpp clean-untracked --repo <repo> [--recursive] -- <paths...> [--json]'
     ].join('\n');
 }

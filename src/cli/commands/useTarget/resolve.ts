@@ -18,13 +18,17 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
     diagnostics?: Array<{ level: 'info' | 'warning' | 'error'; message: string }>;
 }> {
     const diagnostics: Array<{ level: 'info' | 'warning' | 'error'; message: string }> = [];
-    const hasExisting = !!ctx.existingTarget || !!ctx.existingQt.pinnedProject || !!ctx.existingSdk.pinnedProject;
+    const hasExisting = !!ctx.existingTarget || !!ctx.existingQt.pinnedProject || !!ctx.existingCpp.pinnedProject;
     const needTarget = !hasExisting || !!options.project || options.reset;
 
     // ── Resolve target ──
     const resolvedTarget = await resolveTarget(ctx, options, needTarget);
     if (resolvedTarget.questions) return { questions: resolvedTarget.questions, diagnostics };
     if (!resolvedTarget.value) {
+        if (resolvedTarget.notFound && options.project) {
+            diagnostics.push({ level: 'error', message: `${T('use.projectNotFound')}: ${options.project}` });
+            return { diagnostics };
+        }
         if (ctx.candidates.length > 1 && needTarget) {
             return { ambiguous: true, diagnostics: ambiguousDiag(ctx) };
         }
@@ -108,12 +112,12 @@ interface ResolveResult<T> {
     questions?: Question[];
 }
 
-async function resolveTarget(ctx: DetectContext, options: ResolveOptions, needTarget: boolean): Promise<ResolveResult<typeof ctx.candidates[0]>> {
+async function resolveTarget(ctx: DetectContext, options: ResolveOptions, needTarget: boolean): Promise<ResolveResult<typeof ctx.candidates[0]> & { notFound?: boolean }> {
     // Flag
     if (options.project) {
         const match = ctx.candidates.find(c => c.project === options.project) || ctx.candidates.find(c => c.label === options.project);
         if (match) return { value: match };
-        return { value: undefined }; // caller handles not-found
+        return { value: undefined, notFound: true };
     }
 
     // Answers
@@ -124,7 +128,7 @@ async function resolveTarget(ctx: DetectContext, options: ResolveOptions, needTa
 
     // Existing config (not reset)
     if (!needTarget) {
-        const existingProject = ctx.existingTarget?.project || ctx.existingQt.pinnedProject?.relative || ctx.existingSdk.pinnedProject;
+        const existingProject = ctx.existingTarget?.project || ctx.existingQt.pinnedProject?.relative || ctx.existingCpp.pinnedProject;
         if (existingProject) {
             const match = ctx.candidates.find(c => c.project === existingProject);
             if (match) {
@@ -217,7 +221,7 @@ async function resolveVsPath(ctx: DetectContext, options: ResolveOptions, stored
     const candidates = candidatesOverride ?? ctx.toolchain.vsCandidates;
     if (options.vsInstall) return { value: options.vsInstall };
     if (options.answers?.vsInstall) return { value: options.answers.vsInstall };
-    if (!options.reset && (ctx.existingQt.vsInstall || ctx.existingSdk.vsInstall)) return { value: ctx.existingQt.vsInstall || ctx.existingSdk.vsInstall };
+    if (!options.reset && (ctx.existingQt.vsInstall || ctx.existingCpp.vsInstall)) return { value: ctx.existingQt.vsInstall || ctx.existingCpp.vsInstall };
     if (stored?.vsInstall) return { value: stored.vsInstall };
     if (candidates.length === 1 && !forceInteractive) return { value: candidates[0].installPath };
     if (options.interactive && candidates.length >= 1) {
@@ -277,10 +281,10 @@ async function resolveArch(ctx: DetectContext, options: ResolveOptions): Promise
 // ── Helpers ──
 
 function ambiguousDiag(ctx: DetectContext): Array<{ level: 'info' | 'warning' | 'error'; message: string }> {
-    if (ctx.qtCandidates.length > 0 && ctx.sdkCandidates.length > 0) {
+    if (ctx.qtCandidates.length > 0 && ctx.cppCandidates.length > 0) {
         return [{
             level: 'info',
-            message: `${T('init.foundQtSdkNotAutoSelecting')}: ${ctx.qtCandidates.length} Qt (${ctx.qtCandidates.map(c => c.label).join(', ')}), ${ctx.sdkCandidates.length} SDK (${ctx.sdkCandidates.map(c => c.label).join(', ')})`,
+            message: `${T('init.foundQtCppNotAutoSelecting')}: ${ctx.qtCandidates.length} Qt (${ctx.qtCandidates.map(c => c.label).join(', ')}), ${ctx.cppCandidates.length} C++ (${ctx.cppCandidates.map(c => c.label).join(', ')})`,
         }];
     }
     return [{

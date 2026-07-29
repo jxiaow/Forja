@@ -74,7 +74,7 @@ function _parseMakefileVar(makefilePath: string, varName: string): string | null
     try {
         if (!fs.existsSync(makefilePath)) { return null; }
         const content = fs.readFileSync(makefilePath, 'utf-8');
-        const match = content.match(new RegExp(`^${varName}\\s*=\\s*(.+)$`, 'm'));
+        const match = content.match(new RegExp(`^${varName}[ \\t]+=[ \\t]*(.+)$`, 'm'));
         if (!match) { return null; }
         return match[1].replace(/#.*$/, '').trim();
     } catch (e) {
@@ -241,7 +241,7 @@ export function generateCppProperties(project: ProjectInfo): void {
         };
     } else {
         configuration = {
-            name: 'Qt Linux',
+            name: `Qt ${arch === 'x64' ? 'x64' : 'x86'}`,
             includePath,
             defines,
             compilerPath: '/usr/bin/g++',
@@ -268,7 +268,7 @@ export function generateCppProperties(project: ProjectInfo): void {
  * @param slnPath .sln 文件的绝对路径
  * @param wsRoot workspace 根目录
  */
-export function generateSdkCppProperties(slnPath: string, wsRoot: string): void {
+export function generateCppPropertiesFromSln(slnPath: string, wsRoot: string): void {
     const slnDir = path.dirname(slnPath);
     const isWin = process.platform === 'win32';
     const state = getState();
@@ -437,9 +437,13 @@ export function updateCppPropertiesStandard(cStandard: string, cppStandard: stri
         const props = JSON.parse(content);
 
         if (props.configurations && props.configurations.length > 0) {
-            props.configurations[0].cStandard = cStandard;
-            props.configurations[0].cppStandard = cppStandard;
-            fs.writeFileSync(propsPath, JSON.stringify(props, null, 4), 'utf-8');
+            const configName = process.platform === 'win32' ? `Qt ${getState().arch === 'x64' ? 'x64' : 'Win32'}` : `Qt ${getState().arch}`;
+            const config = props.configurations.find((c: Record<string, unknown>) => c.name === configName) || props.configurations[0];
+            if (config) {
+                config.cStandard = cStandard;
+                config.cppStandard = cppStandard;
+                fs.writeFileSync(propsPath, JSON.stringify(props, null, 4), 'utf-8');
+            }
         }
     } catch (e) {
         log(`[configGenerator] 更新 c_cpp_properties.json 失败: ${e instanceof Error ? e.message : e}`);

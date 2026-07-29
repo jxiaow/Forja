@@ -22,7 +22,9 @@ async function main(argv: string[]): Promise<void> {
 
     // Load locale before help/version so translations work
     const globalConfig = loadGlobalConfig();
-    const locale = resolveLocale(undefined, globalConfig.lang);
+    const langIdx = argv.indexOf('--lang');
+    const langValue = langIdx >= 0 && argv[langIdx + 1] && !argv[langIdx + 1].startsWith('--') ? argv[langIdx + 1] : undefined;
+    const locale = resolveLocale(langValue, globalConfig.lang);
     setGlobalLocale(locale);
 
     const subcommand = argv[0];

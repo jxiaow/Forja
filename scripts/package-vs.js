@@ -46,6 +46,8 @@ fs.mkdirSync(distVs, { recursive: true });
 // Swap README: use VS-specific README for vsce packaging
 let swapped = false;
 let patchedPkg = false;
+const origDisplayName = pkg.displayName;
+const origVersion = pkg.version;
 try {
     if (fs.existsSync(vsReadme)) {
         fs.copyFileSync(rootReadme, backupReadme);
@@ -71,10 +73,10 @@ try {
         fs.copyFileSync(backupReadme, rootReadme);
         fs.unlinkSync(backupReadme);
     }
-    // Restore original package.json
+    // Restore original package.json from saved originals
     if (patchedPkg) {
-        pkg.displayName = pkg.displayName.replace(/ \(Dev\)$/, '');
-        pkg.version = version;
+        pkg.displayName = origDisplayName;
+        pkg.version = origVersion;
         fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
     }
 }

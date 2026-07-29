@@ -4,9 +4,9 @@
 import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSummary, Diagnostic, Locale, T } from './types';
 import { collectTargetCandidates } from './candidates';
 import { listServers, getServerDetail } from './server';
-import { loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
+import { loadRemoteSettings } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget as getActiveTargetFromStore } from '../../core/workspaceStore';
-import { detectMake } from '../../sdk/cli/envDetector';
+import { detectMake } from '../../cpp/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 import { setSilent } from '../../core/loggerBase';
 
@@ -22,7 +22,7 @@ export type EnvSubCategory = 'qt' | 'vs' | 'jom' | 'make';
 export interface SavedTargetInfo {
     id: string;
     name: string;
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     mode: string;
     arch: string;
@@ -39,7 +39,7 @@ export interface ListResult extends ForjaJsonResult {
     envSubCategory?: EnvSubCategory;
 }
 
-export function formatListText(result: ListResult, locale: Locale): string {
+export function formatListText(result: ListResult, _locale: Locale): string {
     const lines: string[] = [];
 
     if (!result.ok) {
@@ -59,17 +59,19 @@ export function formatListText(result: ListResult, locale: Locale): string {
     switch (result.category) {
         case 'targets': {
             lines.push(T('targets'));
-            if (result.workspace) { lines.push(`${T('workspace')}${result.workspace}`); }
+            if (result.workspace) { lines.push(`${T('workspace')}: ${result.workspace}`); }
 
             // Show saved targets first (from workspaceStore)
             const saved = result.savedTargets || [];
+            const hasDiscovered = (result.targets || []).length > 0;
             if (saved.length > 0) {
-                lines.push(`  ${T('lst.savedTargets')}:`);
+                // Only show section header when both sections are present
+                if (hasDiscovered) { lines.push(`  ${T('lst.savedTargets')}:`); }
                 for (const t of saved) {
                     const marker = t.active ? '* ' : '  ';
-                    lines.push(`  ${marker}${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}  ${t.project}`);
+                    lines.push(`  ${marker}${t.name} — ${t.mode}|${t.arch} — ${t.project}`);
                 }
-                lines.push('');
+                if (hasDiscovered) { lines.push(''); }
             }
 
             // Show discovered targets
@@ -101,20 +103,20 @@ export function formatListText(result: ListResult, locale: Locale): string {
                     lines.push(`  ${T('none')}`);
                 } else {
                     for (const s of servers) {
-                        const sel = s.selected ? ' *' : '';
-                        lines.push(`  ${s.id}  ${s.name}  ${s.username}@${s.host}:${s.port}  auth=${s.authMode}${sel}`);
+                        const sel = s.selected ? '* ' : '  ';
+                        lines.push(`  ${sel}${s.id}  ${s.name}  ${s.username}@${s.host}:${s.port}  auth=${s.authMode}`);
                     }
                 }
             } else if (servers) {
                 const s = servers as ServerDetail;
-                lines.push(`  ${T('serverIdLabel')}${s.id}`);
-                lines.push(`  ${T('serverNameLabel')}${s.name}`);
-                lines.push(`  ${T('serverHostLabel')}${s.host}`);
-                lines.push(`  ${T('serverPortLabel')}${s.port}`);
-                lines.push(`  ${T('serverUsernameLabel')}${s.username}`);
-                lines.push(`  ${T('serverAuthLabel')}${s.authMode}`);
-                if (s.privateKeyPath) { lines.push(`  ${T('key')}${s.privateKeyPath}`); }
-                if (s.strictHostKeyChecking !== undefined) { lines.push(`  ${T('strictHostKey')}${s.strictHostKeyChecking}`); }
+                lines.push(`  ${T('serverIdLabel')}: ${s.id}`);
+                lines.push(`  ${T('serverNameLabel')}: ${s.name}`);
+                lines.push(`  ${T('serverHostLabel')}: ${s.host}`);
+                lines.push(`  ${T('serverPortLabel')}: ${s.port}`);
+                lines.push(`  ${T('serverUsernameLabel')}: ${s.username}`);
+                lines.push(`  ${T('serverAuthLabel')}: ${s.authMode}`);
+                if (s.privateKeyPath) { lines.push(`  ${T('key')}: ${s.privateKeyPath}`); }
+                if (s.strictHostKeyChecking !== undefined) { lines.push(`  ${T('strictHostKey')}: ${s.strictHostKeyChecking}`); }
             }
             break;
         }
@@ -125,13 +127,13 @@ export function formatListText(result: ListResult, locale: Locale): string {
                 const env = result.env || {};
                 if (result.envSubCategory === 'jom') {
                     if (env.jom) {
-                        lines.push(`  ${T('jomLabel')}${quotePath(env.jom)}`);
+                        lines.push(`  ${T('jomLabel')}: ${quotePath(env.jom)}`);
                     } else {
                         lines.push(`  ${T('nothingDetected')}`);
                     }
                 } else if (result.envSubCategory === 'make') {
                     if (env.make) {
-                        lines.push(`  ${T('makeLabel')}${T('available')}`);
+                        lines.push(`  ${T('makeLabel')}: ${T('available')}`);
                     } else {
                         lines.push(`  ${T('nothingDetected')}`);
                     }
@@ -151,9 +153,9 @@ export function formatListText(result: ListResult, locale: Locale): string {
                     // Show jom/make alongside Qt/VS
                     if (result.envSubCategory === 'qt') {
                         if (process.platform === 'win32') {
-                            lines.push(`  ${T('jomLabel')}${env.jom ? quotePath(env.jom) : T('nothingDetected')}`);
+                            lines.push(`  ${T('jomLabel')}: ${env.jom ? quotePath(env.jom) : T('nothingDetected')}`);
                         } else {
-                            lines.push(`  ${T('makeLabel')}${env.make ? T('available') : T('nothingDetected')}`);
+                            lines.push(`  ${T('makeLabel')}: ${env.make ? T('available') : T('nothingDetected')}`);
                         }
                     }
                 }
@@ -195,14 +197,14 @@ export function formatListText(result: ListResult, locale: Locale): string {
 
                 // jom / make
                 if (env.jom) {
-                    lines.push(`  ${T('jomLabel')}${quotePath(env.jom)}`);
+                    lines.push(`  ${T('jomLabel')}: ${quotePath(env.jom)}`);
                 } else {
-                    lines.push(`  ${T('jomLabel')}${T('nothingDetected')}`);
+                    lines.push(`  ${T('jomLabel')}: ${T('nothingDetected')}`);
                 }
                 if (env.make) {
-                    lines.push(`  ${T('makeLabel')}${T('available')}`);
+                    lines.push(`  ${T('makeLabel')}: ${T('available')}`);
                 } else if (process.platform !== 'win32') {
-                    lines.push(`  ${T('makeLabel')}${T('nothingDetected')}`);
+                    lines.push(`  ${T('makeLabel')}: ${T('nothingDetected')}`);
                 }
             }
             break;
@@ -216,11 +218,10 @@ export function formatListText(result: ListResult, locale: Locale): string {
     return lines.join('\n');
 }
 
-export async function runList(workspace: string, category: InternalListCategory, options: { detailId?: string; envSubCategory?: EnvSubCategory } = {}): Promise<ListResult> {
+export async function runList(workspace: string, category: InternalListCategory, options: { detailId?: string; envSubCategory?: EnvSubCategory; savedOnly?: boolean } = {}): Promise<ListResult> {
     switch (category) {
         case 'targets':
-        case undefined as unknown as ListCategory:
-            return listTargets(workspace);
+            return listTargets(workspace, options.savedOnly);
         case 'servers':
             return listServersCmd(workspace, options.detailId);
         case 'env':
@@ -233,8 +234,7 @@ export async function runList(workspace: string, category: InternalListCategory,
     throw new Error(`Unknown list category: ${category}`);
 }
 
-function listTargets(workspace: string): ListResult {
-    const rawTargets = collectTargetCandidates(workspace);
+function listTargets(workspace: string, savedOnly?: boolean): ListResult {
     const diagnostics: Diagnostic[] = [];
 
     const workroot = resolveWorkroot(workspace);
@@ -257,6 +257,23 @@ function listTargets(workspace: string): ListResult {
         }
     }
 
+    // Default: only saved targets (skip discovery)
+    if (savedOnly) {
+        return {
+            ok: true,
+            action: 'list',
+            category: 'targets',
+            workspace,
+            targets: [],
+            savedTargets: savedTargets.length > 0 ? savedTargets : undefined,
+            nextAction: savedTargets.length > 0 ? 'forja use target --project <name|path>' : 'forja list targets --all',
+        };
+    }
+
+    setSilent(true);
+    let rawTargets;
+    try { rawTargets = collectTargetCandidates(workspace); } finally { setSilent(false); }
+
     const hasQtTargets = rawTargets.some(t => t.kind === 'qt');
     const hasQtToolchain = activeProfile?.toolchain.qtPath;
     const hasVsToolchain = activeProfile?.toolchain.vsInstall;
@@ -268,12 +285,11 @@ function listTargets(workspace: string): ListResult {
         diagnostics.push({ level: 'warning', message: T('lst.vsInstallNotConfigured') });
     }
 
-    // Strip internal 'kind' field from output
-    const targets = rawTargets.map(({ kind: _kind, ...rest }) => rest as TargetCandidate);
+    const targets = rawTargets;
 
     const nextAction = savedTargets.length > 0
         ? 'forja use target --project <name|path>'
-        : 'forja init';
+        : (workroot ? 'forja use target' : 'forja init');
 
     return {
         ok: true,
@@ -306,7 +322,6 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
             servers: detail,
         };
     }
-    const sync = loadSyncSettings(workspace);
     const remote = loadRemoteSettings(workspace);
     const selectedId = remote.selectedServer || undefined;
     const servers = listServers(selectedId);
@@ -332,36 +347,40 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
 
 async function listEnvAll(workspace: string): Promise<ListResult> {
     setSilent(true);
-    const env = await detectEnv();
+    try {
+        const env = await detectEnv();
 
-    // Get configured paths from workspaceStore (active target's toolchain)
-    const workroot = resolveWorkroot(workspace);
-    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
-    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
-    const configuredQtPath = activeProfile?.toolchain.qtPath || '';
-    const configuredVsPath = activeProfile?.toolchain.vsInstall || '';
+        // Get configured paths from workspaceStore (active target's toolchain)
+        const workroot = resolveWorkroot(workspace);
+        const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+        const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+        const configuredQtPath = activeProfile?.toolchain.qtPath || '';
+        const configuredVsPath = activeProfile?.toolchain.vsInstall || '';
 
-    const summary: EnvSummary = {};
-    summary.qt = env.qtCandidates.map(c => ({
-        path: c.path, version: c.version,
-        ...(c.path === configuredQtPath ? { configured: true } : {}),
-    }));
-    if (process.platform === 'win32') {
-        if (env.jom) { summary.jom = env.jom; }
-        summary.vs = env.vsCandidates.map(v => ({
-            path: v.installPath, version: v.version, edition: v.edition,
-            ...(v.installPath === configuredVsPath ? { configured: true } : {}),
+        const summary: EnvSummary = {};
+        summary.qt = env.qtCandidates.map(c => ({
+            path: c.path, version: c.version,
+            ...(c.path === configuredQtPath ? { configured: true } : {}),
         }));
-    } else {
-        if (detectMake()) { summary.make = true; }
-    }
+        if (process.platform === 'win32') {
+            if (env.jom) { summary.jom = env.jom; }
+            summary.vs = env.vsCandidates.map(v => ({
+                path: v.installPath, version: v.version, edition: v.edition,
+                ...(v.installPath === configuredVsPath ? { configured: true } : {}),
+            }));
+        } else {
+            if (detectMake()) { summary.make = true; }
+        }
 
-    return {
-        ok: true,
-        action: 'list',
-        category: 'env',
-        env: summary,
-    };
+        return {
+            ok: true,
+            action: 'list',
+            category: 'env',
+            env: summary,
+        };
+    } finally {
+        setSilent(false);
+    }
 }
 
 async function listEnvSub(workspace: string, sub: EnvSubCategory): Promise<ListResult> {
@@ -375,26 +394,30 @@ async function listEnvSub(workspace: string, sub: EnvSubCategory): Promise<ListR
 
 async function listEnvQt(workspace: string): Promise<ListResult> {
     setSilent(true);
-    const workroot = resolveWorkroot(workspace);
-    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
-    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
-    const configuredPath = activeProfile?.toolchain.qtPath || '';
-    const env = await detectEnv();
-    const qt = env.qtCandidates.map(c => ({
-        path: c.path, version: c.version,
-        ...(c.path === configuredPath ? { configured: true } : {}),
-    }));
-    const summary: EnvSummary = { qt };
-    if (process.platform === 'win32' && env.jom) { summary.jom = env.jom; }
-    if (process.platform !== 'win32' && detectMake()) { summary.make = true; }
+    try {
+        const workroot = resolveWorkroot(workspace);
+        const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+        const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+        const configuredPath = activeProfile?.toolchain.qtPath || '';
+        const env = await detectEnv();
+        const qt = env.qtCandidates.map(c => ({
+            path: c.path, version: c.version,
+            ...(c.path === configuredPath ? { configured: true } : {}),
+        }));
+        const summary: EnvSummary = { qt };
+        if (process.platform === 'win32' && env.jom) { summary.jom = env.jom; }
+        if (process.platform !== 'win32' && detectMake()) { summary.make = true; }
 
-    return {
-        ok: true,
-        action: 'list',
-        category: 'env',
-        envSubCategory: 'qt',
-        env: summary,
-    };
+        return {
+            ok: true,
+            action: 'list',
+            category: 'env',
+            envSubCategory: 'qt',
+            env: summary,
+        };
+    } finally {
+        setSilent(false);
+    }
 }
 
 async function listEnvVs(workspace: string): Promise<ListResult> {
@@ -404,35 +427,43 @@ async function listEnvVs(workspace: string): Promise<ListResult> {
     const configuredPath = activeProfile?.toolchain.vsInstall || '';
 
     setSilent(true);
-    const env = await detectEnv();
-    const vs = env.vsCandidates.map(v => ({
-        path: v.installPath, version: v.version, edition: v.edition,
-        ...(v.installPath === configuredPath ? { configured: true } : {}),
-    }));
+    try {
+        const env = await detectEnv();
+        const vs = env.vsCandidates.map(v => ({
+            path: v.installPath, version: v.version, edition: v.edition,
+            ...(v.installPath === configuredPath ? { configured: true } : {}),
+        }));
 
-    return {
-        ok: true,
-        action: 'list',
-        category: 'env',
-        envSubCategory: 'vs',
-        env: { vs },
-    };
+        return {
+            ok: true,
+            action: 'list',
+            category: 'env',
+            envSubCategory: 'vs',
+            env: { vs },
+        };
+    } finally {
+        setSilent(false);
+    }
 }
 
 async function listEnvJom(): Promise<ListResult> {
     setSilent(true);
-    const summary: EnvSummary = {};
-    if (process.platform === 'win32') {
-        const env = await detectEnv();
-        if (env.jom) { summary.jom = env.jom; }
+    try {
+        const summary: EnvSummary = {};
+        if (process.platform === 'win32') {
+            const env = await detectEnv();
+            if (env.jom) { summary.jom = env.jom; }
+        }
+        return {
+            ok: true,
+            action: 'list',
+            category: 'env',
+            envSubCategory: 'jom',
+            env: summary,
+        };
+    } finally {
+        setSilent(false);
     }
-    return {
-        ok: true,
-        action: 'list',
-        category: 'env',
-        envSubCategory: 'jom',
-        env: summary,
-    };
 }
 
 async function listEnvMake(): Promise<ListResult> {
