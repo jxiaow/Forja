@@ -26,7 +26,7 @@ export interface ExecuteBundleBaselineResult {
     mode: 'remote';
     repos: RepoBaselineState[];
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export async function executeBundleBaseline(options: ExecuteBundleBaselineOptions): Promise<ExecuteBundleBaselineResult> {
@@ -127,7 +127,7 @@ function finish(repos: RepoBaselineState[], diagnostics: RemoteDiagnostic[]): Ex
         mode: 'remote',
         repos,
         diagnostics,
-        nextActions: ok ? [] : ['修复 bundle baseline 诊断后重试']
+        nextAction: ok ? undefined : '修复 bundle baseline 诊断后重试'
     };
 }
 

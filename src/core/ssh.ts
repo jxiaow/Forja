@@ -24,6 +24,7 @@ export function buildSshArgs(server: ServerConfig, options?: SshArgsOptions): st
     // 默认关闭严格主机密钥检查（开发工具场景），可通过 server config 启用
     const hostKeyChecking = server.strictHostKeyChecking ? 'yes' : 'no';
     args.push('-o', `StrictHostKeyChecking=${hostKeyChecking}`);
+    args.push('-o', 'ConnectTimeout=10');
     if (server.authMode === 'key') {
         args.push('-o', 'BatchMode=yes');
     }
@@ -49,6 +50,7 @@ export function buildScpArgs(server: ServerConfig): string[] {
     }
     const hostKeyChecking = server.strictHostKeyChecking ? 'yes' : 'no';
     args.push('-o', `StrictHostKeyChecking=${hostKeyChecking}`);
+    args.push('-o', 'ConnectTimeout=10');
     if (server.authMode === 'key') {
         args.push('-o', 'BatchMode=yes');
     }
@@ -72,6 +74,7 @@ export function quoteForRemoteShell(value: string): string {
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { warn } from './loggerBase';
 
 const ASKPASS_ENV_VAR = 'FORJA_SSH_PASS';
 
@@ -118,7 +121,7 @@ export function createAskpassEnv(password: string | null, suffix?: string): Askp
 
         return { env, cleanup };
     } catch (e) {
-        console.warn(`[forja] createAskpassEnv 失败: ${e instanceof Error ? e.message : e}`);
+        warn(`createAskpassEnv 失败: ${e instanceof Error ? e.message : e}`);
         return undefined;
     }
 }

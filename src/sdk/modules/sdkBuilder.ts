@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import * as path from 'path';
 import { StateManager } from './stateManager';
 import { ConfigService } from './configService';
 import { BuildAction } from '../types';
 import { TASK_SOURCE } from '../constants';
-import { getCurrentPlatform, isWindows } from '../platform';
-import { buildWindowsCommand, getWindowsShellOptions } from '../platform/windows';
-import { buildLinuxCommand } from '../platform/linux';
+import { isWindows } from '../platform';
+import { getWindowsShellOptions } from '../platform/windows';
+import { buildCommand, SdkPlanOptions } from '../shared/plan';
 import { log, logError } from '../utils/logger';
 
 export class SdkBuilder {
@@ -54,12 +53,23 @@ export class SdkBuilder {
       return;
     }
 
-    // 组装命令
-    let command: string;
-    const platform = getCurrentPlatform();
+    // 组装命令参数
+    const actionMap: Record<BuildAction, SdkPlanOptions['action']> = {
+      'Build': 'build',
+      'Rebuild': 'rebuild',
+      'Clean': 'clean',
+    };
 
-    if (platform === 'windows') {
-      // Windows 前置检查：VS 环境
+    const planOptions: SdkPlanOptions = {
+      action: actionMap[action],
+      workspace: '',  // Not needed for command assembly
+      project: this.stateManager.currentProject.path,
+      mode: this.stateManager.mode,
+      arch: this.stateManager.arch,
+    };
+
+    // Windows 前置检查：VS 环境
+    if (isWindows && planOptions.project.endsWith('.sln')) {
       const vsDevCmdPath = await this.configService.getVsDevCmdPath();
       if (!vsDevCmdPath) {
         logError(`${action}: 未检测到 VS 环境`);
@@ -68,22 +78,12 @@ export class SdkBuilder {
         );
         return;
       }
-
-      command = buildWindowsCommand({
-        vsDevCmdPath,
-        slnPath: this.stateManager.currentProject.path,
-        mode: this.stateManager.mode,
-        arch: this.stateManager.arch,
-        action
-      });
-    } else {
-      const makefileDir = path.dirname(this.stateManager.currentProject.path);
-      command = buildLinuxCommand({
-        makefileDir,
-        mode: this.stateManager.mode,
-        action
-      });
+      planOptions.vsDevCmdPath = vsDevCmdPath;
     }
+
+    // 使用共享的命令组装逻辑
+    const commands = buildCommand(planOptions);
+    const command = commands.join(' && ');
 
     log(`${action}: 生成命令: ${command}`);
     await this.executeTask(command, action);
@@ -91,11 +91,10 @@ export class SdkBuilder {
 
   /** 创建并执行 VSCode Task */
   private async executeTask(command: string, action: BuildAction): Promise<void> {
-    const platform = getCurrentPlatform();
     const mode = this.stateManager.mode;
 
     // Shell 配置
-    const shellOptions: vscode.ShellExecutionOptions = platform === 'windows'
+    const shellOptions: vscode.ShellExecutionOptions = isWindows
       ? getWindowsShellOptions()
       : {};
 

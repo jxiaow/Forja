@@ -76,11 +76,11 @@ function _refreshStatusBar(): void {
     if (resolved) {
         _statusItem.text = '$(cloud-upload)';
         _statusItem.tooltip = `Forja: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
-        _statusItem.command = 'forja.syncChangedFiles';
+        _statusItem.command = 'forja.sync';
     } else {
         _statusItem.text = '$(cloud)';
         _statusItem.tooltip = 'Forja: 同步未就绪，点击配置远程服务器';
-        _statusItem.command = 'forja.showSyncTab';
+        _statusItem.command = 'forja.use';
     }
     _statusItem.show();
 }

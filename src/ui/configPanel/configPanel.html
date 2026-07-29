@@ -452,6 +452,7 @@ details[open] .arrow { transform: rotate(90deg); }
         </select>
       </div>
     </div>
+    <!--IF_QT-->
     <div class="field">
       <label>QMake TARGET</label>
       <input id="target" value="{{effectiveTarget}}" data-default-target="{{defaultTarget}}" data-saved-target="{{savedTarget}}" placeholder="留空使用 .pro 默认值" onchange="saveTarget()" />
@@ -461,16 +462,13 @@ details[open] .arrow { transform: rotate(90deg); }
       <input id="qmakeArgs" value="{{qmakeArgs}}" placeholder="例如 DEFINES+=FEATURE_X CONFIG+=qml_debug" onchange="saveQmakeArgs()" />
     </div>
     <div class="field">
-      <label>停止进程名</label>
-      <input id="runtimeProcessName" value="{{runtimeProcessName}}" placeholder="例如 DemoAppWorker，留空使用 TARGET" onchange="saveRuntimeProcessName()" />
-    </div>
-    <div class="field">
       <label>排除目录</label>
       <div class="tag-input" id="scanExcludeDirsWrap">
         <input id="scanExcludeDirsInput" placeholder="输入目录名，回车添加" onkeydown="onTagKey(event, 'scanExcludeDirs')" />
       </div>
-      <div class="hint">回车添加，点击标签删除；仅影响 IntelliSense 扫描；已内置排除 build*, debug, release</div>
+      <div class="hint">Qt IntelliSense 目录扫描时跳过，已内置排除 build*, debug, release</div>
     </div>
+    <!--END_QT-->
     <button class="btn btn-full" style="margin-top:10px;" onclick="generateIntelliSense()">生成 IntelliSense 配置</button>
 
     <details>
@@ -791,10 +789,6 @@ function saveTarget() {
   lastSavedTarget = savedValue;
   input.dataset.savedTarget = savedValue;
   vscode.postMessage({ command: 'saveQmakeTarget', value: savedValue });
-}
-function saveRuntimeProcessName() {
-  const val = document.getElementById('runtimeProcessName').value.trim().replace(/\.exe$/i, '');
-  vscode.postMessage({ command: 'saveRuntimeProcessName', value: val });
 }
 function saveQmakeArgs() {
   const val = document.getElementById('qmakeArgs').value.trim();

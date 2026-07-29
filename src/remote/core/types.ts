@@ -23,7 +23,7 @@ export interface RemoteLayer {
     ok: boolean | null;
     message?: string;
     version?: string;
-    nextActions?: string[];
+    nextAction?: string;
 }
 
 export interface RemoteConfig {
@@ -90,7 +90,7 @@ export interface RemoteStatusResult {
         repos: RemoteRepoPlan[];
     };
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export interface RemoteTestResult {
@@ -99,6 +99,6 @@ export interface RemoteTestResult {
     mode: 'remote';
     failedLayer?: RemoteLayerName;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
     stages?: RemoteStage[];
 }

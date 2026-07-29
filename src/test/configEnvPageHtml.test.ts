@@ -44,7 +44,6 @@ function createTemplateData(): TemplateData {
         cppStandard: 'c++17',
         scanExcludeDirs: '',
         target: '',
-        runtimeProcessName: '',
         isWin: true,
         autoDevShell: '',
         autoQtPath: 'C:/Qt/5.12/msvc2019',

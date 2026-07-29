@@ -3,10 +3,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { setState, loadPersistedState } from './vscode/qtState';
 import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, updateConfig, getJomPath } from './qt/services/configService';
-import { createUnifiedStatusBar } from './ui/unifiedStatusBar';
+import { createStatusBar } from './ui/statusBar';
 import { registerPriWatcher } from './qt/project/priWatcher';
 import { ConfigNavTreeProvider } from './ui/configPanel/configNavTree';
-import { ConfigPageManager } from './ui/configPanel/configPagePanel';
 import { selectProject, parseProFile } from './qt/project/projectManager';
 import { registerDebugSessionWatcher } from './qt/build/debugger';
 import { generateCppProperties } from './qt/build/configGenerator';
@@ -14,13 +13,12 @@ import { createLogger, initLogger } from './vscode/logger';
 import { detectEnv } from './qt/env/envDetector';
 import { ensureLocalStateDir } from './qt/shared/localState';
 import { registerSyncWatcher } from './sync/syncWatcher';
-import { registerRemoteCommands } from './remote/vscode/commands';
+import { registerCommands } from './vscode/commands';
 import { initSettingsStore } from './vscode/settingsStore';
 import { registerWorkspaceWatcher } from './vscode/workspaceResolver';
+import { ConfigPageManager } from './ui/configPanel/configPagePanel';
 import { activateSdk } from './sdk/sdkExtension';
-import { registerQtCommands } from './qt/commands';
 import { TASK_SOURCE_QT } from './qt/constants';
-import { normalizeConfigPageId } from './ui/configPanel/pageIds';
 
 import { listProjectConfigs } from './core/settingsIO';
 import { listSyncStates } from './core/syncState';
@@ -60,28 +58,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 后台清理残留配置（不阻塞启动）
     setTimeout(() => { try { autoCleanupStaleConfigs(); } catch { /* ignore */ } }, 5000);
 
-    createUnifiedStatusBar(context);
+    createStatusBar(context);
 
     const navTree = new ConfigNavTreeProvider();
-    const pageManager = new ConfigPageManager(context);
     const configTreeView = vscode.window.createTreeView(ConfigNavTreeProvider.viewId, { treeDataProvider: navTree });
     configTreeView.title = `配置 v${context.extension.packageJSON.version || ''}`;
     context.subscriptions.push(configTreeView);
+
+    // 配置面板管理器
+    const pageManager = new ConfigPageManager(context);
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.config.openPage', (pageId?: string) => {
-            pageManager.openPage(normalizeConfigPageId(pageId));
+            const { normalizeConfigPageId } = require('./ui/configPanel/pageIds');
+            const id = normalizeConfigPageId(pageId || 'project');
+            pageManager.openPage(id);
         })
-    );
-    context.subscriptions.push(
-        vscode.commands.registerCommand('forja.showSyncTab', () => pageManager.switchTab('remote'))
     );
 
     registerPriWatcher(context);
     registerDebugSessionWatcher(context);
     registerSyncWatcher(context);
-    registerRemoteCommands(context);
+    registerCommands(context);
 
-    // 全局任务结束监听：兜底重置 isBuilding / isRunning（防止关闭终端后状态卡住）
+    // Qt 任务结束监听：重置 isBuilding / isRunning（防止状态卡住）
     context.subscriptions.push(
         vscode.tasks.onDidEndTask(e => {
             const task = e.execution.task;
@@ -98,6 +97,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     // 启动时优先恢复手动指定项目，其次再走工作区扫描/记忆选择
+    // 必须在 SDK 激活之前完成，否则 SDK 扫描完成时 qtState.currentProject 还没设置，
+    // 会导致混合 workspace 中状态栏错误切到 SDK 模块
     let project: import('./core/types').ProjectInfo | null = null;
     const manualProPath = getManualProPath();
     if (manualProPath && fs.existsSync(manualProPath)) {
@@ -110,15 +111,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     setState('currentProject', project);
 
+    // SDK 模块激活（异步，不阻塞 Qt 启动；在 Qt 项目恢复之后，避免竞态）
+    activateSdk(context).catch((e: Error) => logger.error(`SDK 模块激活失败: ${e.message}`));
+
     // 环境检测（一次，全量扫描获取完整候选列表）
     detectEnv().then(async (env) => {
         setState('envInfo', env);
         logger.info('启动环境检测完成');
 
-        // 自动写入检测结果到配置（仅当工作区包含相关项目时）
-        if (project) {
-            await autoWriteDetectedEnv(env);
-        }
+        // 启动时不弹工具链选择，等用户选了项目后再按项目类型提示
     }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
 
     // 有项目时确保 .forja/ 目录存在
@@ -140,12 +141,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         }
     }
-
-    // Qt 命令注册（提取到 qt/commands.ts）
-    registerQtCommands(context, pageManager);
-
-    // 激活 SDK 模块
-    await activateSdk(context);
 
     logger.info('Forja 扩展激活完成');
 }

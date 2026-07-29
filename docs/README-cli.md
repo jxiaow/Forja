@@ -1,90 +1,336 @@
 # Forja CLI
 
-命令行工具用于 C++ 项目的构建、运行和环境管理。
-
-当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`sync`、`cleanup`。
+命令行工具用于 C++ 项目的构建、运行和环境管理。支持 Qt (qmake) 和 SDK (.sln/Makefile) 两种项目类型，支持本地和远程执行。
 
 ## 安装
+
+### Stable（正式版本）
+
+```bash
+# VSCode 扩展
+code --install-extension dist/forja-<version>/vs/forja-<version>.vsix
+
+# CLI
+npm install -g dist/forja-<version>/cli/forja-cli-<version>.tgz
+```
+
+### Dev（开发版本）
+
+```bash
+# 先打包
+npm run package:all:dev
+
+# 安装
+code --install-extension dist/forja-<version>/vs/forja-<version>-dev.vsix
+npm install -g dist/forja-<version>/cli/forja-cli-<version>-dev.tgz
+```
+
+### 从源码安装（开发调试）
 
 ```bash
 npm install
 npm run compile
-npm link
+npm link          # 全局注册 forja 命令
 ```
 
-安装后可直接执行：
+## 快速上手
+
+**三步开始：**
 
 ```bash
-forja --help
-forja qt --help
-forja sdk --help
-forja remote --help
+# 1. 查看状态（第一条命令永远是 status）
+forja status
+
+# 2. 按提示初始化或选择项目
+forja init                    # 首次：自动检测环境
+forja list targets            # 查看可用项目
+forja use target --project app.pro   # 选择项目
+
+# 3. 构建运行
+forja build
+forja run
 ```
 
-## AI 工具集成
-
-Skill 文件位于 CLI 包的 `skills/forja/` 目录下，安装后 AI 助手可直接调用 `forja` 命令。
-
-## 使用流程
-
-手动使用时先查看状态，再按状态提示执行下一步。`init` 只用于首次自动初始化；如果 `status` 提示缺项目、缺构建配置或缺工具链，先用 `projects` / `env` 查看候选，再用 `use` 写入显式选择：
+**每条命令都支持 `--json` 输出结构化结果，适合脚本和 AI 调用：**
 
 ```bash
-forja qt status
-forja qt init
-forja qt env
-forja qt projects
-forja qt use --mode release
-forja qt build
-forja qt run
+forja status --json
+forja build --json
 ```
 
-AI 或脚本需要结构化输出时追加 `--json`：
+## 常见场景
+
+### 场景 1：本地 Qt 项目
 
 ```bash
-forja qt status --json
-forja qt build --json
-forja remote status --json
+forja init                                    # 检测 Qt/VS/jom
+forja use target --project app/app.pro        # 选择 .pro 文件
+forja use target --mode release --arch x64    # 设置构建配置
+forja build                                   # 编译
+forja run                                     # 运行
 ```
+
+### 场景 2：本地 SDK 项目（Windows .sln）
+
+```bash
+forja init                                    # 检测 VS/MSBuild
+forja use target --project MyProject.sln      # 选择 .sln 文件
+forja build
+forja run --detach                            # 后台运行
+```
+
+### 场景 3：远程构建
+
+```bash
+# 先配置服务器
+forja server add --name dev --host 192.168.1.10 --username dev
+
+# 配置远程执行
+forja remote --server dev --remote-path /home/dev/workspace
+
+# 远程初始化（通过 SSH 在远端执行 init）
+forja init --remote
+
+# 远程构建
+forja build
+
+# 远程诊断
+forja doctor --remote
+```
+
+### 场景 4：文件同步
+
+```bash
+forja use sync --server dev --remote-path /home/dev/workspace --enable
+forja sync plan                           # 预览待同步文件
+forja sync                                # 同步变更文件
+```
+
+### 场景 5：多项目切换
+
+```bash
+forja list targets                            # 列出所有项目
+forja use target --project moduleA/app.pro    # 切换到 moduleA
+forja build
+forja use target --project moduleB/app.pro    # 切换到 moduleB
+forja build
+```
+
+## VSCode 扩展与 CLI 的关系
+
+VSCode 扩展和 CLI 共享同一套配置存储（`~/.forja/projects/<hash>.json`）。在任一侧做的配置变更（选项目、切 mode/arch、配远程）在另一侧立即可见。
+
+| 操作 | VSCode | CLI |
+|------|--------|-----|
+| 查看状态 | 状态栏 + 配置面板 | `forja status` |
+| 选项目 | 配置面板 → 项目 | `forja use target --project` |
+| 切 mode/arch | 状态栏下拉 / 配置面板 | `forja use target --mode` |
+| 构建 | `forja.build` 命令 | `forja build` |
+| 运行 | `forja.run` 命令 | `forja run` |
+| 远程诊断 | — | `forja doctor --remote` |
+
+## 命令速查
+
+| 命令 | 用途 | 常用示例 |
+|------|------|----------|
+| `status` | 查看就绪状态 | `forja status` |
+| `init` | 首次初始化 | `forja init`、`forja init --remote` |
+| `list` | 列出候选项 | `forja list targets`、`forja list env` |
+| `use` | 写入配置 | `forja use target --project`、`forja use execution --remote` |
+| `server` | 管理服务器 | `forja server add`、`forja server remove` |
+| `build` | 编译 | `forja build`、`forja build fresh`、`forja build qmake` |
+| `run` | 运行 | `forja run`、`forja run --detach` |
+| `stop` | 停止进程 | `forja stop` |
+| `clean` | 清理产物 | `forja clean` |
+| `doctor` | 诊断修复 | `forja doctor`、`forja doctor fix --remote` |
+| `sync` | 文件同步 | `forja sync`、`forja sync plan` |
 
 ## 通用选项
 
-Qt/SDK 命令通用选项：
+| 选项 | 说明 |
+| --- | --- |
+| `--help` | 显示帮助（支持 `forja --help` 和 `forja <command> --help`） |
+| `--json` | JSON 输出，适合 AI/脚本解析 |
+| `--workspace <dir>` | 操作根目录，默认当前目录 |
+| `--plan` | 仅显示计划，不执行（适用于 build/clean/doctor） |
+
+> **注意**：选项必须跟在命令后面。`forja status --json` ✓，`forja --json status` ✗。
+
+## 命令参考
+
+### `forja status`
+
+查看当前项目状态、配置是否就绪和下一步动作。`status` 是推荐的第一条命令。
+
+```bash
+forja status
+forja status --json
+```
+
+`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `list targets` / `use target --project`；缺工具链时提示 `list env` / `use qt/sdk`；配置齐全后再提示 `build` 或 `run`。
+
+### `forja init`
+
+检测环境（Qt/VS/make），并保存当前工作区中能自动确定的配置。
+
+```bash
+forja init --json
+```
+
+`init` 不接收 `--project`、`--mode`、`--arch`、工具链路径。这些显式配置统一通过 `forja use` 写入。
+
+### `forja list`
+
+列出各类配置和候选项。
+
+```bash
+forja list targets --json     # 列出可用项目（.pro/.sln/Makefile/CMakeLists.txt）
+forja list env --json         # 列出检测到的工具链环境
+forja list env qt --json      # 列出 Qt 环境详情
+forja remote --json             # 显示远程执行配置（含 repos）
+forja list lang --json        # 列出当前语言设置
+```
+
+### `forja use`
+
+切换当前 workspace 的配置，只更新显式传入的字段。
+
+```bash
+# 选择项目和构建配置
+forja use target --project app.pro
+forja use target --mode release --arch x64
+
+# 切换本地/远程执行
+forja use execution --remote
+forja use execution --local
+
+# 配置同步
+forja setup remote --server server-1 --remote-path /home/dev/workspace
+
+# 配置远程执行
+forja remote --server server-1 --remote-path /home/dev/workspace
+
+# 配置远程高级选项
+forja remote repo set --local qt_client --remote qt_client --role primary
+forja remote forja-bin set --path /home/dev/.forja/bin/forja
+forja remote build-order set qt:build sdk:rebuild
+forja remote transfer set --server server-2 --path /deploy/app
+
+# 配置 Qt 工具链
+forja setup --qt-path /path/to/Qt --vs-dev-shell /path/to/Launch-VsDevShell.ps1
+
+# 配置 SDK 工具链
+forja setup --vs-dev-cmd "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/Tools/VsDevCmd.bat"
+```
+
+### `forja server`
+
+管理同步服务器。
+
+```bash
+forja server                    # 列出所有服务器
+forja server --detail <id>      # 查看服务器详情
+forja server --json             # JSON 输出
+forja server add --name dev --host 127.0.0.1 --username dev --json
+forja server update server-1 --host 10.0.0.2 --json
+forja server remove server-1 --json
+```
+
+### `forja build`
+
+编译当前项目。
+
+```bash
+forja build                 # 默认编译
+forja build fresh           # 清理后重新编译
+forja build qmake           # 仅运行 qmake
+forja build rcc             # 编译 .qrc 资源文件
+forja build --plan          # 仅显示编译计划
+```
+
+### `forja run`
+
+先杀掉已运行的程序，再编译并启动程序。
+
+```bash
+forja run                   # 前台运行
+forja run --detach          # 后台运行
+forja run designer app.ui   # 打开 Qt Designer
+```
+
+`--detach` 时，编译在前台执行；编译成功后后台启动程序，编译失败直接返回错误。
+
+`--json` 输出在成功解析 Makefile 目标时会包含 `executablePath`，表示最终启动的可执行文件绝对路径。`run --detach --json` 成功时还会返回 `pid` 和 `logFile`。
+
+### `forja stop`
+
+停止运行中的程序。
+
+```bash
+forja stop
+```
+
+### `forja clean`
+
+清理构建产物。
+
+```bash
+forja clean
+forja clean --plan
+```
+
+### `forja doctor`
+
+诊断和修复环境问题。
+
+```bash
+forja doctor                # 本地诊断
+forja doctor --remote       # 远程诊断
+forja doctor fix --remote   # 修复远程问题（部署 forja CLI）
+```
+
+### `forja sync`
+
+按 git 变更文件同步到已配置的服务器。
+
+```bash
+forja sync                              # 同步所有变更
+forja sync --yes                        # 跳过确认直接同步
+forja sync --reset                      # 清除同步状态
+forja sync plan                         # 预览待同步文件
+```
 
 | 选项 | 说明 |
 | --- | --- |
-| `--workspace <dir>` | 操作根目录，默认当前目录；日常手动使用通常先 `cd` 到项目根目录，不需要传 |
-| `--json` | 输出 JSON，适合 AI/脚本解析 |
+| `--yes` | 跳过确认直接执行同步 |
+| `--reset` | 清除同步状态 |
 
-`--workspace` 用来确定本次命令读写哪个项目的本地配置、从哪里扫描 `.pro`、以及同步/运行状态等归属。它不是 `.pro` 文件路径；多项目仓库中用 `forja qt use --project <relative.pro>` 在该 workspace 内选择具体项目。
+服务器列表存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/projects/<hash>.json`。
 
-## Remote 命令
+## Remote 配置
 
-Remote 命令复用 sync 配置中的 server 和 remotePath，先用 `forja sync status --json` 确认远端目标，再执行 remote 状态检查或远程构建流程。
-
-```bash
-forja remote status --json
-forja remote doctor --json
-forja remote test --json
-forja remote bootstrap --json
-forja remote forja-bin use --path /home/dev/.forja/bin/forja-with-env --json
-forja remote qt build --json
-forja remote sdk build --json
-```
-
-Staged remote workspace 可以显式配置本地仓库和远端仓库的对应关系；如果构建依赖被 `.gitignore` 忽略的本地 SDK/headers，也用 repo asset 声明，让 remote prepare 阶段一并上传：
+远程执行复用 sync 配置中的 server，先用 `forja status` 确认远端目标，再执行远程构建流程。
 
 ```bash
-forja remote workspace use --mode staged --path /home/dev/workspace/forja-remote/release --json
-forja remote repo set --local qt_client --remote qt_client --role primary --baseline auto --overlay true --json
-forja remote repo set --local qt_client --remote qt_client --role primary --baseline auto --overlay true --asset XYMeetingKit_DLLs/NemoSDK/headers=XYMeetingkit_DLLs/NemoSDK/headers --json
+# 配置远程执行目标
+forja remote --server server-1 --remote-path /home/dev/workspace
+
+# 配置远程仓库映射（staged 模式）
+forja remote repo set --local qt_client --remote qt_client --role primary --baseline auto --overlay true
+
+# 配置远程 forja 二进制路径
+forja remote forja-bin set --path /home/dev/.forja/bin/forja-with-env
+
+# 配置构建顺序
+forja remote build-order set qt:build sdk:rebuild
+
+# 配置部署传输
+forja remote transfer set --server server-2 --path /deploy/app --artifact out/app
 ```
 
-`--local` 和 `--remote` 是仓库名称，不是路径；它们必须是单段名称，不能包含 `/`、`\`、`.` 或 `..`。如果 Linux 侧依赖仓库不是 staged workspace 下的子目录，用 `--path /absolute/remote/repo` 表达真实路径，例如 `--local xylib_win32 --remote xylib_arm64 --role remote-only --path /home/dev/workspace/dev/xylib_arm64 --mount symlink`。
+`--local` 和 `--remote` 是仓库名称，不是路径；它们必须是单段名称，不能包含 `/`、`\`、`.` 或 `..`。如果 Linux 侧依赖仓库不是 staged workspace 下的子目录，用 `--remote-path /absolute/remote/repo` 表达真实路径。
 
-`--asset local=remote` 的左右两边都是仓库内相对路径；右侧可省略，省略时按同名路径上传。这个映射用于处理 Windows 和 Linux 侧目录名不同、大小写不同，或本地依赖包不在 git baseline 内的场景。
-
-如果远端无法安装或执行 forja CLI，staged 模式会对执行类动作尝试 shell fallback：Qt 支持 `qmake/build/clean/run/stop/ps`，SDK 支持 `build/rebuild/clean`。`init/use/status` 等远端持久配置或诊断动作仍依赖远端 forja；无 CLI 环境应在本地保存 remote 配置，并在执行命令中显式传入必要的 `--project`、`--qt-path`、`--qmake-args` 等参数。
+如果远端无法安装或执行 forja CLI，staged 模式会对执行类动作尝试 shell fallback：Qt 支持 `qmake/build/clean/run/stop/ps`，SDK 支持 `build/rebuild/clean`。`init/use/status` 等远端持久配置或诊断动作仍依赖远端 forja。
 
 ## JSON 输出
 
@@ -93,231 +339,21 @@ forja remote repo set --local qt_client --remote qt_client --role primary --base
 ```json
 {
   "ok": true,
-  "command": "qt build",
+  "action": "build",
   "workspace": "/path/to/project",
-  "project": "app.pro",
-  "candidates": [],
-  "diagnostics": [],
-  "nextActions": [],
-  "resolved": {
+  "activeTarget": {
+    "kind": "qt",
+    "project": "app.pro",
     "mode": "debug",
-    "arch": "x64"
-  }
+    "arch": "x64",
+    "runAt": "local"
+  },
+  "diagnostics": [],
+  "nextAction": "forja build",
+  "exitCode": 0,
+  "errors": [],
+  "logFile": "/path/to/log"
 }
-```
-
-## Qt 命令
-
-### `forja qt status`
-
-查看当前 Qt 项目状态、当前 workspace、配置是否就绪和下一步动作。`status` 是推荐的第一条命令。
-
-```bash
-forja qt status
-```
-
-`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `projects` / `use --project`；`mode` / `arch` 未写入时提示 `use --mode ... --arch ...`；缺 Qt/VS 工具链时提示 `env` / `use --qt-path` 或 `use --vs-dev-shell`；配置齐全后再提示 `qmake`、`build` 或 `run`。
-
-`build` / `run` / `clean` / `qmake` / `stop` 只读取已保存项目配置；如果没有先通过 `init` 自动保存单项目，或没有通过 `use` 确认项目、mode、arch，这些命令会返回 `status` 作为统一入口。
-
-### `forja qt init`
-
-检测 Qt 和 Visual Studio 环境，并保存当前工作区中能自动确定的 Qt 配置。
-
-```bash
-forja qt init --json
-```
-
-`init` 不接收 `--project`、`--mode`、`--arch`、`--qt-path`、`--vs-dev-shell`、`--target`。这些显式配置统一通过 `forja qt use` 写入；其中 `mode` 的默认值只会在 `status` 中作为建议展示。`arch` 如果在当前平台只有一种可选值，`init` 会直接写入；否则由 `status` 提示后再用 `use` 确认。
-
-### `forja qt use`
-
-切换当前 workspace 正在使用的项目或构建配置，只更新显式传入的字段。
-
-```bash
-forja qt use --mode release
-forja qt use --project app.pro
-forja qt use --project app.pro --target MyApp
-forja qt use --qt-path /path/to/Qt
-```
-
-`--target` 用于多个 `.pro` 指向同名或需要覆盖 QMake `TARGET` 的场景；`projects` 会在文本和 JSON 输出中列出可用 target，便于和 `--project` 一起确认。
-
-### `forja qt qmake`
-
-生成 Makefile。
-
-```bash
-forja qt qmake
-```
-
-### `forja qt build`
-
-编译 Qt 项目。
-
-```bash
-forja qt build
-```
-
-### `forja qt run`
-
-先杀掉已运行的程序，再编译并启动程序。
-
-```bash
-forja qt run
-forja qt run --detach
-```
-
-`--detach` 时，编译在前台执行；编译成功后后台启动程序，编译失败直接返回错误。
-
-`--json` 输出在成功解析 Makefile 目标时会包含 `executablePath`，表示最终启动的可执行文件绝对路径。`run --detach --json` 成功时还会返回 `pid` 和 `logFile`；`pid` 只表示目标可执行文件进程，不表示启动脚本进程。若后台启动后无法在超时时间内解析目标 PID，命令会返回失败诊断。
-
-### `forja qt ps`
-
-查看最近一次 `run --detach` 启动的目标进程是否仍在运行。
-
-```bash
-forja qt ps
-forja qt ps --json
-```
-
-`ps --json` 返回 `running`、目标进程 `pid`、`executablePath` 和最近一次后台运行的 `logFile`。未运行时 `pid` 为 `null`；如果之前有后台运行记录且日志文件仍存在，`logFile` 仍会返回，便于用户自行打开或 tail 日志。
-
-### `forja qt stop`
-
-停止运行中的程序。
-
-```bash
-forja qt stop
-```
-
-### `forja qt clean`
-
-清理构建产物。
-
-```bash
-forja qt clean
-```
-
-### `forja sync`
-
-按 git 变更文件同步到已配置的服务器。
-
-```bash
-forja sync status --json
-forja sync servers --json
-forja sync server --json
-forja sync add-server --name dev --host 127.0.0.1 --username dev --json
-forja sync use --server server-1 --remote-path /home/dev/workspace --enable --json
-forja sync test-connection --json
-forja sync reset --json
-forja sync update-server --server server-1 --host 10.0.0.2 --json
-forja sync remove-server --server server-1 --json
-forja sync
-forja sync --plan --json
-forja sync --file src/main.cpp --json
-forja sync --server server-1 --repo /home/dev/workspace/app --json
-```
-
-| 选项 | 说明 |
-| --- | --- |
-| `status` | 查看同步配置是否就绪、缺哪些配置项和下一步建议，不执行上传 |
-| `--plan` | 预览待同步文件、目标服务器和路径，不执行上传 |
-| `--server <id>` | 临时指定服务器 ID；在 `sync` / `status` / `test-connection` 中不写入配置 |
-| `--repo <name\|path>` | 多 git 仓库 workspace 时只同步指定仓库；单 git 仓库 workspace 时可传远程绝对仓库路径覆盖目标目录 |
-| `--file <path>` | 单文件同步；可重复，路径可相对 workspace、仓库根目录或使用绝对路径 |
-| `servers` | 列举全局同步服务器 |
-| `server [--server <id>]` | 查看当前选中服务器或指定服务器详情，不输出 password |
-| `add-server` | 增加服务器，常用参数：`--name`、`--host`、`--username`、`--port`、`--auth-mode`、`--private-key-path` |
-| `use --server <id>` | 保存当前 workspace 的选中服务器，可配合 `--remote-path`、`--enable`、`--disable` |
-| `test-connection` | 测试当前选中服务器或 `--server <id>` 指定服务器的 SSH 连接 |
-| `reset` | 清除当前 workspace 的同步状态；中断或误跳过后可用它让下次重新计算 |
-| `update-server --server <id>` | 修改服务器字段 |
-| `remove-server --server <id>` | 删除服务器 |
-
-服务器列表存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、路径和忽略列表存储在 `~/.forja/projects/<hash>.json`。服务器管理命令不会自动修改当前 workspace 的选中服务器或远程路径；只有 `forja sync use ...` 会保存当前选择。`sync` / `--plan` 的 JSON 输出包含 `skippedDetails`，文本输出会列出跳过文件及原因；失败时会列出文件级错误明细。
-
-### `forja qt rcc`
-
-编译 `.qrc` 资源文件为 `.rcc` 二进制，并复制到可执行文件输出目录。
-
-```bash
-forja qt rcc --json
-```
-
-RCC 项目路径解析顺序：
-
-1. 已保存的 `rccProjectPath`
-2. 自动扫描 workspace 父目录下的 `XYRcc/` 目录
-
-`run` 命令会自动检测 RCC 资源是否有变更，有变更时自动插入 rcc 编译步骤。
-
-## SDK 命令
-
-### `forja sdk status`
-
-查看 SDK 项目状态、当前 workspace、配置是否就绪和下一步动作。`status` 是 SDK 推荐的第一条命令。
-
-```bash
-forja sdk status
-forja sdk status --json
-```
-
-`status` 会按缺失项返回更具体的下一步：没有本地配置时提示 `init`；已有配置但缺项目时提示 `projects` / `use --project`；缺 VS/make 工具链时提示 `env` / `use --vs-dev-cmd`；配置齐全后再提示 `build`。
-
-`build` / `rebuild` / `clean` 只读取已保存项目配置；如果没有先通过 `init` 自动保存单项目，或没有通过 `use` 确认项目、mode、arch，这些命令会返回 `status` 作为统一入口。
-
-### `forja sdk init`
-
-检测 Visual Studio 或 make 环境，并保存当前工作区中能自动确定的 SDK 配置。
-
-```bash
-forja sdk init --json
-```
-
-`init` 不接收 `--project`、`--mode`、`--arch`、`--vs-dev-cmd`。这些显式配置统一通过 `forja sdk use` 写入。非 Windows 平台只有 `x64` 架构，`init` 会直接写入；Windows 下可通过 `use --arch` 切换。
-
-### `forja sdk use`
-
-切换当前 workspace 正在使用的 SDK 项目或构建配置，只更新显式传入的字段。
-
-```bash
-forja sdk use --project Makefile
-forja sdk use --mode release
-forja sdk use --vs-dev-cmd "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/Tools/VsDevCmd.bat"
-```
-
-### `forja sdk build`
-
-编译 SDK 项目。
-
-```bash
-forja sdk build
-forja sdk build --plan --json
-```
-
-### `forja sdk rebuild`
-
-重新编译 SDK 项目。
-
-```bash
-forja sdk rebuild --json
-```
-
-### `forja sdk clean`
-
-清理 SDK 构建产物。
-
-```bash
-forja sdk clean
-```
-
-## Cleanup 命令
-
-清理 Forja 本地运行状态和缓存文件。
-
-```bash
-forja cleanup --json
 ```
 
 ## 本地状态
@@ -326,7 +362,7 @@ forja cleanup --json
 
 ```text
 ~/.forja/
-├── projects/<hash>.json  # 当前 workspace 的 Qt/SDK/sync 配置
+├── projects/<hash>.json  # 当前 workspace 的 Qt/SDK/sync/remote 配置
 └── servers.json          # 服务器列表
 
 .forja/
@@ -343,7 +379,7 @@ CLI 参数 > 已保存配置 > 环境变量 > 自动检测 > 默认值
 
 ## 支持平台
 
-- Windows (MSVC + jom)
+- Windows (MSVC + jom / MSBuild)
 - Linux (GCC + make)
 
 ## License

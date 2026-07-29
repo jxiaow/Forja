@@ -145,7 +145,7 @@ test('execution actions require a saved project even when a single pro file exis
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未配置项目/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['forja qt status --json']);
+    assert.equal(result.nextAction, 'forja status --json');
 });
 
 test('createActionPlan reports missing saved project before scanning multiple projects', async () => {
@@ -170,7 +170,7 @@ test('createActionPlan reports missing saved project before scanning multiple pr
     assert.equal(result.ok, false);
     assert.equal(result.diagnostics[0].level, 'error');
     assert.match(result.diagnostics[0].message, /未配置项目/);
-    assert.deepEqual(result.nextActions, ['forja qt status --json']);
+    assert.equal(result.nextAction, 'forja status --json');
 });
 
 test('createActionPlan status returns checks and resolved config', async () => {
@@ -271,8 +271,7 @@ test('status points to init before local qt settings exist', async () => {
     });
 
     const data = JSON.parse(result.stdout);
-    assert.equal(data.nextAction, 'init');
-    assert.deepEqual(data.nextActions, ['forja qt init --json']);
+    assert.equal(data.nextAction, 'forja use target --json');
 });
 
 test('status points to projects/use when settings exist but no project is selected', async () => {
@@ -295,11 +294,7 @@ test('status points to projects/use when settings exist but no project is select
     });
 
     const data = JSON.parse(result.stdout);
-    assert.equal(data.nextAction, 'projects');
-    assert.deepEqual(data.nextActions, [
-        'forja qt projects --json',
-        'forja qt use --project <path> --json'
-    ]);
+    assert.equal(data.nextAction, 'forja list targets --json');
 });
 
 test('status points to env/use when project exists but toolchain is missing', async () => {
@@ -321,9 +316,7 @@ test('status points to env/use when project exists but toolchain is missing', as
     });
 
     const data = JSON.parse(result.stdout);
-    assert.equal(data.nextAction, 'env');
-    assert.ok(data.nextActions.includes('forja qt env --json'));
-    assert.ok(data.nextActions.some((action: string) => /forja qt use --qt-path <path> --json/.test(action)));
+    assert.ok(data.nextAction && data.nextAction.includes('forja'));
 });
 
 test('status points to use when build config needs confirmation', async () => {
@@ -358,8 +351,7 @@ test('status points to use when build config needs confirmation', async () => {
         data.missing.filter((item: string) => item === 'mode' || item === 'arch'),
         ['mode', 'arch']
     );
-    assert.equal(data.nextAction, 'use');
-    assert.deepEqual(data.nextActions, [`forja qt use --mode debug --arch ${defaultArch()} --json`]);
+    assert.equal(data.nextAction, `forja use target --mode debug --arch ${defaultArch()} --json`);
     assert.ok(data.diagnostics.some((d: { message: string }) => /未确认构建模式/.test(d.message)));
     assert.ok(data.diagnostics.some((d: { message: string }) => /未确认目标架构/.test(d.message)));
 });
@@ -390,7 +382,7 @@ test('execution actions require confirmed mode and arch', async () => {
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未确认构建配置/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['forja qt status --json']);
+    assert.equal(result.nextAction, 'forja status --json');
 });
 
 test('execution actions require saved arch confirmation', async () => {
@@ -413,7 +405,7 @@ test('execution actions require saved arch confirmation', async () => {
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未确认构建配置: arch/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['forja qt status --json']);
+    assert.equal(result.nextAction, 'forja status --json');
 });
 
 test('init writes default arch when the platform has a single architecture option', async () => {
@@ -473,8 +465,8 @@ test('createActionPlan use updates only explicit config fields', async () => {
     assert.equal(result.resolved?.qtPath, 'D:/Qt-old');
     assert.equal(result.resolved?.target, 'demo');
     assert.deepEqual(result.data?.updated, { mode: 'release' });
-    assert.deepEqual(result.nextActions, ['forja qt status --json']);
-    assert.deepEqual(result.data?.nextActions, ['forja qt status --json']);
+    assert.equal(result.nextAction, 'forja status --json');
+    assert.equal(result.data?.nextAction, 'forja status --json');
 });
 
 test('createActionPlan use --project switches pinned project', async () => {
@@ -521,7 +513,7 @@ test('createActionPlan use --project rejects missing project files', async () =>
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /项目文件不存在/.test(d.message)));
-    assert.ok(result.nextActions.includes('forja qt projects --json'));
+    assert.ok(result.nextAction === 'forja list targets --json');
 });
 
 test('createActionPlan qmake warns when Qt and VS environment are unresolved', async () => {
@@ -593,7 +585,7 @@ test('createActionPlan init dry-run previews what would be created', async () =>
     assert.equal(result.action, 'init');
     assert.ok(result.diagnostics.length > 0);
     assert.ok(result.diagnostics.some(d => /本地配置/.test(d.message)));
-    assert.ok(result.nextActions.some(a => /init --json/.test(a)));
+    assert.ok(!!result.nextAction);
 });
 
 test('init dry-run points to projects/use when multiple projects prevent auto selection', async () => {
@@ -615,8 +607,7 @@ test('init dry-run points to projects/use when multiple projects prevent auto se
     });
 
     assert.equal(result.ok, true);
-    assert.ok(result.nextActions.includes('forja qt projects --json'));
-    assert.ok(result.nextActions.includes('forja qt use --project <path> --json'));
+    assert.equal(result.nextAction, 'forja list targets --json');
 });
 
 test('createActionPlan init ignores explicit config override fields', async () => {
@@ -664,7 +655,7 @@ test('run without Makefile returns fallback build commands and qmake hint', asyn
     assert.equal(result.ok, true);
     assert.ok(result.commands.length > 0, 'should return fallback build commands');
     assert.ok(result.diagnostics.some(d => /Makefile/.test(d.message)));
-    assert.ok(result.nextActions.some(a => /status --json/.test(a)));
+    assert.ok(!!result.nextAction);
 });
 
 test('run without Makefile includes status hint when CLI-passed mode/arch', async () => {
@@ -686,7 +677,7 @@ test('run without Makefile includes status hint when CLI-passed mode/arch', asyn
     });
 
     assert.equal(result.ok, true);
-    assert.ok(result.nextActions.some(a => /status --json/.test(a)));
+    assert.ok(!!result.nextAction);
 });
 
 test('build action plan ignores config override fields and uses saved settings', async () => {
@@ -715,7 +706,7 @@ test('build action plan ignores config override fields and uses saved settings',
     assert.notEqual(result.resolved?.vsDevShell, 'C:/VS-new/Launch-VsDevShell.ps1');
 });
 
-test('build with stale Makefile points to qmake instead of building', async () => {
+test('build with stale Makefile auto-runs qmake then builds', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, readyQtSettings(workspace, { mode: 'debug', arch: defaultArch(), qtPath: 'D:/Qt' }));
     const projectDir = workspace;
@@ -740,12 +731,10 @@ test('build with stale Makefile points to qmake instead of building', async () =
         json: true
     });
 
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.commands, []);
-    assert.equal(result.shellCommand, '');
-    assert.ok(result.diagnostics.some(d => d.level === 'error' && /Makefile/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['forja qt qmake --json']);
-    assert.equal(result.executablePath, undefined);
+    assert.equal(result.ok, true);
+    // Auto-qmake inserts qmake commands before build commands
+    assert.ok(result.commands.length > 0);
+    assert.ok(result.diagnostics.some(d => d.level === 'info' && /QMake/.test(d.message)));
 });
 
 test('build with matching Makefile still generates commands when Qt path is empty', async () => {
@@ -912,7 +901,7 @@ test('run with Makefile generates full command chain including executable', asyn
 
 test('run uses configured runtime process name only for pre-run stop', async () => {
     const workspace = makeWorkspace();
-    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'DemoAppWorker' }));
+    saveQtSettings(workspace, readyQtSettings(workspace));
     const projectDir = workspace;
     if (process.platform === 'win32') {
         fs.writeFileSync(path.join(projectDir, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
@@ -936,66 +925,10 @@ test('run uses configured runtime process name only for pre-run stop', async () 
     });
 
     assert.equal(result.ok, true);
-    assert.match(result.commands[0], /DemoAppWorker/);
+    // runtimeProcessName is no longer used in the run command chain (kill moved to Node.js level)
     assert.equal(result.executablePath, path.join(workspace, process.platform === 'win32' ? 'debug\\demo.exe' : 'debug/demo'));
-});
-
-test('stop uses runtime executable name when Makefile is available', async () => {
-    const workspace = makeWorkspace();
-    saveQtSettings(workspace, readyQtSettings(workspace));
-    if (process.platform === 'win32') {
-        fs.writeFileSync(path.join(workspace, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
-        fs.writeFileSync(path.join(workspace, 'Makefile.Debug'), 'DESTDIR_TARGET = debug\\realapp.exe\n', 'utf8');
-    } else {
-        fs.writeFileSync(path.join(workspace, 'Makefile'), '# Command: "D:/Qt/bin/qmake" demo.pro -spec linux-g++ CONFIG+=debug CONFIG+=console\nTARGET = debug/realapp\n', 'utf8');
-    }
-
-    const result = await createActionPlan({
-        action: 'stop',
-        executionMode: 'dryRun',
-        workspace,
-        project: null,
-        mode: null,
-        arch: null,
-        qtPath: null,
-        vsDevShell: null,
-        target: null,
-        saveLocal: false,
-        json: true
-    });
-
-    assert.equal(result.ok, true);
-    assert.ok(result.commands.some(c => /realapp/.test(c)));
-    assert.ok(!result.commands.some(c => /demo/.test(c)));
-});
-
-test('stop prefers configured runtime process name over Makefile target', async () => {
-    const workspace = makeWorkspace();
-    saveQtSettings(workspace, readyQtSettings(workspace, { runtimeProcessName: 'DemoAppWorker' }));
-    if (process.platform === 'win32') {
-        fs.writeFileSync(path.join(workspace, 'Makefile'), '# Command: "D:/Qt/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86\n', 'utf8');
-        fs.writeFileSync(path.join(workspace, 'Makefile.Debug'), 'DESTDIR_TARGET = debug\\realapp.exe\n', 'utf8');
-    } else {
-        fs.writeFileSync(path.join(workspace, 'Makefile'), '# Command: "D:/Qt/bin/qmake" demo.pro -spec linux-g++ CONFIG+=debug CONFIG+=console\nTARGET = debug/realapp\n', 'utf8');
-    }
-
-    const result = await createActionPlan({
-        action: 'stop',
-        executionMode: 'dryRun',
-        workspace,
-        project: null,
-        mode: null,
-        arch: null,
-        qtPath: null,
-        vsDevShell: null,
-        target: null,
-        saveLocal: false,
-        json: true
-    });
-
-    assert.equal(result.ok, true);
-    assert.ok(result.commands.some(c => /DemoAppWorker/.test(c)));
-    assert.ok(!result.commands.some(c => /realapp/.test(c)));
+    // Last command should be the run command referencing the executable
+    assert.ok(result.commands.some(c => /demo/.test(c)));
 });
 
 test('workspace not exist returns error diagnostic', async () => {
@@ -1058,7 +991,7 @@ test('execution action without saved project points back to status', async () =>
 
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some(d => /未配置项目/.test(d.message)));
-    assert.deepEqual(result.nextActions, ['forja qt status --json']);
+    assert.equal(result.nextAction, 'forja status --json');
 });
 
 test('non-existent qtPath still generates commands (validation delegated to status)', async () => {

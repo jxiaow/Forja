@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import * as path from 'path';
 import { SdkProjectInfo } from '../types';
-import { EXCLUDE_DIRS, EXCLUDE_PATH_SEGMENTS, DEFAULT_SCAN_DEPTH, SCAN_TIMEOUT_MS } from '../constants';
+import { DEFAULT_SCAN_DEPTH, SCAN_TIMEOUT_MS } from '../constants';
+import { scanSdkProjects } from '../../core/sdkProjectScanner';
 import { isWindows } from '../platform';
 import { log, logError } from '../utils/logger';
 import { getSdkSetting } from '../../vscode/settingsStore';
@@ -24,22 +24,29 @@ export class ProjectScanner {
     }
 
     const maxDepth = getSdkSetting('scanDepth') || DEFAULT_SCAN_DEPTH;
-    const filePattern = isWindows ? /\.sln$/i : /^(Makefile|makefile|GNUmakefile)$/;
 
-    log(`开始 fs 遍历扫描, 最大深度: ${maxDepth}, 排除目录: ${EXCLUDE_DIRS.join(',')}, 排除路径: ${EXCLUDE_PATH_SEGMENTS.join(',')}`);
-
-    const allResults: vscode.Uri[] = [];
+    log(`开始扫描, 最大深度: ${maxDepth}`);
 
     try {
+      const allResults: SdkProjectInfo[] = [];
+
       await this.scanWithTimeout(() => {
-        const deadline = Date.now() + SCAN_TIMEOUT_MS;
         for (const folder of workspaceFolders) {
           const wsRoot = folder.uri.fsPath;
-          this.walk(wsRoot, wsRoot, 0, maxDepth, filePattern, allResults, deadline);
+          const files = scanSdkProjects({
+            workspace: wsRoot,
+            maxDepth,
+            skipQtProjectDirs: true,
+            relativePaths: false, // need absolute paths for SdkProjectInfo
+          });
+          for (const filePath of files) {
+            allResults.push(this.toProjectInfo(filePath));
+          }
         }
       });
-      log(`fs 遍历返回 ${allResults.length} 个文件`);
-      this._projects = allResults.map(uri => this.uriToProjectInfo(uri));
+
+      log(`扫描完成，找到 ${allResults.length} 个项目`);
+      this._projects = allResults;
     } catch (err) {
       logError('项目扫描失败', err);
       this._projects = [];
@@ -48,42 +55,14 @@ export class ProjectScanner {
     return this._projects;
   }
 
-  /** 递归遍历目录 */
-  private walk(
-    dir: string,
-    wsRoot: string,
-    currentDepth: number,
-    maxDepth: number,
-    filePattern: RegExp,
-    results: vscode.Uri[],
-    deadline: number
-  ): void {
-    if (Date.now() > deadline) { throw new Error('Scan timed out'); }
-    if (currentDepth > maxDepth) { return; }
-
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        if (EXCLUDE_DIRS.includes(entry.name)) { continue; }
-        const subDir = path.join(dir, entry.name);
-        // 检查路径片段排除
-        const relativePath = path.relative(wsRoot, subDir).replace(/\\/g, '/');
-        if (EXCLUDE_PATH_SEGMENTS.some(seg => relativePath.includes(seg))) { continue; }
-        this.walk(subDir, wsRoot, currentDepth + 1, maxDepth, filePattern, results, deadline);
-      } else if (entry.isFile() && filePattern.test(entry.name)) {
-        // 同目录或父目录有 .pro 文件说明是 Qt 项目，跳过
-        if (this.isQtProjectDir(dir)) {
-          continue;
-        }
-        results.push(vscode.Uri.file(path.join(dir, entry.name)));
-      }
-    }
+  /** 将绝对路径转换为 SdkProjectInfo */
+  private toProjectInfo(filePath: string): SdkProjectInfo {
+    const fileName = path.basename(filePath);
+    const type = fileName.endsWith('.sln') ? 'sln' : 'makefile';
+    const name = type === 'sln'
+      ? path.basename(filePath, '.sln')
+      : path.basename(path.dirname(filePath));
+    return { name, path: filePath, type };
   }
 
   /** 带超时的扫描执行 */
@@ -102,35 +81,6 @@ export class ProjectScanner {
         reject(err);
       }
     });
-  }
-
-  /** 将 Uri 转换为 SdkProjectInfo */
-  private uriToProjectInfo(uri: vscode.Uri): SdkProjectInfo {
-    const filePath = uri.fsPath;
-    const fileName = path.basename(filePath);
-    const type = fileName.endsWith('.sln') ? 'sln' : 'makefile';
-    const name = type === 'sln'
-      ? path.basename(filePath, '.sln')
-      : path.basename(path.dirname(filePath));
-
-    return { name, path: filePath, type };
-  }
-
-  /** 检查目录是否属于 Qt 项目（当前目录或父目录包含 .pro 文件） */
-  private isQtProjectDir(dir: string): boolean {
-    if (this.hasPro(dir)) { return true; }
-    const parent = path.dirname(dir);
-    if (parent !== dir && this.hasPro(parent)) { return true; }
-    return false;
-  }
-
-  private hasPro(dir: string): boolean {
-    try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      return entries.some(e => e.isFile() && e.name.endsWith('.pro'));
-    } catch {
-      return false;
-    }
   }
 
   /** 根据扫描结果解析当前项目 */

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { detectEnv } from '../../qt/env/envDetector';
-import { generateCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
+import { generateCppProperties, generateSdkCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
 import { getState, setState } from '../../vscode/qtState';
 import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { createLogger } from '../../vscode/logger';
@@ -53,6 +53,15 @@ export async function handleMessage(
             }
             logger.info(`保存构建模式: "${modeVal}"`);
             await updateConfig('mode', modeVal as '' | 'debug' | 'release');
+            // Sync to activeTarget so CLI build/run use the updated value
+            const ws = getWorkspaceRoot();
+            if (ws) {
+                const { getActiveTarget, setActiveTarget } = await import('../../cli/commands/activeTarget');
+                const target = getActiveTarget(ws);
+                if (target && target.kind === 'qt') {
+                    setActiveTarget(ws, { ...target, mode: modeVal as 'debug' | 'release' });
+                }
+            }
             break;
         }
         case 'saveArch': {
@@ -63,6 +72,15 @@ export async function handleMessage(
             }
             logger.info(`保存目标架构: "${archVal}"`);
             await updateConfig('arch', archVal as '' | 'x86' | 'x64');
+            // Sync to activeTarget so CLI build/run use the updated value
+            const wsArch = getWorkspaceRoot();
+            if (wsArch) {
+                const { getActiveTarget: gat, setActiveTarget: sat } = await import('../../cli/commands/activeTarget');
+                const at = gat(wsArch);
+                if (at && at.kind === 'qt') {
+                    sat(wsArch, { ...at, arch: archVal as 'x86' | 'x64' });
+                }
+            }
             break;
         }
         case 'refreshEnv': {
@@ -75,7 +93,7 @@ export async function handleMessage(
             break;
         }
         case 'selectProject': {
-            await vscode.commands.executeCommand('forja.qt.selectProject');
+            await vscode.commands.executeCommand('forja.list');
             updateHtml();
             break;
         }
@@ -153,18 +171,37 @@ export async function handleMessage(
             await updateConfig('qmakeArgs', String(msg.value || '').trim());
             break;
         }
-        case 'saveRuntimeProcessName': {
-            const value = String(msg.value || '').replace(/\.exe$/i, '');
-            logger.info(`保存运行前停止进程名: "${value}"`);
-            await updateConfig('runtimeProcessName', value);
-            break;
-        }
         case 'saveManualProPath': {
             logger.info(`手动指定 .pro: "${msg.value}"`);
-            await updateConfig('manualProPath', String(msg.value || ''));
             if (msg.value) {
-                await vscode.commands.executeCommand('forja.qt.loadManualProject');
+                const { runUseTarget } = await import('../../cli/commands/use');
+                const { getWorkspaceRoot } = await import('../../qt/services/configService');
+                const { applyManualProjectSelection } = await import('../../qt/project/projectManager');
+                const workspace = getWorkspaceRoot() || '';
+                const result = await runUseTarget(workspace, { project: String(msg.value), interactive: true });
+                if (!result.ok) {
+                    const errorMsg = result.diagnostics?.[0]?.message || '项目选择失败';
+                    vscode.window.showErrorMessage(errorMsg);
+                    break;
+                }
+                // 同步更新 currentProject 内存状态（状态栏依赖此值）
+                applyManualProjectSelection(workspace, String(msg.value));
+            } else {
+                setState('currentProject', null);
+                // Also clear activeTarget and pinnedProject so CLI doesn't build old target
+                const { getWorkspaceRoot: gwr } = await import('../../qt/services/configService');
+                const ws = gwr();
+                if (ws) {
+                    const fs = await import('fs');
+                    const { projectConfigPath, loadQtSettings, saveQtSettings, loadSdkSettings, saveSdkSettings } = await import('../../core/settingsIO');
+                    try { fs.unlinkSync(projectConfigPath(ws, 'activeTarget')); } catch { /* may not exist */ }
+                    const qt = loadQtSettings(ws);
+                    if (qt.pinnedProject) { qt.pinnedProject = null; saveQtSettings(ws, qt); }
+                    const sdk = loadSdkSettings(ws);
+                    if (sdk.pinnedProject) { sdk.pinnedProject = null; saveSdkSettings(ws, sdk); }
+                }
             }
+            await updateConfig('manualProPath', String(msg.value || ''));
             updateHtml();
             break;
         }
@@ -187,13 +224,31 @@ export async function handleMessage(
             logger.info(`生成 IntelliSense: C=${msg.cStandard}, C++=${msg.cppStandard}`);
             if (msg.cStandard) { await updateConfig('cStandard', msg.cStandard); }
             if (msg.cppStandard) { await updateConfig('cppStandard', msg.cppStandard); }
-            const project = getState().currentProject;
-            if (project) {
-                logger.info(`项目: ${getEffectiveProjectName(project, getTarget(), project.proFile)}`);
-                generateCppProperties(project);
+
+            // 判断当前活跃的项目类型
+            const { getActiveTarget } = await import('../../cli/commands/activeTarget');
+            const { resolveProjectRoot } = await import('../../vscode/workspaceResolver');
+            const sdkWs = resolveProjectRoot('sdk') || '';
+            const qtWs = resolveProjectRoot('qt') || getWorkspaceRoot() || '';
+            const activeTarget = getActiveTarget(sdkWs) || getActiveTarget(qtWs) || getActiveTarget(getWorkspaceRoot() || '');
+
+            if (activeTarget?.kind === 'sdk') {
+                // SDK 项目：从 .sln 解析 .vcxproj 生成
+                const slnAbsPath = require('path').isAbsolute(activeTarget.project)
+                    ? activeTarget.project
+                    : require('path').join(sdkWs, activeTarget.project);
+                const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || sdkWs;
+                generateSdkCppProperties(slnAbsPath, wsRoot);
             } else {
-                logger.warn('无项目，无法生成 IntelliSense');
-                vscode.window.showWarningMessage('请先选择项目');
+                // Qt 项目：从 .pro / Makefile 生成
+                const project = getState().currentProject;
+                if (project) {
+                    logger.info(`项目: ${getEffectiveProjectName(project, getTarget(), project.proFile)}`);
+                    generateCppProperties(project);
+                } else {
+                    logger.warn('无项目，无法生成 IntelliSense');
+                    vscode.window.showWarningMessage('请先选择项目');
+                }
             }
             break;
         }
@@ -336,7 +391,7 @@ export async function handleMessage(
         }
         case 'syncNow': {
             logger.info('手动触发同步');
-            await vscode.commands.executeCommand('forja.syncChangedFiles');
+            await vscode.commands.executeCommand('forja.sync');
             break;
         }
         case 'testSyncConnection': {
@@ -402,6 +457,15 @@ export async function handleMessage(
             if (val !== 'debug' && val !== 'release') { break; }
             logger.info(`保存 SDK 构建模式: "${val}"`);
             setSdkSetting('mode', val);
+            // Sync to activeTarget so CLI build/run use the updated value
+            const ws = getWorkspaceRoot();
+            if (ws) {
+                const { getActiveTarget, setActiveTarget } = await import('../../cli/commands/activeTarget');
+                const target = getActiveTarget(ws);
+                if (target && target.kind === 'sdk') {
+                    setActiveTarget(ws, { ...target, mode: val });
+                }
+            }
             break;
         }
         case 'saveSdkArch': {
@@ -413,6 +477,15 @@ export async function handleMessage(
             if (val !== 'x86' && val !== 'x64') { break; }
             logger.info(`保存 SDK 目标架构: "${val}"`);
             setSdkSetting('arch', val);
+            // Sync to activeTarget so CLI build/run use the updated value
+            const wsArch = getWorkspaceRoot();
+            if (wsArch) {
+                const { getActiveTarget: gat, setActiveTarget: sat } = await import('../../cli/commands/activeTarget');
+                const at = gat(wsArch);
+                if (at && at.kind === 'sdk') {
+                    sat(wsArch, { ...at, arch: val });
+                }
+            }
             break;
         }
         case 'saveSdkVsInstall': {
@@ -422,7 +495,7 @@ export async function handleMessage(
             break;
         }
         case 'selectSdkProject': {
-            await vscode.commands.executeCommand('forja.sdk.selectProject');
+            await vscode.commands.executeCommand('forja.list');
             updateHtml();
             break;
         }

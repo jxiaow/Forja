@@ -13,18 +13,36 @@ const root = path.resolve(__dirname, '..');
 const srcOut = path.join(root, 'out');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const version = pkg.version;
+
+// Channel: auto-detect from version (.dev suffix → dev), or override with --channel
+const channelIdx = process.argv.indexOf('--channel');
+const channel = channelIdx >= 0 && process.argv[channelIdx + 1]
+    ? process.argv[channelIdx + 1]
+    : (version.endsWith('.dev') ? 'dev' : 'stable');
+
+// Dev builds append date: 0.7.55.dev.202607031430
+function dateStamp() {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+}
+const dateSuffix = (channel === 'dev') ? `.${dateStamp()}` : '';
+const displayVersion = `${version}${dateSuffix}`;
+
 const distCli = path.join(root, 'dist', `forja-${version}`, 'cli');
 const tmpBuild = path.join(root, 'dist', '_cli-build');
 
 // Directories to copy (relative to out/)
 const dirs = [
     'cli',
+    'cli/commands',
+    'cli/commands/useTarget',
     'qt/cli',
     'qt/shared',
     'qt/env',
     'qt/platform/win',
     'qt/platform/linux',
     'sdk/cli',
+    'sdk/shared',
     'remote/cli',
     'remote/core'
 ];
@@ -45,7 +63,9 @@ const coreFiles = [
     'core/sshTransport.js',
     'core/gitChangedFiles.js',
     'core/gitRepoResolver.js',
-    'core/syncFileSelection.js'
+    'core/syncFileSelection.js',
+    'core/sdkProjectScanner.js',
+    'core/projectTypeDetector.js'
 ];
 
 // Individual files needed from qt/platform/ (exclude builder.js, which depends on vscode)
@@ -60,6 +80,9 @@ const rootFiles = ['version.js'];
 
 // Individual files needed from sdk/ (non-vscode ones)
 const sdkFiles = ['sdk/constants.js'];
+
+// Individual files needed from qt/build/ (non-vscode ones)
+const qtBuildFiles = ['qt/build/designer.js'];
 
 function copyDir(src, dst) {
     if (!fs.existsSync(src)) { return; }
@@ -125,6 +148,17 @@ for (const file of rootFiles) {
     }
 }
 
+// Patch version.js with date suffix for dev builds
+if (dateSuffix && fs.existsSync(path.join(tmpBuild, 'version.js'))) {
+    const vFile = path.join(tmpBuild, 'version.js');
+    let vContent = fs.readFileSync(vFile, 'utf8');
+    vContent = vContent.replace(
+        /VERSION\s*=\s*["']([^"']+)["']/,
+        `VERSION = "$1${dateSuffix}"`
+    );
+    fs.writeFileSync(vFile, vContent, 'utf8');
+}
+
 // Copy individual sync files (non-vscode only)
 for (const file of syncFiles) {
     const srcFile = path.join(srcOut, file);
@@ -155,6 +189,16 @@ for (const file of sdkFiles) {
     }
 }
 
+// Copy individual qt/build files (non-vscode only)
+for (const file of qtBuildFiles) {
+    const srcFile = path.join(srcOut, file);
+    const dstFile = path.join(tmpBuild, file);
+    if (fs.existsSync(srcFile)) {
+        fs.mkdirSync(path.dirname(dstFile), { recursive: true });
+        fs.copyFileSync(srcFile, dstFile);
+    }
+}
+
 // Ensure shebang on CLI entry point
 const entryFile = path.join(tmpBuild, 'cli', 'index.js');
 if (fs.existsSync(entryFile)) {
@@ -174,7 +218,7 @@ if (fs.existsSync(cliReadme)) {
 const mainPkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const cliPkg = {
     name: 'forja',
-    version: mainPkg.version,
+    version: displayVersion,
     description: 'CLI for C++ project builds — Qt (qmake) and SDK (.sln/Makefile)',
     license: 'MIT',
     bin: {
@@ -204,7 +248,7 @@ execSync('npm pack', { cwd: tmpBuild, stdio: 'inherit' });
 const tgzFiles = fs.readdirSync(tmpBuild).filter(f => f.endsWith('.tgz'));
 for (const tgz of tgzFiles) {
     const src = path.join(tmpBuild, tgz);
-    const dstName = `forja-cli-${version}.tgz`;
+    const dstName = `forja-cli-${displayVersion}.tgz`;
     const dst = path.join(distCli, dstName);
     fs.renameSync(src, dst);
     console.log(`Packed: dist/forja-${version}/cli/${dstName}`);
@@ -230,4 +274,4 @@ if (fs.existsSync(skillsSrc)) {
     console.log('Copied: dist/forja-' + version + '/cli/skills/forja/');
 }
 
-console.log(`\nCLI package complete: dist/forja-${version}/cli/`);
+console.log(`\nCLI package complete (${channel}): dist/forja-${version}/cli/`);

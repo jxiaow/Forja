@@ -1,20 +1,90 @@
 /**
  * SDK Module extension entry point.
- * Called by the unified Forja extension.ts when SDK projects are detected.
+ * Called by the Forja extension.ts when SDK projects are detected.
  */
 import * as vscode from 'vscode';
 import { StateManager } from './modules/stateManager';
 import { ConfigService } from './modules/configService';
 import { ProjectScanner } from './modules/projectScanner';
 import { SdkBuilder } from './modules/sdkBuilder';
-import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN, CMD_SHOW_ACTIONS, CMD_SELECT_PROJECT, CTX_ACTIVATED, TASK_SOURCE } from './constants';
+import { CTX_ACTIVATED, TASK_SOURCE } from './constants';
 import { isWindows } from './platform';
 import { initLogger, log, logError } from './utils/logger';
-import { setSdkState, activateSdkModuleIfNoQtProject, onSdkUpdate } from '../ui/unifiedStatusBar';
+import { setSdkState, activateSdkModuleIfNoQtProject, onSdkUpdate } from '../ui/statusBar';
 import { setSdkProjectRoot } from '../vscode/workspaceResolver';
 import { onSettingsChange } from '../vscode/settingsStore';
 
+// SDK 模块级实例（激活后初始化）
+let sdkBuilder: SdkBuilder | null = null;
+let stateManager: StateManager | null = null;
+let projectScanner: ProjectScanner | null = null;
+
+// 激活完成信号 — 防止在 activateSdk 完成前调用 buildSdk 等函数
+let _sdkReadyResolve: (() => void) | null = null;
+const sdkReady = new Promise<void>(resolve => { _sdkReadyResolve = resolve; });
+
+/**
+ * SDK 构建操作（供 vscode/commands.ts 调用）
+ */
+export async function buildSdk(): Promise<void> {
+    await sdkReady;
+    if (!sdkBuilder) {
+        vscode.window.showErrorMessage('SDK 模块未激活');
+        return;
+    }
+    log('执行 SDK Build');
+    await sdkBuilder.build();
+}
+
+export async function rebuildSdk(): Promise<void> {
+    await sdkReady;
+    if (!sdkBuilder) {
+        vscode.window.showErrorMessage('SDK 模块未激活');
+        return;
+    }
+    log('执行 SDK Rebuild');
+    await sdkBuilder.rebuild();
+}
+
+export async function cleanSdk(): Promise<void> {
+    await sdkReady;
+    if (!sdkBuilder) {
+        vscode.window.showErrorMessage('SDK 模块未激活');
+        return;
+    }
+    log('执行 SDK Clean');
+    await sdkBuilder.clean();
+}
+
+export async function selectSdkProject(): Promise<void> {
+    await sdkReady;
+    if (!projectScanner || !stateManager) {
+        vscode.window.showErrorMessage('SDK 模块未激活');
+        return;
+    }
+    log('执行 SDK Select Project');
+    const projects = projectScanner.projects;
+    if (projects.length === 0) {
+        vscode.window.showInformationMessage('Forja SDK: 未找到可用的 SDK 项目');
+        return;
+    }
+    const currentPath = stateManager.currentProject?.path;
+    const items = projects.map(p => ({
+        label: p.name,
+        description: p.path === currentPath ? '（当前）' : p.path,
+        project: p
+    }));
+    const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: '选择 SDK 项目'
+    });
+    if (selected) {
+        stateManager.currentProject = (selected as typeof items[0]).project;
+        await stateManager.persistToConfig();
+    }
+}
+
 export async function activateSdk(context: vscode.ExtensionContext): Promise<void> {
+    try {
     // 0. 初始化日志
     const outputChannel = initLogger();
     context.subscriptions.push(outputChannel);
@@ -24,12 +94,12 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
 
     // 1. 初始化基础服务
     const configService = new ConfigService();
-    const stateManager = new StateManager();
-    const projectScanner = new ProjectScanner();
+    const sm = new StateManager();
+    const ps = new ProjectScanner();
 
     // 2. 扫描工作区项目，确定 SDK workspace root
     log('开始扫描工作区项目...');
-    const projects = await projectScanner.scan();
+    const projects = await ps.scan();
     log(`扫描完成，找到 ${projects.length} 个项目:`);
     projects.forEach(p => log(`  - ${p.name} (${p.type}): ${p.path}`));
 
@@ -42,32 +112,32 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     // 3. 无 SDK 项目时，跳过项目初始化
     if (projects.length === 0) {
         log('未找到 SDK 项目');
-        stateManager.currentProject = null;
+        sm.currentProject = null;
     } else {
         // 4. 从配置恢复状态（在 workspace root 确定之后，确保读取正确的配置文件）
-        await stateManager.restoreFromConfig();
-        log(`恢复配置: mode=${stateManager.mode}, arch=${stateManager.arch}, project=${stateManager.currentProject?.path ?? 'null'}`);
+        await sm.restoreFromConfig();
+        log(`恢复配置: mode=${sm.mode}, arch=${sm.arch}, project=${sm.currentProject?.path ?? 'null'}`);
 
         // 5. 解析当前项目
-        if (stateManager.currentProject) {
-            const exists = projects.find(p => p.path === stateManager.currentProject?.path);
+        if (sm.currentProject) {
+            const exists = projects.find(p => p.path === sm.currentProject?.path);
             if (!exists) {
-                log(`持久化的项目不存在: ${stateManager.currentProject.path}，重新选择...`);
-                stateManager.currentProject = null;
-                await stateManager.persistToConfig();
-                stateManager.currentProject = await projectScanner.resolveCurrentProject(projects);
-                if (stateManager.currentProject) {
-                    await stateManager.persistToConfig();
+                log(`持久化的项目不存在: ${sm.currentProject.path}，重新选择...`);
+                sm.currentProject = null;
+                await sm.persistToConfig();
+                sm.currentProject = await ps.resolveCurrentProject(projects);
+                if (sm.currentProject) {
+                    await sm.persistToConfig();
                 }
             } else {
-                log(`已恢复项目: ${stateManager.currentProject.name}`);
+                log(`已恢复项目: ${sm.currentProject.name}`);
             }
         } else {
             log('无持久化项目，尝试自动选择...');
-            stateManager.currentProject = await projectScanner.resolveCurrentProject(projects);
-            if (stateManager.currentProject) {
-                log(`自动选择项目: ${stateManager.currentProject.name}`);
-                await stateManager.persistToConfig();
+            sm.currentProject = await ps.resolveCurrentProject(projects);
+            if (sm.currentProject) {
+                log(`自动选择项目: ${sm.currentProject.name}`);
+                await sm.persistToConfig();
             } else {
                 log('未选择任何项目');
             }
@@ -87,21 +157,22 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
 
     // 6. 初始化 UI 组件（使用统一状态栏）
     const updateSdkStatusBar = () => {
-        const project = stateManager.currentProject;
+        const project = sm.currentProject;
         setSdkState({
             projectName: project?.name || '',
-            mode: stateManager.mode,
-            arch: stateManager.arch,
-            isBuilding: stateManager.isBuilding
+            mode: sm.mode,
+            arch: sm.arch,
+            isBuilding: sm.isBuilding
         });
     };
-    stateManager.onStateChanged(() => updateSdkStatusBar());
+    sm.onStateChanged(() => updateSdkStatusBar());
     updateSdkStatusBar();
     // 状态栏切换 SDK mode/arch 时，通过 stateManager 持久化到正确的 workspace 配置
     onSdkUpdate(({ mode, arch }) => {
-        stateManager.mode = mode as import('./types').BuildMode;
-        stateManager.arch = arch as import('./types').Arch;
-        stateManager.persistToConfig();
+        sm.mode = mode as import('./types').BuildMode;
+        sm.arch = arch as import('./types').Arch;
+        sm.persistToConfig()
+            .catch((e: Error) => logError('状态栏更新后保存 SDK 配置失败', e));
     });
     let sdkSettingsDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     context.subscriptions.push(onSettingsChange((section) => {
@@ -110,7 +181,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         if (sdkSettingsDebounceTimer) { clearTimeout(sdkSettingsDebounceTimer); }
         sdkSettingsDebounceTimer = setTimeout(() => {
             sdkSettingsDebounceTimer = undefined;
-            stateManager.restoreFromConfig()
+            sm.restoreFromConfig()
                 .then(async () => {
                     if (isWindows) {
                         await configService.getVsDevCmdPath();
@@ -121,60 +192,21 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         }, 300);
     }));
     // 有 SDK 项目时激活 SDK 模块
-    if (stateManager.currentProject) {
-        activateSdkModuleIfNoQtProject();
+    if (sm.currentProject) {
+        const wsRoot = sdkWorkspaceRoot || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        activateSdkModuleIfNoQtProject(wsRoot);
     }
     log('状态栏已初始化（统一模式）');
 
-    // 7. 初始化 Builder
-    const sdkBuilder = new SdkBuilder(stateManager, configService);
+    // 7. 初始化 Builder 并赋值给模块级变量
+    sdkBuilder = new SdkBuilder(sm, configService);
+    stateManager = sm;
+    projectScanner = ps;
 
-    // 8. 注册命令
-    const selectProjectHandler = async () => {
-        log('执行命令: Select Project');
-        const projects = projectScanner.projects;
-        if (projects.length === 0) {
-            vscode.window.showInformationMessage('Forja SDK: 未找到可用的 SDK 项目');
-            return;
-        }
-        const currentPath = stateManager.currentProject?.path;
-        const items = projects.map(p => ({
-            label: p.name,
-            description: p.path === currentPath ? '（当前）' : p.path,
-            project: p
-        }));
-        const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: '选择 SDK 项目'
-        });
-        if (selected) {
-            stateManager.currentProject = (selected as typeof items[0]).project;
-            await stateManager.persistToConfig();
-        }
-    };
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand(CMD_BUILD, () => {
-            log('执行命令: Build');
-            return sdkBuilder.build();
-        }),
-        vscode.commands.registerCommand(CMD_REBUILD, () => {
-            log('执行命令: Rebuild');
-            return sdkBuilder.rebuild();
-        }),
-        vscode.commands.registerCommand(CMD_CLEAN, () => {
-            log('执行命令: Clean');
-            return sdkBuilder.clean();
-        }),
-        vscode.commands.registerCommand(CMD_SELECT_PROJECT, selectProjectHandler),
-        // 保留旧命令 ID 作为别名，避免用户快捷键绑定失效
-        vscode.commands.registerCommand(CMD_SHOW_ACTIONS, selectProjectHandler)
-    );
-    log('命令已注册: build, rebuild, clean, selectProject, showActions(alias)');
-
-    // 9. 监听 Task 结束事件
+    // 8. 监听 Task 结束事件
     const taskEndListener = vscode.tasks.onDidEndTaskProcess((e) => {
         if (e.execution.task.source === TASK_SOURCE) {
-            stateManager.isBuilding = false;
+            sm.isBuilding = false;
             if (e.exitCode !== undefined && e.exitCode !== 0) {
                 logError(`编译失败，退出码: ${e.exitCode}`);
                 vscode.window.showWarningMessage(
@@ -191,9 +223,12 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     await vscode.commands.executeCommand('setContext', CTX_ACTIVATED, true);
 
     // 11. 注册 Disposables
-    context.subscriptions.push(stateManager, configService);
+    context.subscriptions.push(sm, configService);
 
     log('Forja SDK 模块激活完成!');
+    } finally {
+        _sdkReadyResolve!();
+    }
 }
 
 /**

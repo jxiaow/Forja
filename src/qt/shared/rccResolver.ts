@@ -3,6 +3,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { warn } from '../../core/loggerBase';
 
 export interface RccTarget {
     name: string;
@@ -47,7 +48,7 @@ export function scanRccTargets(rccProjectPath: string): RccTarget[] {
             }
         } catch (e) {
             // 权限不足或其他 IO 错误时记录，不中断扫描
-            console.warn(`[rccResolver] scanRccTargets failed on "${dir}": ${e instanceof Error ? e.message : e}`);
+            warn(`[rccResolver] scanRccTargets failed on "${dir}": ${e instanceof Error ? e.message : e}`);
         }
     };
     scanDir(rccProjectPath);

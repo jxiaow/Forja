@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { createLoggerBase } from './loggerBase';
+import { isIgnored } from './gitChangedFiles';
 import { forjaConfigDir } from './settingsIO';
 
 const logger = createLoggerBase('SyncState');
@@ -278,16 +279,7 @@ export function getSyncPendingInfo(workspaceRoot: string, ignore: string[]): { c
     let count = 0;
     for (const [key, record] of Object.entries(state.files)) {
         const relativePath = _relativePathFromStateKey(key);
-        // 检查忽略
-        const parts = relativePath.split(/[\\/]/);
-        let ignored = false;
-        for (const pattern of ignore) {
-            for (const part of parts) {
-                if (part === pattern) { ignored = true; break; }
-            }
-            if (ignored) { break; }
-        }
-        if (ignored) { continue; }
+        if (isIgnored(relativePath, ignore)) { continue; }
 
         const absPath = path.join(workspaceRoot, relativePath);
         try {
@@ -316,7 +308,9 @@ export function listSyncStates(): Array<{ filePath: string; workspace: string }>
                 if (raw.workspace) {
                     results.push({ filePath, workspace: raw.workspace });
                 }
-            } catch { /* skip malformed */ }
+            } catch (e) {
+                logger.warn(`sync state 扫描跳过损坏文件: ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
+            }
         }
     } catch { /* dir read failure */ }
     return results;

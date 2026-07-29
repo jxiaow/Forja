@@ -39,7 +39,7 @@ export interface RemoteRepoPlanResult {
     ok: boolean;
     repos: RemoteRepoPlan[];
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export function planRemoteRepositories(options: PlanRemoteRepositoriesOptions): RemoteRepoPlanResult {
@@ -90,7 +90,7 @@ export function planRemoteRepositories(options: PlanRemoteRepositoriesOptions): 
         ok,
         repos,
         diagnostics,
-        nextActions: ok ? [] : ['检查 remote repo 映射和 staged workspace 配置']
+        nextAction: ok ? undefined : '检查 remote repo 映射和 staged workspace 配置'
     };
 }
 

@@ -66,20 +66,3 @@ test('shell plan builder exposes shell execution metadata', () => {
     assert.equal(exec.shellExecutable, 'cmd.exe');
     assert.deepEqual(exec.shellArgs, ['/c']);
 });
-
-test('pre-run kill command fails when the target process is still alive', () => {
-    const winKill = winConfig.killCommand('demo');
-    const linuxKill = linuxConfig.killCommand('demo');
-
-    assert.match(winKill, /^\(taskkill \/F \/IM demo\.exe/);
-    assert.match(winKill, /2>nul/);
-    assert.match(winKill, /\|\| ver>nul\)$/);
-    assert.doesNotMatch(winKill, /powershell/);
-    assert.doesNotMatch(winKill, /projectDir/);
-    assert.deepEqual(winConfig.stopCommands('demo'), [winKill]);
-
-    assert.match(linuxKill, /pkill -x "demo"/);
-    assert.match(linuxKill, /pgrep -x "demo"/);
-    assert.match(linuxKill, /exit 1/);
-    assert.doesNotMatch(linuxKill, /; true$/);
-});

@@ -5,11 +5,13 @@ import { createLogger } from '../../vscode/logger';
 import { decodePinnedProject, encodePinnedProject } from './pinnedProject';
 import { getEffectiveProjectName, getProjectSelectionLabel } from './projectDisplay';
 import { getTarget } from '../services/configService';
-import { getState } from '../../vscode/qtState';
+import { getState, setState } from '../../vscode/qtState';
 import { getQtSetting, setQtSetting } from '../../vscode/settingsStore';
 import { setProjectRoot } from '../../vscode/workspaceResolver';
 import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../shared/projectScanner';
 import { resolveRuntimeTarget, parseRuntimeLibPaths } from '../shared/runtimeTarget';
+import { saveActiveTarget, loadActiveTarget } from '../../core/settingsIO';
+import { ensureLocalStateDir } from '../shared/localState';
 
 import { ProjectInfo } from './types';
 export type { ProjectInfo } from './types';
@@ -17,6 +19,46 @@ export interface MakefileInfo {
     target: string;         // 可执行文件名（不含 .exe）
     destDir: string;        // 输出目录
     exePath: string;        // 完整可执行文件绝对路径
+}
+
+/** Sync activeTarget when a Qt project is selected, so new build/run commands can find it. */
+function _syncQtActiveTarget(workspace: string, relativeProject: string): void {
+    const state = getState();
+    const existing = loadActiveTarget(workspace);
+    // Only create/update if no activeTarget or if it's already Qt kind
+    if (!existing || existing.kind === 'qt') {
+        saveActiveTarget(workspace, {
+            kind: 'qt',
+            project: relativeProject,
+            mode: state.mode || 'debug',
+            arch: state.arch || 'x86',
+            runAt: existing?.runAt || 'local',
+        });
+    }
+}
+
+/**
+ * Apply manual project selection: parse .pro file, update memory state, ensure .forja dir.
+ * Called by config panel when user manually specifies a .pro path.
+ * Returns the parsed ProjectInfo or null if parsing fails.
+ */
+export function applyManualProjectSelection(workspace: string, proPath: string): ProjectInfo | null {
+    if (!proPath) {
+        setState('currentProject', null);
+        return null;
+    }
+    const absolutePath = path.isAbsolute(proPath) ? proPath : path.join(workspace, proPath);
+    try {
+        const info = parseProFile(absolutePath);
+        info.projectDir = path.dirname(absolutePath);
+        setState('currentProject', info);
+        if (workspace) {
+            ensureLocalStateDir(workspace);
+        }
+        return info;
+    } catch {
+        return null;
+    }
 }
 
 const logger = createLogger('Project');
@@ -118,6 +160,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         info.projectDir = path.dirname(item.relative);
         setProjectRoot(item.root);
         setQtSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
+        _syncQtActiveTarget(item.root, item.relative);
         return info;
     }
 
@@ -134,6 +177,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
             info.projectDir = path.dirname(item.relative);
             setProjectRoot(item.root);
             setQtSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
+            _syncQtActiveTarget(item.root, item.relative);
             return info;
         }
     }

@@ -15,7 +15,7 @@ export interface WorkspaceLinkResult {
     mode: 'remote';
     linked: string[];
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export async function executeWorkspaceLinks(options: ExecuteWorkspaceLinksOptions): Promise<WorkspaceLinkResult> {
@@ -50,7 +50,7 @@ export async function executeWorkspaceLinks(options: ExecuteWorkspaceLinksOption
         mode: 'remote',
         linked,
         diagnostics,
-        nextActions: ok ? [] : ['检查 remote-only 依赖路径后重试']
+        nextAction: ok ? undefined : '检查 remote-only 依赖路径后重试'
     };
 }
 

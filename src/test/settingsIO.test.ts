@@ -19,6 +19,7 @@ import {
     projectConfigPath,
     listProjectConfigs,
 } from '../core/settingsIO';
+import { setOutputWriter } from '../core/loggerBase';
 
 const _tmpDirs: string[] = [];
 const _createdFiles: string[] = [];
@@ -42,6 +43,20 @@ function makeWorkspace(): string {
 
 function trackFile(filePath: string): void {
     _createdFiles.push(filePath);
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function captureOutputLines<T>(fn: () => T): { result: T; lines: string[] } {
+    const lines: string[] = [];
+    setOutputWriter(line => lines.push(line));
+    try {
+        return { result: fn(), lines };
+    } finally {
+        setOutputWriter(null);
+    }
 }
 
 // ── loadQtSettings ──
@@ -74,7 +89,6 @@ test('loadQtSettings reads from ~/.forja/projects/<hash>.json', () => {
     assert.equal(settings.cStandard, 'c11');
     assert.equal(settings.fileSyncPromptEnabled, true);
     assert.equal(settings.pinnedProject, null);
-    assert.equal(settings.runtimeProcessName, '');
     assert.equal(settings.qmakeArgs, '');
 });
 
@@ -91,7 +105,6 @@ test('loadQtSettings preserves all field types correctly', () => {
         qtPath: 'D:/Qt',
         arch: 'x64',
         mode: 'release',
-        runtimeProcessName: 'DemoAppWorker',
         qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug',
         scanExcludeDirs: ['vendor'],
         pinnedProject: { root: 'C:/ws', relative: 'app.pro' },
@@ -103,7 +116,6 @@ test('loadQtSettings preserves all field types correctly', () => {
     assert.equal(settings.qtPath, 'D:/Qt');
     assert.equal(settings.arch, 'x64');
     assert.equal(settings.mode, 'release');
-    assert.equal(settings.runtimeProcessName, 'DemoAppWorker');
     assert.equal(settings.qmakeArgs, 'DEFINES+=FEATURE_X CONFIG+=qml_debug');
     assert.deepEqual(settings.scanExcludeDirs, ['vendor']);
     assert.deepEqual(settings.pinnedProject, { root: 'C:/ws', relative: 'app.pro' });
@@ -120,8 +132,14 @@ test('loadQtSettings returns defaults when file is malformed', () => {
     if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
     fs.writeFileSync(filePath, '{ invalid json !!!', 'utf8');
 
-    const settings = loadQtSettings(workspace);
+    const { result: settings, lines } = captureOutputLines(() => loadQtSettings(workspace));
     assert.deepEqual(settings, DEFAULT_QT);
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /\[WARN\]/);
+    assert.match(lines[0], /qt 配置读取失败/);
+    assert.match(lines[0], /invalid json/i);
+    assert.match(lines[0], new RegExp(escapeRegExp(filePath)));
+    fs.rmSync(filePath, { force: true });
 });
 
 test('loadQtSettings uses unique child workspace config from parent directory', () => {
@@ -222,6 +240,25 @@ test('loadSdkSettings returns defaults when no config exists', () => {
     assert.deepEqual(settings, DEFAULT_SDK);
 });
 
+test('loadSdkSettings warns and returns defaults when file is malformed', () => {
+    const workspace = makeWorkspace();
+    const filePath = projectConfigPath(workspace, 'sdk');
+    trackFile(filePath);
+
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    fs.writeFileSync(filePath, '{ invalid json !!!', 'utf8');
+
+    const { result: settings, lines } = captureOutputLines(() => loadSdkSettings(workspace));
+    assert.deepEqual(settings, DEFAULT_SDK);
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /\[WARN\]/);
+    assert.match(lines[0], /sdk 配置读取失败/);
+    assert.match(lines[0], /invalid json/i);
+    assert.match(lines[0], new RegExp(escapeRegExp(filePath)));
+    fs.rmSync(filePath, { force: true });
+});
+
 test('saveSdkSettings round-trips with loadSdkSettings', () => {
     const workspace = makeWorkspace();
     trackFile(projectConfigPath(workspace, 'sdk'));
@@ -239,6 +276,26 @@ test('loadSyncSettings returns defaults when no config exists', () => {
     const workspace = makeWorkspace();
     const settings = loadSyncSettings(workspace);
     assert.deepEqual(settings, DEFAULT_SYNC);
+});
+
+test('loadSyncSettings warns and returns defaults when file is malformed', () => {
+    const workspace = makeWorkspace();
+    const filePath = projectConfigPath(workspace, 'sync');
+    trackFile(filePath);
+
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    fs.writeFileSync(filePath, '{ invalid json !!!', 'utf8');
+
+    const { result: settings, lines } = captureOutputLines(() => loadSyncSettings(workspace));
+    assert.deepEqual(settings, DEFAULT_SYNC);
+
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /\[WARN\]/);
+    assert.match(lines[0], /sync 配置读取失败/);
+    assert.match(lines[0], /invalid json/i);
+    assert.match(lines[0], new RegExp(escapeRegExp(filePath)));
+    fs.rmSync(filePath, { force: true });
 });
 
 test('saveSyncSettings round-trips with loadSyncSettings', () => {
@@ -299,6 +356,25 @@ test('saveRemoteSettings round-trips with loadRemoteSettings', () => {
     assert.equal(loaded.remoteForjaBin, '/opt/forja/bin/forja');
     assert.deepEqual(loaded.buildOrder, [{ target: 'qt', action: 'build', args: ['--verbose'] }]);
     assert.deepEqual(loaded.transfer, { deployServer: 'deploy-1', deployPath: '/opt/app', artifacts: ['build/app.exe'] });
+});
+
+test('loadRemoteSettings warns and returns defaults when file is malformed', () => {
+    const workspace = makeWorkspace();
+    const filePath = projectConfigPath(workspace, 'remote');
+    trackFile(filePath);
+
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    fs.writeFileSync(filePath, '{ invalid json !!!', 'utf8');
+
+    const { result: settings, lines } = captureOutputLines(() => loadRemoteSettings(workspace));
+    assert.deepEqual(settings, DEFAULT_REMOTE);
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /\[WARN\]/);
+    assert.match(lines[0], /remote 配置读取失败/);
+    assert.match(lines[0], /invalid json/i);
+    assert.match(lines[0], new RegExp(escapeRegExp(filePath)));
+    fs.rmSync(filePath, { force: true });
 });
 
 test('saveRemoteSettings round-trips staged workspace repo mappings', () => {
@@ -399,4 +475,20 @@ test('listProjectConfigs returns saved configs', () => {
     const configs = listProjectConfigs();
     const found = configs.find(c => c.workspace === workspace && c.type === 'qt');
     assert.ok(found, 'should find the saved qt config');
+});
+
+test('listProjectConfigs warns when a project config file is malformed', () => {
+    const workspace = makeWorkspace();
+    const filePath = projectConfigPath(workspace, 'qt');
+    trackFile(filePath);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, '{not valid json', 'utf8');
+
+    const { result: configs, lines } = captureOutputLines(() => listProjectConfigs());
+
+    assert.equal(configs.some(c => c.filePath === filePath), false);
+    const matchingLines = lines.filter(line => line.includes(filePath));
+    assert.equal(matchingLines.length, 1);
+    assert.match(matchingLines[0], /\[WARN\]/);
+    assert.match(matchingLines[0], /项目配置扫描跳过损坏文件/);
 });

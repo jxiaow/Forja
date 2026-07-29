@@ -25,10 +25,10 @@ export interface CommandPlan {
 
 export interface ShellPlanBuilder {
     makeCommandLine(commands: string[]): ShellCommandLine;
+    initCommands(cfg: BuildConfig): string[];
     qmakeCommands(cfg: BuildConfig, extraConfigs?: string[]): CommandPlan;
     buildCommands(cfg: BuildConfig): CommandPlan;
     cleanCommands(cfg: BuildConfig): CommandPlan;
-    stopCommands(exeName: string): string[];
 }
 
 export function createShellPlanBuilder(config: PlatformConfig): ShellPlanBuilder {
@@ -47,6 +47,10 @@ export function createShellPlanBuilder(config: PlatformConfig): ShellPlanBuilder
                 shellExecutable: config.shellExecutable,
                 shellArgs: config.shellArgs || []
             };
+        },
+
+        initCommands(cfg: BuildConfig): string[] {
+            return [...config.initCommands(cfg), config.cdCommand(cfg.projectDir)];
         },
 
         qmakeCommands(cfg: BuildConfig, extraConfigs: string[] = []): CommandPlan {
@@ -77,10 +81,6 @@ export function createShellPlanBuilder(config: PlatformConfig): ShellPlanBuilder
                 commands: assembleCommands(cfg, [config.cleanCommand]),
                 matcher: config.cleanMatcher
             };
-        },
-
-        stopCommands(exeName: string): string[] {
-            return config.stopCommands(exeName);
         }
     };
 }

@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as os from 'os';
+import { warn } from './loggerBase';
 
 // ── 类型定义 ──
 
@@ -19,11 +20,11 @@ export interface QtSettings {
     arch: 'x86' | 'x64' | '';
     vsInstall: string;
     qtPath: string;
+    qtVersion: string;
     jomPath: string;
     pinnedProject: { root: string; relative: string } | null;
     target: string;
     qmakeArgs: string;
-    runtimeProcessName: string;
     cStandard: string;
     cppStandard: string;
     designerPath: string;
@@ -34,6 +35,7 @@ export interface QtSettings {
     customCommands: { name: string; command: string }[];
     fileSyncPromptEnabled: boolean;
     qmakeReminderEnabled: boolean;
+    suppressedWarnings?: string[];
 }
 
 export interface SdkSettings {
@@ -87,6 +89,21 @@ export interface RemoteSettings {
     profile: string;
     remoteWorkspace: string;
     repos: RemoteRepoSettings[];
+    // Remote execution target (separate from sync)
+    selectedServer: string;
+    remotePaths: Record<string, string>;
+}
+
+export interface ActiveTargetSettings {
+    kind: 'qt' | 'sdk';
+    project: string;
+    mode: 'debug' | 'release';
+    arch: 'x86' | 'x64';
+    runAt: 'local' | 'remote';
+    qtPath?: string;
+    vsInstall?: string;
+    jomPath?: string;
+    qmakeTarget?: string;
 }
 
 export interface ForjaSettings {
@@ -103,11 +120,11 @@ export const DEFAULT_QT: Readonly<QtSettings> = {
     arch: '',
     vsInstall: '',
     qtPath: '',
+    qtVersion: '',
     jomPath: '',
     pinnedProject: null,
     target: '',
     qmakeArgs: '',
-    runtimeProcessName: '',
     cStandard: 'c11',
     cppStandard: 'c++11',
     designerPath: '',
@@ -141,7 +158,9 @@ export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
     workspaceMode: 'legacy',
     profile: '',
     remoteWorkspace: '',
-    repos: []
+    repos: [],
+    selectedServer: '',
+    remotePaths: {}
 };
 
 export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
@@ -162,8 +181,43 @@ export function projectsDir(): string {
     return path.join(forjaConfigDir(), 'projects');
 }
 
+// ── 全局配置 ──
+
+export interface GlobalConfig {
+    lang: string;
+}
+
+const DEFAULT_GLOBAL_CONFIG: GlobalConfig = { lang: '' };
+
+export function globalConfigPath(): string {
+    return path.join(forjaConfigDir(), 'config.json');
+}
+
+export function loadGlobalConfig(): GlobalConfig {
+    const filePath = globalConfigPath();
+    try {
+        if (fs.existsSync(filePath)) {
+            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            return { lang: typeof raw.lang === 'string' ? raw.lang : '' };
+        }
+    } catch {
+        // ignore
+    }
+    return { ...DEFAULT_GLOBAL_CONFIG };
+}
+
+export function saveGlobalConfig(config: Partial<GlobalConfig>): void {
+    const current = loadGlobalConfig();
+    const merged = { ...current, ...config };
+    const dir = forjaConfigDir();
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    fs.writeFileSync(globalConfigPath(), JSON.stringify(merged, null, 2), 'utf8');
+}
+
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
-export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync' | 'remote'): string {
+export type ConfigType = 'qt' | 'sdk' | 'sync' | 'remote' | 'activeTarget' | 'targetToolchains';
+
+export function projectConfigPath(workspace: string, type: ConfigType): string {
     const normalized = workspace.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     const hash = crypto.createHash('sha256').update(`${normalized}:${type}`).digest('hex').slice(0, 12);
     return path.join(projectsDir(), `${hash}.json`);
@@ -174,7 +228,7 @@ export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'
  * 子目录没有自己的配置时，自动继承父目录的。
  * 返回找到的第一个配置文件路径，没找到则返回当前 workspace 路径（用于新建）。
  */
-export function resolveConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync' | 'remote'): string {
+export function resolveConfigPath(workspace: string, type: ConfigType): string {
     let current = workspace;
     for (;;) {
         const filePath = projectConfigPath(current, type);
@@ -203,6 +257,20 @@ function resolveUniqueDescendantConfigPath(workspace: string, type: 'qt' | 'sdk'
     return matches.length === 1 ? matches[0].filePath : null;
 }
 
+// ── Corruption tracking ──
+
+export interface CorruptedConfig { path: string; detail: string }
+
+const _corruptedConfigs: CorruptedConfig[] = [];
+
+export function getCorruptedConfigs(): CorruptedConfig[] {
+    return [..._corruptedConfigs];
+}
+
+export function clearCorruptedConfigs(): void {
+    _corruptedConfigs.length = 0;
+}
+
 // ── Qt 配置读写 ──
 
 export function loadQtSettings(workspace: string): QtSettings {
@@ -212,7 +280,10 @@ export function loadQtSettings(workspace: string): QtSettings {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeQt(raw);
         }
-    } catch { /* file missing or malformed */ }
+    } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
+        warnSettingsLoadFailure('qt', filePath, e);
+    }
     return { ...DEFAULT_QT };
 }
 
@@ -236,7 +307,10 @@ export function loadSdkSettings(workspace: string): SdkSettings {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeSdk(raw);
         }
-    } catch { /* file missing or malformed */ }
+    } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
+        warnSettingsLoadFailure('sdk', filePath, e);
+    }
     return { ...DEFAULT_SDK };
 }
 
@@ -263,7 +337,10 @@ export function loadSyncSettings(workspace: string): SyncSettings {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeSync(raw);
         }
-    } catch { /* file missing or malformed */ }
+    } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
+        warnSettingsLoadFailure('sync', filePath, e);
+    }
     return { ...DEFAULT_SYNC };
 }
 
@@ -287,7 +364,10 @@ export function loadRemoteSettings(workspace: string): RemoteSettings {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeRemote(raw);
         }
-    } catch { /* file missing or malformed */ }
+    } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
+        warnSettingsLoadFailure('remote', filePath, e);
+    }
     return { ...DEFAULT_REMOTE };
 }
 
@@ -300,6 +380,92 @@ export function saveRemoteSettings(workspace: string, settings: RemoteSettings):
         ...settings
     };
     fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+}
+
+// ── ActiveTarget 读写 ──
+
+export function loadActiveTarget(workspace: string): ActiveTargetSettings | null {
+    const filePath = resolveConfigPath(workspace, 'activeTarget');
+    try {
+        if (fs.existsSync(filePath)) {
+            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            const result = sanitizeActiveTarget(raw);
+            if (result && typeof raw.workspace === 'string' && raw.workspace !== workspace) {
+                const configWorkspace = raw.workspace as string;
+                if (result.project && !path.isAbsolute(result.project)) {
+                    const absoluteProject = path.resolve(configWorkspace, result.project);
+                    const relativeToCurrent = path.relative(workspace, absoluteProject);
+                    result.project = relativeToCurrent;
+                }
+            }
+            return result;
+        }
+    } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
+        warnSettingsLoadFailure('activeTarget', filePath, e);
+    }
+    return null;
+}
+
+export function saveActiveTarget(workspace: string, settings: ActiveTargetSettings): void {
+    const filePath = projectConfigPath(workspace, 'activeTarget');
+    _ensureDir(filePath);
+    const data: Record<string, unknown> = {
+        workspace,
+        type: 'activeTarget',
+        ...settings
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+}
+
+function sanitizeActiveTarget(raw: Record<string, unknown>): ActiveTargetSettings | null {
+    const kind = raw.kind;
+    const project = raw.project;
+    if (kind !== 'qt' && kind !== 'sdk') { return null; }
+    if (typeof project !== 'string' || !project) { return null; }
+    return {
+        kind,
+        project,
+        mode: (raw.mode === 'debug' || raw.mode === 'release') ? raw.mode : 'debug',
+        arch: (raw.arch === 'x86' || raw.arch === 'x64') ? raw.arch : 'x64',
+        runAt: (raw.runAt === 'local' || raw.runAt === 'remote') ? raw.runAt : 'local',
+        ...(typeof raw.qtPath === 'string' ? { qtPath: raw.qtPath } : {}),
+        ...(typeof raw.vsInstall === 'string' ? { vsInstall: raw.vsInstall } : {}),
+        ...(typeof raw.jomPath === 'string' ? { jomPath: raw.jomPath } : {}),
+        ...(typeof raw.qmakeTarget === 'string' ? { qmakeTarget: raw.qmakeTarget } : {}),
+    };
+}
+
+// ── Per-target toolchain store ──
+
+export interface TargetToolchainConfig {
+    qtPath?: string;
+    qtVersion?: string;
+    vsInstall?: string;
+    jomPath?: string;
+    qmakeTarget?: string;
+}
+
+export function loadTargetToolchains(workspace: string): Record<string, TargetToolchainConfig> {
+    const filePath = resolveConfigPath(workspace, 'targetToolchains');
+    try {
+        if (fs.existsSync(filePath)) {
+            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+                return raw;
+            }
+        }
+    } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
+        warnSettingsLoadFailure('targetToolchains', filePath, e);
+    }
+    return {};
+}
+
+export function saveTargetToolchains(workspace: string, toolchains: Record<string, TargetToolchainConfig>): void {
+    const filePath = projectConfigPath(workspace, 'targetToolchains');
+    _ensureDir(filePath);
+    fs.writeFileSync(filePath, JSON.stringify(toolchains, null, 2), 'utf8');
 }
 
 // ── VS 路径推导 ──
@@ -338,7 +504,9 @@ export function listProjectConfigs(): Array<{ filePath: string; workspace: strin
                 if (raw.workspace && raw.type) {
                     results.push({ filePath, workspace: raw.workspace, type: raw.type });
                 }
-            } catch { /* skip malformed */ }
+            } catch (e) {
+                warn(`项目配置扫描跳过损坏文件: ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
+            }
         }
     } catch { /* dir read failure */ }
     return results;
@@ -353,7 +521,19 @@ function _ensureDir(filePath: string): void {
     }
 }
 
+function warnSettingsLoadFailure(type: ConfigType, filePath: string, e: unknown): void {
+    warn(`${type} 配置读取失败 (invalid JSON or read error): ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
+}
+
 function isString(v: unknown): v is string { return typeof v === 'string'; }
+
+function sanitizeStringRecord(v: Record<string, unknown>): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const [k, val] of Object.entries(v)) {
+        if (typeof val === 'string') { result[k] = val; }
+    }
+    return result;
+}
 function isBool(v: unknown): v is boolean { return typeof v === 'boolean'; }
 function isStringArray(v: unknown): v is string[] { return Array.isArray(v) && v.every(i => typeof i === 'string'); }
 function isNumber(v: unknown): v is number { return typeof v === 'number'; }
@@ -381,11 +561,11 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
         arch: (raw.arch === 'x86' || raw.arch === 'x64' || raw.arch === '') ? raw.arch : d.arch,
         vsInstall: isString(raw.vsInstall) ? raw.vsInstall : d.vsInstall,
         qtPath: isString(raw.qtPath) ? raw.qtPath : d.qtPath,
+        qtVersion: isString(raw.qtVersion) ? raw.qtVersion : d.qtVersion,
         jomPath: isString(raw.jomPath) ? raw.jomPath : d.jomPath,
         pinnedProject,
         target: isString(raw.target) ? raw.target : d.target,
         qmakeArgs: isString(raw.qmakeArgs) ? raw.qmakeArgs : d.qmakeArgs,
-        runtimeProcessName: isString(raw.runtimeProcessName) ? raw.runtimeProcessName : d.runtimeProcessName,
         cStandard: isString(raw.cStandard) ? raw.cStandard : d.cStandard,
         cppStandard: isString(raw.cppStandard) ? raw.cppStandard : d.cppStandard,
         designerPath: isString(raw.designerPath) ? raw.designerPath : d.designerPath,
@@ -395,7 +575,8 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
         scanExcludeDirs: isStringArray(raw.scanExcludeDirs) ? raw.scanExcludeDirs : d.scanExcludeDirs,
         customCommands,
         fileSyncPromptEnabled: isBool(raw.fileSyncPromptEnabled) ? raw.fileSyncPromptEnabled : d.fileSyncPromptEnabled,
-        qmakeReminderEnabled: isBool(raw.qmakeReminderEnabled) ? raw.qmakeReminderEnabled : d.qmakeReminderEnabled
+        qmakeReminderEnabled: isBool(raw.qmakeReminderEnabled) ? raw.qmakeReminderEnabled : d.qmakeReminderEnabled,
+        suppressedWarnings: isStringArray(raw.suppressedWarnings) ? raw.suppressedWarnings : undefined
     };
 }
 function sanitizeSdk(raw: Record<string, unknown>): SdkSettings {
@@ -483,7 +664,11 @@ function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
         workspaceMode: raw.workspaceMode === 'staged' || raw.workspaceMode === 'managed' ? 'staged' : d.workspaceMode,
         profile: isString(raw.profile) ? raw.profile : d.profile,
         remoteWorkspace: isString(raw.remoteWorkspace) ? raw.remoteWorkspace : d.remoteWorkspace,
-        repos
+        repos,
+        selectedServer: isString(raw.selectedServer) ? raw.selectedServer : d.selectedServer,
+        remotePaths: (raw.remotePaths && typeof raw.remotePaths === 'object' && !Array.isArray(raw.remotePaths))
+            ? sanitizeStringRecord(raw.remotePaths as Record<string, unknown>)
+            : d.remotePaths
     };
 }
 

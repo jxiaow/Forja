@@ -66,7 +66,7 @@ export interface ExecuteRemoteOverlaySyncResult {
     mode: 'remote';
     repos: RemoteOverlaySyncRepoResult[];
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export async function buildLocalOverlayPlan(options: BuildLocalOverlayPlanOptions): Promise<LocalOverlayPlan> {
@@ -173,7 +173,7 @@ export async function executeRemoteOverlaySync(options: ExecuteRemoteOverlaySync
     const diagnostics: RemoteDiagnostic[] = [...options.plan.diagnostics];
     const repos: RemoteOverlaySyncRepoResult[] = [];
     if (!options.plan.ok) {
-        return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: ['修复 overlay plan 诊断后重试'] };
+        return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextAction: '修复 overlay plan 诊断后重试' };
     }
 
     for (const repo of options.plan.repos) {
@@ -198,7 +198,7 @@ export async function executeRemoteOverlaySync(options: ExecuteRemoteOverlaySync
             repoDiagnostics.push(error);
             await persistCompletedOverlay();
             repos.push({ name: repo.name, ok: false, uploaded, deletedTracked, diagnostics: repoDiagnostics });
-            return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: ['修复 overlay sync 诊断后重试'] };
+            return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextAction: '修复 overlay sync 诊断后重试' };
         };
 
         for (const item of allUploads) {
@@ -244,12 +244,12 @@ export async function executeRemoteOverlaySync(options: ExecuteRemoteOverlaySync
             diagnostics.push(error);
             repoDiagnostics.push(error);
             repos.push({ name: repo.name, ok: false, uploaded, deletedTracked, diagnostics: repoDiagnostics });
-            return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: ['修复 overlay sync 诊断后重试'] };
+            return { ok: false, action: 'overlaySync', mode: 'remote', repos, diagnostics, nextAction: '修复 overlay sync 诊断后重试' };
         }
         repos.push({ name: repo.name, ok: true, uploaded, deletedTracked, diagnostics: repoDiagnostics });
     }
 
-    return { ok: diagnostics.every(item => item.level !== 'error'), action: 'overlaySync', mode: 'remote', repos, diagnostics, nextActions: [] };
+    return { ok: diagnostics.every(item => item.level !== 'error'), action: 'overlaySync', mode: 'remote', repos, diagnostics };
 }
 
 function defaultGitRunner(): GitRunner {

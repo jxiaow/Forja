@@ -11,12 +11,12 @@ import * as path from 'path';
  * Only warning/error diagnostics are included; info-level is conveyed through resolved.
  * When build fails: omit raw stdout/stderr (available via logFile), output errors + warningSummary instead.
  */
-function compactResult(result: CliResult): Record<string, unknown> {
+export function compactResult(result: CliResult): Record<string, unknown> {
     const out: Record<string, unknown> = { ok: result.ok, action: result.action };
 
     const diagnostics = result.diagnostics.filter(d => d.level !== 'info');
     if (diagnostics.length > 0) { out.diagnostics = diagnostics; }
-    if (result.nextActions.length > 0) { out.nextActions = result.nextActions; }
+    if (result.nextAction) { out.nextAction = result.nextAction; }
     if (result.exitCode !== null) { out.exitCode = result.exitCode; }
     if (result.errors.length > 0) { out.errors = result.errors; }
     if (result.warningSummary) { out.warningSummary = result.warningSummary; }
@@ -80,7 +80,7 @@ function humanMessage(message: string): string {
     return message.replace(/\s+--json\b/g, '');
 }
 
-function textOutput(result: CliResult): string {
+export function textOutput(result: CliResult): string {
     const status = result.ok ? '成功' : '失败';
     const lines = [
         `Forja Qt ${result.action} ${status}`,
@@ -121,11 +121,9 @@ function textOutput(result: CliResult): string {
         if (diagnostic.level === 'info') { continue; }
         lines.push(`${diagnostic.level}: ${humanMessage(diagnostic.message)}`);
     }
-    if (result.nextActions.length > 0) {
+    if (result.nextAction) {
         lines.push('下一步:');
-        for (const action of result.nextActions) {
-            lines.push(`  ${humanCommand(action)}`);
-        }
+        lines.push(`  ${humanCommand(result.nextAction)}`);
     }
     return lines.join('\n');
 }
@@ -149,7 +147,7 @@ async function main(argv: string[]): Promise<void> {
             const status = resolveRunProcessStatus(state);
 
             if (!state) {
-                const msg = '没有后台运行记录，请先执行 forja qt run --detach';
+                const msg = '没有后台运行记录，请先执行 forja run --detach';
                 if (wantsJson) {
                     console.log(JSON.stringify({
                         ok: false,
@@ -307,12 +305,10 @@ function formatStatusText(data: Record<string, unknown>): string {
     }
 
     lines.push('');
-    lines.push(`下一步: forja qt ${data.nextAction}`);
-    const nextActions = data.nextActions as string[] | undefined;
-    if (nextActions && nextActions.length > 0) {
-        for (const action of nextActions) {
-            lines.push(`  ${humanCommand(action)}`);
-        }
+    lines.push(`下一步: forja ${data.nextAction}`);
+    const nextAction = data.nextAction as string | undefined;
+    if (nextAction) {
+        lines.push(`  ${humanCommand(nextAction)}`);
     }
 
     const diagnostics = data.diagnostics as Array<Record<string, string>> | undefined;
@@ -385,7 +381,7 @@ function formatProjectsText(data: Record<string, unknown>): string {
 }
 
 /**
- * Qt CLI entry point — called by the unified forja dispatcher.
+ * Qt CLI entry point — called by the forja dispatcher.
  */
 export async function runQtCli(argv: string[]): Promise<void> {
     await main(argv);

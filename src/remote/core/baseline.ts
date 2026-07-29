@@ -1,7 +1,6 @@
 import * as cp from 'child_process';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
 import { buildRemoteRepoDirSetup } from './repoPath';
-import { remoteCommand } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
 export interface GitCommandResult {
@@ -83,7 +82,7 @@ export interface BuildRemoteBaselineStatusResult {
     overall: 'ready' | 'degraded' | 'blocked';
     repos: RepoBaselineState[];
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export async function inspectLocalRepositories(options: InspectLocalRepositoriesOptions): Promise<InspectLocalRepositoriesResult> {
@@ -189,7 +188,7 @@ export async function inspectRemoteRepositories(options: InspectRemoteRepositori
 export async function buildRemoteBaselineStatus(options: BuildRemoteBaselineStatusOptions): Promise<BuildRemoteBaselineStatusResult> {
     const local = await inspectLocalRepositories({ workspace: options.workspace, git: options.git, allowUnpushed: options.allowUnpushed });
     if (local.repos.length === 0) {
-        return { ok: false, overall: 'blocked', repos: [], diagnostics: local.diagnostics, nextActions: ['检查本地 workspace git 仓库'] };
+        return { ok: false, overall: 'blocked', repos: [], diagnostics: local.diagnostics, nextAction: '检查本地 workspace git 仓库' };
     }
 
     const remote = await inspectRemoteRepositories({
@@ -229,7 +228,7 @@ export async function buildRemoteBaselineStatus(options: BuildRemoteBaselineStat
         overall: hasError ? 'blocked' : hasWarning ? 'degraded' : 'ready',
         repos,
         diagnostics,
-        nextActions: hasError ? ['修复 baseline 诊断后重试'] : []
+        nextAction: hasError ? '修复 baseline 诊断后重试' : undefined
     };
 }
 

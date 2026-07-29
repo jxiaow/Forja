@@ -61,10 +61,6 @@ export function getQmakeArgs(): string {
     return getQtSetting('qmakeArgs');
 }
 
-export function getRuntimeProcessName(): string {
-    return getQtSetting('runtimeProcessName');
-}
-
 export function getManualProPath(): string {
     return getQtSetting('manualProPath');
 }
