@@ -6,7 +6,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as os from 'node:os';
 
 const repoRoot = process.cwd();
 
@@ -39,10 +38,10 @@ test('COMMANDS array includes all implemented commands', () => {
 
 test('`forja init` is a valid command for workroot registration', () => { const activeTargetSrc = source('src/cli/commands/activeTarget.ts'); assert.ok(activeTargetSrc.includes("'forja init'"), 'activeTarget.ts should suggest forja init when workroot not registered'); });
 
-test('qtCore.ts nextActions reference `forja use target` not `forja init`', () => {
+test('qtCore.ts is a pure build plan builder (no settingsIO fallback)', () => {
     const qtCore = source('src/qt/shared/qtCore.ts');
-    assert.ok(!qtCore.includes('forja init'), 'qtCore.ts must not reference `forja init`');
-    assert.ok(qtCore.includes('forja use target'), 'qtCore.ts must reference `forja use target`');
+    assert.ok(!qtCore.includes('loadQtSettings'), 'qtCore.ts must not import loadQtSettings');
+    assert.ok(!qtCore.includes('saveQtSettings'), 'qtCore.ts must not import saveQtSettings');
 });
 
 // ── List categories ──
@@ -68,8 +67,6 @@ test('use command supports all documented subcommands', () => {
     const useSrc = source('src/cli/commands/use.ts');
     const expectedSubcommands = [
         'runUseTarget',
-        'runUseExecution',
-        'runUseLang',
         'formatUseText',
     ];
     for (const fn of expectedSubcommands) {
@@ -78,6 +75,8 @@ test('use command supports all documented subcommands', () => {
     }
     // Removed functions that moved to remote.ts or were deleted
     const removedSubcommands = [
+        'runUseExecution',
+        'runUseLang',
         'runUseSync',
         'runUseRemote',
         'runUseRemoteWorkspace',
@@ -86,7 +85,7 @@ test('use command supports all documented subcommands', () => {
         'runUseRemoteBuildOrder',
         'runUseRemoteTransfer',
         'runUseQt',
-        'runUseSdk',
+        'runUseCpp',
     ];
     for (const fn of removedSubcommands) {
         assert.ok(!useSrc.includes(`export function ${fn}`) && !useSrc.includes(`export async function ${fn}`),
@@ -172,7 +171,7 @@ test('use target command supports setup-equivalent options', () => {
 
 test('sync command supports plan and reset actions', () => {
     const syncSrc = source('src/cli/commands/sync.ts');
-    assert.match(syncSrc, /SyncAction\s*=\s*'run'\s*\|\s*'plan'\s*\|\s*'reset'/, 'SyncAction must include run, plan, and reset');
+    assert.match(syncSrc, /SyncAction\s*=\s*'run'\s*\|\s*'plan'\s*\|\s*'reset'\s*\|\s*'status'\s*\|\s*'ignore'/, 'SyncAction must include run, plan, reset, status, and ignore');
 });
 
 // ── Doctor command ──

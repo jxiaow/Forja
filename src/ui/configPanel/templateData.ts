@@ -11,7 +11,7 @@ import {
     getDesignerPath, getQtSourcePath, getFileSyncPromptEnabled,
     getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot
 } from '../../qt/services/configService';
-import { getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
+import { getQtSetting, getCppSetting } from '../../vscode/settingsStore';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { loadRemoteSettings } from '../../core/settingsIO';
@@ -77,19 +77,19 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         syncServers: servers.map(s => ({
             id: s.id, name: s.name, host: s.host, port: s.port,
             username: s.username, authMode: s.authMode,
-            privateKeyPath: s.privateKeyPath, password: s.password
+            privateKeyPath: s.privateKeyPath, password: s.password ? '••••••••' : ''
         })),
         syncIgnore: sync.ignore.join(', '),
         syncRemotePath: selectedServerExists ? (remote.remotePaths[remote.selectedServer] || '') : '',
         syncPendingCount: pendingInfo.count,
         syncLastTime: pendingInfo.lastTime,
         syncReadinessIssues: buildSyncReadinessIssues(sync, remote, servers),
-        // SDK
-        sdkProjectName: getSdkSetting('pinnedProject') || '未选择',
-        sdkMode: getSdkSetting('mode'),
-        sdkArch: getSdkSetting('arch'),
-        sdkVsInstall: getSdkSetting('vsInstall') || '',
+        // C++
+        cppProjectName: getCppSetting('pinnedProject') || '未选择',
+        cppMode: getCppSetting('mode'),
+        cppArch: getCppSetting('arch'),
+        cppVsInstall: getCppSetting('vsInstall') || '',
         qtActive: !!resolveProjectRoot('qt'),
-        sdkActive: !!resolveProjectRoot('sdk'),
+        cppActive: !!resolveProjectRoot('cpp'),
     };
 }

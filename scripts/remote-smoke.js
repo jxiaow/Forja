@@ -82,13 +82,13 @@ function parseArgs(argv) {
         }
     }
 
-    if (!['qt', 'sdk', 'both'].includes(options.target)) {
+    if (!['qt', 'cpp', 'both'].includes(options.target)) {
         throw new Error('--target must be qt, sdk, or both');
     }
     if (options.stop && !options.runDetach) {
         throw new Error('--stop requires --run-detach');
     }
-    if (options.target === 'sdk' && (options.runDetach || options.stop)) {
+    if (options.target === 'cpp' && (options.runDetach || options.stop)) {
         throw new Error('--run-detach/--stop require --target qt or both');
     }
     if (options.execute && hasRequiredYesStep(options) && !options.yes) {
@@ -110,7 +110,7 @@ function readValue(argv, index, option) {
 }
 
 function buildPlan(options) {
-    const targets = options.target === 'both' ? ['qt', 'sdk'] : [options.target];
+    const targets = options.target === 'both' ? ['qt', 'cpp'] : [options.target];
     const steps = [
         step('remote-doctor', ['remote', 'doctor', '--workspace', options.workspace, '--json']),
         step('remote-status', ['remote', 'status', '--workspace', options.workspace, '--json']),

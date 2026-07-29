@@ -9,7 +9,7 @@ import type { TargetProfile } from '../../../core/workspaceStore';
 import { detectContext } from './detect';
 import { resolveAll } from './resolve';
 import { saveAll, buildTargetProfile } from './save';
-import { buildSuccessResult, formatUseTargetText } from './report';
+import { buildSuccessResult } from './report';
 import type { ResolveOptions, UseTargetResult, ResolvedConfig } from './types';
 import { detectProjectType } from '../../../core/projectTypeDetector';
 import { detectEnv } from '../../../qt/env/envDetector';
@@ -128,7 +128,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
         const match = toolchain.vsCandidates.find(v => v.installPath === config.vsInstall);
         if (match) { toolchain.vsVersion = match.version; }
     }
-    return buildSuccessResult(config, toolchain, saveResult.changed, workspace);
+    return buildSuccessResult(config, toolchain, saveResult.changed, workspace, saveResult.targetId);
 }
 
 // ── Switch target (with --project) — simplified path for existing use.ts compatibility ──
@@ -153,21 +153,55 @@ export async function runSwitchTarget(workspace: string, args: {
     // First: try to match against saved targets by ID or name (quick switch)
     const workroot = (await import('../../../core/workspaceStore')).resolveWorkroot(workspace);
     if (workroot) {
-        const wsConfig = (await import('../../../core/workspaceStore')).loadWorkspaceConfig(workroot);
+        const wsMod = await import('../../../core/workspaceStore');
+        const wsConfig = wsMod.loadWorkspaceConfig(workroot);
         const savedTargets = Object.values(wsConfig.targets);
         const inputLower = args.project.toLowerCase();
+
+        const finalizeSwitch = (matched: TargetProfile): UseTargetResult => {
+            const changed: string[] = ['activeTarget'];
+            const oldId = wsConfig.activeTarget;
+            let target = matched;
+
+            if (args.mode && args.mode !== matched.mode) {
+                matched.mode = args.mode;
+                changed.push('mode');
+            }
+            if (args.arch && args.arch !== matched.arch) {
+                matched.arch = args.arch;
+                changed.push('arch');
+            }
+
+            if (changed.length > 1) {
+                const newId = wsMod.generateTargetId(matched.kind, matched.project, matched.mode, matched.arch, new Set(Object.keys(wsConfig.targets)));
+                if (newId !== matched.id) {
+                    matched.id = newId;
+                    matched.name = `${path.basename(matched.project).replace(/\.\w+$/, '')} ${matched.mode} ${matched.arch}`;
+                    if (oldId && oldId !== newId) { delete wsConfig.targets[oldId]; }
+                }
+                wsConfig.targets[newId] = matched;
+                target = matched;
+            }
+
+            wsConfig.activeTarget = target.id;
+            try { wsMod.saveWorkspaceConfig(wsConfig); } catch (e) {
+                return {
+                    ok: false, action: 'use', useScope: 'target', changed: [],
+                    diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
+                    nextAction: 'forja doctor',
+                };
+            }
+            return {
+                ok: true, action: 'use', useScope: 'target',
+                workspace, activeTarget: target, changed,
+                nextAction: 'forja status',
+            };
+        };
 
         // Exact ID match
         const exactId = savedTargets.find(t => t.id === args.project);
         if (exactId) {
-            // Quick switch: just update activeTarget pointer
-            wsConfig.activeTarget = exactId.id;
-            (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
-            return {
-                ok: true, action: 'use', useScope: 'target',
-                workspace, activeTarget: exactId, changed: ['activeTarget'],
-                nextAction: 'forja status',
-            };
+            return finalizeSwitch({ ...exactId, toolchain: { ...exactId.toolchain } });
         }
 
         // ID prefix match or name match
@@ -176,13 +210,7 @@ export async function runSwitchTarget(workspace: string, args: {
             t.name.toLowerCase().includes(inputLower)
         );
         if (prefixMatches.length === 1) {
-            wsConfig.activeTarget = prefixMatches[0].id;
-            (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
-            return {
-                ok: true, action: 'use', useScope: 'target',
-                workspace, activeTarget: prefixMatches[0], changed: ['activeTarget'],
-                nextAction: 'forja status',
-            };
+            return finalizeSwitch({ ...prefixMatches[0], toolchain: { ...prefixMatches[0].toolchain } });
         }
         if (prefixMatches.length > 1) {
             if (args.interactive) {
@@ -192,13 +220,7 @@ export async function runSwitchTarget(workspace: string, args: {
                     t => `${t.id}  ${t.name}  [${t.kind}]`,
                 );
                 if (chosen) {
-                    wsConfig.activeTarget = chosen.id;
-                    (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
-                    return {
-                        ok: true, action: 'use', useScope: 'target',
-                        workspace, activeTarget: chosen, changed: ['activeTarget'],
-                        nextAction: 'forja status',
-                    };
+                    return finalizeSwitch({ ...chosen, toolchain: { ...chosen.toolchain } });
                 }
             } else {
                 const ids = prefixMatches.map(t => t.id).join('\n    ');
@@ -214,12 +236,12 @@ export async function runSwitchTarget(workspace: string, args: {
     // Resolve project path
     const projectPath = path.isAbsolute(args.project) ? args.project : path.join(workspace, args.project);
     let canonicalProject = args.project;
-    let kind: 'qt' | 'sdk' | null = null;
+    let kind: 'qt' | 'cpp' | null = null;
 
     if (fs.existsSync(projectPath) && !fs.statSync(projectPath).isDirectory()) {
         canonicalProject = path.relative(workspace, projectPath).replace(/\\/g, '/');
         const typeInfo = detectProjectType(projectPath);
-        kind = typeInfo.usesQt ? 'qt' : 'sdk';
+        kind = typeInfo.usesQt ? 'qt' : 'cpp';
     } else {
         // Try label match
         const inputLower = path.basename(args.project).toLowerCase();
@@ -237,7 +259,7 @@ export async function runSwitchTarget(workspace: string, args: {
                 if (chosen) {
                     canonicalProject = chosen.project;
                     kind = chosen.kind;
-                    if (!args.json) { console.log(`  ✓ ${chosen.label} — ${chosen.project}`); }
+                    if (!args.json) { console.log(`  ${T('selectedMark')} ${chosen.label} — ${chosen.project}`); }
                 } else {
                     return {
                         ok: false, action: 'use', useScope: 'target', changed: [],
@@ -274,8 +296,8 @@ export async function runSwitchTarget(workspace: string, args: {
     const currentTarget = ctx.existingTarget;
     const mode = args.mode ?? currentTarget?.mode ?? 'debug';
     const arch = args.arch ?? currentTarget?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
-    // SDK targets don't support remote execution — force local when switching to SDK
-    const runAt = (kind === 'sdk') ? 'local' : (currentTarget?.runAt ?? 'local');
+    // C++ targets don't support remote execution — force local when switching to C++
+    const runAt = (kind === 'cpp') ? 'local' : (currentTarget?.runAt ?? 'local');
 
     let qtPath: string | undefined;
     let vsInstall: string | undefined;
@@ -294,8 +316,8 @@ export async function runSwitchTarget(workspace: string, args: {
         vsInstall = currentTarget.toolchain.vsInstall;
     } else if (args.interactive) {
         setSilent(true);
-        const env = await detectEnv();
-        setSilent(false);
+        let env;
+        try { env = await detectEnv(); } finally { setSilent(false); }
 
         if (kind === 'qt') {
             if (env.qtCandidates.length > 1) {
@@ -347,8 +369,8 @@ export async function runSwitchTarget(workspace: string, args: {
         };
     } else {
         setSilent(true);
-        const env = await detectEnv();
-        setSilent(false);
+        let env;
+        try { env = await detectEnv(); } finally { setSilent(false); }
         if (kind === 'qt') { qtPath = env.qt?.path; }
         // Filter VS by Qt compiler tag for Qt targets
         if (kind === 'qt' && qtPath) {
@@ -392,17 +414,18 @@ export async function runSwitchTarget(workspace: string, args: {
     }
 
     if (qtPath || vsInstall) changed.push('toolchain');
-    changed.push(kind === 'qt' ? 'qt.pinnedProject' : 'sdk.pinnedProject');
+    changed.push(kind === 'qt' ? 'qt.pinnedProject' : 'cpp.pinnedProject');
     changed.push('activeTarget');
 
     const target = buildTargetProfile(config);
+    target.id = saveResult.targetId;
 
     return {
         ok: true, action: 'use', useScope: 'target',
         workspace, activeTarget: target,
         config: kind === 'qt'
             ? { qt: { configured: true, project: canonicalProject, mode, arch, qtPath, vsInstall, qtVersion: config.qtVersion, vsVersion } }
-            : { sdk: { configured: true, project: canonicalProject, mode, arch, vsInstall } },
+            : { cpp: { configured: true, project: canonicalProject, mode, arch, vsInstall } },
         changed,
         nextAction: 'forja status',
     };
@@ -421,6 +444,22 @@ export async function runUpdateModeArch(workspace: string, args: {
             ok: false, action: 'use', useScope: 'target', changed: [],
             diagnostics: [{ level: 'error', message: T('use.noActiveTargetSelected') }],
             nextAction: 'forja use target --project <path>',
+        };
+    }
+
+    // Validate mode/arch values before applying
+    if (args.mode && args.mode !== 'debug' && args.mode !== 'release') {
+        return {
+            ok: false, action: 'use', useScope: 'target', changed: [],
+            diagnostics: [{ level: 'error', message: `${T('use.invalidMode')}: ${args.mode}` }],
+            nextAction: 'forja use target --mode debug',
+        };
+    }
+    if (args.arch && args.arch !== 'x86' && args.arch !== 'x64') {
+        return {
+            ok: false, action: 'use', useScope: 'target', changed: [],
+            diagnostics: [{ level: 'error', message: `${T('use.invalidArch')}: ${args.arch}` }],
+            nextAction: 'forja use target --arch x64',
         };
     }
 
@@ -445,6 +484,14 @@ export async function runUpdateModeArch(workspace: string, args: {
                 nextAction: 'forja init',
             };
         }
+    } else {
+        // Nothing changed — inform the user
+        return {
+            ok: true, action: 'use', useScope: 'target',
+            workspace, activeTarget: updated, changed: [],
+            diagnostics: [{ level: 'info', message: T('use.noChanges') }],
+            nextAction: 'forja status',
+        };
     }
 
     return {
@@ -481,12 +528,19 @@ export async function runUpdateToolchain(workspace: string, args: {
         updated.toolchain.qtPath = args.qtPath;
         changed.push('qtPath');
         setSilent(true);
-        const env = await detectEnv();
-        setSilent(false);
+        let env;
+        try { env = await detectEnv(); } finally { setSilent(false); }
         const match = env.qtCandidates.find(q => q.path === args.qtPath);
         if (match) {
             updated.toolchain.qtVersion = match.version;
             changed.push('qtVersion');
+        } else {
+            // Fallback: extract the LAST X.Y.Z match from path (handles /opt/1.2.3/Qt/6.5.3/)
+            const matches = [...args.qtPath.matchAll(/(\d+\.\d+\.\d+)/g)];
+            if (matches.length > 0) {
+                updated.toolchain.qtVersion = matches[matches.length - 1][1];
+                changed.push('qtVersion');
+            }
         }
     }
     if (args.vsInstall && args.vsInstall !== currentTarget.toolchain.vsInstall) {

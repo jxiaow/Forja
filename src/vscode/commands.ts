@@ -1,7 +1,7 @@
 /**
  * VSCode command registration for v2 command surface.
  * Qt build/run/stop/clean delegate to buildManager (VSCode task system) or remote pipeline.
- * SDK build/clean delegate to SDK VSCode commands.
+ * C++ build/clean delegate to C++ VSCode commands.
  * Other commands delegate to CLI handlers.
  */
 import * as vscode from 'vscode';
@@ -22,6 +22,8 @@ import {
     initRemoteDiagnostics,
     executeRemoteBuild, executeRemoteActionWithProgress, startForegroundRemoteRun,
 } from './remoteHelpers';
+import type { InternalListCategory } from '../cli/commands/list';
+import type { RemoteResult } from '../cli/commands/remote';
 
 /**
  * Register all Forja commands.
@@ -35,11 +37,40 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         return getActiveTarget(workspace());
     }
 
+    // Synthesize a C++ target from workspaceStore C++ settings when no activeTarget exists
+    async function synthesizeCppTarget() {
+        const { getActiveModule } = await import('../ui/statusBar');
+        if (getActiveModule() !== 'cpp') { return null; }
+        const { getCppSetting } = await import('./settingsStore');
+        const pinnedProject = getCppSetting('pinnedProject');
+        if (!pinnedProject) { return null; }
+        return {
+            id: '',
+            name: '',
+            kind: 'cpp' as const,
+            project: pinnedProject as string,
+            mode: (getCppSetting('mode') || 'debug') as 'debug' | 'release',
+            arch: (getCppSetting('arch') || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+            runAt: 'local' as const,
+            toolchain: {
+                vsInstall: getCppSetting('vsInstall') as string,
+            },
+        };
+    }
+
     // After selecting a project, prompt for toolchain version if multiple detected and none configured
     async function promptToolchainIfNeeded(kind: string) {
         const { getQtPath, getVsDevShellPath } = await import('../qt/services/configService');
         const { detectEnv } = await import('../qt/env/envDetector');
-        const { inferVsInstall, loadQtSettings, saveQtSettings, loadSdkSettings, saveSdkSettings } = await import('../core/settingsIO');
+        const { inferVsInstall } = await import('../core/settingsIO');
+        const { setQtSetting, setCppSetting } = await import('./settingsStore');
+        const { getActiveTarget } = await import('../core/workspaceStore');
+        const { resolveWorkroot, loadWorkspaceConfig } = await import('../core/workspaceStore');
+
+        const ws = workspace();
+        const workroot = resolveWorkroot(ws);
+        const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+        const hasActiveTarget = wsConfig ? getActiveTarget(wsConfig) !== null : false;
 
         if (kind === 'qt' && !getQtPath()) {
             const env = await detectEnv();
@@ -53,15 +84,15 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     placeHolder: '检测到多个 Qt 版本，请选择一个',
                 });
                 if (picked) {
-                    const ws = workspace();
-                    const current = loadQtSettings(ws);
-                    saveQtSettings(ws, { ...current, qtPath: picked.path });
-                    vscode.window.showInformationMessage(`Qt 路径已设置: ${picked.path}`);
+                    if (hasActiveTarget) {
+                        setQtSetting('qtPath', picked.path);
+                    }
+                    vscode.window.showInformationMessage(`Qt 路径已选择: ${picked.path}${hasActiveTarget ? '' : '（选择目标后将自动应用）'}`);
                 }
             }
         }
 
-        if (kind === 'sdk' && !getVsDevShellPath()) {
+        if (kind === 'cpp' && !getVsDevShellPath()) {
             const env = await detectEnv();
             if (env.vsCandidates && env.vsCandidates.length > 1) {
                 const items = env.vsCandidates.map(c => ({
@@ -73,10 +104,10 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     placeHolder: '检测到多个 Visual Studio 版本，请选择一个',
                 });
                 if (picked) {
-                    const ws = workspace();
-                    const current = loadSdkSettings(ws);
-                    saveSdkSettings(ws, { ...current, vsInstall: inferVsInstall(picked.devShellPath) });
-                    vscode.window.showInformationMessage(`VS 路径已设置: ${picked.label}`);
+                    if (hasActiveTarget) {
+                        setCppSetting('vsInstall', inferVsInstall(picked.devShellPath));
+                    }
+                    vscode.window.showInformationMessage(`VS 路径已选择: ${picked.label}${hasActiveTarget ? '' : '（选择目标后将自动应用）'}`);
                 }
             }
         }
@@ -98,8 +129,28 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 const text = formatStatusText(result, locale);
                 const ch = getOutputChannel();
                 if (ch) { ch.clear(); ch.appendLine(text); ch.show(true); }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
+            }
+        })
+    );
+
+    // forja.init — register workroot + configure initial target
+    context.subscriptions.push(
+        vscode.commands.registerCommand('forja.init', async () => {
+            try {
+                const { runInit, formatInitText } = await import('../cli/commands/init');
+                const result = await runInit(workspace(), { interactive: true, json: false });
+                const text = formatInitText(result);
+                const ch = getOutputChannel();
+                if (ch) { ch.clear(); ch.appendLine(text); ch.show(true); }
+                if (result.ok) {
+                    vscode.window.showInformationMessage('Forja: 初始化完成');
+                }
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -113,7 +164,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 const validCategories = ['targets', 'env'];
                 if (!category || !validCategories.includes(category)) {
                     const descMap: Record<string, [string, string]> = {
-                        targets: ['Qt/SDK projects', 'Qt/SDK 项目'],
+                        targets: ['Qt/C++ projects', 'Qt/C++ 项目'],
                         env: ['Toolchain environment', '工具链环境'],
                     };
                     const picked = await vscode.window.showQuickPick(validCategories.map(c => ({
@@ -125,42 +176,35 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 }
                 const { runList, formatListText } = await import('../cli/commands/list');
                 const { resolveProjectRoot } = await import('./workspaceResolver');
-                const ws = resolveProjectRoot('sdk') || resolveProjectRoot('qt') || workspace();
-                const result = await runList(ws, category as any);
-                const text = formatListText(result as any, locale);
+                const ws = resolveProjectRoot('cpp') || resolveProjectRoot('qt') || workspace();
+                const result = await runList(ws, category as InternalListCategory);
+                const text = formatListText(result, locale);
                 const ch = getOutputChannel();
                 if (ch) { ch.clear(); ch.appendLine(text); ch.show(true); }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
 
-    // forja._selectTarget — internal: select target filtered by kind (qt|sdk)
+    // forja._selectTarget — internal: select target filtered by kind (qt|cpp)
     context.subscriptions.push(
         vscode.commands.registerCommand('forja._selectTarget', async (kindFilter?: string) => {
             try {
-                const ch = getOutputChannel();
-                if (ch) { ch.appendLine(`[DEBUG] forja._selectTarget called with kindFilter=${kindFilter}`); }
                 const { runList } = await import('../cli/commands/list');
                 const { resolveProjectRoot } = await import('./workspaceResolver');
                 // Resolve workspace roots — skip invalid paths (like VSCode install dir)
                 let qtWs = resolveProjectRoot('qt') || '';
-                let sdkWs = resolveProjectRoot('sdk') || '';
+                let cppWs = resolveProjectRoot('cpp') || '';
                 // Fallback: if one is empty, use the other
-                if (!qtWs && sdkWs) { qtWs = sdkWs; }
-                if (!sdkWs && qtWs) { sdkWs = qtWs; }
-                if (!qtWs && !sdkWs) { qtWs = sdkWs = workspace(); }
-                if (ch) { ch.appendLine(`[DEBUG] qtWs=${qtWs}, sdkWs=${sdkWs}`); }
+                if (!qtWs && cppWs) { qtWs = cppWs; }
+                if (!cppWs && qtWs) { cppWs = qtWs; }
+                if (!qtWs && !cppWs) { qtWs = cppWs = workspace(); }
                 const qtResult = (!kindFilter || kindFilter === 'qt') ? await runList(qtWs, 'targets') : { targets: [] };
-                const sdkResult = (!kindFilter || kindFilter === 'sdk') ? await runList(sdkWs, 'targets') : { targets: [] };
-                if (ch) { ch.appendLine(`[DEBUG] qtTargets=${qtResult.targets?.length ?? 0}, sdkTargets=${sdkResult.targets?.length ?? 0}`); }
-                if (ch) {
-                    (qtResult.targets || []).forEach((t, i) => { ch.appendLine(`[DEBUG]   qt[${i}] ${t.kind}: ${t.project}`); });
-                    (sdkResult.targets || []).forEach((t, i) => { ch.appendLine(`[DEBUG]   sdk[${i}] ${t.kind}: ${t.project}`); });
-                }
+                const cppResult = (!kindFilter || kindFilter === 'cpp') ? await runList(cppWs, 'targets') : { targets: [] };
                 const seen = new Set<string>();
-                const allTargets = [...(qtResult.targets || []), ...(sdkResult.targets || [])].filter(t => {
+                const allTargets = [...(qtResult.targets || []), ...(cppResult.targets || [])].filter(t => {
                     if (kindFilter && t.kind !== kindFilter) { return false; }
                     // Deduplicate by absolute path
                     const key = `${t.kind}:${t.project}`;
@@ -168,8 +212,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     seen.add(key);
                     return true;
                 });
-                if (ch) { ch.appendLine(`[DEBUG] filteredTargets=${allTargets.length}`); }
-                if (ch) { allTargets.forEach((t, i) => { ch.appendLine(`[DEBUG]   [${i}] ${t.kind}: ${t.project}`); }); }
                 if (allTargets.length > 0) {
                     const items = allTargets.map(t => ({
                         label: t.project,
@@ -183,13 +225,13 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         const target = allTargets.find(t => t.project === picked.label);
                         if (target) {
                             const { runUseTarget } = await import('../cli/commands/use');
-                            const targetWs = target.kind === 'sdk' ? sdkWs : qtWs;
+                            const targetWs = target.kind === 'cpp' ? cppWs : qtWs;
                             const useResult = await runUseTarget(targetWs, { project: target.project, interactive: true });
                             if (!useResult.ok) {
                                 vscode.window.showErrorMessage(`Failed to select target: ${useResult.diagnostics?.map(d => d.message).join('; ') || 'unknown error'}`);
                                 return;
                             }
-                            const { setActiveModule, setSdkState } = await import('../ui/statusBar');
+                            const { setActiveModule, setCppState } = await import('../ui/statusBar');
                             const { setState } = await import('../vscode/qtState');
                             const { parseProFile } = await import('../qt/project/projectManager');
                             const { ensureLocalStateDir } = await import('../qt/shared/localState');
@@ -216,13 +258,13 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                                 const profile = wsConfig ? getProfile(wsConfig) : null;
                                 const mode = profile?.mode ?? 'debug';
                                 const arch = profile?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
-                                setSdkState({ projectName, mode, arch });
-                                // Generate IntelliSense for SDK project
-                                const { generateSdkCppProperties } = await import('../qt/build/configGenerator');
+                                setCppState({ projectName, mode, arch });
+                                // Generate IntelliSense for C++ project
+                                const { generateCppPropertiesFromSln } = await import('../qt/build/configGenerator');
                                 const slnAbsPath = path.default.isAbsolute(target.project)
                                     ? target.project
                                     : path.default.join(targetWs, target.project);
-                                generateSdkCppProperties(slnAbsPath, targetWs);
+                                generateCppPropertiesFromSln(slnAbsPath, targetWs);
                             }
                             vscode.window.showInformationMessage(`Selected: ${target.project}`);
                             // After selecting a target, prompt for toolchain if not configured
@@ -230,11 +272,12 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         }
                     }
                 } else {
-                    const kindLabel = kindFilter === 'sdk' ? 'SDK' : kindFilter === 'qt' ? 'Qt' : '';
+                    const kindLabel = kindFilter === 'cpp' ? 'C++' : kindFilter === 'qt' ? 'Qt' : '';
                     vscode.window.showInformationMessage(`No ${kindLabel} targets found. Run "Forja: Init" first.`);
                 }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -285,7 +328,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 if (!selected?.command) { return; }
 
                 const ch = getOutputChannel();
-                const showResult = (r: any) => {
+                const showResult = (r: RemoteResult) => {
                     const text = formatRemoteText(r, locale);
                     if (ch) { ch.clear(); ch.appendLine(text); ch.show(true); }
                 };
@@ -340,7 +383,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         break;
                     }
                     case '__build_order__': {
-                        vscode.window.showInformationMessage('Use "forja remote set --build-order qt:build sdk:build" in terminal to configure build order.');
+                        vscode.window.showInformationMessage('Use "forja remote set --build-order qt:build cpp:build" in terminal to configure build order.');
                         break;
                     }
                     case '__transfer__': {
@@ -348,8 +391,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         break;
                     }
                 }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -382,52 +426,50 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                             });
                             if (action) {
                                 switch (action.action) {
-                                    case 'remove':
-                                        await vscode.commands.executeCommand('forja.server', 'remove', server.id);
+                                    case 'remove': {
+                                        const { runServerRemove } = await import('../cli/commands/server');
+                                        const r = runServerRemove(server.id, workspace());
+                                        if (r.ok) {
+                                            vscode.window.showInformationMessage(`Server '${server.name}' removed`);
+                                        } else {
+                                            vscode.window.showErrorMessage(`Remove failed: ${r.diagnostics?.map(d => d.message).join('; ') || 'unknown'}`);
+                                        }
                                         break;
+                                    }
                                     case 'test':
                                         await vscode.commands.executeCommand('forja.syncTestConnection');
                                         break;
-                                    case 'sync':
-                                        await vscode.commands.executeCommand('forja.use', 'sync', '--server', server.id);
+                                    case 'sync': {
+                                        const { configureSyncSettings } = await import('../sync/cli');
+                                        const ws = workspace();
+                                        const r = configureSyncSettings(ws, { enable: true, serverId: server.id });
+                                        if (r.ok) {
+                                            vscode.window.showInformationMessage(`Sync server set to '${server.name}'`);
+                                        } else {
+                                            vscode.window.showErrorMessage(`Set sync server failed: ${r.error}`);
+                                        }
                                         break;
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
 
-    // forja.build — Qt: buildManager (VSCode task); SDK: buildSdk(); Remote: executeRemotePlan
+    // forja.build — Qt: buildManager (VSCode task); C++: buildCpp(); Remote: executeRemotePlan
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.build', async (action?: string) => {
             let target = await resolveActiveTarget();
 
-            // Fallback: if no activeTarget but SDK module is active, synthesize from SDK state
+            // Fallback: if no activeTarget but C++ module is active, synthesize from workspaceStore
             if (!target) {
-                const { getActiveModule } = await import('../ui/statusBar');
-                if (getActiveModule() === 'sdk') {
-                    const { loadSdkSettings } = await import('../core/settingsIO');
-                    const sdkSettings = loadSdkSettings(workspace());
-                    if (sdkSettings.pinnedProject) {
-                        target = {
-                            id: '',
-                            name: '',
-                            kind: 'sdk' as const,
-                            project: sdkSettings.pinnedProject,
-                            mode: (sdkSettings.mode || 'debug') as 'debug' | 'release',
-                            arch: (sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
-                            runAt: 'local' as const,
-                            toolchain: {
-                                vsInstall: sdkSettings.vsInstall,
-                            },
-                        };
-                    }
-                }
+                target = await synthesizeCppTarget();
             }
 
             // Remote dispatch
@@ -444,17 +486,17 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            if (target?.kind === 'sdk') {
-                // SDK doesn't support qmake/rcc
+            if (target?.kind === 'cpp') {
+                // C++ doesn't support qmake/rcc
                 if (action === 'qmake' || action === 'rcc') {
-                    vscode.window.showErrorMessage(`SDK target does not support '${action}' action`);
+                    vscode.window.showErrorMessage(`C++ target does not support '${action}' action`);
                     return;
                 }
-                const { buildSdk, rebuildSdk } = await import('../sdk/sdkExtension');
+                const { buildCpp, rebuildCpp } = await import('../cpp/cppExtension');
                 if (action === 'fresh') {
-                    await rebuildSdk();
+                    await rebuildCpp();
                 } else {
-                    await buildSdk();
+                    await buildCpp();
                 }
                 return;
             }
@@ -510,9 +552,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             }
             const target = await resolveActiveTarget();
 
-            // SDK doesn't support run - check before remote dispatch
-            if (target?.kind === 'sdk') {
-                vscode.window.showWarningMessage('SDK target does not support run. Use Build instead.');
+            // C++ doesn't support run - check before remote dispatch
+            if (target?.kind === 'cpp') {
+                vscode.window.showWarningMessage('C++ target does not support run. Use Build instead.');
                 return;
             }
 
@@ -535,8 +577,8 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.debug', async () => {
             const target = await resolveActiveTarget();
-            if (target?.kind === 'sdk') {
-                vscode.window.showWarningMessage('SDK target does not support debug. Use Build instead.');
+            if (target?.kind === 'cpp') {
+                vscode.window.showWarningMessage('C++ target does not support debug. Use Build instead.');
                 return;
             }
             if (target?.runAt === 'remote') {
@@ -594,32 +636,14 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.clean — Qt: buildManager.clean() (VSCode task); SDK: cleanSdk(); Remote: executeRemotePlan
+    // forja.clean — Qt: buildManager.clean() (VSCode task); C++: cleanCpp(); Remote: executeRemotePlan
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.clean', async () => {
             let target = await resolveActiveTarget();
 
-            // Fallback: if no activeTarget but SDK module is active, synthesize from SDK state
+            // Fallback: if no activeTarget but C++ module is active, synthesize from workspaceStore
             if (!target) {
-                const { getActiveModule } = await import('../ui/statusBar');
-                if (getActiveModule() === 'sdk') {
-                    const { loadSdkSettings } = await import('../core/settingsIO');
-                    const sdkSettings = loadSdkSettings(workspace());
-                    if (sdkSettings.pinnedProject) {
-                        target = {
-                            id: '',
-                            name: '',
-                            kind: 'sdk' as const,
-                            project: sdkSettings.pinnedProject,
-                            mode: (sdkSettings.mode || 'debug') as 'debug' | 'release',
-                            arch: (sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
-                            runAt: 'local' as const,
-                            toolchain: {
-                                vsInstall: sdkSettings.vsInstall,
-                            },
-                        };
-                    }
-                }
+                target = await synthesizeCppTarget();
             }
 
             // Remote dispatch
@@ -628,9 +652,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            if (target?.kind === 'sdk') {
-                const { cleanSdk } = await import('../sdk/sdkExtension');
-                await cleanSdk();
+            if (target?.kind === 'cpp') {
+                const { cleanCpp } = await import('../cpp/cppExtension');
+                await cleanCpp();
                 return;
             }
             const buildManager = await import('../qt/build/buildManager');
@@ -657,8 +681,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     const msg = `Doctor: ${blocked.length} blocked, ${warnings.length} warnings`;
                     vscode.window.showWarningMessage(msg);
                 }
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -667,10 +692,11 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.sync', async (uri?: vscode.Uri) => {
             try {
-                const { executeSyncChangedFiles } = await import('../sync/syncWatcher');
+                const { executeSyncChangedFiles } = await import('./syncWatcher');
                 await executeSyncChangedFiles(uri);
-            } catch (e: any) {
-                vscode.window.showErrorMessage(`Forja: ${e.message || e}`);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -685,7 +711,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     // forja.syncTestConnection — test remote sync connection
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.syncTestConnection', async () => {
-            const { executeTestConnection } = await import('../sync/syncWatcher');
+            const { executeTestConnection } = await import('./syncWatcher');
             await executeTestConnection();
         })
     );

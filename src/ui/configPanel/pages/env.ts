@@ -12,7 +12,7 @@ export function buildEnvPage(data: TemplateData): string {
     h += '<div class="page-desc">管理构建工具链</div>';
 
     h += buildQtEnvSection(data);
-    if (data.isWin) { h += buildSdkEnvSection(data); }
+    if (data.isWin) { h += buildCppEnvSection(data); }
 
     // 刷新按钮
     h += '<div style="margin-top:12px"><button id="refreshEnvBtn" class="btn"';
@@ -130,48 +130,48 @@ function buildQtEnvSection(data: TemplateData): string {
     return h;
 }
 
-// ── SDK 工具链 ──
+// ── C++ 工具链 ──
 
-function buildSdkEnvSection(data: TemplateData): string {
+function buildCppEnvSection(data: TemplateData): string {
     const env = data.env;
-    const open = data.sdkActive ? ' open' : '';
-    const summary = data.sdkActive ? 'SDK 工具链' : 'SDK 工具链 <span class="section-badge">未检测到</span>';
+    const open = data.cppActive ? ' open' : '';
+    const summary = data.cppActive ? 'C++ 工具链' : 'C++ 工具链 <span class="section-badge">未检测到</span>';
 
     let h = `<details class="section-collapse"${open}>`;
     h += `<summary class="section-header">${summary}</summary>`;
 
-    if (!data.sdkActive) {
+    if (!data.cppActive) {
         h += '<div class="section-inactive">';
-        h += '<div class="section-inactive-hint">未检测到 SDK 项目，SDK 环境配置不可用</div>';
+        h += '<div class="section-inactive-hint">未检测到 C++ 项目，C++ 环境配置不可用</div>';
         h += '</div></details>';
         return h;
     }
 
     const detectedVs = env?.vs ? `VS ${env.vs.version} ${env.vs.edition}` : '';
-    const sdkVsEffective = data.sdkVsInstall || env?.vs?.installPath || '';
-    const sdkVsBadge = data.sdkVsInstall ? '已配置' : (env?.vs ? '自动检测' : '未配置');
-    const sdkVsTitle = detectedVs || (data.sdkVsInstall ? 'Visual Studio' : '未检测到');
+    const cppVsEffective = data.cppVsInstall || env?.vs?.installPath || '';
+    const cppVsBadge = data.cppVsInstall ? '已配置' : (env?.vs ? '自动检测' : '未配置');
+    const cppVsTitle = detectedVs || (data.cppVsInstall ? 'Visual Studio' : '未检测到');
 
-    h += '<div class="cs"><div class="cst">Visual Studio (SDK)</div>';
-    h += '<div class="env-card" id="sdkVsEnvCard"><div class="ech">';
-    h += `<span class="sd ${sdkVsEffective ? 'dok' : 'dwn'}"></span>`;
-    h += `<span class="ect" id="sdkVsTitle">${esc(sdkVsTitle)}</span>`;
+    h += '<div class="cs"><div class="cst">Visual Studio (C++)</div>';
+    h += '<div class="env-card" id="cppVsEnvCard"><div class="ech">';
+    h += `<span class="sd ${cppVsEffective ? 'dok' : 'dwn'}"></span>`;
+    h += `<span class="ect" id="cppVsTitle">${esc(cppVsTitle)}</span>`;
     h += '<span class="env-spinner" aria-hidden="true"></span>';
-    h += `<span class="ecb ${sdkVsEffective ? 'bok' : 'bwn'}" id="sdkVsBadge">${esc(sdkVsBadge)}</span>`;
+    h += `<span class="ecb ${cppVsEffective ? 'bok' : 'bwn'}" id="cppVsBadge">${esc(cppVsBadge)}</span>`;
     h += '</div>';
-    h += `<div class="ecp" id="sdkVsPath">${esc(sdkVsEffective || '未配置')}</div>`;
+    h += `<div class="ecp" id="cppVsPath">${esc(cppVsEffective || '未配置')}</div>`;
     h += '<div class="eca"><button class="btn btn-sm env-toggle-btn"';
-    h += " onclick=\"togglePanel('sdkVsPanel',this)\">";
+    h += " onclick=\"togglePanel('cppVsPanel',this)\">";
     h += '<span class="env-toggle-arrow">▾</span> 选择版本</button></div>';
-    h += '<div id="sdkVsPanel" class="env-expand">';
-    h += buildSdkVsCandidateSelect(env, data.sdkVsInstall);
+    h += '<div id="cppVsPanel" class="env-expand">';
+    h += buildCppVsCandidateSelect(env, data.cppVsInstall);
     h += '<div class="ef-row"><span class="ef-label">VS 安装目录或 VsDevCmd</span>';
     h += '<div class="input-row">';
-    h += `<input id="sdkVsInstall" class="ef-input" value="${esc(data.sdkVsInstall)}"`;
+    h += `<input id="cppVsInstall" class="ef-input" value="${esc(data.cppVsInstall)}"`;
     h += ' placeholder="留空使用自动检测；可填 VS 安装目录或 VsDevCmd.bat"';
-    h += " onblur=\"vscode.postMessage({command:'saveSdkVsInstall',value:this.value.trim()})\"/>";
+    h += " onblur=\"vscode.postMessage({command:'saveCppVsInstall',value:this.value.trim()})\"/>";
     h += '<button class="btn btn-sm" onclick="vscode.postMessage(';
-    h += "{command:'browse',targetId:'sdkVsInstall',isDir:true})\">浏览</button>";
+    h += "{command:'browse',targetId:'cppVsInstall',isDir:true})\">浏览</button>";
     h += '</div></div>';
     h += '</div></div></div>';
 
@@ -197,13 +197,13 @@ function buildVsCandidateSelect(env: EnvInfo | null, currentPath: string): strin
     return h;
 }
 
-function buildSdkVsCandidateSelect(env: EnvInfo | null, currentPath: string): string {
+function buildCppVsCandidateSelect(env: EnvInfo | null, currentPath: string): string {
     const candidates = env?.vsCandidates ?? [];
     if (candidates.length === 0) { return ''; }
     const cur = candidates.find(c => c.installPath === currentPath || c.devShellPath === currentPath);
     const curLabel = cur ? `VS ${cur.version} ${cur.edition}` : '选择版本';
-    let h = '<div class="ef-row" id="sdkVsCandidateRow"><span class="ef-label">快速选择</span>';
-    h += `<div class="csel" id="sdkVsSelect"><div class="csel-trigger" data-value="${esc(currentPath)}">${esc(curLabel)}</div>`;
+    let h = '<div class="ef-row" id="cppVsCandidateRow"><span class="ef-label">快速选择</span>';
+    h += `<div class="csel" id="cppVsSelect"><div class="csel-trigger" data-value="${esc(currentPath)}">${esc(curLabel)}</div>`;
     h += '<div class="csel-list">';
     for (const c of candidates) {
         const active = c.installPath === currentPath || c.devShellPath === currentPath ? ' active' : '';
@@ -251,7 +251,7 @@ function buildEnvScript(data: TemplateData): string {
     h += `var qtCandidateLabels=${jsLiteral(JSON.stringify(qtCandidateLabels))};`;
     h += 'qtCandidateLabels=JSON.parse(qtCandidateLabels);';
     h += 'function currentValue(id){var el=document.getElementById(id);var v=el?el.value||"":"";if(v){return v}';
-    h += 'var map={vsDevShellPath:"vsPath",sdkVsInstall:"sdkVsPath",qtPath:"qtPathDisplay"};';
+    h += 'var map={vsDevShellPath:"vsPath",cppVsInstall:"cppVsPath",qtPath:"qtPathDisplay"};';
     h += 'var d=document.getElementById(map[id]);var t=d?d.textContent||"":"";return t==="未配置"?"":t}';
     h += 'function rememberOpenPanels(){var s=vscode.getState&&vscode.getState()||{};';
     h += 's.openEnvPanels=Array.from(document.querySelectorAll(".env-expand.open")).map(function(el){return el.id});';
@@ -260,7 +260,7 @@ function buildEnvScript(data: TemplateData): string {
     h += 'var el=document.getElementById(id);if(!el){return}el.classList.add("open");';
     h += 'var btn=document.querySelector("button[onclick*=\'"+id+"\']");if(btn){btn.classList.add("active");';
     h += 'var arrow=btn.querySelector(".env-toggle-arrow");if(arrow){arrow.textContent="▴"}}})}';
-    h += 'function loadingCards(scope){var ids=scope==="qt"?["qtEnvCard"]:scope==="vs"?["vsEnvCard"]:scope==="sdkVs"?["sdkVsEnvCard"]:["vsEnvCard","qtEnvCard","sdkVsEnvCard"];';
+    h += 'function loadingCards(scope){var ids=scope==="qt"?["qtEnvCard"]:scope==="vs"?["vsEnvCard"]:scope==="cppVs"?["cppVsEnvCard"]:["vsEnvCard","qtEnvCard","cppVsEnvCard"];';
     h += 'return ids.map(function(id){return document.getElementById(id)}).filter(Boolean)}';
     h += 'function setToolchainLoading(scope,on){loadingCards(scope).forEach(function(card){card.classList.toggle("loading",on);';
     h += 'card.querySelectorAll("input,button").forEach(function(el){el.disabled=on});';
@@ -276,15 +276,15 @@ function buildEnvScript(data: TemplateData): string {
     h += 'var vsD=vsT?vsT.previousElementSibling:null;if(vsD&&vsD.classList.contains("sd")){vsD.className="sd "+(path?"dok":"dwn")}';
     h += 'var trigger=document.querySelector("#vsSelect .csel-trigger");if(trigger){trigger.dataset.value=path||"";if(label){trigger.textContent=label}}';
     h += '}';
-    h += 'function updateSdkVsDisplayFromPath(path,label){';
+    h += 'function updateCppVsDisplayFromPath(path,label){';
     h += 'label=vsCandidateLabels[path]||label;';
     h += 'var install=vsCandidateInstalls[path]||path||"";';
-    h += 'var input=document.getElementById("sdkVsInstall");if(input){input.value=install}';
-    h += 'var sdkVsP=document.getElementById("sdkVsPath");if(sdkVsP){sdkVsP.textContent=install||"未配置"}';
-    h += 'var sdkVsB=document.getElementById("sdkVsBadge");if(sdkVsB){sdkVsB.textContent=install?"已配置":"未配置";sdkVsB.className="ecb "+(install?"bok":"bwn")}';
-    h += 'var sdkVsT=document.getElementById("sdkVsTitle");if(sdkVsT&&label){sdkVsT.textContent=label}';
-    h += 'var sdkVsD=sdkVsT?sdkVsT.previousElementSibling:null;if(sdkVsD&&sdkVsD.classList.contains("sd")){sdkVsD.className="sd "+(install?"dok":"dwn")}';
-    h += 'var trigger=document.querySelector("#sdkVsSelect .csel-trigger");if(trigger){trigger.dataset.value=install;if(label){trigger.textContent=label}}';
+    h += 'var input=document.getElementById("cppVsInstall");if(input){input.value=install}';
+    h += 'var cppVsP=document.getElementById("cppVsPath");if(cppVsP){cppVsP.textContent=install||"未配置"}';
+    h += 'var cppVsB=document.getElementById("cppVsBadge");if(cppVsB){cppVsB.textContent=install?"已配置":"未配置";cppVsB.className="ecb "+(install?"bok":"bwn")}';
+    h += 'var cppVsT=document.getElementById("cppVsTitle");if(cppVsT&&label){cppVsT.textContent=label}';
+    h += 'var cppVsD=cppVsT?cppVsT.previousElementSibling:null;if(cppVsD&&cppVsD.classList.contains("sd")){cppVsD.className="sd "+(install?"dok":"dwn")}';
+    h += 'var trigger=document.querySelector("#cppVsSelect .csel-trigger");if(trigger){trigger.dataset.value=install;if(label){trigger.textContent=label}}';
     h += '}';
     h += 'function updateQtDisplayFromPath(path,label){';
     h += 'label=qtCandidateLabels[path]||label;';
@@ -306,11 +306,11 @@ function buildEnvScript(data: TemplateData): string {
     h += 'updateVsDisplayFromPath(e.detail.value);';
     h += 'rememberOpenPanels();';
     h += 'vscode.postMessage({command:"saveVsPath",value:e.detail.value})});';
-    h += 'var sdkVsS=document.getElementById("sdkVsSelect");';
-    h += 'if(sdkVsS)sdkVsS.addEventListener("csel-change",function(e){';
-    h += 'updateSdkVsDisplayFromPath(e.detail.value);';
+    h += 'var cppVsS=document.getElementById("cppVsSelect");';
+    h += 'if(cppVsS)cppVsS.addEventListener("csel-change",function(e){';
+    h += 'updateCppVsDisplayFromPath(e.detail.value);';
     h += 'rememberOpenPanels();';
-    h += 'vscode.postMessage({command:"saveSdkVsInstall",value:e.detail.value})});';
+    h += 'vscode.postMessage({command:"saveCppVsInstall",value:e.detail.value})});';
     h += 'var qtS=document.getElementById("qtSelect");';
     h += 'if(qtS)qtS.addEventListener("csel-change",function(e){';
     h += 'updateQtDisplayFromPath(e.detail.value);';
@@ -331,14 +331,14 @@ function buildEnvScript(data: TemplateData): string {
     h += 'if(d.vsCandidates){vsCandidateLabels={};vsCandidateInstalls={};d.vsCandidates.forEach(function(c){var install=c.installPath||c.value;vsCandidateLabels[c.value]=c.label;vsCandidateLabels[install]=c.label;vsCandidateInstalls[c.value]=install;vsCandidateInstalls[install]=install})}';
     h += 'if(d.qtCandidates){qtCandidateLabels={};d.qtCandidates.forEach(function(c){qtCandidateLabels[c.value]=c.label})}';
     h += 'updateVsDisplayFromPath(currentValue("vsDevShellPath"),d.env.vs);';
-    h += 'updateSdkVsDisplayFromPath(currentValue("sdkVsInstall"),d.env.vs);';
+    h += 'updateCppVsDisplayFromPath(currentValue("cppVsInstall"),d.env.vs);';
     h += 'updateQtDisplayFromPath(currentValue("qtPath"),d.env.qt);';
     h += 'var vsT=document.getElementById("vsTitle");';
     h += 'var vsD=vsT?vsT.previousElementSibling:null;';
     h += 'if(vsD&&vsD.classList.contains("sd")){vsD.className="sd "+(d.env.vs?"dok":"dwn")}';
-    h += 'var sdkVsT=document.getElementById("sdkVsTitle");';
-    h += 'var sdkVsD=sdkVsT?sdkVsT.previousElementSibling:null;';
-    h += 'if(sdkVsD&&sdkVsD.classList.contains("sd")){sdkVsD.className="sd "+(d.env.vs?"dok":"dwn")}';
+    h += 'var cppVsT=document.getElementById("cppVsTitle");';
+    h += 'var cppVsD=cppVsT?cppVsT.previousElementSibling:null;';
+    h += 'if(cppVsD&&cppVsD.classList.contains("sd")){cppVsD.className="sd "+(d.env.vs?"dok":"dwn")}';
     h += 'var qtT=document.getElementById("qtTitle");';
     h += 'var qtD=qtT?qtT.previousElementSibling:null;';
     h += 'if(qtD&&qtD.classList.contains("sd")){qtD.className="sd "+(d.env.qt?"dok":"dwn")}';

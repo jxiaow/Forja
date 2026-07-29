@@ -6,7 +6,7 @@
  * 扩展和 CLI 共用，不依赖 vscode。
  *
  * ⚠ 安全警告：密码以明文存储在 servers.json 中。
- * VSCode 扩展场景建议通过 SecretStorage API 存储密码（参见 sync/sftpClient.ts askPassword）。
+ * VSCode 扩展场景建议通过 SecretStorage API 存储密码（参见 vscode/syncWatcher.ts askPassword）。
  * CLI 场景可通过环境变量 FORJA_SSH_PASSWORD 注入，避免写入磁盘。
  */
 import * as fs from 'fs';
@@ -37,7 +37,7 @@ export interface ServerConfig {
     authMode: AuthMode;
     privateKeyPath: string;
     password: string;
-    /** 是否启用严格主机密钥检查（默认 false，即 StrictHostKeyChecking=no） */
+    /** 是否启用严格主机密钥检查（默认 true，即 StrictHostKeyChecking=yes；显式 false 关闭） */
     strictHostKeyChecking?: boolean;
 }
 
@@ -108,7 +108,7 @@ export function readServers(): ServerConfig[] {
                     authMode: (s.authMode === 'password' ? 'password' : 'key') as AuthMode,
                     privateKeyPath: s.privateKeyPath || '',
                     password: s.password || '',
-                    strictHostKeyChecking: !!s.strictHostKeyChecking
+                    strictHostKeyChecking: s.strictHostKeyChecking !== false
                 }));
         }
     } catch (e) {

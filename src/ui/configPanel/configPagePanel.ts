@@ -11,7 +11,7 @@ import { getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { getPageHtml } from './pageTemplate';
 import { buildTemplateData } from './templateData';
 import { createLogger } from '../../vscode/logger';
-import { onSettingsChange, getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
+import { onSettingsChange, getQtSetting, getCppSetting } from '../../vscode/settingsStore';
 
 const logger = createLogger('ConfigPagePanel');
 
@@ -25,6 +25,12 @@ const PAGE_TITLES: Record<ConfigPageId, string> = {
 export class ConfigPageManager {
     private _panels = new Map<ConfigPageId, vscode.WebviewPanel>();
     private readonly _context: vscode.ExtensionContext;
+    private _navTree: { setDescription(id: ConfigPageId, desc: string): void } | null = null;
+
+    /** 关联导航树，用于高亮已打开的页面 */
+    setNavTree(navTree: { setDescription(id: ConfigPageId, desc: string): void }): void {
+        this._navTree = navTree;
+    }
 
     constructor(context: vscode.ExtensionContext) {
         this._context = context;
@@ -41,14 +47,14 @@ export class ConfigPageManager {
                     });
                 }
             }
-            if (section === 'sdk' && (key === 'mode' || key === 'arch' || key === 'pinnedProject')) {
+            if (section === 'cpp' && (key === 'mode' || key === 'arch' || key === 'pinnedProject')) {
                 const projectPanel = this._panels.get('project');
                 if (projectPanel) {
                     projectPanel.webview.postMessage({
-                        command: 'sdkSettingsUpdated',
-                        sdkMode: getSdkSetting('mode'),
-                        sdkArch: getSdkSetting('arch'),
-                        sdkProjectName: getSdkSetting('pinnedProject') || '未选择'
+                        command: 'cppSettingsUpdated',
+                        cppMode: getCppSetting('mode'),
+                        cppArch: getCppSetting('arch'),
+                        cppProjectName: getCppSetting('pinnedProject') || '未选择'
                     });
                 }
             }
@@ -72,9 +78,11 @@ export class ConfigPageManager {
         );
 
         this._panels.set(pageId, panel);
+        this._navTree?.setDescription(pageId, '已打开');
 
         panel.onDidDispose(() => {
             this._panels.delete(pageId);
+            this._navTree?.setDescription(pageId, '');
         });
 
         panel.webview.onDidReceiveMessage(msg =>
@@ -90,6 +98,7 @@ export class ConfigPageManager {
         if (pageId === 'env') {
             panel.webview.postMessage({ command: 'envDetecting', scope: 'all' });
             detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined).then(env => {
+                if (!this._panels.has(pageId)) { return; }
                 setState('envInfo', env);
                 this._updatePageHtml(pageId);
                 this._pushEnvUpdate(panel.webview);

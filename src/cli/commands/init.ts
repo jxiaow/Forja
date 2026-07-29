@@ -3,16 +3,16 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { T, diag, Diagnostic, Question } from './types';
+import { T, Diagnostic, Question } from './types';
 import type { ForjaJsonResult } from './types';
 import {
-    resolveWorkroot, isWorkrootRegistered, registerWorkroot,
+    resolveWorkroot, isWorkrootRegistered, registerWorkroot, unregisterWorkroot,
     loadWorkspaceConfig, saveWorkspaceConfig, createEmptyWorkspaceConfig,
-    generateTargetId, getActiveTarget,
+    generateTargetId,
     type WorkspaceConfig, type TargetProfile,
 } from '../../core/workspaceStore';
 import { scanProFiles } from '../../qt/shared/projectScanner';
-import { scanSdkProjects } from '../../core/sdkProjectScanner';
+import { scanCppProjects } from '../../core/cppProjectScanner';
 import { detectProjectType } from '../../core/projectTypeDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 import { setSilent } from '../../core/loggerBase';
@@ -22,9 +22,9 @@ import { confirm, prompt, choose, chooseRequired } from './prompt';
 
 export interface InitResult extends ForjaJsonResult {
     action: 'init';
-    workroot?: string;
     registered?: boolean;
     target?: TargetProfile;
+    questions?: Question[];
 }
 
 // ── Entry options ──
@@ -86,6 +86,13 @@ export async function runInit(cwd: string, options: InitOptions): Promise<InitRe
         };
     }
 
+    if (!fs.statSync(workroot).isDirectory()) {
+        return {
+            ok: false, action: 'init',
+            diagnostics: [{ level: 'error', message: `Workroot must be a directory: ${workroot}` }],
+        };
+    }
+
     const alreadyRegistered = isWorkrootRegistered(workroot);
 
     if (alreadyRegistered) {
@@ -117,7 +124,7 @@ async function handleExistingWorkroot(workroot: string, options: InitOptions): P
         return {
             ok: false, action: 'init', workroot,
             diagnostics: [{ level: 'error', message: T('init.workrootAlreadyRegistered') }],
-            nextAction: 'forja init',
+            nextAction: 'forja use target',
         };
     }
 
@@ -128,12 +135,17 @@ async function handleExistingWorkroot(workroot: string, options: InitOptions): P
             return handleAddTargetFromAnswers(workroot, config, options);
         } else if (action === 'modify') {
             return handleModifyTarget(workroot, config, options);
+        } else if (action === 'exit') {
+            return {
+                ok: true, action: 'init', workroot,
+                target: config.activeTarget ? config.targets[config.activeTarget] : undefined,
+                nextAction: 'forja status',
+            };
         }
-        // 'exit' or unknown → return current state
         return {
-            ok: true, action: 'init', workroot,
-            target: config.activeTarget ? config.targets[config.activeTarget] : undefined,
-            nextAction: 'forja status',
+            ok: false, action: 'init', workroot,
+            diagnostics: [{ level: 'error', message: T('init.invalidAction', [action]) }],
+            nextAction: 'forja init',
         };
     }
 
@@ -216,7 +228,9 @@ async function handleModifyTarget(workroot: string, config: WorkspaceConfig, opt
     }
 
     config.targets[updatedResult.target.id] = updatedResult.target;
-    saveWorkspaceConfig(config);
+    try { saveWorkspaceConfig(config); } catch (e) {
+        return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }] };
+    }
 
     return {
         ok: true, action: 'init', workroot,
@@ -240,8 +254,11 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
         const questions: Question[] = [
             { id: 'project', label: T('init.selectProject'), choices: candidates.map(c => c.project) },
             { id: 'mode', label: T('init.selectMode'), choices: ['debug', 'release'] },
-            { id: 'arch', label: T('init.selectArch'), choices: ['x86', 'x64'] },
         ];
+        // Only prompt arch on Windows where multiple options exist
+        if (process.platform === 'win32') {
+            questions.push({ id: 'arch', label: T('init.selectArch'), choices: ['x86', 'x64'] });
+        }
         return {
             ok: false, action: 'init', workroot,
             questions,
@@ -257,9 +274,43 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
         };
     }
 
+    // Answers mode: skip interactive confirmation, use workroot as-is
+    if (options.answers) {
+        const emptyConfig = createEmptyWorkspaceConfig(workroot);
+        registerWorkroot(workroot);
+        const result = await configureNewTarget(workroot, emptyConfig, options);
+        if (!result.ok) {
+            // Rollback registration to avoid orphaned empty workroot
+            unregisterWorkroot(workroot);
+            return result;
+        }
+        return {
+            ok: true, action: 'init', workroot,
+            registered: true,
+            target: result.target,
+            nextAction: 'forja status',
+        };
+    }
+
     // Interactive flow
     console.log(T('init.newWorkroot'));
     console.log(`  ${T('init.workroot')}: ${workroot}`);
+    console.log(`  ${T('init.workrootHint')}`);
+    console.log(`  ${T('init.workrootSuggestion')}`);
+
+    // Confirm or change workroot before scanning
+    const confirmed = await confirm(T('init.confirmWorkroot'), true);
+    if (!confirmed) {
+        const newRoot = await prompt(`${T('init.workroot')}: `);
+        if (!newRoot) {
+            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.configurationCancelled') }] };
+        }
+        workroot = path.resolve(newRoot);
+        if (!fs.existsSync(workroot)) {
+            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('init.workrootNotFound')}: ${workroot}` }] };
+        }
+        console.log(`  ${T('init.workroot')}: ${workroot}`);
+    }
 
     const candidates = await scanProjects(workroot);
     if (candidates.length === 0) {
@@ -273,11 +324,15 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
 
     const config = createEmptyWorkspaceConfig(workroot);
 
-    const result = await configureNewTarget(workroot, config, options, candidates);
-    if (!result.ok) return result;
-
-    // Register AFTER configureNewTarget succeeds — avoids orphaned workroot on failure
+    // Register BEFORE configureNewTarget — avoids orphaned config if registration fails
     registerWorkroot(workroot);
+
+    const result = await configureNewTarget(workroot, config, options, candidates);
+    if (!result.ok) {
+        // Rollback registration to avoid orphaned empty workroot
+        unregisterWorkroot(workroot);
+        return result;
+    }
 
     return {
         ok: true, action: 'init', workroot,
@@ -290,7 +345,7 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
 // ── Shared helpers ──
 
 interface ProjectCandidate {
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     label: string;
 }
@@ -310,20 +365,20 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
         });
     }
 
-    // Scan SDK projects
+    // Scan C++ projects
     setSilent(true);
-    let sdkFiles;
-    try { sdkFiles = scanSdkProjects({ workspace: workroot, relativePaths: true }); } finally { setSilent(false); }
-    for (const sdkFile of sdkFiles) {
-        const fullPath = path.join(workroot, sdkFile);
+    let cppFiles;
+    try { cppFiles = scanCppProjects({ workspace: workroot, relativePaths: true }); } finally { setSilent(false); }
+    for (const cppFile of cppFiles) {
+        const fullPath = path.join(workroot, cppFile);
         const typeInfo = detectProjectType(fullPath);
-        const kind = typeInfo.usesQt ? 'qt' : 'sdk';
+        const kind = typeInfo.usesQt ? 'qt' : 'cpp';
         // Skip if already found as .pro
-        if (!candidates.some(c => c.project === sdkFile)) {
+        if (!candidates.some(c => c.project === cppFile)) {
             candidates.push({
                 kind,
-                project: sdkFile,
-                label: `${path.basename(sdkFile, path.extname(sdkFile))} (${sdkFile})`,
+                project: cppFile,
+                label: `${path.basename(cppFile, path.extname(cppFile))} (${cppFile})`,
             });
         }
     }
@@ -352,7 +407,9 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.answersMissingProject') }] };
     }
 
-    console.log(`  ✓ ${selectedProject.label}`);
+    if (options.interactive) {
+        console.log(`  ${T('selectedMark')} ${selectedProject.label}`);
+    }
 
     // Detect toolchain
     setSilent(true);
@@ -385,7 +442,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
 
         if (env.jom) jomPath = env.jom;
     } else {
-        // SDK project — need VS only
+        // C++ project — need VS only
         if (options.answers?.vsInstall) {
             vsInstall = options.answers.vsInstall;
         } else if (options.interactive && env.vsCandidates.length > 1) {
@@ -402,12 +459,12 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         if (options.answers.mode === 'debug' || options.answers.mode === 'release') {
             mode = options.answers.mode;
         } else {
-            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `Invalid mode value: ${options.answers.mode}. Expected: debug | release` }] };
+            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.invalidMode', [options.answers.mode]) }] };
         }
     } else if (options.interactive) {
         const chosen = await chooseRequired(T('init.selectMode'), [
-            { value: 'debug' as const, label: 'debug' },
-            { value: 'release' as const, label: 'release' },
+            { value: 'debug' as const, label: `debug` },
+            { value: 'release' as const, label: `release` },
         ], item => item.label);
         mode = chosen.value;
     }
@@ -418,12 +475,12 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         if (options.answers.arch === 'x86' || options.answers.arch === 'x64') {
             arch = options.answers.arch;
         } else {
-            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `Invalid arch value: ${options.answers.arch}. Expected: x86 | x64` }] };
+            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.invalidArch', [options.answers.arch]) }] };
         }
     } else if (options.interactive && process.platform === 'win32') {
         const chosen = await chooseRequired(T('init.selectArch'), [
-            { value: 'x86' as const, label: 'x86' },
-            { value: 'x64' as const, label: 'x64' },
+            { value: 'x86' as const, label: `x86` },
+            { value: 'x64' as const, label: `x64` },
         ], item => item.label);
         arch = chosen.value;
     }
@@ -431,6 +488,19 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
     const existingIds = new Set(Object.keys(config.targets));
     const id = generateTargetId(selectedProject.kind, selectedProject.project, mode, arch, existingIds);
     const basename = path.basename(selectedProject.project, path.extname(selectedProject.project));
+
+    // Resolve Qt version — try exact match first, then extract from path as fallback
+    let qtVersion: string | undefined;
+    if (qtPath) {
+        const exact = env.qtCandidates.find(q => q.path === qtPath);
+        if (exact) {
+            qtVersion = exact.version;
+        } else {
+            // Extract the LAST X.Y.Z match (handles paths like /opt/1.2.3/Qt/6.5.3/)
+            const matches = [...qtPath.matchAll(/(\d+\.\d+\.\d+)/g)];
+            if (matches.length > 0) qtVersion = matches[matches.length - 1][1];
+        }
+    }
 
     const target: TargetProfile = {
         id,
@@ -442,7 +512,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         runAt: 'local',
         toolchain: {
             qtPath,
-            qtVersion: qtPath ? env.qtCandidates.find(q => q.path === qtPath)?.version : undefined,
+            qtVersion,
             vsInstall,
             jomPath,
         },
@@ -450,7 +520,9 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
 
     config.targets[id] = target;
     config.activeTarget = id;
-    saveWorkspaceConfig(config);
+    try { saveWorkspaceConfig(config); } catch (e) {
+        return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }] };
+    }
 
     return { ok: true, action: 'init', target };
 }
@@ -507,12 +579,12 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
         if (options.answers.mode === 'debug' || options.answers.mode === 'release') {
             updated.mode = options.answers.mode;
         } else {
-            return { ok: false, diagnostics: [{ level: 'error', message: `Invalid mode value: ${options.answers.mode}. Expected: debug | release` }] };
+            return { ok: false, diagnostics: [{ level: 'error', message: T('init.invalidMode', [options.answers.mode]) }] };
         }
     } else if (options.interactive) {
         const chosen = await chooseRequired(T('init.selectMode'), [
-            { value: 'debug' as const, label: `debug ${updated.mode === 'debug' ? '(current)' : ''}` },
-            { value: 'release' as const, label: `release ${updated.mode === 'release' ? '(current)' : ''}` },
+            { value: 'debug' as const, label: `debug ${updated.mode === 'debug' ? T('currentMarker') : ''}` },
+            { value: 'release' as const, label: `release ${updated.mode === 'release' ? T('currentMarker') : ''}` },
         ], item => item.label);
         updated.mode = chosen.value;
     }
@@ -522,12 +594,12 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
         if (options.answers.arch === 'x86' || options.answers.arch === 'x64') {
             updated.arch = options.answers.arch;
         } else {
-            return { ok: false, diagnostics: [{ level: 'error', message: `Invalid arch value: ${options.answers.arch}. Expected: x86 | x64` }] };
+            return { ok: false, diagnostics: [{ level: 'error', message: T('init.invalidArch', [options.answers.arch]) }] };
         }
     } else if (options.interactive && process.platform === 'win32') {
         const chosen = await chooseRequired(T('init.selectArch'), [
-            { value: 'x86' as const, label: `x86 ${updated.arch === 'x86' ? '(current)' : ''}` },
-            { value: 'x64' as const, label: `x64 ${updated.arch === 'x64' ? '(current)' : ''}` },
+            { value: 'x86' as const, label: `x86 ${updated.arch === 'x86' ? T('currentMarker') : ''}` },
+            { value: 'x64' as const, label: `x64 ${updated.arch === 'x64' ? T('currentMarker') : ''}` },
         ], item => item.label);
         updated.arch = chosen.value;
     }

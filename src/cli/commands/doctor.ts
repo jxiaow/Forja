@@ -7,21 +7,23 @@ import * as path from 'path';
 import { getActiveTarget } from './activeTarget';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { listProjectConfigs } from '../../core/settingsIO';
+import { resolveWorkroot } from '../../core/workspaceStore';
 import { listSyncStates } from '../../core/syncState';
 import { getServerById } from '../../core/serverStore';
-import { Diagnostic, CheckResult, CheckStatus, CommandPlan, diag, Locale, T } from './types';
+import { ForjaJsonResult, Diagnostic, CheckResult, CheckStatus, CommandPlan, diag, Locale, T } from './types';
 import { createSshRunner, createScpUploader } from '../../remote/core/shell';
 import { resolveRemoteConfig, resolveRemoteActionPath } from '../../remote/core/config';
 import { executeRemoteBootstrap, findBootstrapArtifact, findPackageRoot } from '../../remote/core/bootstrap';
 import { executeRemoteReleaseLock } from '../../remote/core/lock';
-import { detectMake } from '../../sdk/cli/envDetector';
+import { detectMake } from '../../cpp/cli/envDetector';
+import { setSilent } from '../../core/loggerBase';
 import { ServerConfig } from '../../core/serverStore';
 
 function resolveSshPassword(server: ServerConfig): string | null {
     return server.password || process.env.FORJA_SSH_PASSWORD || null;
 }
 
-export function formatDoctorText(result: DoctorResult, locale: Locale): string {
+export function formatDoctorText(result: DoctorResult, _locale: Locale): string {
     const lines: string[] = [];
     const statusIcon: Record<CheckStatus, string> = {
         ready: '✓',
@@ -50,8 +52,8 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
         'unlock': T('doctorActionUnlock'),
     };
 
-    lines.push(`${T('doctor')} ${actionMap[result.doctorAction] || result.doctorAction}`);
-    if (result.workspace) { lines.push(`${T('workspace')} ${result.workspace}`); }
+    lines.push(`${T('doctor')}: ${actionMap[result.doctorAction] || result.doctorAction}`);
+    if (result.workspace) { lines.push(`${T('workspace')}: ${result.workspace}`); }
 
     if (result.checks && result.checks.length > 0) {
         lines.push('');
@@ -62,6 +64,8 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
             if (c.diagnostics) {
                 for (const d of c.diagnostics) {
                     if (d.level === 'error' || d.level === 'warning') {
+                        lines.push(`      ${T(d.level)}: ${d.message}`);
+                    } else if (d.level === 'info') {
                         lines.push(`      ${T(d.level)}: ${d.message}`);
                     }
                 }
@@ -88,13 +92,15 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
 
     if (result.changed && result.changed.length > 0) {
         lines.push('');
-        lines.push(`${T('changed')}${result.changed.join(', ')}`);
+        lines.push(`${T('changed')}: ${result.changed.join(', ')}`);
     }
 
     if (result.diagnostics && result.diagnostics.length > 0) {
         lines.push('');
         for (const d of result.diagnostics) {
             if (d.level === 'error' || d.level === 'warning') {
+                lines.push(`${T(d.level)}: ${d.message}`);
+            } else if (d.level === 'info') {
                 lines.push(`${T(d.level)}: ${d.message}`);
             }
         }
@@ -110,17 +116,12 @@ export function formatDoctorText(result: DoctorResult, locale: Locale): string {
 
 export type DoctorAction = 'check' | 'fix' | 'unlock';
 
-export interface DoctorResult {
-    ok: boolean;
+export interface DoctorResult extends ForjaJsonResult {
     action: 'doctor';
     doctorAction: DoctorAction;
-    workspace?: string;
     checks?: CheckResult[];
     plan?: CommandPlan;
     changed?: string[];
-    diagnostics?: Diagnostic[];
-    nextAction?: string;
-    [key: string]: unknown;
 }
 
 function check(name: string, status: CheckStatus, message?: string, diagnostics?: Diagnostic[], nextAction?: string): CheckResult {
@@ -137,6 +138,7 @@ export async function runDoctor(workspace: string, options: {
     const checks: CheckResult[] = [];
     const diagnostics: Diagnostic[] = [];
     const activeTarget = getActiveTarget(workspace);
+    const workroot = resolveWorkroot(workspace);
     const isRemote = options.remote || (activeTarget?.runAt === 'remote');
 
     let doctorAction: DoctorAction = 'check';
@@ -148,7 +150,7 @@ export async function runDoctor(workspace: string, options: {
         // Handle absolute paths correctly
         const projectPath = path.isAbsolute(activeTarget.project)
             ? activeTarget.project
-            : path.join(workspace, activeTarget.project);
+            : path.join(workroot || workspace, activeTarget.project);
         if (fs.existsSync(projectPath)) {
             checks.push(check('target', 'ready', `${T('doctorActiveTarget')}: ${activeTarget.project}`));
         } else {
@@ -206,7 +208,9 @@ export async function runDoctor(workspace: string, options: {
         } else {
             checkedToolchain.add('toolchain-make');
             // POSIX: check make
-            const makePath = detectMake();
+            let makePath: string | null;
+            setSilent(true);
+            try { makePath = detectMake(); } finally { setSilent(false); }
             if (makePath) {
                 checks.push(check('toolchain-make', 'ready', `make: ${makePath}`));
             } else {
@@ -216,19 +220,19 @@ export async function runDoctor(workspace: string, options: {
         }
     }
 
-    if (activeTarget?.kind === 'sdk' || !activeTarget) {
-        // Use activeTarget toolchain fields for SDK
-        const sdkVsInstall = activeTarget?.toolchain.vsInstall;
+    if (activeTarget?.kind === 'cpp' || !activeTarget) {
+        // Use activeTarget toolchain fields for C++
+        const cppVsInstall = activeTarget?.toolchain.vsInstall;
 
-        // Platform-specific toolchain checks for SDK (skip if already checked for Qt)
+        // Platform-specific toolchain checks for C++ (skip if already checked for Qt)
         if (process.platform === 'win32') {
             if (!checkedToolchain.has('toolchain-vs')) {
                 // Windows: check VS
-                if (sdkVsInstall && fs.existsSync(sdkVsInstall)) {
-                    checks.push(check('toolchain-vs', 'ready', `VS: ${sdkVsInstall}`));
-                } else if (sdkVsInstall) {
-                    checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${sdkVsInstall}`,
-                        [diag('error', T('doctorVsNotFoundAtInstall', [sdkVsInstall]))]));
+                if (cppVsInstall && fs.existsSync(cppVsInstall)) {
+                    checks.push(check('toolchain-vs', 'ready', `VS: ${cppVsInstall}`));
+                } else if (cppVsInstall) {
+                    checks.push(check('toolchain-vs', 'blocked', `${T('doctorVsInvalid')}: ${cppVsInstall}`,
+                        [diag('error', T('doctorVsNotFoundAtInstall', [cppVsInstall]))]));
                 } else {
                     checks.push(check('toolchain-vs', 'warning', T('doctorVsNotConfigured'),
                         [diag('warning', T('doctorVsNotConfigured'))]));
@@ -237,7 +241,9 @@ export async function runDoctor(workspace: string, options: {
         } else {
             if (!checkedToolchain.has('toolchain-make')) {
                 // POSIX: check make
-                const makePath = detectMake();
+                let makePath: string | null;
+                setSilent(true);
+                try { makePath = detectMake(); } finally { setSilent(false); }
                 if (makePath) {
                     checks.push(check('toolchain-make', 'ready', `make: ${makePath}`));
                 } else {
@@ -258,7 +264,7 @@ export async function runDoctor(workspace: string, options: {
                 checks.push(check('sync', 'ready', `${T('readinessSync')}: ${server.name}:${remotePath}`));
             } else {
                 checks.push(check('sync', 'blocked', T('doctorSyncRemote'),
-                    [diag('warning', T('doctorSyncRemote'))],
+                    [diag('error', T('doctorSyncRemote'))],
                     'forja remote set'));
             }
         } else {
@@ -421,9 +427,11 @@ export async function runDoctor(workspace: string, options: {
     let nextAction: string | undefined = undefined;
     if (hasBlocked) {
         // Check if any blocked check is fixable
-        const fixableChecks = ['cleanup', 'remote-forja'];
-        const hasFixable = checks.some(c => c.status === 'blocked' && fixableChecks.includes(c.name));
-        if (hasFixable) {
+        const hasRemoteForjaBlocked = checks.some(c => c.name === 'remote-forja' && c.status === 'blocked');
+        const hasCleanupBlocked = checks.some(c => c.name === 'cleanup' && c.status === 'blocked');
+        if (hasRemoteForjaBlocked) {
+            nextAction = 'forja doctor fix --remote';
+        } else if (hasCleanupBlocked) {
             nextAction = 'forja doctor fix';
         } else {
             // No fixable blocks — suggest the most relevant command based on what's blocked

@@ -61,7 +61,7 @@ interface ListResult extends ForjaJsonResult {
 interface SavedTargetInfo {
     id: string;
     name: string;
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     mode: string;
     arch: string;

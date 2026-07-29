@@ -35,12 +35,12 @@ function createTemplateData(): TemplateData {
         syncRemotePath: '',
         syncPendingCount: 0,
         syncLastTime: '',
-        sdkProjectName: '',
-        sdkMode: 'debug',
-        sdkArch: 'x86',
-        sdkVsInstall: '',
+        cppProjectName: '',
+        cppMode: 'debug',
+        cppArch: 'x86',
+        cppVsInstall: '',
         qtActive: true,
-        sdkActive: false
+        cppActive: false
     };
 }
 

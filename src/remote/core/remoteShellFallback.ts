@@ -71,7 +71,7 @@ function buildRemoteShellFallbackCommand(target: RemoteBridgeTarget, action: Rem
     if (!supportsRemoteShellFallback(target, action)) {
         return 'printf %s ' + remoteCommand([`${target} ${action} 不支持 shell fallback`]) + ' >&2; exit 64';
     }
-    const body = target === 'qt' ? buildQtCommand(action, args) : buildSdkCommand(action);
+    const body = target === 'qt' ? buildQtCommand(action, args) : buildCppCommand(action);
     return `cd ${remoteCommand([remotePath])} && ${body}`;
 }
 
@@ -196,7 +196,7 @@ function buildQtStopCommand(): string {
     ].join('; ');
 }
 
-function buildSdkCommand(action: RemoteBridgeAction): string {
+function buildCppCommand(action: RemoteBridgeAction): string {
     const makeDir = [
         'makefile=$(find . -maxdepth 4 \\( -name Makefile -o -name makefile -o -name GNUmakefile \\) | head -n 1)',
         'if [ -z "$makefile" ]; then printf "未找到 Makefile\\n" >&2; exit 3; fi',

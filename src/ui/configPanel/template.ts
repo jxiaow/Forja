@@ -36,14 +36,14 @@ export interface TemplateData {
     syncPendingCount: number;
     syncLastTime: string;
     syncReadinessIssues?: string[];
-    // SDK
-    sdkProjectName: string;
-    sdkMode: string;
-    sdkArch: string;
-    sdkVsInstall: string;
+    // C++
+    cppProjectName: string;
+    cppMode: string;
+    cppArch: string;
+    cppVsInstall: string;
     // 模块激活状态
     qtActive: boolean;
-    sdkActive: boolean;
+    cppActive: boolean;
 }
 
 let _templateCache: string | null = null;

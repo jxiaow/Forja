@@ -1,5 +1,16 @@
 import { remoteCommand } from './shell';
 
+/** Validate repo name — reject path traversal and absolute paths */
+export function validateRepoName(name: string): { ok: true } | { ok: false; reason: 'invalid_chars' | 'empty' } {
+    if (!name || !name.trim()) {
+        return { ok: false, reason: 'empty' };
+    }
+    if (name.includes('..') || name.includes('/') || name.includes('\\') || name.startsWith('~')) {
+        return { ok: false, reason: 'invalid_chars' };
+    }
+    return { ok: true };
+}
+
 export function fallbackRemoteRepoPath(remotePath: string, repoName: string): string {
     return remoteCommand([remotePath]) + '/' + remoteCommand([repoName]);
 }

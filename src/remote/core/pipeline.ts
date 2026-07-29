@@ -78,12 +78,23 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
     });
 
     const local = stagedMode ? await inspectLocalRepositories({ workspace: options.workspace, git: options.git, allowUnpushed: true }) : undefined;
+
+    // Build repo name mapping for non-staged mode (supports localName ≠ remoteName)
+    const repoMappings = remoteSettings.repos;
+    const hasNameMapping = !stagedMode && repoMappings.length > 0;
+    const remoteRepoNames = hasNameMapping ? repoMappings.map(r => r.remoteName) : undefined;
+    const localNameByRemoteName = hasNameMapping
+        ? Object.fromEntries(repoMappings.map(r => [r.remoteName, r.localName]))
+        : undefined;
+
     const baseline = await buildRemoteBaselineStatus({
         workspace: options.workspace,
         remotePath: workspaceRemotePath,
         runner: options.runner,
         git: options.git,
-        allowUnpushed: stagedMode,
+        allowUnpushed: true,
+        remoteRepoNames,
+        localNameByRemoteName,
         ...(stagedMode ? stagedBaselineProbe(local?.repos || [], remoteSettings.repos) : {})
     });
     repos = baseline.repos;
@@ -102,10 +113,15 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             return fail('baselinePlan', plan.nextAction);
         }
     } else {
+        // Non-staged: pre-baseline is informational only — branchSync will pull on remote,
+        // and the post-baseline (after overlay sync) is the real gate.
         stages.push({ stage: 'baselinePrecheck', ok: baseline.ok, message: baseline.overall });
-        diagnostics.push(...baseline.diagnostics);
-        if (!baseline.ok) {
-            return fail('baselinePrecheck', baseline.nextAction);
+        if (baseline.ok) {
+            diagnostics.push(...baseline.diagnostics);
+        } else {
+            diagnostics.push(...baseline.diagnostics.map(d =>
+                d.level === 'error' ? { ...d, level: 'warning' as const } : d
+            ));
         }
     }
 
@@ -186,7 +202,16 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
                 return result;
             }
         } else {
-            const branchSync = await executeRemoteBranchSync({ remotePath: workspaceRemotePath, targetId: lockResult.targetId, repos, runner: options.runner });
+            // Apply repo name mapping: inject remoteName so branchSync can locate remote repos
+            let branchSyncRepos = repos;
+            if (hasNameMapping) {
+                const nameMap = new Map(repoMappings.map(r => [r.localName, r.remoteName]));
+                branchSyncRepos = repos.map(r => {
+                    const rn = nameMap.get(r.name);
+                    return rn ? { ...r, remoteName: rn } : r;
+                });
+            }
+            const branchSync = await executeRemoteBranchSync({ remotePath: workspaceRemotePath, targetId: lockResult.targetId, repos: branchSyncRepos, runner: options.runner });
             diagnostics.push(...branchSync.diagnostics);
             stages.push({ stage: 'branchSync', ok: branchSync.ok, message: 'git' });
             if (!branchSync.ok) {
@@ -227,7 +252,9 @@ export async function prepareRemoteWorkspace(options: PrepareRemoteWorkspaceOpti
             remotePath: workspaceRemotePath,
             runner: options.runner,
             git: options.git,
-            allowUnpushed: stagedMode,
+            allowUnpushed: true,
+            remoteRepoNames,
+            localNameByRemoteName,
             ...(stagedMode ? stagedBaselineProbe(local?.repos || [], remoteSettings.repos) : {})
         });
         repos = postBaseline.repos;

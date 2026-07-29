@@ -11,7 +11,9 @@ import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget } from '../../../
 import type { DetectContext, ToolchainInfo } from './types';
 
 export async function detectContext(workspace: string): Promise<DetectContext> {
-    const candidates = collectTargetCandidates(workspace);
+    setSilent(true);
+    let candidates;
+    try { candidates = collectTargetCandidates(workspace); } finally { setSilent(false); }
     const toolchain = await detectToolchain(workspace);
 
     const workroot = resolveWorkroot(workspace);
@@ -25,7 +27,7 @@ export async function detectContext(workspace: string): Promise<DetectContext> {
         workspace,
         candidates,
         qtCandidates: candidates.filter(c => c.kind === 'qt'),
-        sdkCandidates: candidates.filter(c => c.kind === 'sdk'),
+        cppCandidates: candidates.filter(c => c.kind === 'cpp'),
         toolchain,
         existingTarget,
         existingQt: {
@@ -37,8 +39,8 @@ export async function detectContext(workspace: string): Promise<DetectContext> {
             arch: profile?.arch || '',
             target: profile?.toolchain.qmakeTarget || '',
         },
-        existingSdk: {
-            pinnedProject: profile && profile.kind === 'sdk' ? profile.project : null,
+        existingCpp: {
+            pinnedProject: profile && profile.kind === 'cpp' ? profile.project : null,
             vsInstall: profile?.toolchain.vsInstall || '',
             mode: profile?.mode || '',
             arch: profile?.arch || '',
@@ -51,8 +53,8 @@ async function detectToolchain(workspace: string): Promise<ToolchainInfo> {
     const result: ToolchainInfo = { qt: false, vs: false, jom: false, make: false, qtCandidates: [], vsCandidates: [] };
 
     setSilent(true);
-    const env = await detectEnv();
-    setSilent(false);
+    let env;
+    try { env = await detectEnv(); } finally { setSilent(false); }
 
     result.qtCandidates = env.qtCandidates.map(q => ({ path: q.path, version: q.version }));
     result.vsCandidates = env.vsCandidates.map(v => ({ installPath: v.installPath, version: v.version, edition: v.edition }));

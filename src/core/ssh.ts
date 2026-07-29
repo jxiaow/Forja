@@ -21,8 +21,8 @@ export function buildSshArgs(server: ServerConfig, options?: SshArgsOptions): st
         args.push('-i', server.privateKeyPath);
     }
     args.push('-p', String(server.port));
-    // 默认关闭严格主机密钥检查（开发工具场景），可通过 server config 启用
-    const hostKeyChecking = server.strictHostKeyChecking ? 'yes' : 'no';
+    // 默认启用严格主机密钥检查；显式设为 false 时关闭
+    const hostKeyChecking = server.strictHostKeyChecking !== false ? 'yes' : 'no';
     args.push('-o', `StrictHostKeyChecking=${hostKeyChecking}`);
     args.push('-o', 'ConnectTimeout=10');
     if (server.authMode === 'key') {
@@ -48,7 +48,7 @@ export function buildScpArgs(server: ServerConfig): string[] {
     if (server.port !== 22) {
         args.push('-P', String(server.port));
     }
-    const hostKeyChecking = server.strictHostKeyChecking ? 'yes' : 'no';
+    const hostKeyChecking = server.strictHostKeyChecking !== false ? 'yes' : 'no';
     args.push('-o', `StrictHostKeyChecking=${hostKeyChecking}`);
     args.push('-o', 'ConnectTimeout=10');
     if (server.authMode === 'key') {

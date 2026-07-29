@@ -14,7 +14,6 @@ import test, { before, after } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { execSync } from 'child_process';
 
 // ── 测试环境 ──
@@ -30,20 +29,22 @@ const cleanup = () => {
 };
 
 function run(args: string, cwd?: string): { code: number; out: string; err: string } {
+    const cliPath = path.join(process.cwd(), 'out', 'cli', 'index.js');
     try {
-        const out = execSync(`forja ${args}`, {
+        const out = execSync(`node ${cliPath} ${args}`, {
             cwd: cwd || TEST_DIR,
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'pipe'],
             timeout: 30000,
         });
         return { code: 0, out, err: '' };
-    } catch (e: any) {
-        return { code: e.status || 1, out: e.stdout || '', err: e.stderr || '' };
+    } catch (e: unknown) {
+        const err = e as { status?: number; stdout?: string; stderr?: string };
+        return { code: err.status || 1, out: err.stdout || '', err: err.stderr || '' };
     }
 }
 
-function json(args: string, cwd?: string): any {
+function json(args: string, cwd?: string) {
     const r = run(`${args} --json`, cwd);
     try { return JSON.parse(r.out); } catch { return null; }
 }
@@ -103,12 +104,12 @@ test('init --json 返回初始化结果', () => {
 
 test('list targets current 与 status activeTarget 一致', () => {
     const statusJ = json('status');
-    const listJ = json('list targets');
+    const listJ = json('list targets --all');
 
     if (statusJ.activeTarget) {
         // 规范化路径比较
         const activeProject = statusJ.activeTarget.project.replace(/\\/g, '/');
-        const currentTarget = listJ.targets?.find((t: any) => t.current === true);
+        const currentTarget = listJ.targets?.find((t: { current?: boolean }) => t.current === true);
 
         assert.ok(currentTarget, 'list targets 必须有一个 current=true 的目标');
         const currentProject = currentTarget.project.replace(/\\/g, '/');
@@ -122,8 +123,7 @@ test('list targets current 与 status activeTarget 一致', () => {
 // ════════════════════════════════════════════════════════════
 
 test('doctor 输出跟随 locale（中文）', () => {
-    run('use lang zh');
-    const r = run('doctor');
+    const r = run('doctor --lang zh');
     // 检查关键标签是中文
     assert.match(r.out, /诊断/, 'doctor 必须输出中文"诊断"');
     assert.match(r.out, /工作区/, 'doctor 必须输出中文"工作区"');
@@ -131,20 +131,17 @@ test('doctor 输出跟随 locale（中文）', () => {
 });
 
 test('doctor 输出跟随 locale（英文）', () => {
-    run('use lang en');
-    const r = run('doctor');
+    const r = run('doctor --lang en');
     assert.match(r.out, /Doctor/, 'doctor 必须输出英文"Doctor"');
     assert.match(r.out, /Workspace/, 'doctor 必须输出英文"Workspace"');
     assert.match(r.out, /Next/, 'doctor 必须输出英文"Next"');
 });
 
 test('status 输出跟随 locale', () => {
-    run('use lang zh');
-    const zh = run('status');
+    const zh = run('status --lang zh');
     assert.match(zh.out, /工作区/, '中文 status 必须包含"工作区"');
 
-    run('use lang en');
-    const en = run('status');
+    const en = run('status --lang en');
     assert.match(en.out, /Workspace/, '英文 status 必须包含"Workspace"');
 });
 
@@ -153,8 +150,7 @@ test('status 输出跟随 locale', () => {
 // ═══════════════════════════════════════════════════════════
 
 test('doctor 检查项格式正确（无连体字）', () => {
-    run('use lang zh');
-    const r = run('doctor');
+    const r = run('doctor --lang zh');
     const lines = r.out.trim().split('\n');
 
     for (const line of lines) {
@@ -184,8 +180,7 @@ test('diagnostic level 和 message 之间有分隔符', () => {
 });
 
 test('文本输出标签后紧跟值（无多余空格）', () => {
-    run('use lang zh');
-    const r = run('status');
+    const r = run('status --lang zh');
     const lines = r.out.trim().split('\n');
 
     for (const line of lines) {
@@ -194,7 +189,7 @@ test('文本输出标签后紧跟值（无多余空格）', () => {
             // ：后面不应该有多个连续空格（缩进除外）
             const afterColon = line.split('：')[1];
             if (afterColon && !line.startsWith(' ')) {
-                assert.doesNotMatch(afterColon, /^  /,
+                assert.doesNotMatch(afterColon, /^ {2}/,
                     `中文标签后不应有多余空格: ${line}`);
             }
         }
@@ -211,12 +206,12 @@ test('server add → list servers 能看到', () => {
     assert.ok(addResult.ok, 'add 必须成功');
 
     const listResult = json('server');
-    const found = listResult.servers?.find((s: any) => s.name === name);
+    const found = listResult.servers?.find((s: { name?: string }) => s.name === name);
     assert.ok(found, `list servers 必须包含 ${name}`);
     assert.equal(found.host, '127.0.0.1');
 
     // 清理
-    run(`server remove ${found.id}`);
+    run(`server remove ${found.id} --force`);
 });
 
 test('server update 实际修改了数据', () => {
@@ -228,21 +223,18 @@ test('server update 实际修改了数据', () => {
     assert.ok(updateResult.ok);
 
     const listResult = json('server');
-    const found = listResult.servers?.find((s: any) => s.id === addResult.server.id);
+    const found = listResult.servers?.find((s: { id?: string }) => s.id === addResult.server.id);
     assert.equal(found?.host, '2.2.2.2', 'host 必须已更新');
 
-    run(`server remove ${addResult.server.id}`);
+    run(`server remove ${addResult.server.id} --force`);
 });
 
-test('use lang → 配置持久化一致', () => {
-    run('use lang zh');
-    const configPath = path.join(process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja'), 'config.json');
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(config.lang, 'zh');
+test('--lang 全局 flag 切换输出语言', () => {
+    const zhResult = run('status --lang zh');
+    assert.match(zhResult.out, /工作区/, '中文输出必须包含"工作区"');
 
-    run('use lang en');
-    const config2 = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(config2.lang, 'en');
+    const enResult = run('status --lang en');
+    assert.match(enResult.out, /Workspace/, '英文输出必须包含"Workspace"');
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -265,7 +257,7 @@ test('status nextAction: 有 server 时显示实际名称', () => {
         }
     }
 
-    run(`server remove ${addResult.server.id}`);
+    run(`server remove ${addResult.server.id} --force`);
 });
 
 test('server nextActions: <=5 个显示名字列表', () => {
@@ -294,7 +286,7 @@ test('server nextActions: <=5 个显示名字列表', () => {
         assert.match(remoteAction, /--server <name>/, '超过 5 个应显示 <name>');
     }
 
-    for (const id of ids) { run(`server remove ${id}`); }
+    for (const id of ids) { run(`server remove ${id} --force`); }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -307,7 +299,7 @@ test('未知命令返回正确错误结构', () => {
     assert.equal(r.ok, false);
     assert.ok(r.diagnostics?.length > 0);
     assert.equal(r.diagnostics[0].level, 'error');
-    assert.ok(r.diagnostics[0].code || r.diagnostics[0].level, 'diagnostic must have identifying fields');
+    assert.ok(r.diagnostics[0].level, 'diagnostic must have a level');
 });
 
 test('未知参数返回正确错误结构', () => {
@@ -339,7 +331,7 @@ test('status JSON 结构完整', () => {
 });
 
 test('所有 list 分类返回有效 JSON', () => {
-    const categories = ['targets', 'env', 'lang'];
+    const categories = ['targets', 'env'];
     for (const cat of categories) {
         const j = json(`list ${cat}`);
         assert.ok(j, `list ${cat} 必须返回有效 JSON`);
@@ -366,7 +358,7 @@ test('server 完整 CRUD 流程', () => {
 
     // Read
     const listResult = json('server');
-    const found = listResult.servers.find((s: any) => s.id === serverId);
+    const found = listResult.servers.find((s: { id?: string }) => s.id === serverId);
     assert.ok(found, 'list 必须包含新创建的 server');
     assert.equal(found.name, name);
 
@@ -377,18 +369,18 @@ test('server 完整 CRUD 流程', () => {
 
     // Verify update
     const afterUpdate = json('server');
-    const updated = afterUpdate.servers.find((s: any) => s.id === serverId);
+    const updated = afterUpdate.servers.find((s: { id?: string }) => s.id === serverId);
     assert.equal(updated.host, '192.168.1.1', 'host 必须已更新');
     assert.equal(updated.port, 3333, 'port 必须已更新');
 
     // Delete
-    const removeResult = json(`server remove ${serverId}`);
+    const removeResult = json(`server remove ${serverId} --force`);
     assert.ok(removeResult.ok, 'remove 必须成功');
     assert.equal(removeResult.serverAction, 'remove');
 
     // Verify delete
     const afterRemove = json('server');
-    const stillThere = afterRemove.servers.find((s: any) => s.id === serverId);
+    const stillThere = afterRemove.servers.find((s: { id?: string }) => s.id === serverId);
     assert.ok(!stillThere, 'server 必须已删除');
 });
 
@@ -400,7 +392,7 @@ test('server add 缺少必填参数报错', () => {
 });
 
 test('server remove 不存在的 ID 报错', () => {
-    const r = json('server remove nonexistent-id-12345');
+    const r = json('server remove nonexistent-id-12345 --force');
     assert.ok(r);
     assert.equal(r.ok, false);
 });
@@ -409,8 +401,8 @@ test('server remove 不存在的 ID 报错', () => {
 // 10. Use 子命令测试
 // ═══════════════════════════════════════════════════════════════
 
-test('use execution --local 设置本地执行', () => {
-    const r = json('use execution --local');
+test('use target --run-at local 设置本地执行', () => {
+    const r = json('use target --run-at local');
     assert.ok(r);
     // 可能因为没有 active target 而失败，但必须返回有效 JSON
     assert.equal(r.action, 'use');
@@ -420,31 +412,15 @@ test('use execution --local 设置本地执行', () => {
     }
 });
 
-test('use execution --remote 设置远程执行', () => {
-    const r = json('use execution --remote');
+test('use target --run-at remote 设置远程执行', () => {
+    const r = json('use target --run-at remote');
     assert.ok(r);
     // 可能因为没有配置远程而失败，但必须返回有效 JSON
     assert.equal(r.action, 'use');
 });
 
-test('use lang 切换语言', () => {
-    const configPath = path.join(process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja'), 'config.json');
-
-    // 设置中文
-    const zhResult = json('use lang zh');
-    assert.ok(zhResult.ok);
-    const zhConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(zhConfig.lang, 'zh');
-
-    // 设置英文
-    const enResult = json('use lang en');
-    assert.ok(enResult.ok);
-    const enConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(enConfig.lang, 'en');
-});
-
-test('use lang 无参数报错', () => {
-    const r = json('use lang');
+test('use target --run-at 无效值报错', () => {
+    const r = json('use target --run-at invalid');
     assert.ok(r);
     assert.equal(r.ok, false);
 });
@@ -456,16 +432,16 @@ test('remote --server 设置服务器', () => {
     assert.ok(addResult.ok);
 
     // 设置远程
-    const r = json(`remote --server ${name}`);
+    const r = json(`remote set --server ${name}`);
     assert.ok(r);
     assert.equal(r.ok, true);
 
     // 清理
-    run(`server remove ${addResult.server.id}`);
+    run(`server remove ${addResult.server.id} --force`);
 });
 
 test('remote --server 不存在的服务器报错', () => {
-    const r = json('remote --server nonexistent-server');
+    const r = json('remote set --server nonexistent-server');
     assert.ok(r);
     assert.equal(r.ok, false);
 });
@@ -488,11 +464,11 @@ test('server --detail 显示服务器详情', () => {
     assert.match(r.out, /detailuser/, '必须包含 username');
 
     // 清理
-    run(`server remove ${addResult.server.id}`);
+    run(`server remove ${addResult.server.id} --force`);
 });
 
-test('list targets 显示项目信息', () => {
-    const r = json('list targets');
+test('list targets --all 显示项目信息', () => {
+    const r = json('list targets --all');
     assert.ok(r);
     assert.equal(r.action, 'list');
     assert.equal(r.category, 'targets');
@@ -519,23 +495,6 @@ test('list env 显示工具链信息', () => {
 // 12. 配置持久化测试
 // ═════════════════════════════════════════════════════════════
 
-test('use lang 后配置持久化', () => {
-    // 设置语言
-    run('use lang zh');
-
-    // 重新读取配置文件
-    const configPath = path.join(process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja'), 'config.json');
-    const r1 = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(r1.lang, 'zh');
-
-    // 再次设置
-    run('use lang en');
-
-    // 验证变更
-    const r2 = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.equal(r2.lang, 'en');
-});
-
 test('server add 后配置持久化', () => {
     const name = `persist-test-${Date.now()}`;
 
@@ -545,12 +504,12 @@ test('server add 后配置持久化', () => {
 
     // 重新读取
     const listResult = json('server');
-    const found = listResult.servers.find((s: any) => s.name === name);
+    const found = listResult.servers.find((s: { name?: string }) => s.name === name);
     assert.ok(found, 'server 必须持久化');
     assert.equal(found.host, '9.9.9.9');
 
     // 清理
-    run(`server remove ${found.id}`);
+    run(`server remove ${found.id} --force`);
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -570,7 +529,7 @@ test('空工作区 status 不崩溃', () => {
 });
 
 test('list 所有分类都不崩溃', () => {
-    const categories = ['targets', 'env', 'lang'];
+    const categories = ['targets', 'env'];
     for (const cat of categories) {
         const r = run(`list ${cat}`);
         assert.ok(r.code === 0 || r.code === 1, `list ${cat} 不应崩溃`);
@@ -580,14 +539,14 @@ test('list 所有分类都不崩溃', () => {
 test('JSON 输出必须可解析', () => {
     const cmds = [
         'status', 'list targets', 'list env',
-        'list lang', 'remote', 'server',
+        'remote', 'server',
     ];
     for (const cmd of cmds) {
         const r = run(`${cmd} --json`);
         let parsed;
         try {
             parsed = JSON.parse(r.out);
-        } catch (e) {
+        } catch {
             assert.fail(`${cmd} --json 输出不是有效 JSON: ${r.out.slice(0, 200)}`);
         }
         assert.ok(parsed, `${cmd} 必须返回 JSON 对象`);
@@ -611,4 +570,419 @@ test('forja --version 显示版本号', () => {
     const r = run('--version');
     assert.equal(r.code, 0);
     assert.match(r.out, /\d+\.\d+\.\d+/, '必须包含版本号');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// 15. E2E 边界测试（使用真实工作区）
+// ═══════════════════════════════════════════════════════════════
+
+const REAL_WORKSPACE = 'C:\\Code\\workspace\\260627';
+
+function runE2E(args: string): { code: number; out: string; err: string } {
+    const cliPath = path.join(process.cwd(), 'out', 'cli', 'index.js');
+    try {
+        const out = execSync(`node ${cliPath} ${args}`, {
+            cwd: REAL_WORKSPACE,
+            encoding: 'utf8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+            timeout: 30000,
+        });
+        return { code: 0, out, err: '' };
+    } catch (e: unknown) {
+        const err = e as { status?: number; stdout?: string; stderr?: string };
+        return { code: err.status || 1, out: err.stdout || '', err: err.stderr || '' };
+    }
+}
+
+function jsonE2E(args: string): any {
+    const r = runE2E(`${args} --json`);
+    try { return JSON.parse(r.out); } catch { return null; }
+}
+
+// ── 15.1 无效的 mode/arch 值 ──
+
+test('use target with invalid mode value', () => {
+    const j = jsonE2E('use target --mode invalid-mode');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with invalid arch value', () => {
+    const j = jsonE2E('use target --arch invalid-arch');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with empty mode', () => {
+    const j = jsonE2E('use target --mode ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('use target with empty arch', () => {
+    const j = jsonE2E('use target --arch ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.2 无效的端口值（边界测试）──
+
+test('server add with port 0', () => {
+    const j = jsonE2E('server add --name test-port-0 --host 192.168.1.100 --username testuser --port 0');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add with port 65536 (above max)', () => {
+    const j = jsonE2E('server add --name test-port-max --host 192.168.1.100 --username testuser --port 65536');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add with negative port', () => {
+    const j = jsonE2E('server add --name test-port-neg --host 192.168.1.100 --username testuser --port -1');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add with non-numeric port', () => {
+    const j = jsonE2E('server add --name test-port-str --host 192.168.1.100 --username testuser --port abc');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add with float port', () => {
+    const j = jsonE2E('server add --name test-port-float --host 192.168.1.100 --username testuser --port 22.5');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.3 缺少必填参数 ──
+
+test('server add without required name', () => {
+    const j = jsonE2E('server add --host 192.168.1.100 --username testuser --port 22');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add without required host', () => {
+    const j = jsonE2E('server add --name test-no-host --username testuser --port 22');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add without required username', () => {
+    const j = jsonE2E('server add --name test-no-user --host 192.168.1.100 --port 22');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+// ── 15.4 未知 flag ──
+
+test('status with unknown flag', () => {
+    const j = jsonE2E('status --unknown-flag');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('list with unknown flag', () => {
+    const j = jsonE2E('list targets --invalid-option');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('use target with unknown flag', () => {
+    const j = jsonE2E('use target --nonexistent-option');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.5 无效的子命令 ──
+
+test('list with invalid category', () => {
+    const j = jsonE2E('list invalid-category');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use with invalid subcommand', () => {
+    const j = jsonE2E('use invalid-subcommand');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('server with invalid subcommand', () => {
+    const j = jsonE2E('server invalid-action');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.6 无效的 run-at 值 ──
+
+test('use target with invalid run-at value', () => {
+    const j = jsonE2E('use target --run-at invalid-location');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with empty run-at', () => {
+    const j = jsonE2E('use target --run-at ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.7 无效的 auth-mode 值 ──
+
+test('server add with invalid auth-mode', () => {
+    const j = jsonE2E('server add --name test-auth --host 192.168.1.100 --username testuser --port 22 --auth-mode invalid-auth');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server add with empty auth-mode', () => {
+    const j = jsonE2E('server add --name test-auth-empty --host 192.168.1.100 --username testuser --port 22 --auth-mode ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.8 空值/空白值 ──
+
+test('server add with whitespace name', () => {
+    const j = jsonE2E('server add --name "   " --host 192.168.1.100 --username testuser --port 22');
+    assert.ok(j);
+    assert.ok(j.ok !== undefined);
+});
+
+test('server add with whitespace host', () => {
+    const j = jsonE2E('server add --name test-ws-host --host "   " --username testuser --port 22');
+    assert.ok(j);
+    assert.ok(j.ok !== undefined);
+});
+
+test('server add with whitespace username', () => {
+    const j = jsonE2E('server add --name test-ws-user --host 192.168.1.100 --username "   " --port 22');
+    assert.ok(j);
+    assert.ok(j.ok !== undefined);
+});
+
+// ── 15.9 冲突的 flag ──
+
+test('sync with both --dry-run and --yes', () => {
+    const j = jsonE2E('sync --dry-run --yes');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+// ── 15.10 无效的项目路径 ──
+
+test('use target with nonexistent project', () => {
+    const j = jsonE2E('use target --project /nonexistent/path/to/project.pro');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with empty project path', () => {
+    const j = jsonE2E('use target --project ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.11 无效的工作区路径 ──
+
+test('init with nonexistent workspace', () => {
+    const j = jsonE2E('init --workspace /nonexistent/workspace/path');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('init with empty workspace', () => {
+    const j = jsonE2E('init --workspace ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.12 无效的服务器 ID ──
+
+test('server update with nonexistent ID', () => {
+    const j = jsonE2E('server update nonexistent-server-id --name new-name');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server remove with nonexistent ID', () => {
+    const j = jsonE2E('server remove nonexistent-server-id --force');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('server update with empty ID', () => {
+    const j = jsonE2E('server update "" --name new-name');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('server remove with empty ID', () => {
+    const j = jsonE2E('server remove "" --force');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.13 无效的锁 ID ──
+
+test('doctor unlock with nonexistent lock ID', () => {
+    const j = jsonE2E('doctor unlock nonexistent-lock-id');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('doctor unlock with empty lock ID', () => {
+    const j = jsonE2E('doctor unlock ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.14 无效的文件路径 ──
+
+test('sync with nonexistent file', () => {
+    const j = jsonE2E('sync --file /nonexistent/file.txt');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('sync with empty file path', () => {
+    const j = jsonE2E('sync --file ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.15 多个未知 flag ──
+
+test('status with multiple unknown flags', () => {
+    const j = jsonE2E('status --unknown1 --unknown2 --unknown3');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('list with multiple unknown flags', () => {
+    const j = jsonE2E('list targets --invalid1 --invalid2');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.16 混合有效和无效 flag ──
+
+test('use target with valid mode and invalid flag', () => {
+    const j = jsonE2E('use target --mode debug --unknown-flag');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('server add with valid params and unknown flag', () => {
+    const j = jsonE2E('server add --name test-mixed --host 192.168.1.100 --username testuser --port 22 --invalid-option');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.17 无效的远程路径 ──
+
+test('remote set with empty remote path', () => {
+    const j = jsonE2E('remote set --server test-server --remote-path ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('remote set with whitespace remote path', () => {
+    const j = jsonE2E('remote set --server test-server --remote-path "   "');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.18 无效的忽略模式 ──
+
+test('sync ignore with empty pattern', () => {
+    const j = jsonE2E('sync ignore --add ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('sync ignore with whitespace pattern', () => {
+    const j = jsonE2E('sync ignore --add "   "');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('sync ignore remove with nonexistent pattern', () => {
+    const j = jsonE2E('sync ignore --rm nonexistent-pattern-xyz');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+// ── 15.19 无效的工具链路径 ──
+
+test('use target with nonexistent Qt path', () => {
+    const j = jsonE2E('use target --qt /nonexistent/qt/path');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with empty Qt path', () => {
+    const j = jsonE2E('use target --qt ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+test('use target with nonexistent VS path', () => {
+    const j = jsonE2E('use target --vs /nonexistent/vs/path');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
+});
+
+test('use target with empty VS path', () => {
+    const j = jsonE2E('use target --vs ""');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+});
+
+// ── 15.20 特殊字符边界情况 ──
+
+test('server add with special characters in name', () => {
+    const j = jsonE2E('server add --name "test@server#1" --host 192.168.1.100 --username testuser --port 22');
+    assert.ok(j);
+    assert.ok(j.ok !== undefined);
+});
+
+test('server add with unicode in name', () => {
+    const j = jsonE2E('server add --name "测试服务器" --host 192.168.1.100 --username testuser --port 22');
+    assert.ok(j);
+    assert.ok(j.ok !== undefined);
+});
+
+test('use target with special characters in project path', () => {
+    const j = jsonE2E('use target --project "test@project#1.pro"');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.ok(j.diagnostics?.length > 0);
 });

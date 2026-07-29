@@ -2,7 +2,7 @@
  * Unit tests for init.ts and candidates.ts core logic.
  * Tests detectToolchain, auto-select, path normalization, and CMake support.
  */
-import test, { before, after } from 'node:test';
+import test, { after } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -42,25 +42,25 @@ test('aggregateCandidates: detects .pro files as qt candidates', () => {
     assert.equal(result[0].label, 'myapp');
 });
 
-test('aggregateCandidates: detects Makefile as sdk candidate on POSIX', () => {
+test('aggregateCandidates: detects Makefile as cpp candidate on POSIX', () => {
     if (os.platform() === 'win32') { return; }
     const { aggregateCandidates } = require('../cli/commands/candidates');
-    const workspace = path.join(TEST_DIR, 'sdk-ws');
+    const workspace = path.join(TEST_DIR, 'cpp-ws');
     fs.mkdirSync(workspace, { recursive: true });
     fs.writeFileSync(path.join(workspace, 'Makefile'), 'all:\n');
     const result = aggregateCandidates(workspace, null, []);
     assert.equal(result.length, 1);
-    assert.equal(result[0].kind, 'sdk');
+    assert.equal(result[0].kind, 'cpp');
 });
 
-test('aggregateCandidates: detects CMakeLists.txt as sdk candidate', () => {
+test('aggregateCandidates: detects CMakeLists.txt as cpp candidate', () => {
     const { aggregateCandidates } = require('../cli/commands/candidates');
     const workspace = path.join(TEST_DIR, 'cmake-ws');
     fs.mkdirSync(workspace, { recursive: true });
     fs.writeFileSync(path.join(workspace, 'CMakeLists.txt'), 'cmake_minimum_required(VERSION 3.14)\n');
     const result = aggregateCandidates(workspace, null, []);
     assert.equal(result.length, 1);
-    assert.equal(result[0].kind, 'sdk');
+    assert.equal(result[0].kind, 'cpp');
     assert.equal(result[0].label, 'cmake-ws');
 });
 

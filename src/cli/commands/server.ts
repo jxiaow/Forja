@@ -6,10 +6,10 @@ import {
     ServerConfig, AuthMode,
 } from '../../core/serverStore';
 import { ForjaJsonResult, Diagnostic, ServerDetail, ServerSummary, Locale, T } from './types';
-import { loadRemoteSettings, saveRemoteSettings } from '../../core/settingsIO';
+import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
 import * as path from 'path';
 
-export function formatServerText(result: ServerResult, locale: Locale): string {
+export function formatServerText(result: ServerResult, _locale: Locale): string {
     const lines: string[] = [];
 
     if (!result.ok) {
@@ -49,7 +49,7 @@ export function formatServerText(result: ServerResult, locale: Locale): string {
     }
 
     if (result.changed?.length) {
-        lines.push(`  ${T('changed')} ${result.changed.join(', ')}`);
+        lines.push(`  ${T('changed')}: ${result.changed.join(', ')}`);
     }
 
     if (result.nextAction) {
@@ -64,7 +64,7 @@ export interface ServerResult extends ForjaJsonResult {
     serverAction: 'add' | 'update' | 'remove';
     server?: ServerDetail;
     removed?: string;
-    changed: string[];
+    changed?: string[];
 }
 
 function toServerSummary(s: ServerConfig, selectedId?: string): ServerSummary {
@@ -112,6 +112,13 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
             nextAction: 'forja server add --port 22',
         };
     }
+    if (args.authMode && args.authMode !== 'key' && args.authMode !== 'password') {
+        return {
+            ok: false, action: 'server', serverAction: 'add', changed: [],
+            diagnostics: [{ level: 'error', message: `Invalid auth mode: ${args.authMode}. Use 'key' or 'password'` }],
+            nextAction: 'forja server add --auth-mode key',
+        };
+    }
     if (!args.name) {
         diagnostics.push({ level: 'error', message: T('srv.missingName') });
     }
@@ -121,18 +128,31 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
     if (!args.username) {
         diagnostics.push({ level: 'error', message: T('srv.missingUsername') });
     }
-    // Validate auth mode consistency
+    // Validate auth mode — only block when explicitly specified; missing credentials without explicit auth-mode are warnings
     if (args.authMode === 'key' && !args.privateKeyPath && !args.password) {
         diagnostics.push({ level: 'error', message: T('srv.keyRequiresKeyOrPassword') });
     }
     if (args.authMode === 'password' && !args.password) {
         diagnostics.push({ level: 'error', message: T('srv.passwordRequiresPassword') });
     }
-    if (diagnostics.length > 0) {
+    if (!args.authMode && !args.privateKeyPath && !args.password) {
+        diagnostics.push({ level: 'warning', message: T('srv.noCredentials') });
+    }
+    if (diagnostics.some(d => d.level === 'error')) {
         return {
             ok: false, action: 'server', serverAction: 'add', changed: [],
             diagnostics,
             nextAction: 'forja server add --name <name> --host <host> --username <name>',
+        };
+    }
+
+    // Check for duplicate name
+    const existing = readServers().find(s => s.name === args.name);
+    if (existing) {
+        return {
+            ok: false, action: 'server', serverAction: 'add', changed: [],
+            diagnostics: [{ level: 'error', message: `${T('srv.duplicateName')}: ${args.name} (${T('id')}: ${existing.id})` }],
+            nextAction: `forja server update ${existing.id} --name <new-name>`,
         };
     }
 
@@ -153,6 +173,7 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
             serverAction: 'add',
             server: toServerDetail(created),
             changed: [`servers.${created.id}`],
+            diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
             nextAction: `forja remote set --server ${created.id} --remote-path <path>`,
         };
     } catch (e) {
@@ -173,6 +194,13 @@ export function runServerUpdate(id: string, updates: Partial<ServerAddArgs>): Se
             nextAction: 'forja server',
         };
     }
+    if (updates.authMode && updates.authMode !== 'key' && updates.authMode !== 'password') {
+        return {
+            ok: false, action: 'server', serverAction: 'update', changed: [],
+            diagnostics: [{ level: 'error', message: `Invalid auth mode: ${updates.authMode}. Use 'key' or 'password'` }],
+            nextAction: 'forja server update --auth-mode key',
+        };
+    }
     const patch: Partial<Omit<ServerConfig, 'id'>> = {};
     if (updates.name !== undefined) { patch.name = updates.name; }
     if (updates.host !== undefined) { patch.host = updates.host; }
@@ -188,6 +216,26 @@ export function runServerUpdate(id: string, updates: Partial<ServerAddArgs>): Se
         patch.password = '';
     } else if (updates.authMode === 'password') {
         patch.privateKeyPath = '';
+    }
+
+    // Validate credentials only when auth mode is explicitly being changed
+    if (updates.authMode) {
+        const resultKeyPath = updates.privateKeyPath ?? existing.privateKeyPath;
+        const resultPassword = updates.password ?? existing.password;
+        if (updates.authMode === 'key' && !resultKeyPath && !resultPassword) {
+            return {
+                ok: false, action: 'server', serverAction: 'update', changed: [],
+                diagnostics: [{ level: 'error', message: T('srv.keyRequiresKeyOrPassword') }],
+                nextAction: `forja server update ${id} --private-key-path <path>`,
+            };
+        }
+        if (updates.authMode === 'password' && !resultPassword) {
+            return {
+                ok: false, action: 'server', serverAction: 'update', changed: [],
+                diagnostics: [{ level: 'error', message: T('srv.passwordRequiresPassword') }],
+                nextAction: `forja server update ${id} --password`,
+            };
+        }
     }
 
     try {
@@ -234,7 +282,8 @@ export function runServerRemove(id: string, workspace: string): ServerResult {
             const ws = path.resolve(workspace);
             const remote = loadRemoteSettings(ws);
             let remoteChanged = false;
-            if (remote.selectedServer === id) {
+            const wasSelected = remote.selectedServer === id;
+            if (wasSelected) {
                 remote.selectedServer = '';
                 remoteChanged = true;
             }
@@ -242,9 +291,24 @@ export function runServerRemove(id: string, workspace: string): ServerResult {
                 delete remote.remotePaths[id];
                 remoteChanged = true;
             }
+            if (remote.transfer?.deployServer === id) {
+                remote.transfer = null;
+                remoteChanged = true;
+            }
             if (remoteChanged) {
                 saveRemoteSettings(ws, remote);
                 changed.push('remote.selectedServer');
+            }
+            // Disable sync if the removed server was the sync target
+            if (wasSelected) {
+                try {
+                    const sync = loadSyncSettings(ws);
+                    if (sync.enabled) {
+                        sync.enabled = false;
+                        saveSyncSettings(ws, sync);
+                        changed.push('sync.disabled');
+                    }
+                } catch { /* sync file may not exist */ }
             }
         }
 

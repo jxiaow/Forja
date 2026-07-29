@@ -1,6 +1,8 @@
 # 命令表面整理方案
 
-> **状态**：设计中，待实现
+> **状态：superseded（2026-07-16）。** 本文只保留早期“移除 setup 并并入 use target”的历史记录。当前新版本保留 `forja init` 作为全新配置入口；不读取旧配置、不兼容旧命令。实现计划以 `docs/superpowers/plans/2026-07-16-forja-greenfield-convergence.md` 为准。
+
+> **历史状态**：设计中，待归档
 > **日期**：2026-07-05
 > **背景**：setup 无法适配多 target；全面审查发现多处不一致
 

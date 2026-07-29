@@ -26,7 +26,7 @@ export interface ToolchainConfig {
 export interface TargetProfile {
     id: string;
     name: string;
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';
@@ -49,7 +49,7 @@ export interface QtModulePrefs {
     qmakeReminderEnabled: boolean;
 }
 
-export interface SdkModulePrefs {
+export interface CppModulePrefs {
     scanDepth: number;
 }
 
@@ -58,7 +58,7 @@ export interface WorkspaceConfig {
     activeTarget: string | null;
     targets: Record<string, TargetProfile>;
     qtModulePrefs: QtModulePrefs;
-    sdkModulePrefs: SdkModulePrefs;
+    cppModulePrefs: CppModulePrefs;
 }
 
 export interface WorkspacesRegistry {
@@ -82,7 +82,7 @@ export const DEFAULT_QT_MODULE_PREFS: Readonly<QtModulePrefs> = {
     qmakeReminderEnabled: true,
 };
 
-export const DEFAULT_SDK_MODULE_PREFS: Readonly<SdkModulePrefs> = {
+export const DEFAULT_CPP_MODULE_PREFS: Readonly<CppModulePrefs> = {
     scanDepth: 8,
 };
 
@@ -127,18 +127,27 @@ function atomicWriteFileSync(filePath: string, data: string): void {
 
 export function loadWorkspacesRegistry(): WorkspacesRegistry {
     const filePath = workspacesRegistryPath();
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            if (Array.isArray(raw.workroots)) {
-                return { workroots: raw.workroots.filter((r: unknown) => typeof r === 'string') };
-            }
-        }
-    } catch {
-        // corrupted — try recovery from per-workspace files
+    if (!fs.existsSync(filePath)) {
+        // No registry yet — try recovery from per-workspace files
+        return recoverRegistry();
     }
-    // Recovery: scan workspaces/ directory for orphan config files
-    return recoverRegistry();
+    let raw: string;
+    try {
+        raw = fs.readFileSync(filePath, 'utf8');
+    } catch {
+        // Unreadable — treat as empty
+        return recoverRegistry();
+    }
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.workroots)) {
+            return { workroots: parsed.workroots.filter((r: unknown) => typeof r === 'string') };
+        }
+        // Valid JSON but unexpected shape — recover
+        return recoverRegistry();
+    } catch {
+        throw new Error(`workspaces.json 损坏，请运行 forja init 重新配置: ${filePath}`);
+    }
 }
 
 function recoverRegistry(): WorkspacesRegistry {
@@ -188,7 +197,7 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
                 targets[id] = {
                     id: typeof obj.id === 'string' ? obj.id : id,
                     name: typeof obj.name === 'string' ? obj.name : id,
-                    kind: obj.kind === 'sdk' ? 'sdk' : 'qt',
+                    kind: obj.kind === 'cpp' ? 'cpp' : 'qt',
                     project: typeof obj.project === 'string' ? obj.project : '',
                     mode: obj.mode === 'release' ? 'release' : 'debug',
                     arch: obj.arch === 'x64' ? 'x64' : 'x86',
@@ -217,7 +226,7 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
         };
     };
 
-    const sanitizeSdkPrefs = (raw: unknown): SdkModulePrefs => {
+    const sanitizeCppPrefs = (raw: unknown): CppModulePrefs => {
         const obj = (raw && typeof raw === 'object') ? raw as Record<string, unknown> : {};
         return {
             scanDepth: typeof obj.scanDepth === 'number' ? obj.scanDepth : 8,
@@ -229,27 +238,30 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
         activeTarget: typeof raw.activeTarget === 'string' ? raw.activeTarget : null,
         targets,
         qtModulePrefs: sanitizeQtPrefs(raw.qtModulePrefs),
-        sdkModulePrefs: sanitizeSdkPrefs(raw.sdkModulePrefs),
+        cppModulePrefs: sanitizeCppPrefs(raw.cppModulePrefs),
     };
 }
 
 export function loadWorkspaceConfig(workroot: string): WorkspaceConfig {
     const filePath = workspaceConfigPath(workroot);
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            return sanitizeWorkspaceConfig(raw);
-        }
-    } catch {
-        // corrupted — return empty
+    if (!fs.existsSync(filePath)) {
+        // File doesn't exist — not initialized, return empty
+        return {
+            workroot: normalizePath(workroot),
+            activeTarget: null,
+            targets: {},
+            qtModulePrefs: { ...DEFAULT_QT_MODULE_PREFS },
+            cppModulePrefs: { ...DEFAULT_CPP_MODULE_PREFS },
+        };
     }
-    return {
-        workroot: normalizePath(workroot),
-        activeTarget: null,
-        targets: {},
-        qtModulePrefs: { ...DEFAULT_QT_MODULE_PREFS },
-        sdkModulePrefs: { ...DEFAULT_SDK_MODULE_PREFS },
-    };
+    const raw = fs.readFileSync(filePath, 'utf8');
+    let parsed: Record<string, unknown>;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        throw new Error(`workspace 配置损坏，请运行 forja init 重新配置: ${filePath}`);
+    }
+    return sanitizeWorkspaceConfig(parsed);
 }
 
 export function saveWorkspaceConfig(config: WorkspaceConfig): void {
@@ -296,9 +308,19 @@ export function registerWorkroot(workroot: string): void {
     }
 }
 
+export function unregisterWorkroot(workroot: string): void {
+    const registry = loadWorkspacesRegistry();
+    const normalized = normalizePath(workroot);
+    const idx = registry.workroots.findIndex(wr => normalizePath(wr) === normalized);
+    if (idx >= 0) {
+        registry.workroots.splice(idx, 1);
+        saveWorkspacesRegistry(registry);
+    }
+}
+
 // ── Target helpers ──
 
-export function generateTargetId(kind: 'qt' | 'sdk', projectPath: string, mode: string, arch: string, existingIds?: Set<string>): string {
+export function generateTargetId(kind: 'qt' | 'cpp', projectPath: string, mode: string, arch: string, existingIds?: Set<string>): string {
     const basename = path.basename(projectPath, path.extname(projectPath));
     let id = `${kind}-${basename}-${mode}-${arch}`;
 
@@ -321,6 +343,6 @@ export function createEmptyWorkspaceConfig(workroot: string): WorkspaceConfig {
         activeTarget: null,
         targets: {},
         qtModulePrefs: { ...DEFAULT_QT_MODULE_PREFS },
-        sdkModulePrefs: { ...DEFAULT_SDK_MODULE_PREFS },
+        cppModulePrefs: { ...DEFAULT_CPP_MODULE_PREFS },
     };
 }

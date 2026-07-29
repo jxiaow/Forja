@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getBuildConfig, getQtSourcePath, getWorkspaceRoot } from '../services/configService';
+import { getBuildConfig, getQtSourcePath } from '../services/configService';
 import { setState } from '../../vscode/qtState';
 import { getMakefileInfo } from '../project/projectManager';
 import { build, qmakeForDebug } from './buildManager';
@@ -11,6 +11,7 @@ const isWin = process.platform === 'win32';
 const logger = createLogger('Debug');
 let _activeDebugProgram: string | null = null;
 let _suppressTerminateNotice = false;
+let _isStartingDebug = false;
 
 function _needsQmakeForDebug(projectDir: string): boolean {
     const mf = path.join(projectDir, 'Makefile');
@@ -128,7 +129,14 @@ async function stopExistingDebugSessions(program: string): Promise<void> {
     await vscode.debug.stopDebugging(session);
 
     await new Promise<void>(resolve => {
+        const startTime = Date.now();
+        const TIMEOUT_MS = 5000;
         const check = (): void => {
+            if (Date.now() - startTime > TIMEOUT_MS) {
+                _suppressTerminateNotice = false;
+                resolve();
+                return;
+            }
             const activeSession = vscode.debug.activeDebugSession;
             const activeProgram = activeSession?.configuration?.program;
             const stillRunning = !!activeSession
@@ -170,71 +178,75 @@ export function registerDebugSessionWatcher(context: vscode.ExtensionContext): v
 }
 
 export async function startDebug(): Promise<void> {
-    const cfg = getBuildConfig();
-    if (!cfg.projectDir) {
-        vscode.window.showErrorMessage('请先选择项目');
+    if (_isStartingDebug) {
+        vscode.window.showWarningMessage('调试会话正在启动中，请稍候');
         return;
     }
-
-    // 先 Build
-    setState('isBuilding', true);
-    setState('buildAction', 'debug');
+    _isStartingDebug = true;
     try {
-        if (cfg.mode === 'release' && _needsQmakeForDebug(cfg.projectDir)) {
-            const qmakeExecution = await qmakeForDebug();
-            await waitForTask(qmakeExecution);
+        const cfg = getBuildConfig();
+        if (!cfg.projectDir) {
+            vscode.window.showErrorMessage('请先选择项目');
+            return;
         }
-        const buildExecution = await build();
-        await waitForTask(buildExecution);
-    } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : String(e);
-        vscode.window.showErrorMessage(message === '任务失败' ? '构建失败' : message);
-        return;
+
+        // 先 Build
+        setState('isBuilding', true);
+        setState('buildAction', 'debug');
+        try {
+            if (cfg.mode === 'release' && _needsQmakeForDebug(cfg.projectDir)) {
+                const qmakeExecution = await qmakeForDebug();
+                await waitForTask(qmakeExecution);
+            }
+            const buildExecution = await build();
+            await waitForTask(buildExecution);
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            vscode.window.showErrorMessage(message === '任务失败' ? '构建失败' : message);
+            return;
+        } finally {
+            setState('isBuilding', false);
+            setState('buildAction', null);
+        }
+
+        const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
+        if (!mfInfo) {
+            vscode.window.showErrorMessage(`请先运行 QMake (${cfg.mode})`);
+            return;
+        }
+
+        await stopExistingDebugSessions(mfInfo.exePath);
+
+        const qtSourcePath = getEffectiveQtSourcePath(cfg.qtPath);
+        const sourceFileMap = createQtSourceFileMap(qtSourcePath);
+
+        const config: vscode.DebugConfiguration = {
+            name: `Debug ${mfInfo.target}`,
+            type: isWin ? 'cppvsdbg' : 'cppdbg',
+            request: 'launch',
+            program: mfInfo.exePath,
+            args: [],
+            stopAtEntry: false,
+            cwd: cfg.projectDir,
+            environment: [],
+            console: 'integratedTerminal',
+            logging: {
+                exceptions: true,
+                programOutput: true
+            }
+        };
+        if (sourceFileMap) {
+            config.sourceFileMap = sourceFileMap;
+        }
+
+        try {
+            logger.info(`启动调试: ${mfInfo.exePath}`);
+            await vscode.debug.startDebugging(undefined, config);
+            _activeDebugProgram = mfInfo.exePath;
+        } catch (e) {
+            vscode.window.showErrorMessage(`启动调试失败: ${e}`);
+        }
     } finally {
-        setState('isBuilding', false);
-        setState('buildAction', null);
-    }
-
-    const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
-    if (!mfInfo) {
-        vscode.window.showErrorMessage(`请先运行 QMake (${cfg.mode})`);
-        return;
-    }
-
-    await stopExistingDebugSessions(mfInfo.exePath);
-    const { runStop } = await import('../../cli/commands/stop');
-    const stopResult = await runStop(getWorkspaceRoot() || process.cwd());
-    if (!stopResult.ok && stopResult.state !== 'not-running') {
-        logger.warn(`Stop before debug: ${stopResult.diagnostics?.[0]?.message ?? 'failed'}`);
-    }
-
-    const qtSourcePath = getEffectiveQtSourcePath(cfg.qtPath);
-    const sourceFileMap = createQtSourceFileMap(qtSourcePath);
-
-    const config: vscode.DebugConfiguration = {
-        name: `Debug ${mfInfo.target}`,
-        type: isWin ? 'cppvsdbg' : 'cppdbg',
-        request: 'launch',
-        program: mfInfo.exePath,
-        args: [],
-        stopAtEntry: false,
-        cwd: cfg.projectDir,
-        environment: [],
-        console: 'integratedTerminal',
-        logging: {
-            exceptions: true,
-            programOutput: true
-        }
-    };
-    if (sourceFileMap) {
-        config.sourceFileMap = sourceFileMap;
-    }
-
-    try {
-        logger.info(`启动调试: ${mfInfo.exePath}`);
-        await vscode.debug.startDebugging(undefined, config);
-        _activeDebugProgram = mfInfo.exePath;
-    } catch (e) {
-        vscode.window.showErrorMessage(`启动调试失败: ${e}`);
+        _isStartingDebug = false;
     }
 }

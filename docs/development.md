@@ -256,10 +256,10 @@ forja/
 
 ```
 VSCode 配置面板
-  → 写入 ~/.forja/servers.json 和 ~/.forja/projects/<hash>.json 的 sync 配置
+  → 写入 ~/.forja/servers.json 和 ~/.forja/workspaces/<hash>.json 的 sync 配置
 
 CLI
-  → 读取 ~/.forja/projects/<hash>.json 的 sync 配置
+  → 读取 ~/.forja/workspaces/<hash>.json 的 sync 配置
   → 执行同步
 
 两者共用
@@ -271,9 +271,9 @@ CLI
 | 配置项 | 作用域 | 存储位置 |
 |--------|--------|----------|
 | 服务器列表 | 全局 | `~/.forja/servers.json` |
-| 启用开关 | 项目 | `~/.forja/projects/<hash>.json` (`type=sync`) |
-| 远程路径 | 项目 | `~/.forja/projects/<hash>.json` (`type=sync`) |
-| 忽略列表 | 项目 | `~/.forja/projects/<hash>.json` (`type=sync`) |
+| 启用开关 | 项目 | `~/.forja/workspaces/<hash>.json` (`sync.enabled`) |
+| 远程路径 | 项目 | `~/.forja/workspaces/<hash>.json` (`sync.remotePath`) |
+| 忽略列表 | 项目 | `~/.forja/workspaces/<hash>.json` (`sync.ignore`) |
 | 同步状态 | 项目 | `.forja/sync-state.json` |
 
 ---

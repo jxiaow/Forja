@@ -1,16 +1,16 @@
 import * as vscode from 'vscode';
 import { detectEnv } from '../../qt/env/envDetector';
-import { generateCppProperties, generateSdkCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
+import { generateCppProperties, generateCppPropertiesFromSln, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
 import { getState, setState } from '../../vscode/qtState';
 import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig, updateRemoteSelectedServer } from '../../core/serverStore';
-import { loadRemoteSettings, saveRemoteSettings } from '../../core/settingsIO';
-import { executeTestConnection, refreshSyncStatusBar } from '../../sync/syncWatcher';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, updateRemoteSelectedServer } from '../../core/serverStore';
+import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
+import { executeTestConnection, refreshSyncStatusBar } from '../../vscode/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
-import { setSdkSetting } from '../../vscode/settingsStore';
-import { getDefaultArch, isWindows } from '../../sdk/platform';
+import { setCppSetting } from '../../vscode/settingsStore';
+import { getDefaultArch, isWindows } from '../../cpp/platform';
 
 const logger = createLogger('ConfigPanel');
 
@@ -95,7 +95,6 @@ export async function handleMessage(
         }
         case 'selectProject': {
             await vscode.commands.executeCommand('forja.list');
-            updateHtml();
             break;
         }
         case 'saveVsPath': {
@@ -198,7 +197,9 @@ export async function handleMessage(
                     if (workroot) {
                         const config = loadWorkspaceConfig(workroot);
                         config.activeTarget = null;
-                        saveWorkspaceConfig(config);
+                        try { saveWorkspaceConfig(config); } catch (e) {
+                            logger.error(`Failed to clear activeTarget: ${e instanceof Error ? e.message : String(e)}`);
+                        }
                     }
                 }
             }
@@ -229,17 +230,17 @@ export async function handleMessage(
             // 判断当前活跃的项目类型
             const { getActiveTarget } = await import('../../cli/commands/activeTarget');
             const { resolveProjectRoot } = await import('../../vscode/workspaceResolver');
-            const sdkWs = resolveProjectRoot('sdk') || '';
+            const cppWs = resolveProjectRoot('cpp') || '';
             const qtWs = resolveProjectRoot('qt') || getWorkspaceRoot() || '';
-            const activeTarget = getActiveTarget(sdkWs) || getActiveTarget(qtWs) || getActiveTarget(getWorkspaceRoot() || '');
+            const activeTarget = getActiveTarget(cppWs) || getActiveTarget(qtWs) || getActiveTarget(getWorkspaceRoot() || '');
 
-            if (activeTarget?.kind === 'sdk') {
-                // SDK 项目：从 .sln 解析 .vcxproj 生成
+            if (activeTarget?.kind === 'cpp') {
+                // C++ 项目：从 .sln 解析 .vcxproj 生成
                 const slnAbsPath = require('path').isAbsolute(activeTarget.project)
                     ? activeTarget.project
-                    : require('path').join(sdkWs, activeTarget.project);
-                const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || sdkWs;
-                generateSdkCppProperties(slnAbsPath, wsRoot);
+                    : require('path').join(cppWs, activeTarget.project);
+                const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || cppWs;
+                generateCppPropertiesFromSln(slnAbsPath, wsRoot);
             } else {
                 // Qt 项目：从 .pro / Makefile 生成
                 const project = getState().currentProject;
@@ -313,6 +314,12 @@ export async function handleMessage(
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
                 break;
             }
+            // Check for duplicate name
+            const existing = readServers().find(s => s.name === newServerData.name);
+            if (existing) {
+                vscode.window.showWarningMessage(`服务器名称 "${newServerData.name}" 已存在 (ID: ${existing.id})`);
+                break;
+            }
             const created = addServer(newServerData);
             // 保存远程路径和选中服务器到项目配置
             const wsAdd = getWorkspaceRoot();
@@ -333,13 +340,38 @@ export async function handleMessage(
             logger.info(`删除服务器: "${msg.id}"`);
             if (msg.id) {
                 removeServer(msg.id);
-                // 如果删除的是当前选中的服务器，切换到剩余的第一个
+                // Cascade cleanup: clear references in remote and sync settings
                 const wsRm = getWorkspaceRoot();
                 if (wsRm) {
                     const remoteCfgRm = loadRemoteSettings(wsRm);
-                    if (remoteCfgRm.selectedServer === msg.id) {
+                    const wasSelected = remoteCfgRm.selectedServer === msg.id;
+                    let remoteChanged = false;
+                    if (remoteCfgRm.remotePaths[msg.id]) {
+                        delete remoteCfgRm.remotePaths[msg.id];
+                        remoteChanged = true;
+                    }
+                    if (remoteCfgRm.transfer?.deployServer === msg.id) {
+                        remoteCfgRm.transfer = null;
+                        remoteChanged = true;
+                    }
+                    // Compute final selectedServer before writing (avoid intermediate empty state)
+                    if (wasSelected) {
                         const remaining = readServers();
-                        updateRemoteSelectedServer(wsRm, remaining.length > 0 ? remaining[0].id : '');
+                        remoteCfgRm.selectedServer = remaining.length > 0 ? remaining[0].id : '';
+                        remoteChanged = true;
+                    }
+                    if (remoteChanged) {
+                        saveRemoteSettings(wsRm, remoteCfgRm);
+                    }
+                    // Disable sync if the removed server was the sync target
+                    if (wasSelected) {
+                        try {
+                            const sync = loadSyncSettings(wsRm);
+                            if (sync.enabled) {
+                                sync.enabled = false;
+                                saveSyncSettings(wsRm, sync);
+                            }
+                        } catch { /* sync file may not exist */ }
                     }
                 }
             }
@@ -364,8 +396,8 @@ export async function handleMessage(
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
                 break;
             }
-            // 如果密码为空，保留原密码
-            if (!updates.password) {
+            // 如果密码为空或为遮蔽占位符，保留原密码
+            if (!updates.password || updates.password === '••••••••') {
                 const existing = readServers().find(s => s.id === serverId);
                 if (existing) { updates.password = existing.password; }
             }
@@ -452,52 +484,51 @@ export async function handleMessage(
             }
             break;
         }
-        // ── SDK 配置消息 ──
-        case 'saveSdkMode': {
+        // ── C++ 配置消息 ──
+        case 'saveCppMode': {
             const val = String(msg.value || '');
             if (val !== 'debug' && val !== 'release') { break; }
-            logger.info(`保存 SDK 构建模式: "${val}"`);
-            setSdkSetting('mode', val);
+            logger.info(`保存 C++ 构建模式: "${val}"`);
+            setCppSetting('mode', val);
             // Sync to activeTarget so CLI build/run use the updated value
             const ws = getWorkspaceRoot();
             if (ws) {
                 const { getActiveTarget, setActiveTarget } = await import('../../cli/commands/activeTarget');
                 const target = getActiveTarget(ws);
-                if (target && target.kind === 'sdk') {
+                if (target && target.kind === 'cpp') {
                     setActiveTarget(ws, { ...target, mode: val });
                 }
             }
             break;
         }
-        case 'saveSdkArch': {
+        case 'saveCppArch': {
             const val = String(msg.value || '');
             if (!isWindows) {
-                setSdkSetting('arch', getDefaultArch());
+                setCppSetting('arch', getDefaultArch());
                 break;
             }
             if (val !== 'x86' && val !== 'x64') { break; }
-            logger.info(`保存 SDK 目标架构: "${val}"`);
-            setSdkSetting('arch', val);
+            logger.info(`保存 C++ 目标架构: "${val}"`);
+            setCppSetting('arch', val);
             // Sync to activeTarget so CLI build/run use the updated value
             const wsArch = getWorkspaceRoot();
             if (wsArch) {
                 const { getActiveTarget: gat, setActiveTarget: sat } = await import('../../cli/commands/activeTarget');
                 const at = gat(wsArch);
-                if (at && at.kind === 'sdk') {
+                if (at && at.kind === 'cpp') {
                     sat(wsArch, { ...at, arch: val });
                 }
             }
             break;
         }
-        case 'saveSdkVsInstall': {
-            logger.info(`保存 SDK VS 路径: "${msg.value}"`);
-            const sdkVsInstall = inferVsInstall(String(msg.value || '')) || String(msg.value || '');
-            setSdkSetting('vsInstall', sdkVsInstall);
+        case 'saveCppVsInstall': {
+            logger.info(`保存 C++ VS 路径: "${msg.value}"`);
+            const cppVsInstall = inferVsInstall(String(msg.value || '')) || String(msg.value || '');
+            setCppSetting('vsInstall', cppVsInstall);
             break;
         }
-        case 'selectSdkProject': {
+        case 'selectCppProject': {
             await vscode.commands.executeCommand('forja.list');
-            updateHtml();
             break;
         }
     }

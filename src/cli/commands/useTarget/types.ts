@@ -1,7 +1,7 @@
 /**
  * useTarget module — shared types.
  */
-import { TargetCandidate, Diagnostic, Question, ForjaJsonResult } from '../types';
+import { TargetCandidate, Question, ForjaJsonResult } from '../types';
 import type { TargetProfile } from '../../../core/workspaceStore';
 
 // ── Detection context ──
@@ -24,7 +24,7 @@ export interface DetectContext {
     workspace: string;
     candidates: TargetCandidate[];
     qtCandidates: TargetCandidate[];
-    sdkCandidates: TargetCandidate[];
+    cppCandidates: TargetCandidate[];
     toolchain: ToolchainInfo;
     existingTarget: TargetProfile | null;
     existingQt: {
@@ -36,7 +36,7 @@ export interface DetectContext {
         arch: string;
         target: string;
     };
-    existingSdk: {
+    existingCpp: {
         pinnedProject: string | null;
         vsInstall: string;
         mode: string;
@@ -63,7 +63,7 @@ export interface ResolveOptions {
 // ── Resolved config ──
 
 export interface ResolvedConfig {
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;
     mode?: 'debug' | 'release';
     arch?: 'x86' | 'x64';
@@ -85,8 +85,7 @@ export interface UseTargetResult extends ForjaJsonResult {
     questions?: Question[];
     config?: {
         qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qtVersion?: string; vsVersion?: string; qmakeTarget?: string };
-        sdk?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
+        cpp?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
     };
-    changed: string[];
-    nextActions?: string[];
+    changed?: string[];
 }

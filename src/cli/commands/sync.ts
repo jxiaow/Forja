@@ -1,10 +1,12 @@
 /**
  * `forja sync` — sync changed files to remote.
  */
-import { planSyncCli, executeSyncCli, resetSyncCli, ClassifiedChanges } from '../../sync/cli';
-import { readProjectSyncConfig, writeProjectSyncConfig, getServerById } from '../../core/serverStore';
+import * as path from 'path';
+import { planSyncCli, executeSyncCli, resetSyncCli, ClassifiedChanges, configureSyncSettings } from '../../sync/cli';
+import { readProjectSyncConfig, writeProjectSyncConfig, getServerById, readServers, addServer } from '../../core/serverStore';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { Diagnostic, SyncPlan, ForjaJsonResult, diag, Locale, T } from './types';
+import { prompt, choose } from './prompt';
 
 // ── Types ──
 
@@ -19,6 +21,8 @@ export interface SyncResult extends ForjaJsonResult {
     uploaded?: string[];
     deleted?: string[];
     skipped?: string[];
+    skippedDetails?: Array<{ file: string; reason: string }>;
+    failed?: Array<{ file: string; error: string }>;
     // status fields
     enabled?: boolean;
     serverDetail?: { name: string; host: string; username: string; port: number };
@@ -30,12 +34,16 @@ export interface SyncResult extends ForjaJsonResult {
 
 // ── Formatter ──
 
-export function formatSyncText(result: SyncResult, locale: Locale): string {
+export function formatSyncText(result: SyncResult, _locale: Locale): string {
     const lines: string[] = [];
 
     if (!result.ok) {
         lines.push(T('error'));
-        if (result.diagnostics) {
+        if (result.failed?.length) {
+            for (const f of result.failed) {
+                lines.push(`  ${f.file ? f.file + ': ' : ''}${f.error}`);
+            }
+        } else if (result.diagnostics) {
             for (const d of result.diagnostics) {
                 lines.push(`  ${d.message}`);
             }
@@ -50,8 +58,8 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
     switch (result.syncAction) {
         case 'plan': {
             lines.push(T('syncPlan'));
-            if (result.server) { lines.push(`  ${T('serverLabel')} ${result.server}`); }
-            if (result.remotePath) { lines.push(`  ${T('remotePathLabel')} ${result.remotePath}`); }
+            if (result.server) { lines.push(`  ${T('serverLabel')}: ${result.server}`); }
+            if (result.remotePath) { lines.push(`  ${T('remotePathLabel')}: ${result.remotePath}`); }
             if (result.plan) {
                 if (result.plan.pending?.length) {
                     lines.push(`  ${T('pending')} (${result.plan.pending.length}):`);
@@ -70,8 +78,8 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
         }
         case 'run': {
             lines.push(T('syncComplete'));
-            if (result.server) { lines.push(`  ${T('serverLabel')} ${result.server}`); }
-            if (result.remotePath) { lines.push(`  ${T('remotePathLabel')} ${result.remotePath}`); }
+            if (result.server) { lines.push(`  ${T('serverLabel')}: ${result.server}`); }
+            if (result.remotePath) { lines.push(`  ${T('remotePathLabel')}: ${result.remotePath}`); }
             if (result.uploaded?.length) {
                 lines.push(`  ${T('uploaded')} (${result.uploaded.length}):`);
                 for (const f of result.uploaded) { lines.push(`    ${f}`); }
@@ -94,10 +102,10 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
             lines.push(`  ${result.enabled ? T('enabledStatus') : T('disabledStatus')}`);
             if (result.serverDetail) {
                 const s = result.serverDetail;
-                lines.push(`  ${T('serverLabel')} ${s.name} (${s.username}@${s.host}:${s.port})`);
+                lines.push(`  ${T('serverLabel')}: ${s.name} (${s.username}@${s.host}:${s.port})`);
             }
             if (result.remotePath) {
-                lines.push(`  ${T('remotePathLabel')} ${result.remotePath}`);
+                lines.push(`  ${T('remotePathLabel')}: ${result.remotePath}`);
             }
             if (result.ignore?.length) {
                 lines.push(`  ${T('syncIgnore')}: ${result.ignore.join(', ')}`);
@@ -113,12 +121,12 @@ export function formatSyncText(result: SyncResult, locale: Locale): string {
                     lines.push(`  ${T('syncIgnoreEmpty')}`);
                 }
             } else if (result.ignoreAction === 'add') {
-                lines.push(T('syncIgnoreAdded').replace('{pattern}', result.ignorePattern || ''));
+                lines.push(T('syncIgnoreAdded', [result.ignorePattern || '']));
                 if (result.ignore?.length) {
                     lines.push(`  ${result.ignore.join(', ')}`);
                 }
             } else if (result.ignoreAction === 'rm') {
-                lines.push(T('syncIgnoreRemoved').replace('{pattern}', result.ignorePattern || ''));
+                lines.push(T('syncIgnoreRemoved', [result.ignorePattern || '']));
                 if (result.ignore?.length) {
                     lines.push(`  ${result.ignore.join(', ')}`);
                 }
@@ -152,11 +160,12 @@ export async function runSyncPlan(workspace: string, fileFilters: string[] = [])
                 pending: plan.pending,
                 deleted: plan.deleted,
                 skipped: plan.skipped,
+                skippedDetails: plan.skippedDetails?.length ? plan.skippedDetails : undefined,
             },
             server: plan.server,
             remotePath: plan.remotePath,
             diagnostics: plan.ok ? undefined : plan.failed.map(f => diag('error', `${T('sync.planFailed')}: ${f.error}`)),
-            nextAction: plan.ok ? 'forja sync' : (plan.nextAction || 'forja doctor --remote'),
+            nextAction: plan.ok ? 'forja sync' : (plan.nextAction || 'forja doctor fix --remote'),
         };
     } catch (e) {
         return syncCatchResult('plan', workspace, e);
@@ -176,8 +185,10 @@ export async function runSyncExecute(workspace: string, fileFilters: string[] = 
             uploaded: result.uploaded,
             deleted: result.deleted,
             skipped: result.skipped,
-            diagnostics: result.ok ? undefined : result.failed.map(f => diag('error', `${T('sync.syncFailed')}: ${f.error}`)),
-            nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja doctor --remote'),
+            skippedDetails: result.skippedDetails?.length ? result.skippedDetails : undefined,
+            failed: result.failed?.length ? result.failed : undefined,
+            diagnostics: result.ok ? undefined : (result.failed?.length ? result.failed.map(f => diag('error', `${T('sync.syncFailed')}: ${f.error}`)) : [diag('error', T('sync.syncFailed'))]),
+            nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja doctor fix --remote'),
         };
     } catch (e) {
         return syncCatchResult('run', workspace, e);
@@ -235,6 +246,19 @@ export function runSyncIgnoreList(workspace: string): SyncResult {
 }
 
 export function runSyncIgnoreAdd(workspace: string, pattern: string): SyncResult {
+    // Reject whitespace-only patterns
+    if (!pattern || !pattern.trim()) {
+        return {
+            ok: false,
+            action: 'sync',
+            syncAction: 'ignore',
+            ignoreAction: 'add',
+            workspace,
+            ignore: readProjectSyncConfig(workspace).ignore,
+            ignorePattern: pattern,
+            diagnostics: [diag('error', 'Ignore pattern cannot be empty or whitespace-only')],
+        };
+    }
     const sync = readProjectSyncConfig(workspace);
     if (sync.ignore.includes(pattern)) {
         return {
@@ -245,7 +269,7 @@ export function runSyncIgnoreAdd(workspace: string, pattern: string): SyncResult
             workspace,
             ignore: sync.ignore,
             ignorePattern: pattern,
-            diagnostics: [diag('error', T('syncIgnoreAlreadyExists').replace('{pattern}', pattern))],
+            diagnostics: [diag('error', T('syncIgnoreAlreadyExists', [pattern]))],
         };
     }
     const updated = [...sync.ignore, pattern];
@@ -286,7 +310,7 @@ export function runSyncIgnoreRm(workspace: string, pattern: string): SyncResult 
             workspace,
             ignore: sync.ignore,
             ignorePattern: pattern,
-            diagnostics: [diag('error', T('syncIgnoreNotFound').replace('{pattern}', pattern))],
+            diagnostics: [diag('error', T('syncIgnoreNotFound', [pattern]))],
         };
     }
     const updated = sync.ignore.filter((_, i) => i !== idx);
@@ -322,6 +346,75 @@ function syncCatchResult(syncAction: SyncAction, workspace: string, e: unknown):
     return {
         ok: false, action: 'sync', syncAction, workspace,
         diagnostics: [diag('error', `${T('sync.remoteBlocked')}: ${message}`)],
-        nextAction: 'forja doctor --remote',
+        nextAction: 'forja doctor fix --remote',
     };
+}
+
+// ── Interactive setup ──
+
+/**
+ * Interactive sync setup — guides user to select/create server and input remote path.
+ * Returns true if configuration was completed successfully.
+ */
+export async function interactiveSyncSetup(workroot: string): Promise<{ ok: true } | { ok: false; reason: 'cancelled' | 'configError'; error?: string }> {
+    const existingServers = readServers();
+    let serverId: string | undefined;
+    let selectedServer: { username: string } | undefined;
+
+    if (existingServers.length === 0) {
+        // No servers — guide creation
+        console.log(T('sync.notConfigured'));
+        const host = await prompt(T('setupPromptHost'));
+        if (!host) return { ok: false, reason: 'cancelled' };
+        const username = await prompt(T('setupPromptUsername'));
+        if (!username) return { ok: false, reason: 'cancelled' };
+        const portStr = await prompt(T('setupPromptPort'), '22');
+        const port = parseInt(portStr || '22', 10);
+        if (isNaN(port) || port < 1 || port > 65535) return { ok: false, reason: 'cancelled' };
+        const authChoice = await choose(T('setupPromptAuthMode'), ['key', 'password'] as const, m => m === 'key' ? T('setupAuthKey') : T('setupAuthPassword'));
+        const authMode = authChoice || 'key';
+        let privateKeyPath = '';
+        let password = '';
+        if (authMode === 'key') {
+            privateKeyPath = await prompt(T('setupPromptPrivateKey'), '') || '';
+        } else {
+            password = await prompt(T('setupPromptPassword')) || '';
+        }
+        const name = await prompt(T('setupPromptName'), host) || host;
+        try {
+            const created = addServer({ name, host, username, port, authMode, privateKeyPath, password });
+            serverId = created.id;
+            selectedServer = created;
+            console.log(`${T('setupServerCreated')}: ${created.name} (${created.host})`);
+        } catch {
+            return { ok: false, reason: 'cancelled' };
+        }
+    } else if (existingServers.length === 1) {
+        // Single server — auto-select
+        serverId = existingServers[0].id;
+        selectedServer = existingServers[0];
+    } else {
+        // Multiple servers — interactive selection
+        const server = await choose(T('setupSelectServer'), existingServers, s => `${s.name} (${s.username}@${s.host})`);
+        if (!server) return { ok: false, reason: 'cancelled' };
+        serverId = server.id;
+        selectedServer = server;
+    }
+
+    // Remote path: reuse existing or prompt
+    const remoteCfg = loadRemoteSettings(workroot);
+    let remotePath = remoteCfg.remotePaths[serverId || ''] || '';
+    if (!remotePath) {
+        const defaultPath = `/home/${selectedServer?.username || 'user'}/${path.basename(workroot)}`;
+        remotePath = await prompt(T('setupRemotePathPrompt'), defaultPath);
+        if (!remotePath) return { ok: false, reason: 'cancelled' };
+    }
+
+    const cfg = configureSyncSettings(workroot, { serverId: serverId!, remotePath, enable: true });
+    if (!cfg.ok) {
+        return { ok: false, reason: 'configError', error: cfg.error || T('syncConfigFailed') };
+    }
+
+    console.log();
+    return { ok: true };
 }

@@ -60,7 +60,7 @@ interface InitResult extends ForjaJsonResult {
 interface TargetProfile {
     id: string;               // 如 "qt-app-debug-x64"
     name: string;             // 如 "app debug x64"
-    kind: 'qt' | 'sdk';
+    kind: 'qt' | 'cpp';
     project: string;          // workroot 相对路径
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';

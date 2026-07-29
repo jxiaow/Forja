@@ -41,8 +41,8 @@ const dirs = [
     'qt/env',
     'qt/platform/win',
     'qt/platform/linux',
-    'sdk/cli',
-    'sdk/shared',
+    'cpp/cli',
+    'cpp/shared',
     'remote/cli',
     'remote/core'
 ];
@@ -64,7 +64,7 @@ const coreFiles = [
     'core/gitChangedFiles.js',
     'core/gitRepoResolver.js',
     'core/syncFileSelection.js',
-    'core/sdkProjectScanner.js',
+    'core/cppProjectScanner.js',
     'core/projectTypeDetector.js',
     'core/workspaceStore.js'
 ];
@@ -79,8 +79,8 @@ const platformFiles = [
 // Version file at root of out/
 const rootFiles = ['version.js'];
 
-// Individual files needed from sdk/ (non-vscode ones)
-const sdkFiles = ['sdk/constants.js'];
+// Individual files needed from cpp/ (non-vscode ones)
+const cppFiles = ['cpp/constants.js'];
 
 // Individual files needed from qt/build/ (non-vscode ones)
 const qtBuildFiles = ['qt/build/designer.js'];
@@ -180,8 +180,8 @@ for (const file of platformFiles) {
     }
 }
 
-// Copy individual sdk files (non-vscode only)
-for (const file of sdkFiles) {
+// Copy individual cpp files (non-vscode only)
+for (const file of cppFiles) {
     const srcFile = path.join(srcOut, file);
     const dstFile = path.join(tmpBuild, file);
     if (fs.existsSync(srcFile)) {
@@ -220,7 +220,7 @@ const mainPkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf
 const cliPkg = {
     name: 'forja',
     version: displayVersion,
-    description: 'CLI for C++ project builds — Qt (qmake) and SDK (.sln/Makefile)',
+    description: 'CLI for C++ project builds — Qt (qmake) and C++ (.sln/Makefile)',
     license: 'MIT',
     bin: {
         forja: './cli/index.js'
@@ -228,7 +228,7 @@ const cliPkg = {
     files: [
         'cli/**',
         'qt/**',
-        'sdk/**',
+        'cpp/**',
         'sync/**',
         'remote/**',
         'core/**',
@@ -237,7 +237,7 @@ const cliPkg = {
     engines: {
         node: '>=18.0.0'
     },
-    keywords: ['qt', 'qmake', 'sdk', 'cpp', 'build', 'forja']
+    keywords: ['qt', 'qmake', 'cpp', 'build', 'forja']
 };
 fs.writeFileSync(path.join(tmpBuild, 'package.json'), JSON.stringify(cliPkg, null, 2) + '\n');
 

@@ -4,7 +4,7 @@
  */
 import {
     resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig,
-    generateTargetId, registerWorkroot,
+    generateTargetId, registerWorkroot, unregisterWorkroot,
 } from '../../../core/workspaceStore';
 import type { TargetProfile } from '../../../core/workspaceStore';
 import type { ResolvedConfig } from './types';
@@ -13,9 +13,13 @@ import type { ResolvedConfig } from './types';
  * Build a TargetProfile from resolved config (for result output).
  */
 export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
+    const mode = (config.mode || 'debug') as 'debug' | 'release';
+    const arch = (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64';
+    const id = generateTargetId(config.kind, config.project, mode, arch, new Set());
+    const basename = config.project.split('/').pop()?.replace(/\.\w+$/, '') || config.project;
     return {
-        id: '',
-        name: '',
+        id,
+        name: `${basename} ${mode} ${arch}`,
         kind: config.kind,
         project: config.project,
         mode: (config.mode || 'debug') as 'debug' | 'release',
@@ -36,27 +40,38 @@ export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
  * Full save: write target profile to workspaceStore.
  * Returns list of changed field names.
  */
-export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; changed: string[] } | { ok: false; error: string } {
+export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; changed: string[]; targetId: string } | { ok: false; error: string } {
+    let workroot: string | undefined;
+    let newlyRegistered = false;
     try {
-        const workroot = resolveWorkroot(workspace) || workspace;
+        workroot = resolveWorkroot(workspace) || workspace;
         const wsConfig = loadWorkspaceConfig(workroot);
 
-        // Ensure workroot is registered
-        registerWorkroot(workroot);
+        // Ensure workroot is registered — track if newly registered for rollback
+        newlyRegistered = !resolveWorkroot(workspace);
+        if (newlyRegistered) { registerWorkroot(workroot); }
+
+        const mode = (config.mode || 'debug') as 'debug' | 'release';
+        const arch = (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64';
+
+        // Reuse existing target with same kind/project/mode/arch instead of creating a duplicate
+        const matchId = Object.values(wsConfig.targets).find(
+            t => t.kind === config.kind && t.project === config.project && t.mode === mode && t.arch === arch
+        )?.id;
 
         const existingIds = new Set(Object.keys(wsConfig.targets));
-        const id = generateTargetId(config.kind, config.project, config.mode || 'debug', config.arch || 'x86', existingIds);
+        const id = matchId ?? generateTargetId(config.kind, config.project, mode, arch, existingIds);
         const basename = config.project.split('/').pop()?.replace(/\.\w+$/, '') || config.project;
 
         const oldProfile = wsConfig.activeTarget ? wsConfig.targets[wsConfig.activeTarget] : null;
 
         const profile: TargetProfile = {
             id,
-            name: `${basename} ${config.mode || 'debug'} ${config.arch || 'x86'}`,
+            name: `${basename} ${mode} ${arch}`,
             kind: config.kind,
             project: config.project,
-            mode: (config.mode || 'debug') as 'debug' | 'release',
-            arch: (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+            mode,
+            arch,
             runAt: config.runAt || 'local',
             toolchain: {
                 qtPath: config.qtPath,
@@ -82,8 +97,10 @@ export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; 
         if (config.arch && config.arch !== oldProfile?.arch) changed.push('arch');
         if (config.qmakeTarget && config.qmakeTarget !== oldProfile?.toolchain.qmakeTarget) changed.push('qmakeTarget');
 
-        return { ok: true, changed };
+        return { ok: true, changed, targetId: id };
     } catch (e) {
+        // Rollback workroot registration if it was newly added in this call
+        if (newlyRegistered && workroot) { unregisterWorkroot(workroot); }
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
 }

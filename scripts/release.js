@@ -15,8 +15,8 @@ require('./bump-version');
 const newPkg = JSON.parse(require('fs').readFileSync(path.join(root, 'package.json'), 'utf8'));
 const version = newPkg.version;
 
-// 3. commit + tag
-execSync('git add -A', { cwd: root, stdio: 'inherit' });
+// 3. commit + tag — only add version-related files, never use git add -A
+execSync('git add package.json package-lock.json src/version.ts', { cwd: root, stdio: 'inherit' });
 execSync(`git commit -m "chore: bump version to ${version}"`, { cwd: root, stdio: 'inherit' });
 execSync(`git tag -a v${version} -m "v${version}"`, { cwd: root, stdio: 'inherit' });
 

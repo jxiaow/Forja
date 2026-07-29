@@ -16,15 +16,15 @@ test('cli dispatcher routes to commands', () => {
 
 test('cli interface spec lists only implemented subcommands as available', () => {
     const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
-    assert.match(spec, /当前公开子命令：`status` \| `setup` \| `list` \| `use` \| `server` \| `build` \| `run` \| `stop` \| `clean` \| `doctor` \| `sync`/);
+    assert.match(spec, /当前公开子命令：`init` \| `status`/);
     assert.doesNotMatch(spec, /forja qt \.\.\./);
     assert.doesNotMatch(spec, /forja sdk \.\.\./);
 });
 
 test('cli user guide documents remote commands as implemented', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
-    // In v2, remote config is accessed via `forja remote`
-    assert.match(guide, /forja remote --json/);
+    // In v2, remote config is accessed via `forja remote set`
+    assert.match(guide, /forja remote set/);
     assert.doesNotMatch(guide, /\uFFFD/);
 });
 
@@ -96,8 +96,8 @@ test('sync help and docs describe sync command', () => {
 
     // sync is a top-level command in the command reference table
     assert.match(skill, /\| `sync` \|/);
-    assert.match(skill, /forja remote --json/);
-    assert.match(guide, /forja remote --json/);
+    assert.match(skill, /forja remote set/);
+    assert.match(guide, /forja remote set/);
 });
 
 test('sync help and docs describe server management commands', () => {
@@ -128,11 +128,4 @@ test('forja skill uses unified command structure', () => {
     assert.match(skill, /## 命令参考/);
     // Check that use subcommands are documented
     assert.match(skill, /### use 子命令/);
-});
-
-test('qt cli entry handles parse errors as json when requested', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'cli', 'index.ts'), 'utf8');
-    assert.match(source, /parseCliArgs/);
-    assert.match(source, /JSON\.stringify/);
-    assert.match(source, /process\.exitCode = 1/);
 });

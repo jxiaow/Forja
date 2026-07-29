@@ -136,7 +136,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
             const fullPath = path.join(savedRef.root, savedRef.relative);
             if (fs.existsSync(fullPath)) {
                 const info = parseProFile(fullPath);
-                info.projectDir = path.dirname(savedRef.relative);
+                info.projectDir = path.dirname(fullPath);
                 return info;
             }
         }
@@ -173,7 +173,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const item = allProFiles[0];
         const fullPath = path.join(item.root, item.relative);
         const info = parseProFile(fullPath);
-        info.projectDir = path.dirname(item.relative);
+        info.projectDir = path.dirname(fullPath);
         setProjectRoot(item.root);
         setQtSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
         _syncQtActiveTarget(item.root, item.relative);
@@ -190,7 +190,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         if (item) {
             const fullPath = path.join(item.root, item.relative);
             const info = parseProFile(fullPath);
-            info.projectDir = path.dirname(item.relative);
+            info.projectDir = path.dirname(fullPath);
             setProjectRoot(item.root);
             setQtSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
             _syncQtActiveTarget(item.root, item.relative);

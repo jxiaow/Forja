@@ -7,10 +7,11 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
-import { runCliResult } from '../../qt/shared/commandRunner';
+import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner';
+import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
 import { CliOptions } from '../../qt/cli/types';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
-import { ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
+import { ForjaJsonResult, ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
 import { getActiveTarget } from './activeTarget';
 import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
@@ -19,21 +20,18 @@ import { launchDesigner } from '../../qt/build/designer';
 
 export type RunAction = 'default' | 'detach' | 'debug' | 'custom' | 'designer';
 
-export interface RunResult {
-    ok: boolean;
+export interface RunResult extends ForjaJsonResult {
     action: 'run';
     runAction: RunAction;
-    workspace?: string;
-    activeTarget?: ActiveTarget;
     plan?: { mode: 'dryRun'; commands?: string[]; shellCommand?: string };
     runtime?: RuntimeState;
     exitCode?: number;
     logFile?: string;
-    diagnostics?: Diagnostic[];
-    nextAction?: string;
+    customStdout?: string;
+    customStderr?: string;
 }
 
-function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: { detach?: boolean; plan?: boolean }, qmakeArgs?: string): CliOptions {
+function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: { detach?: boolean; plan?: boolean }, qmakeArgs?: string, rccProjectPath?: string): CliOptions {
     const vsDevShell = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
     return {
         action: 'run',
@@ -46,6 +44,8 @@ function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: 
         vsDevShell: vsDevShell,
         target: target.toolchain.qmakeTarget || null,
         qmakeArgs: qmakeArgs || null,
+        jomPath: target.toolchain.jomPath || null,
+        rccProjectPath: rccProjectPath || null,
         detach: options.detach ?? false,
         saveLocal: false,
         json: false,
@@ -78,17 +78,18 @@ export async function runRun(workspace: string, options: {
         };
     }
     const target = targetResult.target;
+    const workroot = resolveWorkroot(workspace);
 
     // Print run header before execution (text mode only)
     if (!options.json && !options.plan) {
         if (target.runAt === 'remote') {
             const remote = loadRemoteSettings(workspace);
             const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-            console.log(`→ remote:${server?.name || remote.selectedServer}`);
+            console.log(T('execRemote', [server?.name || remote.selectedServer || '']));
         } else {
-            console.log('→ local');
+            console.log(T('execLocal'));
         }
-        console.log(`  ${T('target')}${target.project}`);
+        console.log(`  ${T('target')}: ${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
         if (target.toolchain.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.toolchain.qmakeTarget}`); }
         console.log();
@@ -97,7 +98,7 @@ export async function runRun(workspace: string, options: {
     // Validate project file exists
     const runProjectPath = path.isAbsolute(target.project)
         ? target.project
-        : path.join(workspace, target.project);
+        : path.join(workroot || workspace, target.project);
     if (!fs.existsSync(runProjectPath)) {
         return {
             ok: false,
@@ -119,7 +120,7 @@ export async function runRun(workspace: string, options: {
             workspace,
             activeTarget: target,
             diagnostics: [diag('error', T('cmd.debugVscodeOnly'))],
-            nextAction: 'Open VSCode Command Palette → "Forja: Debug"',
+            nextAction: T('debugNextAction'),
         };
     }
 
@@ -131,14 +132,14 @@ export async function runRun(workspace: string, options: {
     let runAction: RunAction = 'default';
     if (options.detach) { runAction = 'detach'; }
 
-    if (target.kind === 'sdk') {
+    if (target.kind === 'cpp') {
         return {
             ok: false,
             action: 'run',
             runAction,
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', T('cmd.sdkRunUnsupported'))],
+            diagnostics: [diag('error', T('cmd.cppRunUnsupported'))],
             nextAction: 'forja build',
         };
     }
@@ -185,10 +186,10 @@ export async function runRun(workspace: string, options: {
 
     // Qt local
     const wantsJson = options.json ?? false;
-    const workroot = resolveWorkroot(workspace);
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
-    const cliOptions = buildRunQtCliOptions(workspace, target, options, qmakeArgs);
+    const rccProjectPath = wsConfig?.qtModulePrefs.rccProjectPath || undefined;
+    const cliOptions = buildRunQtCliOptions(workspace, target, options, qmakeArgs, rccProjectPath);
 
     try {
         const planned = await createActionPlan(cliOptions);
@@ -215,6 +216,15 @@ export async function runRun(workspace: string, options: {
             };
         }
 
+        // Pre-kill: terminate existing instance before launching (avoid port/file-lock conflicts)
+        if (!options.detach) {
+            const projectDir = path.dirname(path.isAbsolute(target.project) ? target.project : path.join(workroot || workspace, target.project));
+            const runtimeInfo = resolveRuntimeTarget(projectDir, target.mode, target.arch);
+            if (runtimeInfo?.exePath) {
+                terminateExecutable(runtimeInfo.exePath);
+            }
+        }
+
         const executed = await runCliResult(planned, { streaming: !wantsJson, detach: options.detach ?? false });
         const runtime: RuntimeState | undefined = executed.pid ? {
             running: true,
@@ -238,7 +248,7 @@ export async function runRun(workspace: string, options: {
             exitCode: executed.runtimeExitCode ?? executed.exitCode ?? undefined,
             logFile: executed.logFile ?? undefined,
             diagnostics: appExitedNonZero
-                ? [diag('warning', `${T('cmd.appExitedWithError')}: ${executed.runtimeExitCode}`)]
+                ? [diag('error', `${T('cmd.appExitedWithError')}: ${executed.runtimeExitCode}`)]
                 : (executed.ok ? undefined : [diag('error', T('cmd.qtRunFailed'))]),
             nextAction: appExitedNonZero
                 ? 'forja build'
@@ -262,6 +272,17 @@ export async function runRun(workspace: string, options: {
 
 async function handleDesigner(workspace: string, uiFile: string): Promise<RunResult> {
     const resolvedPath = path.isAbsolute(uiFile) ? uiFile : path.join(workspace, uiFile);
+
+    if (!fs.existsSync(resolvedPath)) {
+        return {
+            ok: false,
+            action: 'run',
+            runAction: 'designer',
+            workspace,
+            diagnostics: [diag('error', `File not found: ${resolvedPath}`)],
+            nextAction: 'forja run designer <file.ui>',
+        };
+    }
 
     const workroot = resolveWorkroot(workspace);
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
@@ -292,14 +313,14 @@ async function handleDesigner(workspace: string, uiFile: string): Promise<RunRes
 }
 
 function handleCustom(workspace: string, target: ActiveTarget, customName: string, json: boolean): RunResult {
-    if (target.kind === 'sdk') {
+    if (target.kind === 'cpp') {
         return {
             ok: false,
             action: 'run',
             runAction: 'custom',
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', T('cmd.sdkCustomUnsupported'))],
+            diagnostics: [diag('error', T('cmd.cppCustomUnsupported'))],
             nextAction: 'forja build',
         };
     }
@@ -309,22 +330,21 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
     const customCommands = wsConfig?.qtModulePrefs.customCommands ?? [];
     const customCmd = customCommands.find(c => c.name === customName);
     if (!customCmd) {
-        const available = customCommands.map(c => c.name).join(', ') || '(none)';
+        const available = customCommands.map(c => c.name).join(', ') || T('none');
         return {
             ok: false,
             action: 'run',
             runAction: 'custom',
             workspace,
             activeTarget: target,
-            diagnostics: [diag('error', `${T('cmd.customNotFound')}: ${customName}. Available: ${available}`)],
-            nextAction: 'forja list targets',
+            diagnostics: [diag('error', `${T('cmd.customNotFound')}: ${customName}. ${T('cmd.customAvailable')}: ${available}`)],
         };
     }
 
     try {
         const projectDir = path.isAbsolute(target.project)
             ? path.dirname(target.project)
-            : path.join(workspace, path.dirname(target.project));
+            : path.join(workroot || workspace, path.dirname(target.project));
 
         // Inject Qt bin into PATH so custom commands can find Qt tools
         const env = { ...process.env };
@@ -370,6 +390,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
                 workspace,
                 activeTarget: target,
                 exitCode: 0,
+                ...(json && stdout ? { customStdout: stdout } : {}),
             };
         }
         return {
@@ -380,6 +401,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
             activeTarget: target,
             exitCode,
             diagnostics: [diag('error', `${T('cmd.customFailed')}: "${customName}" exit code ${exitCode}`)],
+            ...(json ? { customStdout: stdout || undefined, customStderr: stderr || undefined } : {}),
             nextAction: 'forja doctor',
         };
     } catch (e) {
@@ -405,13 +427,13 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
         if (result.activeTarget) {
             const t = result.activeTarget;
             const qt = t.toolchain.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}` : '';
-            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
+            console.log(`${T('target')}: ${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
         }
         if (result.runtime?.pid) {
-            console.log(`${T('pidLabel')}${result.runtime.pid}`);
+            console.log(`${T('pidLabel')}: ${result.runtime.pid}`);
         }
         if (result.logFile) {
-            console.log(`${T('log')}${result.logFile}`);
+            console.log(`${T('log')}: ${result.logFile}`);
         }
         if (result.diagnostics) {
             for (const d of result.diagnostics) {
@@ -423,4 +445,5 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
             console.log(`  ${result.nextAction}`);
         }
     }
+    if (!result.ok) { process.exitCode = 1; }
 }
