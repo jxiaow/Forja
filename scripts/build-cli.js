@@ -24,7 +24,9 @@ const dirs = [
     'qt/env',
     'qt/platform/win',
     'qt/platform/linux',
-    'sdk/cli'
+    'sdk/cli',
+    'remote/cli',
+    'remote/core'
 ];
 
 // Individual files from sync/ needed by CLI (only pure Node files)
@@ -183,6 +185,7 @@ const cliPkg = {
         'qt/**',
         'sdk/**',
         'sync/**',
+        'remote/**',
         'core/**',
         'version.js'
     ],

@@ -1,7 +1,7 @@
 /**
  * SSH/SCP 传输层 — 负责远程文件操作。
  * 密码模式通过 SSH_ASKPASS 机制实现：
- *   - Windows: 生成 PowerShell 脚本，密码通过环境变量传入（避免 cmd 转义问题）
+ *   - Windows: 生成可直接 spawn 的 cmd 脚本，密码通过环境变量传入
  *   - Linux/macOS: 生成 bash 脚本，密码通过环境变量传入
  * 关键：spawn 时 stdio 不能是 'inherit'，必须是 pipe，这样 ssh 检测不到 TTY 才会调用 ASKPASS。
  */
@@ -13,6 +13,7 @@ export { buildSshArgs, buildScpArgs, sshTarget, SshArgsOptions } from '../core/s
 
 export {
     CancellationTokenLike,
+    deleteRemoteFile,
     ensureRemoteDir,
     isCancellationError,
     scpUpload,

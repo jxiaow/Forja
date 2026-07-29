@@ -204,5 +204,9 @@ export function parseCliArgs(args: string[]): CliOptions {
         }
     }
 
+    if (options.action === 'run' && options.json && !options.detach) {
+        throw new Error('run --json 仅支持 --detach 模式，请使用 run --detach --json');
+    }
+
     return options;
 }

@@ -221,6 +221,43 @@ test('forja sync --plan --file only returns the selected file', async () => {
     assert.equal(process.exitCode, 0);
 });
 
+test('forja sync --plan reports deleted files separately', async () => {
+    const workspace = makeWorkspace();
+    cp.execFileSync('git', ['init'], { cwd: workspace, stdio: 'ignore' });
+    cp.execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: workspace, stdio: 'ignore' });
+    cp.execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: workspace, stdio: 'ignore' });
+    fs.writeFileSync(path.join(workspace, 'old.cpp'), 'int old_file() { return 0; }\n', 'utf8');
+    cp.execFileSync('git', ['add', 'old.cpp'], { cwd: workspace, stdio: 'ignore' });
+    cp.execFileSync('git', ['commit', '-m', 'seed'], { cwd: workspace, stdio: 'ignore' });
+    fs.unlinkSync(path.join(workspace, 'old.cpp'));
+
+    writeServers([{
+        id: 'server-1',
+        name: 'dev',
+        host: '127.0.0.1',
+        port: 22,
+        username: 'dev',
+        authMode: 'key',
+        privateKeyPath: '/tmp/nonexistent-key',
+        password: ''
+    }]);
+    saveSyncSettings(workspace, {
+        ...DEFAULT_SYNC,
+        enabled: true,
+        selectedServer: 'server-1',
+        remotePaths: { 'server-1': '/remote/app' },
+        ignore: []
+    });
+
+    const output = await captureStdout(() => runSyncCli(['--workspace', workspace, '--plan', '--json']));
+    const data = JSON.parse(output);
+
+    assert.equal(data.ok, true);
+    assert.deepEqual(data.pending, []);
+    assert.deepEqual(data.deleted, [path.basename(workspace) + '/old.cpp']);
+    assert.equal(process.exitCode, 0);
+});
+
 test('forja sync --plan reports skipped file reasons', async () => {
     const workspace = makeWorkspace();
     cp.execFileSync('git', ['init'], { cwd: workspace, stdio: 'ignore' });
@@ -566,6 +603,123 @@ test('forja sync server management commands update global servers', async () => 
     assert.equal(removed.ok, true);
     assert.equal(removed.action, 'remove-server');
     assert.equal(removed.server.id, added.server.id);
+});
+
+test('forja sync server selectors accept a unique server name and persist its id', async () => {
+    const workspace = makeWorkspace();
+    writeServers([]);
+
+    const addOutput = await captureStdout(() => runSyncCli([
+        'add-server',
+        '--name', 'dev',
+        '--host', '127.0.0.1',
+        '--username', 'alice',
+        '--auth-mode', 'key',
+        '--json'
+    ]));
+    const added = JSON.parse(addOutput);
+
+    const useOutput = await captureStdout(() => runSyncCli([
+        'use',
+        '--workspace', workspace,
+        '--server', 'dev',
+        '--remote-path', '/remote/app',
+        '--enable',
+        '--json'
+    ]));
+    const used = JSON.parse(useOutput);
+    const saved = loadSyncSettings(workspace);
+
+    assert.equal(used.ok, true);
+    assert.equal(used.selectedServer, added.server.id);
+    assert.equal(saved.selectedServer, added.server.id);
+    assert.equal(saved.remotePaths[added.server.id], '/remote/app');
+
+    const updateOutput = await captureStdout(() => runSyncCli([
+        'update-server',
+        '--server', 'dev',
+        '--host', '10.0.0.2',
+        '--json'
+    ]));
+    const updated = JSON.parse(updateOutput);
+    assert.equal(updated.ok, true);
+    assert.equal(updated.server.id, added.server.id);
+    assert.equal(updated.server.host, '10.0.0.2');
+
+    const removeOutput = await captureStdout(() => runSyncCli([
+        'remove-server',
+        '--server', 'dev',
+        '--json'
+    ]));
+    const removed = JSON.parse(removeOutput);
+    assert.equal(removed.ok, true);
+    assert.equal(removed.server.id, added.server.id);
+});
+
+test('forja sync server selectors reject duplicate server names', async () => {
+    const workspace = makeWorkspace();
+    writeServers([]);
+
+    for (const username of ['alice', 'bob']) {
+        await captureStdout(() => runSyncCli([
+            'add-server',
+            '--name', 'dev',
+            '--host', '127.0.0.1',
+            '--username', username,
+            '--auth-mode', 'key',
+            '--json'
+        ]));
+    }
+
+    const output = await captureStdout(() => runSyncCli([
+        'use',
+        '--workspace', workspace,
+        '--server', 'dev',
+        '--remote-path', '/remote/app',
+        '--enable',
+        '--json'
+    ]));
+    const data = JSON.parse(output);
+
+    assert.equal(data.ok, false);
+    assert.match(data.diagnostics[0].message, /匹配到多个服务器/);
+});
+
+test('forja sync use migrates existing unique server name selection without dropping remote path', async () => {
+    const workspace = makeWorkspace();
+    writeServers([]);
+
+    const addOutput = await captureStdout(() => runSyncCli([
+        'add-server',
+        '--name', 'dev',
+        '--host', '127.0.0.1',
+        '--username', 'alice',
+        '--auth-mode', 'key',
+        '--json'
+    ]));
+    const added = JSON.parse(addOutput);
+    saveSyncSettings(workspace, {
+        ...DEFAULT_SYNC,
+        enabled: false,
+        selectedServer: 'dev',
+        remotePaths: { dev: '/remote/app' },
+        ignore: []
+    });
+
+    const output = await captureStdout(() => runSyncCli([
+        'use',
+        '--workspace', workspace,
+        '--enable',
+        '--json'
+    ]));
+    const data = JSON.parse(output);
+    const saved = loadSyncSettings(workspace);
+
+    assert.equal(data.ok, true);
+    assert.equal(data.selectedServer, added.server.id);
+    assert.equal(data.remotePath, '/remote/app');
+    assert.equal(saved.selectedServer, added.server.id);
+    assert.equal(saved.remotePaths[added.server.id], '/remote/app');
 });
 
 test('qt ps --json reports no detached run state', async () => {

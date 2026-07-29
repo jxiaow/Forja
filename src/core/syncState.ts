@@ -135,6 +135,26 @@ export function filterNeedsSync(workspaceRoot: string, files: string[], context?
     return result;
 }
 
+export function filterNeedsDelete(workspaceRoot: string, files: string[], context?: SyncTargetContext): string[] {
+    const state = _readState(workspaceRoot);
+    const result: string[] = [];
+
+    for (const relativePath of files) {
+        const key = _stateKey(relativePath, context);
+        if (!key) {
+            result.push(relativePath);
+            continue;
+        }
+
+        const record = state.files[key];
+        const absPath = path.join(workspaceRoot, relativePath);
+        if (!fs.existsSync(absPath) && record?.mtime === 0) { continue; }
+        result.push(relativePath);
+    }
+
+    return result;
+}
+
 /**
  * 标记文件已同步成功
  */
@@ -178,10 +198,26 @@ export function markSyncedBatch(workspaceRoot: string, files: string[], context?
 
     // 清理本地已不存在的文件条目
     for (const key of Object.keys(state.files)) {
+        const record = state.files[key];
+        if (record?.mtime === 0) { continue; }
         const absPath = path.join(workspaceRoot, _relativePathFromStateKey(key));
         if (!fs.existsSync(absPath)) {
             delete state.files[key];
         }
+    }
+
+    _writeState(workspaceRoot, state);
+}
+
+export function markDeletedBatch(workspaceRoot: string, files: string[], context?: SyncTargetContext): void {
+    if (!context) { return; }
+    const state = _readState(workspaceRoot);
+
+    for (const relativePath of files) {
+        state.files[_stateKey(relativePath, context)!] = {
+            mtime: 0,
+            syncedAt: new Date().toISOString()
+        };
     }
 
     _writeState(workspaceRoot, state);
@@ -240,7 +276,8 @@ export function getSyncPendingInfo(workspaceRoot: string, ignore: string[]): { c
 
     // 待同步数：统计 state 中 mtime 已变化的文件数（快速估算，不调用 git）
     let count = 0;
-    for (const [relativePath, record] of Object.entries(state.files)) {
+    for (const [key, record] of Object.entries(state.files)) {
+        const relativePath = _relativePathFromStateKey(key);
         // 检查忽略
         const parts = relativePath.split(/[\\/]/);
         let ignored = false;

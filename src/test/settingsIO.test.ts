@@ -13,6 +13,9 @@ import {
     saveSdkSettings,
     loadSyncSettings,
     saveSyncSettings,
+    DEFAULT_REMOTE,
+    loadRemoteSettings,
+    saveRemoteSettings,
     projectConfigPath,
     listProjectConfigs,
 } from '../core/settingsIO';
@@ -277,6 +280,65 @@ test('loadSyncSettings prefers current directory over parent', () => {
 
     const loaded = loadSyncSettings(child);
     assert.equal(loaded.selectedServer, 'child-server');
+});
+
+// ── Remote ──
+
+test('saveRemoteSettings round-trips with loadRemoteSettings', () => {
+    const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'remote'));
+
+    saveRemoteSettings(workspace, {
+        ...DEFAULT_REMOTE,
+        remoteForjaBin: '/opt/forja/bin/forja',
+        buildOrder: [{ target: 'qt', action: 'build', args: ['--verbose'] }],
+        transfer: { deployServer: 'deploy-1', deployPath: '/opt/app', artifacts: ['build/app.exe'] }
+    });
+    const loaded = loadRemoteSettings(workspace);
+
+    assert.equal(loaded.remoteForjaBin, '/opt/forja/bin/forja');
+    assert.deepEqual(loaded.buildOrder, [{ target: 'qt', action: 'build', args: ['--verbose'] }]);
+    assert.deepEqual(loaded.transfer, { deployServer: 'deploy-1', deployPath: '/opt/app', artifacts: ['build/app.exe'] });
+});
+
+test('saveRemoteSettings round-trips staged workspace repo mappings', () => {
+    const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'remote'));
+
+    saveRemoteSettings(workspace, {
+        ...DEFAULT_REMOTE,
+        workspaceMode: 'staged',
+        profile: 'release_6.0_3.9',
+        remoteWorkspace: '/home/xw/workspace/forja-remote/release_6.0_3.9',
+        repos: [
+            { localName: 'qt_client', remoteName: 'qt_client', role: 'primary', baseline: 'auto', overlay: true },
+            { localName: 'xylib_win32', remoteName: 'xylib_arm64', role: 'remote-only', remotePath: '/home/xw/workspace/dev/xylib_arm64', baseline: 'status-only', overlay: false, mount: 'symlink' }
+        ]
+    });
+    const loaded = loadRemoteSettings(workspace);
+
+    assert.equal(loaded.workspaceMode, 'staged');
+    assert.equal(loaded.profile, 'release_6.0_3.9');
+    assert.equal(loaded.remoteWorkspace, '/home/xw/workspace/forja-remote/release_6.0_3.9');
+    assert.deepEqual(loaded.repos, [
+        { localName: 'qt_client', remoteName: 'qt_client', role: 'primary', baseline: 'auto', overlay: true },
+        { localName: 'xylib_win32', remoteName: 'xylib_arm64', role: 'remote-only', remotePath: '/home/xw/workspace/dev/xylib_arm64', baseline: 'status-only', overlay: false, mount: 'symlink' }
+    ]);
+});
+
+test('loadRemoteSettings looks up parent directory', () => {
+    const parent = makeWorkspace();
+    const child = path.join(parent, 'qt_client');
+    fs.mkdirSync(child, { recursive: true });
+    trackFile(projectConfigPath(parent, 'remote'));
+
+    saveRemoteSettings(parent, {
+        ...DEFAULT_REMOTE,
+        buildOrder: [{ target: 'sdk', action: 'build', args: [] }]
+    });
+    const loaded = loadRemoteSettings(child);
+
+    assert.deepEqual(loaded.buildOrder, [{ target: 'sdk', action: 'build', args: [] }]);
 });
 
 // ── projectConfigPath ──

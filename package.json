@@ -107,6 +107,82 @@
         "command": "forja.sdk.showActions",
         "title": "Forja SDK: Show Actions",
         "enablement": "forja.sdk.activated"
+      },
+      {
+        "command": "forja.remote.status",
+        "title": "Forja Remote: Status"
+      },
+      {
+        "command": "forja.remote.doctor",
+        "title": "Forja Remote: Doctor"
+      },
+      {
+        "command": "forja.remote.workbench",
+        "title": "Forja Remote: Workbench"
+      },
+      {
+        "command": "forja.remote.execution.pick",
+        "title": "Forja: Select Execution Location"
+      },
+      {
+        "command": "forja.remote.execution.local",
+        "title": "Forja: Use Local Execution"
+      },
+      {
+        "command": "forja.remote.execution.remote",
+        "title": "Forja: Use Remote Execution"
+      },
+      {
+        "command": "forja.remote.test",
+        "title": "Forja Remote: Test"
+      },
+      {
+        "command": "forja.remote.bootstrap",
+        "title": "Forja Remote: Bootstrap"
+      },
+      {
+        "command": "forja.remote.transfer.status",
+        "title": "Forja Remote: Transfer Status"
+      },
+      {
+        "command": "forja.remote.qt.build",
+        "title": "Forja Remote Qt: Build"
+      },
+      {
+        "command": "forja.remote.qt.clean",
+        "title": "Forja Remote Qt: Clean"
+      },
+      {
+        "command": "forja.remote.qt.qmake",
+        "title": "Forja Remote Qt: QMake"
+      },
+      {
+        "command": "forja.remote.qt.run",
+        "title": "Forja Remote Qt: Run"
+      },
+      {
+        "command": "forja.remote.qt.runDetached",
+        "title": "Forja Remote Qt: Run Detached"
+      },
+      {
+        "command": "forja.remote.qt.stop",
+        "title": "Forja Remote Qt: Stop"
+      },
+      {
+        "command": "forja.remote.qt.ps",
+        "title": "Forja Remote Qt: PS"
+      },
+      {
+        "command": "forja.remote.sdk.build",
+        "title": "Forja Remote SDK: Build"
+      },
+      {
+        "command": "forja.remote.sdk.rebuild",
+        "title": "Forja Remote SDK: Rebuild"
+      },
+      {
+        "command": "forja.remote.sdk.clean",
+        "title": "Forja Remote SDK: Clean"
       }
     ],
     "menus": {
@@ -156,7 +232,8 @@
     "release": "node scripts/release.js",
     "vsix": "vsce package --allow-missing-repository",
     "harness:check": "node harness/core/automation/check-harness.js",
-    "harness:ops:init": "node harness/core/operations/create-operation-docs.js"
+    "harness:ops:init": "node harness/core/operations/create-operation-docs.js",
+    "remote:smoke": "node scripts/remote-smoke.js"
   },
   "devDependencies": {
     "@eslint/js": "9.39.4",

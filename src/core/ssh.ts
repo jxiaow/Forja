@@ -62,6 +62,11 @@ export function sshTarget(server: ServerConfig): string {
     return `${server.username}@${server.host}`;
 }
 
+/** Quote a value for insertion into a remote shell command. */
+export function quoteForRemoteShell(value: string): string {
+    return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 // ── ASKPASS 统一方案 ──
 
 import * as fs from 'fs';
@@ -86,7 +91,7 @@ export function createAskpassEnv(password: string | null, suffix?: string): Askp
 
     try {
         const tmpDir = os.tmpdir();
-        const tag = suffix || process.pid.toString();
+        const tag = suffix || `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         let scriptPath: string;
 
         if (process.platform === 'win32') {

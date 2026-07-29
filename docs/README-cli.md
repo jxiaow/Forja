@@ -2,7 +2,7 @@
 
 命令行工具用于 C++ 项目的构建、运行和环境管理。
 
-当前 CLI 已实现子命令：`qt`、`sdk`、`sync`、`cleanup`。
+当前 CLI 已实现子命令：`qt`、`sdk`、`remote`、`sync`、`cleanup`。
 
 ## 安装
 
@@ -18,6 +18,7 @@ npm link
 forja --help
 forja qt --help
 forja sdk --help
+forja remote --help
 ```
 
 ## AI 工具集成
@@ -43,6 +44,7 @@ AI 或脚本需要结构化输出时追加 `--json`：
 ```bash
 forja qt status --json
 forja qt build --json
+forja remote status --json
 ```
 
 ## 通用选项
@@ -55,6 +57,34 @@ Qt/SDK 命令通用选项：
 | `--json` | 输出 JSON，适合 AI/脚本解析 |
 
 `--workspace` 用来确定本次命令读写哪个项目的本地配置、从哪里扫描 `.pro`、以及同步/运行状态等归属。它不是 `.pro` 文件路径；多项目仓库中用 `forja qt use --project <relative.pro>` 在该 workspace 内选择具体项目。
+
+## Remote 命令
+
+Remote 命令复用 sync 配置中的 server 和 remotePath，先用 `forja sync status --json` 确认远端目标，再执行 remote 状态检查或远程构建流程。
+
+```bash
+forja remote status --json
+forja remote doctor --json
+forja remote test --json
+forja remote bootstrap --json
+forja remote forja-bin use --path /home/dev/.forja/bin/forja-with-env --json
+forja remote qt build --json
+forja remote sdk build --json
+```
+
+Staged remote workspace 可以显式配置本地仓库和远端仓库的对应关系；如果构建依赖被 `.gitignore` 忽略的本地 SDK/headers，也用 repo asset 声明，让 remote prepare 阶段一并上传：
+
+```bash
+forja remote workspace use --mode staged --path /home/dev/workspace/forja-remote/release --json
+forja remote repo set --local qt_client --remote qt_client --role primary --baseline auto --overlay true --json
+forja remote repo set --local qt_client --remote qt_client --role primary --baseline auto --overlay true --asset XYMeetingKit_DLLs/NemoSDK/headers=XYMeetingkit_DLLs/NemoSDK/headers --json
+```
+
+`--local` 和 `--remote` 是仓库名称，不是路径；它们必须是单段名称，不能包含 `/`、`\`、`.` 或 `..`。如果 Linux 侧依赖仓库不是 staged workspace 下的子目录，用 `--path /absolute/remote/repo` 表达真实路径，例如 `--local xylib_win32 --remote xylib_arm64 --role remote-only --path /home/dev/workspace/dev/xylib_arm64 --mount symlink`。
+
+`--asset local=remote` 的左右两边都是仓库内相对路径；右侧可省略，省略时按同名路径上传。这个映射用于处理 Windows 和 Linux 侧目录名不同、大小写不同，或本地依赖包不在 git baseline 内的场景。
+
+如果远端无法安装或执行 forja CLI，staged 模式会对执行类动作尝试 shell fallback：Qt 支持 `qmake/build/clean/run/stop/ps`，SDK 支持 `build/rebuild/clean`。`init/use/status` 等远端持久配置或诊断动作仍依赖远端 forja；无 CLI 环境应在本地保存 remote 配置，并在执行命令中显式传入必要的 `--project`、`--qt-path`、`--qmake-args` 等参数。
 
 ## JSON 输出
 

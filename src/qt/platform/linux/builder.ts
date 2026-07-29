@@ -9,7 +9,10 @@ export const linuxConfig: PlatformConfig = {
 
     initCommands(cfg: BuildConfig): string[] {
         if (!cfg.qtPath) { return []; }
-        return [`export PATH="${cfg.qtPath}/bin:$PATH"`];
+        return [
+            `export PATH="${cfg.qtPath}/bin:$PATH"`,
+            `export LD_LIBRARY_PATH="${cfg.qtPath}/lib:$HOME/.forja/compat/icu55/lib:$LD_LIBRARY_PATH"`
+        ];
     },
 
     cdCommand(dir: string): string {

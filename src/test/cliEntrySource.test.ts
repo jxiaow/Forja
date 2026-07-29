@@ -8,24 +8,73 @@ test('package exposes forja bin entry', () => {
     assert.equal(pkg.bin['forja'], './out/cli/index.js');
 });
 
-test('cli dispatcher routes to qt, sdk, and sync subcommands', () => {
+test('cli dispatcher routes to qt, sdk, remote, and sync subcommands', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'index.ts'), 'utf8');
     assert.match(source, /runQtCli/);
     assert.match(source, /runSdkCli/);
+    assert.match(source, /runRemoteCli/);
     assert.match(source, /runSyncCli/);
     assert.match(source, /process\.exitCode = 1/);
 });
 
 test('cli interface spec lists only implemented subcommands as available', () => {
     const spec = fs.readFileSync(path.join(process.cwd(), 'docs', 'cli-interface-spec.md'), 'utf8');
-    assert.match(spec, /当前已实现子命令：`qt` \| `sdk` \| `sync` \| `cleanup`/);
-    assert.match(spec, /Remote 模式输出结构（设计稿，暂未实现）/);
+    assert.match(spec, /当前已实现子命令：`qt` \| `sdk` \| `remote` \| `sync` \| `cleanup`/);
+    assert.doesNotMatch(spec, /remote.*尚未实现/i);
 });
 
-test('cli user guide does not document draft remote commands as implemented', () => {
+test('cli user guide documents remote commands as implemented', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
-    assert.doesNotMatch(guide, /forja remote/);
+    assert.match(guide, /forja remote status --json/);
     assert.doesNotMatch(guide, /\uFFFD/);
+});
+
+test('remote CLI bootstrap resolves artifacts from package root instead of caller cwd', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'cli', 'index.ts'), 'utf8');
+    assert.doesNotMatch(source, /findBootstrapArtifact\(process\.cwd\(\)\)/);
+    assert.match(source, /findBootstrapArtifact\(cliPackageRoot\(\)\)/);
+});
+
+test('remote CLI workspace-affecting actions use staged action path', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'cli', 'index.ts'), 'utf8');
+    assert.match(source, /if \(options\.action === 'bridge'\) \{[\s\S]*const actionRemotePath = resolveRemotePrimaryActionPath\(resolved\.config\.workspace, resolved\.config\.remotePath\)[\s\S]*executeRemoteBridge\(\{/);
+    assert.match(source, /executeRemoteTransfer\(\{ remotePath: actionRemotePath/);
+    assert.match(source, /executeRemoteCleanUntracked\(\{ remotePath: actionRemotePath/);
+    assert.match(source, /executeRemoteRestore\(\{ remotePath: actionRemotePath/);
+    assert.match(source, /executeRemoteUnlock\(\{ remotePath: actionRemotePath/);
+});
+
+test('remote VSCode adapter resolves staged paths for bridge and transfer commands', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'remote', 'vscode', 'commands.ts'), 'utf8');
+    assert.match(source, /resolveRemotePrimaryActionPath/);
+    assert.match(source, /const actionRemotePath = resolveRemotePrimaryActionPath\(resolved\.config\.workspace, resolved\.config\.remotePath\)/);
+    assert.match(source, /buildRemoteTransferStatus\(\{\s*remotePath: resolved\.config \? resolveRemotePrimaryActionPath\(resolved\.config\.workspace, resolved\.config\.remotePath\) : null/s);
+    assert.match(source, /executeRemoteBridge\(\{\s*target: command\.target!,\s*action: command\.remoteAction!,[\s\S]*remotePath: actionRemotePath/);
+    assert.match(source, /const problemRemotePath = result\.actionRemotePath \|\| resolved\.config\.remotePath/);
+    assert.match(source, /return \{ \.\.\.result, workspace: resolved\.config\.workspace, remotePath: result\.actionRemotePath \|\| resolved\.config\.remotePath \}/);
+});
+
+test('remote source uses staged workspace naming for public flow', () => {
+    const remoteDir = path.join(process.cwd(), 'src', 'remote');
+    const files = fs.readdirSync(path.join(remoteDir, 'core')).filter(file => file.endsWith('.ts'));
+    const combined = files
+        .map(file => fs.readFileSync(path.join(remoteDir, 'core', file), 'utf8'))
+        .join('\n');
+
+    assert.ok(files.includes('stagedWorkspace.ts'));
+    assert.equal(files.includes('managedWorkspace.ts'), false);
+    assert.doesNotMatch(combined, /managedWorkspacePrepare/);
+    assert.doesNotMatch(combined, /managedWorkspace:/);
+    assert.doesNotMatch(combined, /managedWorkspace\?/);
+    assert.doesNotMatch(combined, /managedWorkspaceRepoPath/);
+    assert.doesNotMatch(combined, /\bmanaged:\s*boolean/);
+    assert.doesNotMatch(combined, /\.managed\b/);
+});
+
+test('standalone CLI package includes remote command modules', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'scripts', 'build-cli.js'), 'utf8');
+    assert.match(source, /'remote\/cli'/);
+    assert.match(source, /'remote\/core'/);
 });
 
 test('forja skill documents current status init use flow', () => {
