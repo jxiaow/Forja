@@ -91,7 +91,7 @@ Scope → Solution → [Plan] → Build → Close
 - **累积升级不可逆**：同一会话内一旦触发，后续全部按 Task 处理
 - **默认自动推进**；除真实阻塞外，不得用提问替代可自行完成的动作
 - 长周期任务**必须在 Solution gate 后先写阶段级 todo/checklist**
-- 命中根目录 / workspace / 目录迁移时，**必须先创建 `docs/operations/<initiative>/`**
+- 命中根目录 / workspace / 目录迁移时，**必须先创建本地 `docs/operations/<initiative>/`**；该运行态目录不提交到公开仓库。
 - 不修改 `extension.ts` 的 activate 函数签名或导出
 - VSCode 命令 ID 可随命令收敛方案替换；不要求旧 ID 兼容保留，但新增/替换命令后必须同步 `package.json` contributes 和 `extension.ts` 注册
 - 不修改 `package.json` 中已发布的 `activationEvents`

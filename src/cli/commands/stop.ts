@@ -3,12 +3,14 @@
  * Output format follows v2 spec: StopResult interface.
  */
 import { requireActiveTarget } from './activeTarget';
-import { readRunState, clearRunState, resolveRunProcessStatus, isProcessRunning } from '../../qt/shared/localState';
-import { executeRemotePlan } from '../../remote/core/plan';
+import { readRunState, clearRunState, findExecutablePids, resolveRunProcessStatus, isProcessRunning } from '../../qt/shared/localState';
+import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
 import { ForjaJsonResult, Diagnostic, RuntimeState, diag, T } from './types';
+import type { TargetProfile } from '../../core/workspaceStore';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { getServerById } from '../../core/serverStore';
 import * as cp from 'child_process';
+import * as path from 'path';
 
 export interface StopResult extends ForjaJsonResult {
     action: 'stop';
@@ -34,6 +36,16 @@ function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function findActiveTargetRuntime(workspace: string, target: TargetProfile): { pid: number; executablePath: string } | null {
+    const projectPath = path.isAbsolute(target.project)
+        ? target.project
+        : path.resolve(workspace, target.project);
+    const runtime = resolveRuntimeTarget(path.dirname(projectPath), target.mode, target.arch);
+    if (!runtime) { return null; }
+    const pid = findExecutablePids(runtime.exePath)[0];
+    return pid ? { pid, executablePath: runtime.exePath } : null;
+}
+
 export async function runStop(workspace: string, options: { json?: boolean } = {}): Promise<StopResult> {
     const targetResult = requireActiveTarget(workspace);
 
@@ -49,6 +61,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
     }
     const target = targetResult.target;
 
+
     if (target.kind === 'cpp') {
         return {
             ok: true,
@@ -61,31 +74,12 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
         };
     }
 
-    if (target.runAt === 'remote') {
-        const remoteResult = await executeRemotePlan({
-            workspace,
-            target: 'qt',
-            action: 'stop',
-            json: options.json ?? false,
-            activeProject: target.project,
-        });
-
-        return {
-            ok: remoteResult.ok,
-            action: 'stop',
-            workspace,
-            activeTarget: target,
-            state: remoteResult.ok ? 'stopped' : 'running',
-            diagnostics: remoteResult.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-            nextAction: remoteResult.nextAction,
-        };
-    }
-
     // Qt local: directly read run state and terminate
     const state = readRunState(workspace);
     const status = resolveRunProcessStatus(state);
+    const fallback = status.running ? null : findActiveTargetRuntime(workspace, target);
 
-    if (!status.running) {
+    if (!status.running && !fallback) {
         if (state) { clearRunState(workspace); }
         return {
             ok: true,
@@ -98,7 +92,8 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
         };
     }
 
-    const pid = status.pid ?? state?.pid ?? 0;
+    const pid = status.pid ?? state?.pid ?? fallback?.pid ?? 0;
+    const executablePath = status.executablePath ?? state?.executablePath ?? fallback?.executablePath;
     const result = terminateProcess(pid);
 
     if (!result.ok) {
@@ -112,7 +107,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
                 workspace,
                 activeTarget: target,
                 state: 'stopped',
-                runtime: { running: false, pid, executablePath: state?.executablePath, logFile: state?.logFile },
+                runtime: { running: false, pid, executablePath, logFile: state?.logFile },
                 nextAction: 'forja run',
             };
         }
@@ -123,7 +118,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
             activeTarget: target,
             state: 'running',
             diagnostics: [diag('error', `${T('cmd.stopFailedDetail')} (pid ${pid}): ${result.error}`)],
-            nextAction: 'forja doctor',
+            nextAction: 'forja status',
         };
     }
 
@@ -162,7 +157,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
                 activeTarget: target,
                 state: 'running',
                 diagnostics: [diag('warning', `${T('cmd.stopStillRunningDetail')} (pid ${pid})`)],
-                nextAction: 'forja doctor',
+                nextAction: 'forja status',
             };
         }
     }
@@ -177,7 +172,7 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
         runtime: {
             running: false,
             pid,
-            executablePath: state?.executablePath,
+            executablePath,
             logFile: state?.logFile,
         },
         nextAction: 'forja run',
@@ -190,13 +185,7 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
     } else {
         if (result.activeTarget) {
             const t = result.activeTarget;
-            if (t.runAt === 'remote' && result.workspace) {
-                const remote = loadRemoteSettings(result.workspace);
-                const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-                console.log(T('execRemote', [server?.name || remote.selectedServer || '']));
-            } else {
-                console.log(T('execLocal'));
-            }
+            console.log(T('execLocal'));
             console.log(`  ${T('target')}: ${t.project}`);
             console.log(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         }

@@ -8,7 +8,8 @@ import {
     isProcessRunning,
     logsDir,
     parsePsPids,
-    parseTasklistPids
+    parseTasklistPids,
+    waitForNewExecutablePid
 } from '../qt/shared/localState';
 
 const _tmpDirs: string[] = [];
@@ -54,4 +55,12 @@ test('parsePsPids returns matching executable pids', () => {
     ].join('\n');
 
     assert.deepEqual(parsePsPids(output, '/opt/app/DemoApp'), [13228]);
+});
+
+test('waitForNewExecutablePid detects a newly observed process and ignores known PIDs', async () => {
+    const found = await waitForNewExecutablePid(process.execPath, [], 50);
+    assert.equal(found, process.pid);
+
+    const missing = await waitForNewExecutablePid(process.execPath, [process.pid], 50);
+    assert.equal(missing, null);
 });

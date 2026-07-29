@@ -30,7 +30,6 @@ export interface TargetProfile {
     project: string;
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';
-    runAt: 'local' | 'remote';
     toolchain: ToolchainConfig;
 }
 
@@ -201,7 +200,6 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
                     project: typeof obj.project === 'string' ? obj.project : '',
                     mode: obj.mode === 'release' ? 'release' : 'debug',
                     arch: obj.arch === 'x64' ? 'x64' : 'x86',
-                    runAt: obj.runAt === 'remote' ? 'remote' : 'local',
                     toolchain,
                 };
             }
@@ -327,6 +325,11 @@ export function generateTargetId(kind: 'qt' | 'cpp', projectPath: string, mode: 
     if (existingIds && existingIds.has(id)) {
         const hash = crypto.createHash('sha256').update(`${projectPath}:${mode}:${arch}`).digest('hex').slice(0, 6);
         id = `${kind}-${basename}-${mode}-${arch}-${hash}`;
+        const hashedId = id;
+        let suffix = 2;
+        while (existingIds.has(id)) {
+            id = `${hashedId}-${suffix++}`;
+        }
     }
 
     return id;
@@ -335,6 +338,24 @@ export function generateTargetId(kind: 'qt' | 'cpp', projectPath: string, mode: 
 export function getActiveTarget(config: WorkspaceConfig): TargetProfile | null {
     if (!config.activeTarget) { return null; }
     return config.targets[config.activeTarget] ?? null;
+}
+
+/** Convert a project path to the canonical workroot-relative form stored by targets. */
+export function relativeProjectPath(workroot: string, projectPath: string): string {
+    return path.relative(workroot, path.resolve(projectPath)).replace(/\\/g, '/');
+}
+
+/** Find a saved target by its resolved project path, independent of relative-path spelling. */
+export function findTargetByProject(
+    config: WorkspaceConfig,
+    projectPath: string,
+    kind: TargetProfile['kind']
+): TargetProfile | null {
+    const expected = normalizePath(path.resolve(projectPath));
+    return Object.values(config.targets).find(target => (
+        target.kind === kind
+        && normalizePath(path.resolve(config.workroot, target.project)) === expected
+    )) ?? null;
 }
 
 export function createEmptyWorkspaceConfig(workroot: string): WorkspaceConfig {

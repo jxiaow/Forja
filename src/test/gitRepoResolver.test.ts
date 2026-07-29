@@ -15,12 +15,32 @@ function teardown() {
     fs.rmSync(tmpBase, { recursive: true, force: true });
 }
 
-test('isGitRepo returns true when .git exists', () => {
+test('isGitRepo returns true when .git directory has HEAD', () => {
     setup();
     try {
         const repo = path.join(tmpBase, 'repo-a');
         fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+        fs.writeFileSync(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/main');
         assert.equal(isGitRepo(repo), true);
+    } finally { teardown(); }
+});
+
+test('isGitRepo returns true when .git is a file (worktree)', () => {
+    setup();
+    try {
+        const repo = path.join(tmpBase, 'worktree');
+        fs.mkdirSync(repo, { recursive: true });
+        fs.writeFileSync(path.join(repo, '.git'), 'gitdir: /somewhere/else');
+        assert.equal(isGitRepo(repo), true);
+    } finally { teardown(); }
+});
+
+test('isGitRepo returns false when .git is an empty directory', () => {
+    setup();
+    try {
+        const dir = path.join(tmpBase, 'empty-git');
+        fs.mkdirSync(path.join(dir, '.git'), { recursive: true });
+        assert.equal(isGitRepo(dir), false);
     } finally { teardown(); }
 });
 
@@ -38,6 +58,7 @@ test('resolveGitRoots returns self when dir is a git repo', () => {
     try {
         const repo = path.join(tmpBase, 'single-repo');
         fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+        fs.writeFileSync(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/main');
         const roots = resolveGitRoots(repo);
         assert.equal(roots.length, 1);
         assert.equal(roots[0].dir, repo);
@@ -50,9 +71,11 @@ test('resolveGitRoots scans subdirectories when root is not a git repo', () => {
     try {
         const root = path.join(tmpBase, 'workspace');
         fs.mkdirSync(root, { recursive: true });
-        // Create sub-repos
+        // Create sub-repos with valid .git/HEAD
         fs.mkdirSync(path.join(root, 'lib-a', '.git'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'lib-a', '.git', 'HEAD'), 'ref: refs/heads/main');
         fs.mkdirSync(path.join(root, 'lib-b', '.git'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'lib-b', '.git', 'HEAD'), 'ref: refs/heads/main');
         // Create a non-repo dir
         fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
 
@@ -69,7 +92,9 @@ test('resolveGitRoots skips dot-prefixed directories', () => {
         const root = path.join(tmpBase, 'ws-dot');
         fs.mkdirSync(root, { recursive: true });
         fs.mkdirSync(path.join(root, '.hidden', '.git'), { recursive: true });
+        fs.writeFileSync(path.join(root, '.hidden', '.git', 'HEAD'), 'ref: refs/heads/main');
         fs.mkdirSync(path.join(root, 'visible', '.git'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'visible', '.git', 'HEAD'), 'ref: refs/heads/main');
 
         const roots = resolveGitRoots(root);
         assert.equal(roots.length, 1);
@@ -86,5 +111,23 @@ test('resolveGitRoots returns empty array when no git repos found', () => {
 
         const roots = resolveGitRoots(root);
         assert.equal(roots.length, 0);
+    } finally { teardown(); }
+});
+
+test('resolveGitRoots skips root with empty .git and finds sub-repos', () => {
+    setup();
+    try {
+        const root = path.join(tmpBase, 'broken-root');
+        fs.mkdirSync(path.join(root, '.git'), { recursive: true });
+        // No HEAD — invalid repo
+        fs.mkdirSync(path.join(root, 'proj-a', '.git'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'proj-a', '.git', 'HEAD'), 'ref: refs/heads/main');
+        fs.mkdirSync(path.join(root, 'proj-b', '.git'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'proj-b', '.git', 'HEAD'), 'ref: refs/heads/main');
+
+        const roots = resolveGitRoots(root);
+        assert.equal(roots.length, 2);
+        const names = roots.map(r => r.name).sort();
+        assert.deepEqual(names, ['proj-a', 'proj-b']);
     } finally { teardown(); }
 });

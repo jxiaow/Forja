@@ -1,197 +1,188 @@
 ---
 name: forja
-description: Use when a C++ Qt qmake, .sln, or Makefile project needs build, run, clean, environment status, or sync work through the forja CLI.
+description: Build, run, clean, diagnose, configure, or remotely sync C++ projects through the Forja CLI. Use when a workspace contains Qt qmake (.pro), C++ (.sln, Makefile, or CMake) targets and the user asks to compile, run, select a target or toolchain, inspect build readiness, manage remote servers, or synchronize changed files.
 ---
 
-# forja
+# Forja CLI
 
-当需要处理本地 C++ 项目，且机器上已经可用 `forja` 命令时使用。
+使用已安装的 `forja` 可执行文件，命令形式为 `forja <command>`。
 
-## 适用场景
+## 操作规则
 
-- 基于 qmake 的 Qt/C++ 项目的构建、运行、清理
-- .sln 或 Makefile（含 makefile、GNUmakefile）的 SDK/库项目的构建
-- 需要检测 Qt/VS 环境或项目状态
-- 需要同步变更文件到服务器
+- 由 agent 调用时追加 `--json`。继续执行前读取 `ok`、`diagnostics`、
+  `nextAction`、`nextActions`、`activeTarget` 及该命令的结果字段。
+- `questions` 或 `choices` 是阻塞式输入，不是推荐项：一旦返回它们，立即停止
+  命令链并向用户展示需要选择的字段。未得到用户明确答案前，不得继续执行、创建
+  `answers.json`、传入 `--answers`，也不得从候选列表、机器检测结果、历史会话或
+  示例命令中推断任何值。
+- `nextAction` 中的 `<answers.json>` 只是占位符，绝不得创建或复用字面量 `answers.json`。
+  - 项目已确定时，使用系统临时目录下 `forja-answers/<SHA-256(规范化项目绝对路径)>.json` 作为该目标唯一的 answers 文件；仅累积当前目标流程中用户已确认的字段，绝不读取、合并或复用其他目标的文件。
+  - 项目尚未确定时，才使用 `forja-answers/init-<SHA-256(规范化工作根目录或当前目录)>.json` 作为初始化暂存文件；项目确定后，将本轮已确认答案迁移至该目标文件。
+  - 命令成功完成或流程取消后删除相应临时文件。
+- 展示 `questions` 前，先判断每个问题的类型并选择展示方式：
+  - **输入型**（无 `choices` 数组）：有 `default` 时，`default` 只是候选值而非用户确认值；必须使用提问工具展示该候选值和“自定义”占位选项。无 `default` 时用普通文本索取实际值。
+  - **选择型**（有 `choices` 数组）：按 `choices` 数量决定展示方式：1 个 choice 时注入仅用于提问工具适配的“自定义”占位选项；2–4 个 choices 时直接使用提问工具；超过 4 个 choices 时降级为普通文本完整展示。
+  - **混合阶段**（同时有输入型和选择型）：有 `default` 的输入型与选择型在同一次提问工具调用中展示；无 `default` 的输入型作为同一阶段的文本附注。不得把有 `default` 的输入型降级为文本附注。
+  - 用户选择或输入实际值后，才将实际值写入原问题 `id`。用户选择注入的“自定义”占位项时，不得将占位值写入 `answers.json`；仅针对该原问题用普通文本补录实际值，补录后不得再次调用提问工具。
+- 展示 `questions` 时，必须原样映射 CLI 返回的每一个问题：
+  - 不得拆分、分页或截断 `choices` 数组；选项过多时仍在一个问题中展示全部。
+  - 不得新增 CLI 未返回的问题字段或实质性选项（如“更多分组”“其他项目”等）。例外仅有两种：有 `default` 的输入型问题可增加“自定义”占位选项；选择型问题只有 1 个 choice 时可增加“自定义”占位选项，以适配提问工具的最低选项数要求。用户选择任一占位项时按文本输入处理。
+  - 不得将展示用的分页问题当作答案字段收集。
+  - 允许按语义阶段展示问题，但不得按选项数量分页或截断。固定阶段为：
+    0. `workroot`（若 CLI 返回）；① `choicesBy` 的父问题（如 `projectGroup`）；
+    ② 父问题确定后对应的子问题（如 `project`）；③ 项目确定后的构建字段
+    （`mode`、Windows 下的 `arch`）；④ CLI 返回的工具链字段。Qt、VS、jom 不是
+    固定必问项，不得自定义
+    “分组2”“更多选项”等问题。
+  - 每个阶段都必须先输出可见标题，再展示问题或调用提问工具；不得只给第一阶段标题，
+    后续阶段孤零零展示选项。标题固定使用以下语义：
+    `Forja 初始化 — ⓪ 工作根目录`、`Forja 初始化 — ① 选择项目分组`、
+    `Forja 初始化 — ② 选择项目`、`Forja 初始化 — ③ 选择构建参数`、
+    `Forja 初始化 — ④ 选择工具链`。目标切换的项目选择使用
+    `Forja 目标选择 — ⓪ 选择目标`；其返回的构建参数和工具链问题分别使用
+    `Forja 目标配置 — ① 选择构建参数`、`Forja 目标配置 — ② 选择工具链`。标题是展示文本，
+    不是 CLI 问题或答案字段。
+  - 每次收到一批问题答案后，先完成该批中“自定义”的实际值补录，再按原问题 `label` 回显每个实际已选值，随后才展示下一阶段或继续执行 CLI。提问工具与普通文本降级流程同样适用。回显仅用于展示，不得新增字段或改变 `answers.json`。
+  - 每个阶段必须完整展示该阶段已有的 CLI 问题；不得因提问工具限制拆成多个调用。
+    混合阶段按前述输入型/选择型策略分别收集；工具无法无损承载选择型问题时，
+    用一条普通文本展示该阶段的全部问题，保留原始 `id`、`label` 和完整 `choices`。
+  - 每进入一个新阶段都必须重新评估展示方式；上一阶段的文本锁定只作用于上一阶段，
+    不得传递到后续阶段。若当前阶段的每个选择型问题都有 2–4 个 CLI 选项，且一次调用能
+    保留全部原始问题和选项，必须优先使用提问工具，不得无理由改用普通文本。
+  - 一旦某阶段因 choices 超过 4 个、工具报错或无法保留原始结构而降级为普通文本，该阶段即锁定为文本模式，
+    直到该阶段答案收齐；不得重试工具、拆分选项、只展示部分选项或混合
+    使用工具收集剩余答案。
+  - 普通文本展示完整 `choices` 后，不得新增任何 CLI 未返回的占位项或编号；用户可以
+    直接回复原始选项值或实际输入值，但这不是新增 choice。
+  - `choicesBy` 表示依赖关系：必须先解决父问题，再根据用户选择完整展示对应子问题；
+    不得跳过、提前展示或凭空改写子问题。
+  - 若 `choicesBy` 针对已选父值解析为空数组，该字段对当前项目不适用：不要展示、
+    不要索取答案，也不要写入 `answers.json`；这不是遗漏 CLI 问题。
+  - 工具链字段严格按 CLI 返回的 `questions` 展示：C++/`.sln`/CMake 目标通常只处理
+    `vsInstall`；只有 CLI 返回 `qtPath` 时才询问 Qt，只有 CLI 返回 `jomPath` 时才询问
+    jom。不得因检测到机器上存在 Qt、VS 或 jom 就新增问题，也不得把未返回的字段写入
+    `answers.json`。
+  - 阶段之间保留已获答案；已获答案的问题不得再次询问。阶段只是展示顺序，不得
+    作为额外字段；CLI 返回的 `workroot` 答案应原样放入 `answers.json`，由 Forja
+    用它解析后续扫描根目录。
+  - 若展示数量，必须等于 CLI `choices` 的实际长度；不确定时不要声明数量，也不得
+    使用“主要项目”“前 N 项”代替完整列表。
+  - 只有当所有 CLI 返回的问题都获得用户明确答案后，才允许生成
+    `answers.json` 或继续执行命令。
+- 构建、运行、清理、选择目标或同步前，先执行 `forja status --json`。
+  优先遵循输出中的下一步命令，不猜测项目路径或工具链。
+- 新工作根目录或未注册目录使用 `forja init --json`。若 JSON 返回需要输入的
+  问题，不要擅自选择有歧义的项目或工具链。
+- 选择或切换目标时，先执行 `forja list targets --json`。若默认结果只有一个目标，
+  再执行 `forja list targets --all --json` 展开全部候选；若默认结果有多个目标，先
+  展示这些目标并询问用户；只有用户明确表示没有满意项时，才执行 `--all`。环境候选
+  另行使用 `forja list env --json`，不得用 `init` 代替目标列表。默认列表的目标选项
+  固定追加一个展示控制项 `未找到，查看全部`：总数为 2–4 时可用提问工具，超过 4 项时
+  必须用一条普通文本完整展示，禁止拆分、分页或截断。选择该控制项只触发
+  `forja list targets --all --json`，不得把它写入 `answers.json` 或作为 `--project`
+  参数；已执行 `--all` 时绝不追加该控制项。
+- `list targets` 返回 `savedTargets` 时，用户选择已保存目标后，优先使用其 `id` 执行
+  `forja use target --project <target-id> --json`，只切换 `activeTarget`，不得重新询问
+  mode、arch 或工具链；其精确项目路径也只切换 `activeTarget`，新增或未保存的项目路径
+  才进入配置流程。
+- `list targets --all --json` 返回 `targetGroups` 时，必须按 init 的方式两级展示：先以
+  `Forja 目标选择 — ① 选择项目分组` 展示全部分组，用户选定分组后，再以
+  `Forja 目标选择 — ② 选择项目` 完整展示该组的目标；不得将不同分组的目标平铺为
+  编号或单一列表。这里的分组选择只是展示流程，不是 CLI `questions`，也不得写入
+  `answers.json`。
+- 通过 `forja use target` 保存目标与工具链选择；执行类命令使用已保存的当前
+  目标。仅 `forja build --project <path>` 可以直接指定项目。
+- `mode` 只能来自用户明确选择或已有目标配置。不得根据项目类型、构建任务或惯例
+  擅自选择 `debug` 或 `release`。
+- Windows 的 `arch` 只能来自用户明确选择或已有目标配置；缺失时不要传
+  `--arch`，应消费 Forja 返回的 `x86` / `x64` 问题。Linux 当前只有 `x64`，
+  不询问用户，也不要传 `--arch`，由 Forja 使用平台唯一值。
+- 项目已选但其他字段仍有歧义时，只传已确认字段并消费返回的 `questions`；
+  用 `--answers <answers.json>` 继续，不要为了减少交互而补齐 mode、arch 或工具链。
+- `use target` 的续接必须保留原始 `--project <path>`（或完整复制 Forja 返回的
+  `nextAction`）；`answers.json` 只填写返回问题的字段，不要用 `target` 字段代替
+  `--project`，也不要单独执行 `forja use target --answers ...`。
+- 同一个字段只提供一次：已放入 `answers.json` 的 mode、arch、Qt 或 VS 不要再
+  同时重复传命令行参数，避免答案来源冲突。
+- 选择新项目时，不能把其他项目的 Qt、VS、mode 或 arch 配置当作新项目的用户确认；
+  只有用户明确要求复用，或 Forja 返回的活动目标就是同一项目，才可沿用已有配置。
+- 已初始化工作区切换目标时，禁止使用 `forja init`。`forja use target --json` 不带
+  `--project` 只查看当前目标，不会启动选择流程；已保存目标使用其 `id`，新增目标才使用
+  完整项目路径执行 `forja use target --project <值> --json`，并消费其返回的后续问题。
+- 用户要求预览，或目标工作区尚不熟悉时，对 build、run、clean
+  使用 `--plan --json`。
+- `build` 默认前台执行。前台达到执行器时限时，只有执行器确认能将**同一仍在运行的
+  进程**接管到后台，才自动接管并回显任务 ID；不能接管时只报告超时和进程状态，绝不
+  重新发起后台构建。用户明确要求后台时可直接后台执行。
+- `run` 默认前台执行；仅用户明确要求后台时传 `--detach`。不得因项目规模或运行时长
+  推断后台模式。
+- Forja 已覆盖的操作，不要自行拼接 qmake、make、MSBuild、SSH 或 SCP 命令。
 
-## 不适用
+## 标准流程
 
-- 项目不是 C++ 项目（不含 .pro/.sln/Makefile）
-- 机器上没有 `forja` 命令
-- 只是读代码或改代码，不涉及构建/运行
-
-## 核心原则
-
-1. **先 status 再动手**：用 `status --json` 看环境就绪状态和 diagnostics
-2. **init 只做自动初始化**：不要给 `init` 传 `--project`、`--mode`、`--arch`、工具链路径或 target
-3. **use 负责显式选择**：项目、mode、arch、Qt/VS 路径只通过 `use` 写入保存配置
-4. **执行命令只读配置**：`build`、`run`、`clean` 不传项目或构建配置参数
-5. **默认执行**：命令默认执行，加 `--plan` 仅查看计划
-6. **加 --json**：获取结构化输出，省 token
-7. **run 必须 --detach**：程序启动后不会自行退出，不加会阻塞终端
-8. **build/clean 不加 --detach**：前台执行完直接返回结果
-9. **activeTarget 决定项目类型**：通过 `forja use target --project <path>` 选择 Qt (.pro) 或 SDK (.sln/Makefile)
-
-## 决策流程
-
+```text
+status → init（缺少工作根目录时）→ list（选择有歧义时）
+       → use target → status → 预览或执行 → 检查 JSON 结果
 ```
-用户要求构建/运行 →
-  1. forja status --json
-  2. 看 diagnostics / nextActions：
-     - 没有本地配置 → 运行 init --json，让 CLI 保存可自动确定的配置
-     - 缺项目或 target → 运行 list targets --json，展示候选，让用户选择后运行 use target --project <path> --json
-     - 缺 mode/arch 确认 → 按 status 建议运行 use target --mode ... --arch ... --json
-     - 缺 Qt/VS 工具链 → 运行 list env --json，展示候选，让用户选择后运行 use qt/sdk 写入路径
-     - 缺 Makefile → 先 build qmake --json
-  3. 配置齐全后执行 build/run/clean：
-     - 不追加 --project、--mode、--arch、--qt-path、--vs-dev-shell
-     - 需要切换配置时，先运行 use，再重新 status
-  4. 执行命令，检查 ok 字段：
-     - ok: true → 完成
-     - ok: false → 看 errors 和 diagnostics 定位问题
-```
-
-**关键：当存在多个候选（多个 Qt 版本、多个 .pro 文件、多个 VS 版本、
-debug/release、x86/x64）且用户未设置过时，必须展示选项让用户选择，
-禁止自动选择后静默执行。**
-
-## 命令参考
-
-| 命令 | 用途 | 关键参数 |
-|------|------|----------|
-| `status` | 当前配置和就绪状态 | |
-| `init` | 自动检测并保存能确定的配置 | |
-| `list` | 列表（targets/servers/env/remote/config） | `targets`, `servers`, `env`, `remote`, `config` |
-| `use` | 配置（target/execution/sync/remote/qt/sdk） | 见下方子命令 |
-| `server` | 服务器管理（add/update/remove） | `add`, `update`, `remove` |
-| `build` | 编译 | `fresh`, `qmake`, `rcc`, `--plan` |
-| `run` | 编译并运行 | `designer <ui-file>`, `--detach`（必须） |
-| `stop` | 停止运行中的程序 | |
-| `clean` | 清理构建产物 | `--plan` |
-| `doctor` | 诊断和修复 | `--remote`, `fix` |
-| `sync` | 同步变更文件到服务器 | `--yes`, `--reset`, `plan` 子命令 |
-
-### use 子命令
-
-| 子命令 | 用途 | 关键参数 |
-|--------|------|----------|
-| `use target` | 选择项目和构建配置 | `--project`, `--mode`, `--arch` |
-| `use execution` | 切换本地/远程执行 | `--local`, `--remote` |
-| `use sync` | 配置同步服务器 | `--server`, `--remote-path`, `--enable`, `--disable` |
-| `use remote` | 配置远程执行 | `--server`, `--remote-path` |
-| `use remote repo` | 配置远程仓库映射 | `set/remove/clear`, `--local`, `--remote`, `--role` |
-| `use remote forja-bin` | 配置远程 Forja 二进制路径 | `set/clear`, `--path` |
-| `use remote build-order` | 配置远程构建顺序 | `set/clear`, 位置参数 `qt:build` 等 |
-| `use remote transfer` | 配置远程部署传输 | `set/clear`, `--server`, `--path`, `--artifact` |
-| `use qt` | 配置 Qt 工具链 | `--qt-path`, `--vs-dev-shell`, `--qmake-target` |
-| `use sdk` | 配置 SDK 工具链 | `--vs-dev-cmd` |
-
-### server 子命令
-
-| 子命令 | 用途 | 关键参数 |
-|--------|------|----------|
-| `server add` | 添加服务器 | `--name`, `--host`, `--username`, `--port` |
-| `server update` | 修改服务器 | `--id`, `--name`, `--host`, `--username`, `--port` |
-| `server remove` | 删除服务器 | `--id` |
-
-### 通用参数
-
-| 参数 | 说明 |
-|------|------|
-| `--workspace <path>` | 工作区路径，默认当前目录 |
-| `--plan` | 仅显示命令计划，不执行 |
-| `--detach` | 仅 `run` 可用，后台启动程序并写日志 |
-| `--json` | 结构化 JSON 输出 |
-
-## JSON 输出关键字段
-
-```jsonc
-{
-  "ok": true,              // 操作是否成功
-  "action": "status",      // 当前动作
-  "ready": true,           // 是否就绪可执行（status 专有）
-  "checks": {              // 各项检查结果（status 专有）
-    "settings": true,
-    "project": true,
-    "qtPath": true,
-    "jom": true,
-    "makefile": true
-  },
-  "missing": ["project"],  // 缺失项列表
-  "target": "MyApp",       // 项目名
-  "project": "app.pro",    // 项目文件
-  "exitCode": 0,           // 进程退出码（build/run）
-  "errors": [],            // 编译错误行（最多 20 条）
-  "diagnostics": [],       // 诊断信息（warning/error 级别）
-  "nextAction": "init",    // 建议的下一步命令
-  "nextActions": [],       // 建议的下一步命令列表
-  "logFile": "...",        // 日志文件路径（detach 模式）
-  "resolved": {            // 实际使用的配置
-    "mode": "debug",
-    "arch": "x86",
-    "qtPath": "...",
-    "vsDevShell": "...",
-    "jomPath": "..."
-  }
-}
-```
-
-## 执行规则
-
-- **不要拆解命令**：`forja run` 会先杀旧进程、编译、再启动，不要自己拆步骤
-- **不要猜路径**：不要自己拼 qmake/jom/msbuild 命令，统一用 forja
-- **多候选必须让用户选**：`list targets` / `list env` 返回多个候选时，列出选项让用户决定，不要自动取第一个
-- **首次配置必须确认**：status 中 resolved 的 qtPath、vsDevShell、project 如果是自动检测的，先展示给用户确认再执行
-- **只有 run 加 --detach**：程序启动后不会自行退出，不加会阻塞
-- **detach 后看 status**：`run --detach` 返回 `ok: true` 表示程序已启动且已解析到目标进程 PID；用 `status --process --json` 随时确认运行状态和日志路径
-- **非 detach 直接看结果**：`ok` 字段直接反映成功/失败
-- **命令耗时与超时**：`build`、`run --detach`、`clean` 都是前台阻塞命令，会等执行完成后返回 JSON 结果；其中 `build` 和 `run --detach`（内含编译步骤）耗时取决于增量编译量，通常几十秒到几分钟。执行时应设置足够的超时（建议 15 分钟），不要因默认超时中断后反复重试。这些命令最终都会自行退出，**不是长驻进程，禁止用后台进程方式启动**
-- **执行前确认目标**：看 `activeTarget`、`project`、`candidates`、`diagnostics`
-- **需要完整日志时**：读 `logFile` 路径指向的文件
-
-## 常见场景示例
 
 ```bash
-# 首次使用：先看状态，再自动初始化
+# 查看并配置工作区
 forja status --json
 forja init --json
-
-# 显式选择配置
-forja use target --project src/app.pro --mode release --json
-
-# 日常编译
-forja build --json
-
-# 编译并后台运行
-forja run --detach --json
-
-# 查运行状态和日志路径
-forja status --process --json
-
-# 停止程序
-forja stop --json
-
-# 只看编译计划不执行
-forja build --plan --json
-
-# 同步：先看状态，再预览或单文件同步
-forja remote set --server dev --remote-path /remote/app --json
-forja server --json
-forja server add --name dev --host 127.0.0.1 --username dev --json
-forja use sync --server server-1 --remote-path /remote/app --enable --json
-forja sync --reset --json
-forja server update server-1 --host 10.0.0.2 --json
-forja server remove server-1 --json
-forja sync plan --json
-
-# SDK 编译：配置先用 use，build 只读保存配置
+forja list targets --json
+forja list env --json
+forja use target --project path/to/app.pro --json
 forja status --json
-forja use target --project Makefile --mode release --json
-forja build --json
 
-# 远程高级配置
-forja use remote repo set --local qt_client --remote qt_client --role primary --json
-forja use remote forja-bin set --path /home/dev/.forja/bin/forja --json
-forja use remote build-order set qt:build sdk:rebuild --json
-forja use remote transfer set --server server-2 --path /deploy/app --artifact out/app --json
+# 构建并运行已选择的目标
+forja build --plan --json
+forja build --json
+forja run --detach --json
+forja stop --json
 ```
+
+多个项目、工具链或远程服务器同时可用，且既有配置不能消除歧义时，列出候选项并让
+用户选择；不得静默选择第一个结果。
+
+## 命令速查
+
+| 需求 | 命令 |
+| --- | --- |
+| 查看当前目标、就绪状态和建议下一步 | `forja status --json` |
+| 注册并初始化工作根目录 | `forja init [--workroot <path>] --json` |
+| 列出 Qt/C++ 目标或检测到的环境 | `forja list targets\|env --json` |
+| 保存目标、模式、架构或工具链 | `forja use target [--project <path>] [--answers <file>] [--mode debug\|release] [--arch x86\|x64] [--qt <path>] [--vs <path>] [--jom <path>] --json` |
+| 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] --json` |
+| 运行 Qt 目标 | `forja run [--detach] [--plan] --json` |
+| 运行保存的自定义命令 | `forja run custom <name> --json` |
+| 打开 Qt Designer 文件 | `forja run designer <ui-file> --json` |
+| 停止当前运行目标 | `forja stop --json` |
+| 清理当前目标的构建产物 | `forja clean [--plan] --json` |
+| 管理远程服务器记录 | `forja server [add\|update\|remove] ... --json` |
+| 初始化当前 workroot 的远程同步 | `forja remote setup [--server <id> --remote-path <path>] --json` |
+| 预览待同步文件 | `forja sync --dry-run --json` |
+
+需要在当前目录以外操作时传入 `--workspace <path>`。仅在需要稳定的诊断语言时传入
+`--lang zh` 或 `--lang en`。
+
+## 目标行为
+
+- `.pro` 是 Qt/qmake 目标；`build qmake`、`build rcc` 和 `run` 仅适用于此类目标。
+- `.sln`、`Makefile` 与 CMake 是 C++ SDK 目标。对此类目标使用 `build` 或
+  `build fresh`；不要改用 Qt 专属动作。
+- `run --detach` 会启动后台进程。成功后执行 `forja status --json`，从 `runtime`
+  中读取运行状态和 `logFile`。
+- 即使输出包含计划或部分诊断，`ok: false` 仍表示操作失败。优先使用返回的
+  `nextAction(s)`；没有足够修复提示时重新执行 `forja status --json` 查看就绪状态。
+
+## 远程与破坏性操作
+
+- 同步前执行 `forja sync status --json`；未配置时使用 `forja remote setup`，它会绑定当前
+  workroot 的服务器和远端路径、启用同步并部署远端 Forja。
+- 同步前使用 `forja sync --dry-run --json` 展示上传、删除和跳过的文件。
+  `forja sync --json` 会跳过交互确认并直接执行；仅在用户已授权目标服务器与文件范围后
+  执行。
+- `sync reset`、`server remove` 都会改变状态或具有破坏性。支持 `--plan`
+  时先预览；其余情况先说明精确目标并取得用户明确授权。JSON 模式下的 `sync reset` 和
+  `server remove` 还需要显式传入 `--force`。
+- 不要输出服务器密码、私钥内容或其他凭据；仅把用户提供的凭据引用传给 Forja。

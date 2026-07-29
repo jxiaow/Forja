@@ -147,7 +147,17 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                 return {
                     syncEnabled: sync.enabled,
                     syncSelectedServer: remote.selectedServer,
-                    syncServers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, authMode: s.authMode, privateKeyPath: s.privateKeyPath, password: s.password })),
+                    syncServers: servers.map(s => ({
+                        id: s.id,
+                        name: s.name,
+                        host: s.host,
+                        port: s.port,
+                        username: s.username,
+                        authMode: s.authMode,
+                        privateKeyPath: s.privateKeyPath,
+                        password: s.password,
+                        remotePathHistory: s.remotePathHistory ?? [],
+                    })),
                     syncIgnore: sync.ignore.join(', '),
                     syncRemotePath: remote.remotePaths[remote.selectedServer] || '',
                     syncPendingCount: pendingInfo.count,

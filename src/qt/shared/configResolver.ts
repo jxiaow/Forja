@@ -24,8 +24,11 @@ export interface ConfigInputs {
  * shared between the VSCode extension and the CLI.
  */
 export function resolveBuildConfig(inputs: ConfigInputs): BuildConfig {
-    const projectDir = inputs.projectPath
-        ? path.dirname(inputs.projectPath)
+    const resolvedProjectPath = inputs.projectPath
+        ? path.resolve(inputs.workspace, inputs.projectPath)
+        : null;
+    const projectDir = resolvedProjectPath
+        ? path.dirname(resolvedProjectPath)
         : inputs.workspace;
     const proFile = inputs.projectPath
         ? path.basename(inputs.projectPath)

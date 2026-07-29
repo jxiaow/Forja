@@ -35,7 +35,7 @@ test('staged remote status keeps planning repos when remote forja is missing', a
             if (command.includes('uname -s')) {
                 return { exitCode: 0, stdout: 'Linux\n', stderr: '' };
             }
-            if (command.includes('$HOME/.forja/bin/forja --version')) {
+            if (command.includes('$(npm prefix -g)/bin/forja') && command.includes('--version')) {
                 return { exitCode: 127, stdout: '', stderr: 'not found' };
             }
             if (command.includes('printf "path:%s\\n"')) {
@@ -67,7 +67,7 @@ test('staged remote status keeps planning repos when remote forja is missing', a
         assert.equal(result.remotePlan?.repos[0].overlayAllowed, true);
         assert.equal(result.layers.find(layer => layer.name === 'remoteForja')?.ok, false);
         assert.equal(result.layers.find(layer => layer.name === 'baselinePlan')?.ok, true);
-        assert.match(result.nextAction || '', /forja doctor fix --remote/);
+        assert.match(result.nextAction || '', /forja remote bootstrap/);
         assert.equal(commands.some(command => command.includes(stagedWorkspace)), true);
     } finally {
         fs.rmSync(fixture.root, { recursive: true, force: true });
@@ -151,7 +151,7 @@ test('staged remote test allows missing remote forja so prepared fallback can ru
             if (command.includes('uname -s')) {
                 return { exitCode: 0, stdout: 'Linux\n', stderr: '' };
             }
-            if (command.includes('$HOME/.forja/bin/forja --version')) {
+            if (command.includes('$(npm prefix -g)/bin/forja') && command.includes('--version')) {
                 return { exitCode: 127, stdout: '', stderr: 'not found' };
             }
             if (command.includes('pwd -P')) {

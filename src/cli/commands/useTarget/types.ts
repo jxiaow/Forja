@@ -55,6 +55,7 @@ export interface ResolveOptions {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
+    qmakeTarget?: string;
     mode?: string;
     arch?: string;
     answers?: Record<string, string>;
@@ -67,7 +68,6 @@ export interface ResolvedConfig {
     project: string;
     mode?: 'debug' | 'release';
     arch?: 'x86' | 'x64';
-    runAt: 'local' | 'remote';
     qtPath?: string;
     qtVersion?: string;
     vsInstall?: string;

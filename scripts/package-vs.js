@@ -21,6 +21,12 @@ const channelIdx = process.argv.indexOf('--channel');
 const channel = channelIdx >= 0 && process.argv[channelIdx + 1]
     ? process.argv[channelIdx + 1]
     : (version.endsWith('.dev') ? 'dev' : 'stable');
+if (channel !== 'stable' && channel !== 'dev') {
+    throw new Error(`Unsupported package channel: ${channel}`);
+}
+if (channel === 'stable' && version.endsWith('.dev')) {
+    throw new Error('Stable packages require a version without the .dev suffix.');
+}
 
 // Dev builds append date: VSIX uses 0.7.55-dev.202607031430 (vsce requires hyphen pre-release)
 function dateStamp() {

@@ -122,7 +122,7 @@ export async function executeRemotePlan(options: RemotePlanOptions): Promise<Rem
             mode: 'remote',
             stages: [],
             diagnostics: [{ level: 'error', message: error instanceof Error ? error.message : String(error) }],
-            nextAction: 'forja doctor --remote',
+            nextAction: 'forja remote bootstrap',
         };
     }
 }

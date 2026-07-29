@@ -1,16 +1,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const maxScanDepth = 5;
+const maxScanDepth = 8;
 const defaultSkipDirs = ['node_modules', '.git', '.forja', '.worktrees', 'build', 'debug', 'release', 'out'];
 
 /**
  * Scan for .pro files under a root directory.
  * Returns relative paths (forward-slash normalized) from root.
+ * `includedDefaultDirs` selectively re-enables directories from the default skip list.
  * Shared between the VSCode extension and the CLI.
  */
-export function scanProFiles(root: string, extraSkipDirs: string[] = []): string[] {
-    const skipSet = new Set([...defaultSkipDirs, ...extraSkipDirs.map(d => d.toLowerCase())]);
+export function scanProFiles(root: string, extraSkipDirs: string[] = [], includedDefaultDirs: string[] = []): string[] {
+    const includedSet = new Set(includedDefaultDirs.map(d => d.toLowerCase()));
+    const skipSet = new Set([
+        ...defaultSkipDirs.filter(d => !includedSet.has(d)),
+        ...extraSkipDirs.map(d => d.toLowerCase()),
+    ]);
     const proFiles: string[] = [];
 
     function scan(dir: string, depth: number): void {

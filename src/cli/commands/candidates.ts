@@ -22,7 +22,7 @@ export function aggregateCandidates(
     const savedProjectSet = new Set(savedTargets.map(t => normalizePath(t.project)));
 
     // Qt candidates (.pro files)
-    const proFiles = scanProFiles(workspace);
+    const proFiles = scanProFiles(workspace, [], ['build', '.worktrees']);
 
     for (const pro of proFiles) {
         const isCurrent = activeProfile !== null

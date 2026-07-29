@@ -12,6 +12,7 @@ test('remote overlay plan expands staged renames into old delete and new upload'
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-remote-overlay-'));
     const workspace = path.join(root, 'app');
     fs.mkdirSync(path.join(workspace, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(workspace, '.git', 'HEAD'), 'ref: refs/heads/main\n');
 
     try {
         const result = await buildLocalOverlayPlan({

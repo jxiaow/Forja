@@ -149,7 +149,8 @@ CLI 的使用文档见 [`docs/README-cli.md`](./README-cli.md)。
 | `npm test` | 编译 + 运行全部测试 |
 | `npm run package` | 编译 + 打包 .vsix 到 `dist/` |
 | `npm run package:cli` | 编译 + 组装 CLI + 打包 .tgz 到 `dist/` |
-| `npm run package:all` | bump 版本 + 打包 .vsix 和 CLI .tgz |
+| `npm run package:all:stable` | 显式稳定通道：打包 .vsix 和 CLI .tgz（版本不得带 `.dev`） |
+| `npm run package:all:dev` | 显式开发通道：生成带时间戳的开发 VSIX 与 CLI tgz |
 | `npm run build:cli` | 编译 + 组装 CLI（不打 tgz） |
 | `npm run vsix` | 仅打包 .vsix（跳过编译） |
 
@@ -167,7 +168,7 @@ CLI 的使用文档见 [`docs/README-cli.md`](./README-cli.md)。
 ## 版本发布流程
 
 1. 运行 `npm test` 确保测试通过
-2. 一键打包：`npm run package:all`（自动 bump 版本）
+2. 一键打包：稳定包使用 `npm run package:all:stable`；开发包使用 `npm run package:all:dev`
 3. 安装验证：`code --install-extension dist/forja-x.x.x.vsix`
 4. 分发 `dist/` 下的 `.vsix` 和 `.tgz`
 

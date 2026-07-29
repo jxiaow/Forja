@@ -3,6 +3,7 @@
  */
 import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSummary, Diagnostic, Locale, T } from './types';
 import { collectTargetCandidates } from './candidates';
+import { getProjectGroup } from './projectGrouping';
 import { listServers, getServerDetail } from './server';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget as getActiveTargetFromStore } from '../../core/workspaceStore';
@@ -32,7 +33,7 @@ export interface SavedTargetInfo {
 export interface ListResult extends ForjaJsonResult {
     action: 'list';
     category: InternalListCategory;
-    targets?: TargetCandidate[];
+    targetGroups?: Record<string, TargetCandidate[]>;
     savedTargets?: SavedTargetInfo[];
     servers?: ServerSummary[] | ServerDetail;
     env?: EnvSummary;
@@ -63,25 +64,40 @@ export function formatListText(result: ListResult, _locale: Locale): string {
 
             // Show saved targets first (from workspaceStore)
             const saved = result.savedTargets || [];
-            const hasDiscovered = (result.targets || []).length > 0;
+            const targetGroups = result.targetGroups || {};
+            const hasDiscovered = Object.values(targetGroups).some(group => group.length > 0);
             if (saved.length > 0) {
                 // Only show section header when both sections are present
                 if (hasDiscovered) { lines.push(`  ${T('lst.savedTargets')}:`); }
-                for (const t of saved) {
+                // Extract project name (strip trailing mode/arch from name)
+                const displayNames = saved.map(t => t.name.replace(/\s+(debug|release)\s+(x86|x64)$/, ''));
+                const variants = saved.map(t => `${t.mode}|${t.arch}`);
+                const maxLen = Math.max(...displayNames.map(n => n.length));
+                const maxVariantLen = Math.max(...variants.map(v => v.length));
+                for (let i = 0; i < saved.length; i++) {
+                    const t = saved[i];
                     const marker = t.active ? '* ' : '  ';
-                    lines.push(`  ${marker}${t.name} — ${t.mode}|${t.arch} — ${t.project}`);
+                    const displayName = displayNames[i];
+                    lines.push(`  ${marker}${displayName.padEnd(maxLen)}  ${variants[i].padEnd(maxVariantLen)}  —  ${t.project}`);
                 }
                 if (hasDiscovered) { lines.push(''); }
             }
 
             // Show discovered targets
-            const targets = result.targets || [];
-            if (targets.length > 0) {
+            if (hasDiscovered) {
                 lines.push(`  ${T('lst.discoveredTargets')}:`);
-                for (const t of targets) {
-                    const marker = t.current ? '* ' : '  ';
-                    const cfg = t.configured ? `${T('configuredMark')} ` : '';
-                    lines.push(`  ${marker}${cfg}${t.label} — ${t.project}`);
+                for (const [group, groupTargets] of Object.entries(targetGroups).sort(([a], [b]) => a.localeCompare(b))) {
+                    lines.push(`    ${group}:`);
+                    const targetLabels = groupTargets.map(t => {
+                        const cfg = t.configured ? `${T('configuredMark')} ` : '';
+                        return `${cfg}${t.label}`;
+                    });
+                    const maxTargetLen = Math.max(...targetLabels.map(l => l.length));
+                    for (let i = 0; i < groupTargets.length; i++) {
+                        const t = groupTargets[i];
+                        const marker = t.current ? '* ' : '  ';
+                        lines.push(`      ${marker}${targetLabels[i].padEnd(maxTargetLen)}  —  ${t.project}`);
+                    }
                 }
             } else if (saved.length === 0) {
                 lines.push(`  ${T('noneFound')}`);
@@ -264,7 +280,7 @@ function listTargets(workspace: string, savedOnly?: boolean): ListResult {
             action: 'list',
             category: 'targets',
             workspace,
-            targets: [],
+            targetGroups: {},
             savedTargets: savedTargets.length > 0 ? savedTargets : undefined,
             nextAction: savedTargets.length > 0 ? 'forja use target --project <name|path>' : 'forja list targets --all',
         };
@@ -285,7 +301,14 @@ function listTargets(workspace: string, savedOnly?: boolean): ListResult {
         diagnostics.push({ level: 'warning', message: T('lst.vsInstallNotConfigured') });
     }
 
-    const targets = rawTargets;
+    const groups = new Map<string, TargetCandidate[]>();
+    for (const target of rawTargets) {
+        const group = getProjectGroup(target.project);
+        const groupTargets = groups.get(group) || [];
+        groupTargets.push(target);
+        groups.set(group, groupTargets);
+    }
+    const targetGroups = Object.fromEntries([...groups.entries()].sort(([a], [b]) => a.localeCompare(b)));
 
     const nextAction = savedTargets.length > 0
         ? 'forja use target --project <name|path>'
@@ -296,7 +319,7 @@ function listTargets(workspace: string, savedOnly?: boolean): ListResult {
         action: 'list',
         category: 'targets',
         workspace,
-        targets,
+        targetGroups,
         savedTargets: savedTargets.length > 0 ? savedTargets : undefined,
         diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
         nextAction,
@@ -329,12 +352,12 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
     if (servers.length === 0) {
         nextAction = 'forja server add --name <name> --host <host> --username <name>';
     } else if (servers.length === 1) {
-        nextAction = `forja remote set --server ${servers[0].name}`;
+        nextAction = `forja remote setup --server ${servers[0].name} --remote-path <path>`;
     } else if (servers.length <= 5) {
         const names = servers.map(s => s.name).join('|');
-        nextAction = `forja remote set --server <${names}>`;
+        nextAction = `forja remote setup --server <${names}> --remote-path <path>`;
     } else {
-        nextAction = 'forja remote set --server <name>';
+        nextAction = 'forja remote setup --server <name> --remote-path <path>';
     }
     return {
         ok: true,

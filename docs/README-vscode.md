@@ -1,6 +1,6 @@
 # Forja — VSCode 扩展
 
-C++ 项目构建扩展，支持 Qt (qmake) 和 C++ (.sln/Makefile) 项目，覆盖本地和远程执行。
+C++ 项目构建扩展，支持 Qt (qmake) 和 C++ (.sln/Makefile) 项目。本地构建、运行和环境管理由扩展与 CLI 共同提供；远端当前仅支持工作区同步和 CLI 部署。
 
 ## 安装
 
@@ -9,7 +9,7 @@ C++ 项目构建扩展，支持 Qt (qmake) 和 C++ (.sln/Makefile) 项目，覆�
 code --install-extension forja-<version>.vsix
 
 # Dev
-code --install-extension forja-<version>-dev.vsix
+code --install-extension forja-<version>-dev.<timestamp>.vsix
 ```
 
 扩展和 CLI 共享新配置存储（`~/.forja/workspaces/<hash>.json`），在任一侧做的变更在另一侧立即可见。旧 `~/.forja/projects/` 不读取、不迁移、不兼容。
@@ -74,31 +74,29 @@ code --install-extension forja-<version>-dev.vsix
 
 在配置面板中修改 mode/arch 会同步写入 activeTarget，CLI 的 `forja build` 立即生效。
 
-## 远程执行
+## 远程同步
 
-Forja 支持通过 SSH 在远程服务器上构建和运行：
+Forja 当前通过 SSH 同步工作区，并可将当前本地 CLI 部署到远端；远程构建、运行和诊断暂不可用：
 
 ```bash
 # 1. 添加服务器（CLI 或配置面板）
 forja server add --name dev --host 192.168.1.10 --username dev
 
-# 2. 配置远程执行目标
-forja remote set --server dev --remote-path /home/dev/workspace
+# 2. 为当前 workroot 配置同步服务器与远端路径，并启用同步
+forja remote setup --server dev --remote-path /home/dev/workspace
 
-# 3. 切换执行位置
-forja use target --run-at remote
+# 3. 部署远端 Forja（setup 已执行；也可单独重试）
+forja remote bootstrap
 ```
 
-切换后，状态栏 Build/Run 自动走远程路径。远程诊断：`forja doctor --remote`。
-
-远程 Forja 二进制默认安装在 `$HOME/.forja/bin/forja`，可通过 `forja remote forja-bin set --path <path>` 覆盖。
+服务器记录由 `forja server` 管理；远端路径和同步开关属于当前 workroot。`remote setup` 会提供该服务器已使用路径的选择或新路径输入。
 
 ## 同步
 
 基于 git diff 增量上传变更文件，适用于本地编辑、远端编译的场景：
 
-1. 配置面板「同步」页配置服务器（一次配置，所有项目共享）
-2. 设置远程路径并开启同步
+1. 使用 Forja: Server 管理服务器记录（一次配置，所有项目共享）
+2. 使用 Forja: Remote 的 Remote Setup 为当前 workroot 选择服务器、远端路径并开启同步
 3. 点击状态栏「同步」按钮或执行 `forja sync`
 4. 仅上传有变化的文件
 
@@ -107,12 +105,10 @@ forja use target --run-at remote
 ## 诊断与修复
 
 ```bash
-forja doctor                # 本地诊断：检查配置完整性
-forja doctor --remote       # 远程诊断：检查 SSH/Forja/锁状态
-forja doctor fix --remote   # 自动修复：部署/更新远程 Forja
+forja status                # 查看配置就绪状态和下一步操作
 ```
 
-诊断覆盖：配置文件损坏、工具链缺失、项目文件不存在、远程锁死、SSH 连接失败等。
+诊断覆盖本地配置、工具链和项目文件；远端连通性通过 `forja remote bootstrap` 与 `forja sync --dry-run` 验证。
 
 ## 配置存储
 
@@ -120,7 +116,7 @@ forja doctor fix --remote   # 自动修复：部署/更新远程 Forja
 |------|------|
 | `~/.forja/workspaces.json` | 已注册 workroot |
 | `~/.forja/workspaces/<hash>.json` | 当前 workspace 的 Qt/C++/sync/remote 配置 |
-| `~/.forja/servers.json` | 服务器列表 |
+| `~/.forja/servers.json` | 服务器列表及最近使用的远端目录 |
 | `.forja/sync-state.json` | 同步运行状态 |
 
 主要配置项：

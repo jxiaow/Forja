@@ -1,12 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execAsync, readDir, isDir } from './utils';
-import { detectEnvWin } from '../platform/win/envDetector';
+import { detectEnvWin, detectJomSync } from '../platform/win/envDetector';
 import { detectEnvLinux } from '../platform/linux/envDetector';
 import { log } from '../../core/loggerBase';
 
 // 重新导出，供 platform 子模块使用
-export { execAsync, readDir, isDir };
+export { execAsync, readDir, isDir, detectJomSync };
 
 export type { EnvInfo, VSInfo, QtInfo } from '../../core/types';
 import type { EnvInfo, QtInfo } from '../../core/types';

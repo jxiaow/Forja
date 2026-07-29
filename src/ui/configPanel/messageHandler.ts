@@ -5,7 +5,7 @@ import { getState, setState } from '../../vscode/qtState';
 import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, updateRemoteSelectedServer } from '../../core/serverStore';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, updateRemoteSelectedServer, updateRemotePath } from '../../core/serverStore';
 import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
 import { executeTestConnection, refreshSyncStatusBar } from '../../vscode/syncWatcher';
 import { inferVsInstall } from '../../core/settingsIO';
@@ -283,12 +283,12 @@ export async function handleMessage(
                     const newVal = String(msg.value || '');
                     // 不用空值覆盖已有路径（防止页面重渲染时 onblur 误触发）
                     if (newVal || !remoteCfg.remotePaths[serverId]) {
-                        remoteCfg.remotePaths[serverId] = newVal;
-                        saveRemoteSettings(ws3, remoteCfg);
+                        updateRemotePath(ws3, serverId, newVal);
                     }
                 }
             }
             refreshSyncStatusBar();
+            updateHtml();
             break;
         }
         case 'saveSyncIgnore': {
@@ -303,16 +303,33 @@ export async function handleMessage(
             const newServerData = {
                 name: msg.server.name || '',
                 host: msg.server.host || '',
-                port: msg.server.port || 22,
+                port: msg.server.port ?? 22,
                 username: msg.server.username || '',
                 authMode: (msg.server.authMode || 'key') as 'key' | 'password',
                 privateKeyPath: msg.server.privateKeyPath || '',
                 password: msg.server.password || ''
             };
             logger.info(`服务器认证: ${newServerData.authMode}`);
-            if (!newServerData.name || !newServerData.host || !newServerData.username) {
+            if (!newServerData.name.trim() || !newServerData.host.trim() || !newServerData.username.trim()) {
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
                 break;
+            }
+            if (!Number.isInteger(newServerData.port) || newServerData.port < 1 || newServerData.port > 65535) {
+                vscode.window.showWarningMessage('端口必须是 1 到 65535 之间的整数');
+                break;
+            }
+            if (newServerData.authMode === 'key' && !newServerData.privateKeyPath.trim()) {
+                vscode.window.showWarningMessage('密钥认证需要私钥路径');
+                break;
+            }
+            if (newServerData.authMode === 'password' && !newServerData.password) {
+                vscode.window.showWarningMessage('密码认证需要密码');
+                break;
+            }
+            if (newServerData.authMode === 'key') {
+                newServerData.password = '';
+            } else {
+                newServerData.privateKeyPath = '';
             }
             // Check for duplicate name
             const existing = readServers().find(s => s.name === newServerData.name);
@@ -327,9 +344,7 @@ export async function handleMessage(
                 updateRemoteSelectedServer(wsAdd, created.id);
                 updateProjectSyncField(wsAdd, 'enabled', true);
                 if (msg.remotePath) {
-                    const remoteCfg = loadRemoteSettings(wsAdd);
-                    remoteCfg.remotePaths[created.id] = String(msg.remotePath);
-                    saveRemoteSettings(wsAdd, remoteCfg);
+                    updateRemotePath(wsAdd, created.id, String(msg.remotePath));
                 }
             }
             refreshSyncStatusBar();
@@ -386,20 +401,42 @@ export async function handleMessage(
             const updates = {
                 name: msg.server.name || '',
                 host: msg.server.host || '',
-                port: msg.server.port || 22,
+                port: msg.server.port ?? 22,
                 username: msg.server.username || '',
                 authMode: (msg.server.authMode || 'key') as 'key' | 'password',
                 privateKeyPath: msg.server.privateKeyPath || '',
                 password: msg.server.password || ''
             };
-            if (!updates.name || !updates.host || !updates.username) {
+            if (!updates.name.trim() || !updates.host.trim() || !updates.username.trim()) {
                 vscode.window.showWarningMessage('服务器名称、地址和用户名不能为空');
+                break;
+            }
+            if (!Number.isInteger(updates.port) || updates.port < 1 || updates.port > 65535) {
+                vscode.window.showWarningMessage('端口必须是 1 到 65535 之间的整数');
                 break;
             }
             // 如果密码为空或为遮蔽占位符，保留原密码
             if (!updates.password || updates.password === '••••••••') {
                 const existing = readServers().find(s => s.id === serverId);
                 if (existing) { updates.password = existing.password; }
+            }
+            if (updates.authMode === 'key' && !updates.privateKeyPath.trim()) {
+                vscode.window.showWarningMessage('密钥认证需要私钥路径');
+                break;
+            }
+            if (updates.authMode === 'password' && !updates.password) {
+                vscode.window.showWarningMessage('密码认证需要密码');
+                break;
+            }
+            const duplicate = readServers().find(s => s.id !== serverId && s.name === updates.name);
+            if (duplicate) {
+                vscode.window.showWarningMessage(`服务器名称 "${updates.name}" 已存在 (ID: ${duplicate.id})`);
+                break;
+            }
+            if (updates.authMode === 'key') {
+                updates.password = '';
+            } else {
+                updates.privateKeyPath = '';
             }
             const updated = updateServer(serverId, updates);
             if (!updated) {
@@ -412,9 +449,7 @@ export async function handleMessage(
             if (wsUpd) {
                 updateRemoteSelectedServer(wsUpd, serverId);
                 if (msg.remotePath !== undefined) {
-                    const remoteCfgUpd = loadRemoteSettings(wsUpd);
-                    remoteCfgUpd.remotePaths[serverId] = String(msg.remotePath || '');
-                    saveRemoteSettings(wsUpd, remoteCfgUpd);
+                    updateRemotePath(wsUpd, serverId, String(msg.remotePath || ''));
                 }
             }
             _pushServerList(webview, serverId);
@@ -437,12 +472,16 @@ export async function handleMessage(
             if (!msg.server) { break; }
             const testServer = {
                 host: msg.server.host || '',
-                port: msg.server.port || 22,
+                port: msg.server.port ?? 22,
                 username: msg.server.username || '',
                 authMode: (msg.server.authMode || 'key') as 'key' | 'password',
                 privateKeyPath: msg.server.privateKeyPath || '',
                 password: msg.server.password || ''
             };
+            if (!Number.isInteger(testServer.port) || testServer.port < 1 || testServer.port > 65535) {
+                vscode.window.showWarningMessage('端口必须是 1 到 65535 之间的整数');
+                break;
+            }
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
                 title: `正在测试连接 ${testServer.host}...`,

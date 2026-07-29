@@ -11,7 +11,7 @@
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { loadWorkspacesRegistry, normalizePath } from '../core/workspaceStore';
+import { loadWorkspacesRegistry, normalizePath, resolveWorkroot } from '../core/workspaceStore';
 import { forjaConfigDir } from '../core/settingsIO';
 
 export type ModuleType = 'qt' | 'cpp' | 'sync';
@@ -81,7 +81,7 @@ export function resolveProjectRoot(module: ModuleType = 'qt'): string {
 
 /** 当用户选择 Qt 项目后，更新缓存 */
 export function setProjectRoot(root: string): void {
-    _resolvedQt = root;
+    _resolvedQt = resolveWorkroot(root) || root;
 }
 
 /** 当 C++ 项目变化后，更新缓存 */
@@ -141,8 +141,9 @@ function _resolveFromRegistry(_module: ModuleType): string {
         }
 
         if (bestMatch) {
-            // 返回原始 folder 路径（保持大小写）
-            const result = folder.uri.fsPath;
+            // Sync/remote settings still use the opened workspace folder as
+            // their key; Qt/C++ target state is keyed by the workroot.
+            const result = _module === 'sync' ? folder.uri.fsPath : bestMatch;
             if (cacheKey === '_resolvedCpp') { _resolvedCpp = result; }
             else if (cacheKey === '_resolvedSync') { _resolvedSync = result; }
             else { _resolvedQt = result; }

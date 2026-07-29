@@ -10,7 +10,6 @@ import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner
 import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
 import { createCppPlan } from '../../cpp/shared/plan';
-import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ForjaJsonResult, ActiveTarget, Diagnostic, diag, T } from './types';
 import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
@@ -136,46 +135,6 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
         };
     }
 
-    // --plan + remote: return dry-run info without executing
-    if (options.plan && target.runAt === 'remote') {
-        const sshCmd = buildRemoteShellCommand(workspace, 'clean');
-        return {
-            ok: true,
-            action: 'clean',
-            workspace,
-            activeTarget: target,
-            plan: {
-                mode: 'dryRun',
-                commands: [sshCmd],
-                shellCommand: sshCmd,
-            },
-        };
-    }
-
-    // Remote execution
-    if (target.runAt === 'remote') {
-        const remoteResult = await executeRemotePlan({
-            workspace,
-            target: target.kind,
-            action: 'clean',
-            json: wantsJson,
-            activeProject: target.project,
-        });
-
-        return {
-            ok: remoteResult.ok,
-            action: 'clean',
-            workspace,
-            activeTarget: target,
-            state: remoteResult.ok ? 'cleaned' : undefined,
-            exitCode: remoteResult.exitCode,
-            diagnostics: remoteResult.ok
-                ? undefined
-                : remoteResult.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-            nextAction: remoteResult.nextAction,
-        };
-    }
-
     // C++ local
     if (target.kind === 'cpp') {
         const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
@@ -235,7 +194,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             durationMs: executed.durationMs > 0 ? executed.durationMs : durationMs,
             changed,
             diagnostics: ok ? undefined : [diag('error', `${T('cmd.cppCleanFailed')}: ${extractCleanError(executed) || T('unknownError')}`)],
-            nextAction: ok ? 'forja build' : 'forja doctor',
+            nextAction: ok ? 'forja build' : 'forja status',
         };
     }
 
@@ -296,7 +255,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             durationMs: executed.durationMs > 0 ? executed.durationMs : undefined,
             changed,
             diagnostics: ok ? undefined : [diag('error', `${T('cmd.qtCleanFailed')}: ${extractCleanError(executed) || T('unknownError')}`)],
-            nextAction: ok ? 'forja build' : 'forja doctor',
+            nextAction: ok ? 'forja build' : 'forja status',
         };
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -306,7 +265,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             workspace,
             activeTarget: target,
             diagnostics: [diag('error', message)],
-            nextAction: 'forja doctor',
+            nextAction: 'forja status',
         };
     }
 }
@@ -317,13 +276,7 @@ export function outputCleanResult(result: CleanResult, wantsJson: boolean): void
     } else {
         if (result.activeTarget) {
             const t = result.activeTarget;
-            if (t.runAt === 'remote' && result.workspace) {
-                const remote = loadRemoteSettings(result.workspace);
-                const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-                console.log(T('execRemote', [server?.name || remote.selectedServer || '']));
-            } else {
-                console.log(T('execLocal'));
-            }
+            console.log(T('execLocal'));
             console.log(`  ${T('target')}: ${t.project}`);
             console.log(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         }

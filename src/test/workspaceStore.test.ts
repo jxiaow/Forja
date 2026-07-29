@@ -10,7 +10,9 @@ import {
     saveWorkspaceConfig,
     resolveWorkroot,
     generateTargetId,
+    findTargetByProject,
     getActiveTarget,
+    relativeProjectPath,
     createEmptyWorkspaceConfig,
     normalizePath,
     workspaceConfigPath,
@@ -83,7 +85,6 @@ test('saveWorkspaceConfig round-trips with all fields', () => {
                 project: 'app/app.pro',
                 mode: 'debug',
                 arch: 'x64',
-                runAt: 'local',
                 toolchain: {
                     qtPath: 'C:/Qt/6.5.3/msvc2019_64',
                     qtVersion: '6.5.3',
@@ -144,7 +145,6 @@ test('sanitizeWorkspaceConfig handles unknown fields gracefully', () => {
                 project: 'app.pro',
                 mode: 'debug',
                 arch: 'x64',
-                runAt: 'local',
                 extraField: true,
                 toolchain: { qtPath: 'D:/Qt', unknownTool: 'ignored' },
             },
@@ -201,7 +201,6 @@ test('workspaceStore ignores legacy projects/ even when workspaces/ has data', (
                 project: 'app.pro',
                 mode: 'debug',
                 arch: 'x64',
-                runAt: 'local',
                 toolchain: { qtPath: 'D:/ModernQt' },
             },
         },
@@ -242,6 +241,24 @@ test('resolveWorkroot does deepest prefix match', () => {
     assert.equal(resolveWorkroot('C:/Code/other'), 'C:/Code');
 });
 
+test('target lookup uses the resolved project path under its workroot', () => {
+    const workroot = path.join(os.tmpdir(), 'forja-workroot-project');
+    const projectPath = path.join(workroot, 'qt_client', 'client.pro');
+    const config = createEmptyWorkspaceConfig(workroot);
+    config.targets['qt-client-debug-x86'] = {
+        id: 'qt-client-debug-x86',
+        name: 'Client',
+        kind: 'qt',
+        project: 'qt_client/client.pro',
+        mode: 'debug',
+        arch: 'x86',
+        toolchain: {},
+    };
+
+    assert.equal(relativeProjectPath(config.workroot, projectPath), 'qt_client/client.pro');
+    assert.equal(findTargetByProject(config, projectPath, 'qt')?.id, 'qt-client-debug-x86');
+});
+
 test('resolveWorkroot does not match partial directory names', () => {
     freshConfigDir();
     saveWorkspacesRegistry({ workroots: ['C:/Code/app'] });
@@ -263,6 +280,16 @@ test('generateTargetId appends hash on collision', () => {
     assert.ok(id.startsWith('qt-app-debug-x64-'));
 });
 
+test('generateTargetId remains unique when the hashed ID also exists', () => {
+    const existing = new Set(['qt-app-debug-x64']);
+    const hashedId = generateTargetId('qt', 'app/app.pro', 'debug', 'x64', existing);
+    existing.add(hashedId);
+
+    const id = generateTargetId('qt', 'app/app.pro', 'debug', 'x64', existing);
+    assert.notEqual(id, hashedId);
+    assert.ok(id.startsWith(`${hashedId}-`));
+});
+
 test('getActiveTarget returns null when no active target', () => {
     const config = createEmptyWorkspaceConfig('C:/Code/test');
     assert.equal(getActiveTarget(config), null);
@@ -278,7 +305,6 @@ test('getActiveTarget returns the active target profile', () => {
         project: 'app.pro',
         mode: 'debug',
         arch: 'x64',
-        runAt: 'local',
         toolchain: {},
     };
     const target = getActiveTarget(config);

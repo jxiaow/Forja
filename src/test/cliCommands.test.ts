@@ -10,11 +10,16 @@
  * 6. i18n 正确性 - 所有输出跟随 locale
  * 7. 路径分隔符一致性 - current 字段正确匹配
  */
-import test, { before, after } from 'node:test';
+import test, { after } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
+import { formatListText } from '../cli/commands/list';
+import { formatStatusText, StatusResult } from '../cli/commands/status';
+import { setGlobalLocale } from '../cli/commands/types';
+import { runRemoteSetup } from '../cli/commands/remote';
+import { getServerById } from '../core/serverStore';
 
 // ── 测试环境 ──
 const TEST_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'forja-deep-test-'));
@@ -30,8 +35,13 @@ const cleanup = () => {
 
 function run(args: string, cwd?: string): { code: number; out: string; err: string } {
     const cliPath = path.join(process.cwd(), 'out', 'cli', 'index.js');
+    const argv = (args.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map(value => {
+        const quoted = (value.startsWith('"') && value.endsWith('"'))
+            || (value.startsWith("'") && value.endsWith("'"));
+        return quoted ? value.slice(1, -1) : value;
+    });
     try {
-        const out = execSync(`node ${cliPath} ${args}`, {
+        const out = execFileSync(process.execPath, [cliPath, ...argv], {
             cwd: cwd || TEST_DIR,
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'pipe'],
@@ -48,12 +58,6 @@ function json(args: string, cwd?: string) {
     const r = run(`${args} --json`, cwd);
     try { return JSON.parse(r.out); } catch { return null; }
 }
-
-before(() => {
-    try { execSync('forja --version', { stdio: 'pipe' }); } catch {
-        throw new Error('forja CLI not installed');
-    }
-});
 
 after(cleanup);
 
@@ -109,7 +113,8 @@ test('list targets current 与 status activeTarget 一致', () => {
     if (statusJ.activeTarget) {
         // 规范化路径比较
         const activeProject = statusJ.activeTarget.project.replace(/\\/g, '/');
-        const currentTarget = listJ.targets?.find((t: { current?: boolean }) => t.current === true);
+        const currentTarget = (Object.values(listJ.targetGroups || {}).flat() as Array<{ current?: boolean; project: string }>)
+            .find((t: { current?: boolean }) => t.current === true);
 
         assert.ok(currentTarget, 'list targets 必须有一个 current=true 的目标');
         const currentProject = currentTarget.project.replace(/\\/g, '/');
@@ -122,21 +127,6 @@ test('list targets current 与 status activeTarget 一致', () => {
 // 3. i18n 正确性（Bug #4/#6）
 // ════════════════════════════════════════════════════════════
 
-test('doctor 输出跟随 locale（中文）', () => {
-    const r = run('doctor --lang zh');
-    // 检查关键标签是中文
-    assert.match(r.out, /诊断/, 'doctor 必须输出中文"诊断"');
-    assert.match(r.out, /工作区/, 'doctor 必须输出中文"工作区"');
-    assert.match(r.out, /后续/, 'doctor 必须输出中文"后续"');
-});
-
-test('doctor 输出跟随 locale（英文）', () => {
-    const r = run('doctor --lang en');
-    assert.match(r.out, /Doctor/, 'doctor 必须输出英文"Doctor"');
-    assert.match(r.out, /Workspace/, 'doctor 必须输出英文"Workspace"');
-    assert.match(r.out, /Next/, 'doctor 必须输出英文"Next"');
-});
-
 test('status 输出跟随 locale', () => {
     const zh = run('status --lang zh');
     assert.match(zh.out, /工作区/, '中文 status 必须包含"工作区"');
@@ -148,36 +138,6 @@ test('status 输出跟随 locale', () => {
 // ═══════════════════════════════════════════════════════════════
 // 4. 输出格式一致性（Bug #3/#9/#11）
 // ═══════════════════════════════════════════════════════════
-
-test('doctor 检查项格式正确（无连体字）', () => {
-    const r = run('doctor --lang zh');
-    const lines = r.out.trim().split('\n');
-
-    for (const line of lines) {
-        // 只检查检查项行（以 ✓/✗/⚠/– 开头的行）
-        if (line.match(/^\s+[✓✗⚠–]/)) {
-            // 检查项的 name:message 部分不应有驼峰连体词（如 InfoRemote, ErrorCould）
-            // 排除路径（包含 \ 或 / 的部分）
-            const withoutPaths = line.replace(/[A-Za-z]:\\[^\s]*/g, '').replace(/\/[^\s]*/g, '');
-            assert.doesNotMatch(withoutPaths, /[a-z][A-Z][a-z]+[A-Z]/,
-                `检查项不应有驼峰连体词: ${line}`);
-        }
-    }
-});
-
-test('diagnostic level 和 message 之间有分隔符', () => {
-    const r = run('doctor');
-    const lines = r.out.trim().split('\n');
-
-    for (const line of lines) {
-        // 如果包含 error/warning 级别标记，后面必须有分隔符
-        if (line.match(/错误|警告|error|warning/i)) {
-            // 级别后面必须有 : 或 ： 或空格
-            assert.match(line, /(错误|警告|error|warning)\s*[:：]\s*/i,
-                `diagnostic 级别后必须有分隔符: ${line}`);
-        }
-    }
-});
 
 test('文本输出标签后紧跟值（无多余空格）', () => {
     const r = run('status --lang zh');
@@ -309,6 +269,12 @@ test('未知参数返回正确错误结构', () => {
     assert.match(r.diagnostics[0].message, /bad-flag|--unknown|Unknown/i);
 });
 
+test('JSON 输出的 nextAction 保留 --json', () => {
+    const r = json('status --bad-flag');
+    assert.ok(r);
+    assert.match(r.nextAction || '', /--json$/);
+});
+
 // ═══════════════════════════════════════════════════════════════
 // 8. JSON 输出完整性
 // ════════════════════════════════════════════════════════════
@@ -401,54 +367,116 @@ test('server remove 不存在的 ID 报错', () => {
 // 10. Use 子命令测试
 // ═══════════════════════════════════════════════════════════════
 
-test('use target --run-at local 设置本地执行', () => {
-    const r = json('use target --run-at local');
-    assert.ok(r);
-    // 可能因为没有 active target 而失败，但必须返回有效 JSON
-    assert.equal(r.action, 'use');
-    // 如果成功，必须包含 changed 字段
-    if (r.ok) {
-        assert.ok(Array.isArray(r.changed), '必须包含 changed 数组');
-    }
-});
-
-test('use target --run-at remote 设置远程执行', () => {
-    const r = json('use target --run-at remote');
-    assert.ok(r);
-    // 可能因为没有配置远程而失败，但必须返回有效 JSON
-    assert.equal(r.action, 'use');
-});
-
-test('use target --run-at 无效值报错', () => {
-    const r = json('use target --run-at invalid');
+test('use target rejects an unknown option', () => {
+    const r = json('use target --execution local');
     assert.ok(r);
     assert.equal(r.ok, false);
+    assert.match(r.diagnostics?.[0]?.message || '', /--execution/);
 });
 
-test('remote --server 设置服务器', () => {
+test('remote setup configures sync and records the server path', () => {
     // 先创建服务器
     const name = `remote-test-${Date.now()}`;
     const addResult = json(`server add --name ${name} --host 1.2.3.4 --username u`);
     assert.ok(addResult.ok);
 
-    // 设置远程
-    const r = json(`remote set --server ${name}`);
-    assert.ok(r);
+    const r = runRemoteSetup(TEST_DIR, { server: name, remotePath: '/srv/projects/cli-app' });
     assert.equal(r.ok, true);
+    assert.deepEqual(getServerById(addResult.server.id)?.remotePathHistory, ['/srv/projects/cli-app']);
 
     // 清理
     run(`server remove ${addResult.server.id} --force`);
 });
 
-test('remote --server 不存在的服务器报错', () => {
-    const r = json('remote set --server nonexistent-server');
-    assert.ok(r);
+test('remote setup rejects a missing server', () => {
+    const r = runRemoteSetup(TEST_DIR, { server: 'nonexistent-server', remotePath: '/srv/projects/cli-app' });
     assert.equal(r.ok, false);
+});
+
+test('remote setup rejects a blank remote path', () => {
+    const r = runRemoteSetup(TEST_DIR, { server: 'nonexistent-server', remotePath: '   ' });
+    assert.equal(r.ok, false);
+    assert.match(r.diagnostics?.[0]?.message ?? '', /path is required/i);
+});
+
+test('status 工具链摘要按实际可执行文件区分 make 和 jom', () => {
+    setGlobalLocale('zh');
+    const base: StatusResult = {
+        ok: true,
+        action: 'status',
+        workspace: '/workspace/app',
+        activeTarget: {
+            id: 'qt-app-release-x64',
+            name: 'qt-app',
+            kind: 'qt',
+            project: 'app.pro',
+            mode: 'release',
+            arch: 'x64',
+            toolchain: {
+                qtPath: '/usr/local/qt5.13.2',
+                qtVersion: '5.13.2',
+                jomPath: '/usr/bin/make',
+            },
+        },
+        readiness: { target: 'ready', toolchain: 'ready' },
+        diagnostics: [],
+    };
+
+    const makeText = formatStatusText(base, 'zh');
+    assert.match(makeText, /工具链: .*make/);
+    assert.doesNotMatch(makeText, /工具链: .*jom/);
+
+    const jomText = formatStatusText({
+        ...base,
+        activeTarget: {
+            ...base.activeTarget!,
+            toolchain: { ...base.activeTarget!.toolchain, jomPath: 'C:\\Qt\\Tools\\jom\\jom.exe' },
+        },
+    }, 'zh');
+    assert.match(jomText, /工具链: .*jom/);
+});
+
+test('remote bootstrap is routed to the existing bootstrap workflow', () => {
+    const workspace = fs.mkdtempSync(path.join(require('os').tmpdir(), 'forja-bootstrap-no-server-'));
+    try {
+        const text = run('remote bootstrap', workspace);
+        assert.equal(text.code, 1);
+        assert.deepEqual(text.out.trimEnd().split(/\r?\n/), [
+            'Error',
+            '  error: No server selected',
+            '',
+            'Next',
+            '  forja remote setup --server <name> --remote-path <path>',
+        ]);
+
+        const r = json('remote bootstrap', workspace);
+        assert.ok(r);
+        assert.equal(r.action, 'bootstrap');
+        assert.equal(r.ok, false);
+        assert.equal(r.nextAction, 'forja remote setup --server <name> --remote-path <path>');
+        assert.doesNotMatch(r.diagnostics?.[0]?.message ?? '', /unknown remote|未知 remote/i);
+
+        const forced = json('remote bootstrap --force', workspace);
+        assert.ok(forced);
+        assert.equal(forced.action, 'bootstrap');
+        assert.equal(forced.ok, false);
+        assert.doesNotMatch(forced.diagnostics?.[0]?.message ?? '', /--force.*只能用于/i);
+    } finally {
+        fs.rmSync(workspace, { recursive: true, force: true });
+    }
 });
 
 // ═══════════════════════════════════════════════════════════════
 // 11. List 详细功能测试
 // ═════════════════════════════════════════════════════════════
+
+test('removed remote subcommands and doctor remote actions are rejected', () => {
+    for (const args of ['remote restore repo path', 'remote reset repo path', 'doctor --remote', 'doctor unlock stale-lock']) {
+        const r = json(args);
+        assert.ok(r, `${args} must return JSON`);
+        assert.equal(r.ok, false, `${args} must be rejected`);
+    }
+});
 
 test('server --detail 显示服务器详情', () => {
     // 创建服务器
@@ -472,15 +500,56 @@ test('list targets --all 显示项目信息', () => {
     assert.ok(r);
     assert.equal(r.action, 'list');
     assert.equal(r.category, 'targets');
-    assert.ok(Array.isArray(r.targets), 'targets 必须是数组');
+    assert.ok(r.targetGroups && typeof r.targetGroups === 'object', 'targetGroups 必须是对象');
 
-    // 每个 target 必须有必要字段
-    for (const t of r.targets) {
+    // 每个 target 必须有必要字段，分组信息只由父级 key 表达
+    for (const t of Object.values(r.targetGroups).flat() as Array<{
+        kind?: string;
+        group?: string;
+        project?: string;
+        current?: boolean;
+        configured?: boolean;
+    }>) {
         assert.ok(t.kind, 'target 必须有 kind');
         assert.ok(t.project, 'target 必须有 project');
+        assert.equal(t.group, undefined, 'target 不应重复携带父级 group');
         assert.ok(typeof t.current === 'boolean', 'target 必须有 current 布尔值');
         assert.ok(typeof t.configured === 'boolean', 'target 必须有 configured 布尔值');
     }
+});
+
+test('list targets --all safely groups prototype-like directory names', async () => {
+    const { runList } = require('../cli/commands/list');
+    const workspace = fs.mkdtempSync(path.join(TEST_DIR, 'prototype-groups-'));
+    for (const group of ['constructor', '__proto__']) {
+        const projectDir = path.join(workspace, group);
+        fs.mkdirSync(projectDir, { recursive: true });
+        fs.writeFileSync(path.join(projectDir, 'CMakeLists.txt'), 'cmake_minimum_required(VERSION 3.14)\n');
+    }
+
+    try {
+        const result = await runList(workspace, 'targets', { savedOnly: false });
+        assert.ok(Object.prototype.hasOwnProperty.call(result.targetGroups || {}, 'constructor'));
+        assert.ok(Object.prototype.hasOwnProperty.call(result.targetGroups || {}, '__proto__'));
+    } finally {
+        fs.rmSync(workspace, { recursive: true, force: true });
+    }
+});
+
+test('list targets text distinguishes saved mode and arch variants', () => {
+    setGlobalLocale('en');
+    const text = formatListText({
+        ok: true,
+        action: 'list',
+        category: 'targets',
+        savedTargets: [
+            { id: 'qt-app-debug-x64', name: 'app debug x64', kind: 'qt', project: 'app.pro', mode: 'debug', arch: 'x64', active: true },
+            { id: 'qt-app-release-x64', name: 'app release x64', kind: 'qt', project: 'app.pro', mode: 'release', arch: 'x64', active: false },
+        ],
+    }, 'en');
+
+    assert.match(text, /app\s+debug\|x64\s+—\s+app\.pro/);
+    assert.match(text, /app\s+release\|x64\s+—\s+app\.pro/);
 });
 
 test('list env 显示工具链信息', () => {
@@ -558,7 +627,7 @@ test('JSON 输出必须可解析', () => {
 // ═════════════════════════════════════════════════════════════
 
 test('所有命令 --help 格式一致', () => {
-    const cmds = ['status', 'init', 'list', 'use', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync'];
+    const cmds = ['status', 'init', 'list', 'use', 'server', 'build', 'run', 'stop', 'clean', 'sync'];
     for (const cmd of cmds) {
         const r = run(`${cmd} --help --lang en`);
         assert.equal(r.code, 0, `${cmd} --help 必须成功`);
@@ -573,30 +642,11 @@ test('forja --version 显示版本号', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 15. E2E 边界测试（使用真实工作区）
+// 15. E2E 边界测试（使用隔离临时工作区）
 // ═══════════════════════════════════════════════════════════════
 
-const REAL_WORKSPACE = 'C:\\Code\\workspace\\260627';
-
-function runE2E(args: string): { code: number; out: string; err: string } {
-    const cliPath = path.join(process.cwd(), 'out', 'cli', 'index.js');
-    try {
-        const out = execSync(`node ${cliPath} ${args}`, {
-            cwd: REAL_WORKSPACE,
-            encoding: 'utf8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-            timeout: 30000,
-        });
-        return { code: 0, out, err: '' };
-    } catch (e: unknown) {
-        const err = e as { status?: number; stdout?: string; stderr?: string };
-        return { code: err.status || 1, out: err.stdout || '', err: err.stderr || '' };
-    }
-}
-
-function jsonE2E(args: string): any {
-    const r = runE2E(`${args} --json`);
-    try { return JSON.parse(r.out); } catch { return null; }
+function jsonE2E(args: string) {
+    return json(args, TEST_DIR);
 }
 
 // ── 15.1 无效的 mode/arch 值 ──
@@ -728,22 +778,7 @@ test('server with invalid subcommand', () => {
     assert.equal(j.ok, false);
 });
 
-// ── 15.6 无效的 run-at 值 ──
-
-test('use target with invalid run-at value', () => {
-    const j = jsonE2E('use target --run-at invalid-location');
-    assert.ok(j);
-    assert.equal(j.ok, false);
-    assert.ok(j.diagnostics?.length > 0);
-});
-
-test('use target with empty run-at', () => {
-    const j = jsonE2E('use target --run-at ""');
-    assert.ok(j);
-    assert.equal(j.ok, false);
-});
-
-// ── 15.7 无效的 auth-mode 值 ──
+// ── 15.6 无效的 auth-mode 值 ──
 
 test('server add with invalid auth-mode', () => {
     const j = jsonE2E('server add --name test-auth --host 192.168.1.100 --username testuser --port 22 --auth-mode invalid-auth');
@@ -758,24 +793,99 @@ test('server add with empty auth-mode', () => {
     assert.equal(j.ok, false);
 });
 
+test('server key auth requires a private key instead of an unused password', () => {
+    const j = jsonE2E('server add --name test-key-password --host 192.168.1.100 --username testuser --auth-mode key --password secret');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.match(j.diagnostics?.[0]?.message ?? '', /private-key-path/);
+});
+
+test('server password auth must be selected explicitly', () => {
+    const j = jsonE2E('server add --name implicit-password --host 192.168.1.100 --username testuser --password secret');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.match(j.diagnostics?.[0]?.message ?? '', /auth-mode password/);
+});
+
+test('server default key auth rejects an explicitly blank private key path', () => {
+    const j = jsonE2E('server add --name blank-key --host 192.168.1.100 --username testuser --private-key-path "   "');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.match(j.diagnostics?.[0]?.message ?? '', /private-key-path/);
+});
+
+test('server update rejects password when selecting key auth', () => {
+    const added = jsonE2E('server add --name update-key-auth --host 192.168.1.100 --username testuser --auth-mode password --password secret');
+    assert.equal(added.ok, true);
+
+    const updated = jsonE2E(`server update ${added.server.id} --auth-mode key --password secret`);
+    assert.equal(updated.ok, false);
+    assert.match(updated.diagnostics?.[0]?.message ?? '', /auth-mode password/);
+
+    run(`server remove ${added.server.id} --force`, TEST_DIR);
+});
+
+test('server update cannot store a password while remaining in key mode', () => {
+    const added = jsonE2E('server add --name update-key-password --host 192.168.1.100 --username testuser --auth-mode key --private-key-path id_rsa');
+    assert.equal(added.ok, true);
+
+    const updated = jsonE2E(`server update ${added.server.id} --password secret`);
+    assert.equal(updated.ok, false);
+    assert.match(updated.diagnostics?.[0]?.message ?? '', /auth-mode password/);
+
+    run(`server remove ${added.server.id} --force`, TEST_DIR);
+});
+
+test('server rejects conflicting strict host key flags', () => {
+    const j = jsonE2E('server add --name strict-conflict --host 192.168.1.100 --username testuser --strict-host-key-checking --no-strict-host-key-checking');
+    assert.ok(j);
+    assert.equal(j.ok, false);
+    assert.match(j.diagnostics?.[0]?.message ?? '', /strict-host-key-checking/);
+});
+
 // ── 15.8 空值/空白值 ──
 
 test('server add with whitespace name', () => {
     const j = jsonE2E('server add --name "   " --host 192.168.1.100 --username testuser --port 22');
     assert.ok(j);
-    assert.ok(j.ok !== undefined);
+    assert.equal(j.ok, false);
 });
 
 test('server add with whitespace host', () => {
     const j = jsonE2E('server add --name test-ws-host --host "   " --username testuser --port 22');
     assert.ok(j);
-    assert.ok(j.ok !== undefined);
+    assert.equal(j.ok, false);
 });
 
 test('server add with whitespace username', () => {
     const j = jsonE2E('server add --name test-ws-user --host 192.168.1.100 --username "   " --port 22');
     assert.ok(j);
-    assert.ok(j.ok !== undefined);
+    assert.equal(j.ok, false);
+});
+
+test('server update rejects whitespace required fields', () => {
+    const added = jsonE2E('server add --name update-ws --host 192.168.1.100 --username testuser --port 22');
+    assert.equal(added.ok, true);
+
+    for (const flag of ['--name', '--host', '--username']) {
+        const updated = jsonE2E(`server update ${added.server.id} ${flag} "   "`);
+        assert.equal(updated.ok, false);
+        assert.equal(updated.serverAction, 'update');
+    }
+
+    run(`server remove ${added.server.id} --force`, TEST_DIR);
+});
+
+test('server update invalid integer reports update protocol', () => {
+    const added = jsonE2E('server add --name update-port --host 192.168.1.100 --username testuser --port 22');
+    assert.equal(added.ok, true);
+
+    const updated = jsonE2E(`server update ${added.server.id} --port 22.5`);
+    assert.equal(updated.ok, false);
+    assert.equal(updated.serverAction, 'update');
+    assert.match(updated.nextAction, /^forja server update /);
+
+    run(`server remove ${added.server.id} --force`, TEST_DIR);
 });
 
 // ── 15.9 冲突的 flag ──
@@ -845,21 +955,6 @@ test('server remove with empty ID', () => {
     assert.equal(j.ok, false);
 });
 
-// ── 15.13 无效的锁 ID ──
-
-test('doctor unlock with nonexistent lock ID', () => {
-    const j = jsonE2E('doctor unlock nonexistent-lock-id');
-    assert.ok(j);
-    assert.equal(j.ok, false);
-    assert.ok(j.diagnostics?.length > 0);
-});
-
-test('doctor unlock with empty lock ID', () => {
-    const j = jsonE2E('doctor unlock ""');
-    assert.ok(j);
-    assert.equal(j.ok, false);
-});
-
 // ── 15.14 无效的文件路径 ──
 
 test('sync with nonexistent file', () => {
@@ -905,16 +1000,32 @@ test('server add with valid params and unknown flag', () => {
 
 // ── 15.17 无效的远程路径 ──
 
-test('remote set with empty remote path', () => {
-    const j = jsonE2E('remote set --server test-server --remote-path ""');
+test('removed remote set is unavailable', () => {
+    const j = jsonE2E('remote set --server test-server --remote-path "/srv/test"');
     assert.ok(j);
     assert.equal(j.ok, false);
 });
 
-test('remote set with whitespace remote path', () => {
-    const j = jsonE2E('remote set --server test-server --remote-path "   "');
-    assert.ok(j);
-    assert.equal(j.ok, false);
+test('use target answers file completes missing variant selection', async () => {
+    const { runUseTarget } = require('../cli/commands/use');
+    const workspace = fs.mkdtempSync(path.join(TEST_DIR, 'use-target-answers-'));
+    const answers = path.join(workspace, 'answers.json');
+    fs.writeFileSync(path.join(workspace, 'CMakeLists.txt'), 'cmake_minimum_required(VERSION 3.14)\n');
+    fs.writeFileSync(answers, JSON.stringify({ mode: 'release', arch: 'x64' }));
+
+    try {
+        const result = await runUseTarget(workspace, {
+            project: 'CMakeLists.txt',
+            answers,
+            interactive: false,
+            json: true,
+        });
+        const questionIds = (result.questions || []).map((question: { id: string }) => question.id);
+        assert.equal(questionIds.includes('mode'), false);
+        assert.equal(questionIds.includes('arch'), false);
+    } finally {
+        fs.rmSync(workspace, { recursive: true, force: true });
+    }
 });
 
 // ── 15.18 无效的忽略模式 ──

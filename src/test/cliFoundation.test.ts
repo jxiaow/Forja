@@ -84,7 +84,6 @@ test('saveWorkspaceConfig + loadWorkspaceConfig round-trip', () => {
         project: 'apps/client/client.pro',
         mode: 'debug',
         arch: 'x64',
-        runAt: 'local',
         toolchain: { qtPath: '/qt/6.5', vsInstall: '/vs/2019' },
     };
     config.targets[profile.id] = profile;
@@ -108,7 +107,6 @@ test('saveWorkspaceConfig cpp kind round-trip', () => {
         project: 'cpp/NemoSDK.sln',
         mode: 'release',
         arch: 'x86',
-        runAt: 'remote',
         toolchain: { vsInstall: '/vs/2022' },
     };
     config.targets[profile.id] = profile;
@@ -117,7 +115,6 @@ test('saveWorkspaceConfig cpp kind round-trip', () => {
 
     const loaded = loadWorkspaceConfig(ws);
     assert.equal(loaded.targets['cpp-lib-release-x86'].kind, 'cpp');
-    assert.equal(loaded.targets['cpp-lib-release-x86'].runAt, 'remote');
 });
 
 test('loadWorkspaceConfig sanitizes invalid data', () => {
@@ -130,7 +127,6 @@ test('loadWorkspaceConfig sanitizes invalid data', () => {
         project: 'test.pro',
         mode: 'debug',
         arch: 'x64',
-        runAt: 'local',
         toolchain: {},
     };
     config.activeTarget = 'bad';
@@ -211,7 +207,6 @@ test('getActiveTarget (CLI) returns target when saved', () => {
         project: 'a.pro',
         mode: 'debug',
         arch: 'x86',
-        runAt: 'local',
         toolchain: { qtPath: '/qt' },
     };
     config.activeTarget = 'qt-a-debug-x86';
@@ -239,7 +234,6 @@ test('requireActiveTarget returns target when exists', () => {
         project: 'b.sln',
         mode: 'release',
         arch: 'x86',
-        runAt: 'local',
         toolchain: {},
     };
     config.activeTarget = 'cpp-b-release-x86';
@@ -277,7 +271,6 @@ test('collectTargetCandidates marks current target from workspaceStore', () => {
         project: 'app/app.pro',
         mode: 'debug',
         arch: 'x64',
-        runAt: 'local',
         toolchain: {},
     };
     config.activeTarget = 'qt-app-debug-x64';

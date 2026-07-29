@@ -6,6 +6,7 @@ node_modules/
 .vscode-test/
 .opencode/
 .superpowers/
+docs/operations/
 .forja/
 .reasonix/
 .qwen/  
