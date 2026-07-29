@@ -7,6 +7,7 @@ import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
          getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath,
          getFileSyncPromptEnabled, getQmakeReminderEnabled } from '../../core/configService';
 import { createLogger } from '../../core/logger';
+import { getEffectiveProjectName } from '../../core/projectDisplay';
 
 const logger = createLogger('ConfigPanelView');
 
@@ -82,7 +83,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         const state = getState();
         const env = state.envInfo;
         const project = state.currentProject;
-        logger.info(`项目: ${project ? project.target : '无'}`);
+        logger.info(`项目: ${getEffectiveProjectName(project, getQmakeTarget(), '无')}`);
         const data: TemplateData = {
             env,
             project,

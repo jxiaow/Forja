@@ -1,10 +1,11 @@
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 
 let _channel: vscode.OutputChannel | null = null;
 
 export function initLogger(): vscode.OutputChannel {
     if (!_channel) {
-        _channel = vscode.window.createOutputChannel('Qt Pilot');
+        const vscodeApi = require('vscode') as typeof vscode;
+        _channel = vscodeApi.window.createOutputChannel('Qt Pilot');
     }
     return _channel;
 }

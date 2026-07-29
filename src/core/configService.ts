@@ -3,6 +3,8 @@ import * as path from 'path';
 import { BuildConfig } from '../platform/builder';
 import { getState } from './stateManager';
 import { decodeSelectedProject } from './selectedProject';
+import { resolveBuildConfig, mergeConfigInputs } from '../coreCli/configResolver';
+import { readLocalCache, readLocalConfig } from '../coreCli/localState';
 
 // ── 配置读取 ──
 
@@ -78,36 +80,76 @@ export function getBuildConfig(): BuildConfig {
     const root = getWorkspaceRoot();
     const project = state.currentProject;
     const env = state.envInfo;
-    let projectDir = '';
+
+    let projectPath: string | null = null;
     if (project) {
-        // proPath 是绝对路径，最可靠
         if (project.proPath) {
-            projectDir = path.dirname(project.proPath);
-        } else if (project.projectDir) {
-            projectDir = path.isAbsolute(project.projectDir)
+            projectPath = project.proPath;
+        } else if (project.projectDir && project.proFile) {
+            const dir = path.isAbsolute(project.projectDir)
                 ? project.projectDir
                 : path.join(root, project.projectDir);
+            projectPath = path.join(dir, project.proFile);
         }
     }
-    return {
-        vsDevShell: getVsDevShellPath() || env?.vs?.devShellPath || '',
-        qtPath: getQtPath() || env?.qt?.path || '',
-        projectDir,
-        proFile: project?.proFile || '',
-        arch: state.arch,
-        mode: state.mode,
-        qmakeTarget: getQmakeTarget()
-    };
+
+    // Priority: VSCode settings > env detection > .work/qt-pilot/config.json > .work/qt-pilot/cache.json > defaults
+    const localCache = root ? readLocalCache(root) : null;
+    const localConfig = root ? readLocalConfig(root) : null;
+
+    const inputs = mergeConfigInputs(
+        // Lowest priority: local cache (auto-detected values)
+        {
+            qtPath: localCache?.detected.qt?.path || '',
+            vsDevShell: localCache?.detected.vs?.devShellPath || ''
+        },
+        // Environment detection from extension (same level as cache, but fresher)
+        {
+            qtPath: env?.qt?.path || '',
+            vsDevShell: env?.vs?.devShellPath || ''
+        },
+        // Local config (user-saved CLI config — higher than auto-detection)
+        {
+            qtPath: localConfig?.qtPath || '',
+            vsDevShell: localConfig?.vsDevShell || ''
+        },
+        // Highest priority: explicit VSCode settings + current state
+        {
+            workspace: root,
+            projectPath,
+            mode: state.mode,
+            arch: state.arch,
+            qtPath: getQtPath(),
+            vsDevShell: getVsDevShellPath(),
+            qmakeTarget: getQmakeTarget()
+        }
+    );
+
+    return resolveBuildConfig(inputs);
 }
 
 // ── 路径解析 ──
 
 export function getEffectiveVsDevShell(): string {
     const state = getState();
-    return getVsDevShellPath() || state.envInfo?.vs?.devShellPath || '';
+    const root = getWorkspaceRoot();
+    const localConfig = root ? readLocalConfig(root) : null;
+    const localCache = root ? readLocalCache(root) : null;
+    return getVsDevShellPath()
+        || localConfig?.vsDevShell
+        || state.envInfo?.vs?.devShellPath
+        || localCache?.detected.vs?.devShellPath
+        || '';
 }
 
 export function getEffectiveQtPath(): string {
     const state = getState();
-    return getQtPath() || state.envInfo?.qt?.path || '';
+    const root = getWorkspaceRoot();
+    const localConfig = root ? readLocalConfig(root) : null;
+    const localCache = root ? readLocalCache(root) : null;
+    return getQtPath()
+        || localConfig?.qtPath
+        || state.envInfo?.qt?.path
+        || localCache?.detected.qt?.path
+        || '';
 }

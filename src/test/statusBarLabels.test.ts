@@ -22,4 +22,19 @@ test('status bar uses full display label instead of short label text', () => {
 
     assert.doesNotMatch(source, /_modeShortLabel/);
     assert.match(source, /_modeDisplayLabel/);
+    assert.match(source, /getEffectiveProjectName/);
+});
+
+test('project selection and logs use effective project display helpers', () => {
+    const projectManagerPath = path.join(process.cwd(), 'src', 'project', 'projectManager.ts');
+    const projectManagerSource = fs.readFileSync(projectManagerPath, 'utf8');
+    const configPanelPath = path.join(process.cwd(), 'src', 'ui', 'configPanel', 'index.ts');
+    const configPanelSource = fs.readFileSync(configPanelPath, 'utf8');
+    const messageHandlerPath = path.join(process.cwd(), 'src', 'ui', 'configPanel', 'messageHandler.ts');
+    const messageHandlerSource = fs.readFileSync(messageHandlerPath, 'utf8');
+
+    assert.match(projectManagerSource, /getProjectSelectionLabel/);
+    assert.match(projectManagerSource, /切换项目 · 当前/);
+    assert.match(configPanelSource, /getEffectiveProjectName/);
+    assert.match(messageHandlerSource, /getEffectiveProjectName/);
 });

@@ -1,4 +1,4 @@
-import { BuildConfig } from './builder';
+import { BuildConfig } from './shellPlan';
 
 export interface PlatformConfig {
     shellExecutable: string | null;

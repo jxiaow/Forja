@@ -1,6 +1,8 @@
 out/
+cli/out/
 node_modules/
 *.vsix
 .vscode-test/
 .opencode/
 .superpowers/
+.work/

@@ -13,6 +13,8 @@ import { registerDebugSessionWatcher, startDebug } from './build/debugger';
 import { generateCppProperties } from './build/configGenerator';
 import { createLogger, initLogger } from './core/logger';
 import { detectEnv } from './env/envDetector';
+import { writeLocalCache, ensureLocalStateDir, LocalCache } from './coreCli/localState';
+import { scanProFiles } from './coreCli/projectScanner';
 
 const logger = createLogger('Extension');
 
@@ -49,6 +51,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     detectEnv(getQtPath(), getVsDevShellPath()).then((env) => {
         setState('envInfo', env);
         logger.info('启动环境检测完成');
+
+        // 写入 .work/qt-pilot/cache.json 供 CLI 读取
+        const wsRoot = getWorkspaceRoot();
+        if (wsRoot) {
+            try {
+                const qtPath = env.qt?.path || '';
+                const cache: LocalCache = {
+                    version: 1,
+                    updatedAt: new Date().toISOString(),
+                    detected: {
+                        qt: qtPath ? {
+                            path: qtPath,
+                            qmake: path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake')
+                        } : null,
+                        vs: env.vs?.devShellPath ? { devShellPath: env.vs.devShellPath } : null,
+                        projects: scanProFiles(wsRoot).map(rel => path.join(wsRoot, rel))
+                    }
+                };
+                ensureLocalStateDir(wsRoot);
+                writeLocalCache(wsRoot, cache);
+                logger.info('cache.json 已更新');
+            } catch (e) {
+                logger.warn(`写入 cache.json 失败: ${e instanceof Error ? e.message : e}`);
+            }
+        }
     }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
 
     // 启动时优先恢复手动指定项目，其次再走工作区扫描/记忆选择

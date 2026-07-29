@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "qt-pilot": {
+      "command": "node",
+      "args": ["out/mcp/server.js"],
+      "cwd": "<path-to-qt-pilot-extension>",
+      "disabled": false,
+      "autoApprove": ["qt_status", "qt_detect", "qt_projects"]
+    }
+  }
+}

@@ -112,20 +112,30 @@ VSCode 扩展，为基于 qmake 的 Qt/C++ 项目提供构建、运行、调试�
 | `qtPilot.qtPath` | string | Qt 路径（留空自动检测） |
 | `qtPilot.designerPath` | string | Qt Designer 可执行文件路径（留空则自动推断） |
 | `qtPilot.vsDevShellPath` | string | `Launch-VsDevShell.ps1` 路径（留空自动检测） |
-| `qtPilot.selectedProject` | string | 当前选中的 `.pro` 文件记录（扩展内部维护） |
+| `qtPilot.selectedProject` | object | 当前选中的 `.pro` 文件记录（扩展内部维护） |
 | `qtPilot.manualProPath` | string | 手动指定 `.pro` 文件绝对路径 |
 | `qtPilot.qmakeTarget` | string | QMake TARGET 覆盖（留空使用默认） |
 | `qtPilot.arch` | `x86`/`x64` | 目标架构，默认 `x86` |
+| `qtPilot.mode` | `debug`/`release` | 构建模式，默认 `debug` |
 | `qtPilot.cStandard` | string | IntelliSense C 标准，默认 `c11` |
 | `qtPilot.cppStandard` | string | IntelliSense C++ 标准，默认 `c++11` |
 | `qtPilot.scanExcludeDirs` | string[] | 生成 IntelliSense 时额外排除的目录 |
+| `qtPilot.fileSyncPromptEnabled` | boolean | 文件变更时是否提示同步 .pri/.pro |
+| `qtPilot.qmakeReminderEnabled` | boolean | .pro/.pri 变更后是否提示重新 QMake |
 
 ---
 
 ## 注意事项
 
 - **Windows**：需要安装 Visual Studio（含 MSVC 工具链），构建使用 `jom`（Qt 自带）或 `nmake`
+- **Linux**：需要安装 `gcc`/`g++` 和 `make`，Qt 需在 PATH 中或通过配置指定
 - **Run/Debug**：依赖 qmake 生成的 `Makefile` 来确定可执行文件路径，请确保在 Run/Debug 前已执行过 QMake
 - **调试**：需要安装 [C/C++ 扩展](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools)
 - **Qt Designer**：优先使用 `qtPilot.designerPath`，否则尝试从 `qtPilot.qtPath` 推断
 - `.pri`/`.pro` 文件变更后会提示重新运行 QMake
+
+---
+
+## CLI 和 MCP Server
+
+Qt Pilot 还提供独立的命令行工具和 MCP Server，供脚本和 AI 编程工具使用。安装方式：`npm install -g qt-pilot-cli`。

@@ -2,8 +2,9 @@ import * as vscode from 'vscode';
 import { detectEnv } from '../../env/envDetector';
 import { generateCppProperties, updateCppPropertiesStandard } from '../../build/configGenerator';
 import { getState, setState } from '../../core/stateManager';
-import { updateConfig, getQtPath, getVsDevShellPath } from '../../core/configService';
+import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget } from '../../core/configService';
 import { createLogger } from '../../core/logger';
+import { getEffectiveProjectName } from '../../core/projectDisplay';
 
 const logger = createLogger('ConfigPanel');
 
@@ -125,7 +126,7 @@ export async function handleMessage(
             if (msg.cppStandard) { await updateConfig('cppStandard', msg.cppStandard); }
             const project = getState().currentProject;
             if (project) {
-                logger.info(`项目: ${project.proFile}`);
+                logger.info(`项目: ${getEffectiveProjectName(project, getQmakeTarget(), project.proFile)}`);
                 generateCppProperties(project);
             } else {
                 logger.warn('无项目，无法生成 IntelliSense');
