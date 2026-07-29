@@ -125,15 +125,26 @@ export async function runStop(workspace: string, options: { json?: boolean } = {
             if (!isProcessRunning(pid)) { stillRunning = false; break; }
         }
         if (stillRunning) {
-            return {
-                ok: false,
-                action: 'stop',
-                workspace,
-                activeTarget: target,
-                state: 'running',
-                diagnostics: [diag('warning', `${T('cmd.stopStillRunningDetail')} (pid ${pid}), SIGTERM ${T('stopTerminateFailed')}`)],
-                nextAction: 'forja doctor',
-            };
+            // Escalate to SIGKILL
+            try {
+                process.kill(pid, 'SIGKILL');
+                for (let i = 0; i < 5; i++) {
+                    await delay(200);
+                    if (!isProcessRunning(pid)) { stillRunning = false; break; }
+                }
+            } catch { /* ignore — process may have exited */ }
+
+            if (stillRunning) {
+                return {
+                    ok: false,
+                    action: 'stop',
+                    workspace,
+                    activeTarget: target,
+                    state: 'running',
+                    diagnostics: [diag('warning', `${T('cmd.stopStillRunningDetail')} (pid ${pid})`)],
+                    nextAction: 'forja doctor',
+                };
+            }
         }
     }
 

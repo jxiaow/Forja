@@ -5,7 +5,7 @@
 import { executePreparedRemoteAction } from './pipeline';
 import { RemoteBridgeAction, RemoteBridgeTarget } from './bridge';
 import { createSshRunner, createScpUploader } from './shell';
-import { loadRemoteSettings, loadSyncSettings } from '../../core/settingsIO';
+import { loadRemoteSettings } from '../../core/settingsIO';
 import { getServerById } from '../../core/serverStore';
 
 export interface RemotePlanOptions {
@@ -42,10 +42,9 @@ export async function executeRemotePlan(options: RemotePlanOptions): Promise<Rem
 
     // Load settings
     const remoteSettings = loadRemoteSettings(workspace);
-    const syncSettings = loadSyncSettings(workspace);
 
-    // Resolve server and remote path - prefer remoteSettings, fallback to syncSettings
-    const serverId = remoteSettings.selectedServer || syncSettings.selectedServer;
+    // Resolve server and remote path
+    const serverId = remoteSettings.selectedServer;
     if (!serverId) {
         return {
             ok: false,
@@ -69,7 +68,7 @@ export async function executeRemotePlan(options: RemotePlanOptions): Promise<Rem
         };
     }
 
-    const remotePath = remoteSettings.remotePaths[serverId] || syncSettings.remotePaths[serverId];
+    const remotePath = remoteSettings.remotePaths[serverId];
     if (!remotePath) {
         return {
             ok: false,
@@ -134,11 +133,10 @@ export async function executeRemotePlan(options: RemotePlanOptions): Promise<Rem
  */
 export function buildRemoteShellCommand(workspace: string, action: string): string {
     const remoteSettings = loadRemoteSettings(workspace);
-    const syncSettings = loadSyncSettings(workspace);
-    const serverId = remoteSettings.selectedServer || syncSettings.selectedServer;
+    const serverId = remoteSettings.selectedServer;
     if (!serverId) { return `ssh <server> "cd <remotePath> && forja ${action}"`; }
     const server = getServerById(serverId);
     if (!server) { return `ssh <server> "cd <remotePath> && forja ${action}"`; }
-    const remotePath = remoteSettings.remotePaths[serverId] || syncSettings.remotePaths[serverId] || '<remotePath>';
+    const remotePath = remoteSettings.remotePaths[serverId] || '<remotePath>';
     return `ssh ${server.username}@${server.host} "cd ${remotePath} && forja ${action}"`;
 }

@@ -4,15 +4,17 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { requireActiveTarget, tryPinnedProjectFallback, stripJsonFlag } from './activeTarget';
+import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner';
 import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
+import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
 import { createSdkPlan } from '../../sdk/shared/plan';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, diag, T } from './types';
-import { loadQtSettings, loadSdkSettings, loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 import { getServerById } from '../../core/serverStore';
 
 export type BuildAction = 'default' | 'fresh' | 'qmake' | 'rcc';
@@ -33,13 +35,14 @@ export interface BuildResult {
     nextAction?: string;
 }
 
-function buildQtCliOptions(workspace: string, target: ActiveTarget, action: BuildAction, plan: boolean): CliOptions {
+function buildQtCliOptions(workspace: string, target: ActiveTarget, action: BuildAction, plan: boolean, qmakeArgs?: string): CliOptions {
     let qtAction: CliOptions['action'];
     switch (action) {
         case 'qmake': qtAction = 'qmake'; break;
         case 'rcc': qtAction = 'rcc'; break;
         default: qtAction = 'build'; break;
     }
+    const vsDevShell = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
     return {
         action: qtAction,
         executionMode: plan ? 'dryRun' : 'execute',
@@ -47,10 +50,10 @@ function buildQtCliOptions(workspace: string, target: ActiveTarget, action: Buil
         project: target.project,
         mode: target.mode,
         arch: target.arch,
-        qtPath: null,
-        vsDevShell: null,
-        target: null,
-        qmakeArgs: null,
+        qtPath: target.toolchain.qtPath || null,
+        vsDevShell: vsDevShell,
+        target: target.toolchain.qmakeTarget || null,
+        qmakeArgs: qmakeArgs || null,
         detach: false,
         saveLocal: false,
         json: false,
@@ -76,31 +79,38 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 nextAction: 'forja list targets',
             };
         }
-        if (!fs.existsSync(projectPath)) {
+        // Resolve to absolute for existence check, then store as relative for remote compatibility
+        const absolutePath = path.isAbsolute(projectPath) ? projectPath : path.join(workspace, projectPath);
+        if (!fs.existsSync(absolutePath)) {
             return {
                 ok: false, action: 'build', buildAction, workspace,
                 diagnostics: [diag('error', `${T('cmd.projectNotFound')}: ${projectPath}`)],
                 nextAction: 'forja list targets',
             };
         }
-        const qtSettings = loadQtSettings(workspace);
-        const sdkSettings = loadSdkSettings(workspace);
+        const relativeProject = path.isAbsolute(projectPath)
+            ? path.relative(workspace, absolutePath).replace(/\\/g, '/')
+            : projectPath;
+        const earlyWorkroot = resolveWorkroot(workspace);
+        const wsConfigEarly = earlyWorkroot ? loadWorkspaceConfig(earlyWorkroot) : null;
+        const allTargets = wsConfigEarly ? Object.values(wsConfigEarly.targets) : [];
+        const savedProfile = allTargets.find(t => t.kind === kind && t.id === wsConfigEarly?.activeTarget)
+            || allTargets.find(t => t.kind === kind)
+            || null;
         targetResult = {
-            target: {
+            target: savedProfile || {
+                id: '',
+                name: '',
                 kind,
-                project: projectPath,
-                mode: kind === 'qt' ? (qtSettings.mode || 'debug') : (sdkSettings.mode || 'debug'),
-                arch: kind === 'qt' ? (qtSettings.arch || 'x86') : (sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')),
-                runAt: 'local',
+                project: relativeProject,
+                mode: 'debug' as const,
+                arch: (process.platform === 'win32' ? 'x86' : 'x64') as 'x86' | 'x64',
+                runAt: 'local' as const,
+                toolchain: {},
             },
         };
     } else {
         targetResult = requireActiveTarget(workspace);
-    }
-
-    // Fallback: if no activeTarget but SDK has pinnedProject, synthesize target from SDK config
-    if ('error' in targetResult) {
-        targetResult = tryPinnedProjectFallback(workspace, targetResult);
     }
 
     if ('error' in targetResult) {
@@ -114,7 +124,8 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         };
     }
     const target = targetResult.target;
-    const qtSettings = loadQtSettings(workspace);
+    const earlyWsConfig = resolveWorkroot(workspace) ? loadWorkspaceConfig(resolveWorkroot(workspace)!) : null;
+    const suppressedWarnings = earlyWsConfig?.qtModulePrefs.suppressedWarnings ?? [];
 
     // Print build header before execution (text mode only)
     if (!wantsJson && !options.plan) {
@@ -127,6 +138,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         }
         console.log(`  ${T('target')}${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
+        if (target.toolchain.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.toolchain.qmakeTarget}`); }
         console.log();
     }
 
@@ -214,8 +226,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     if (target.kind === 'sdk') {
         try {
             const sdkAction = buildAction === 'fresh' ? 'rebuild' : 'build';
-            const sdkSettings = loadSdkSettings(workspace);
-            const vsDevCmdPath = resolveVsDevCmdPath(sdkSettings.vsInstall);
+            const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
             const plan = createSdkPlan({
                 action: sdkAction as 'build' | 'rebuild' | 'clean',
                 workspace,
@@ -237,7 +248,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             }
 
             const started = Date.now();
-            const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false, suppressedWarnings: qtSettings.suppressedWarnings });
+            const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false, suppressedWarnings });
             const durationMs = Date.now() - started;
 
             const ok = executed.exitCode === 0;
@@ -253,7 +264,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 warningSummary: executed.warningSummary,
                 logFile: executed.logFile ?? undefined,
                 diagnostics: ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.sdkBuildFailed')} (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : T('cmd.sdkBuildFailed'))],
-                nextAction: ok ? undefined : 'forja doctor',
+                nextAction: ok ? undefined : (executed.errors?.length ? undefined : 'forja doctor'),
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -270,16 +281,19 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     }
 
     // Qt local
-    const cliOptions = buildQtCliOptions(workspace, target, buildAction, options.plan ?? false);
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
+    const cliOptions = buildQtCliOptions(workspace, target, buildAction, options.plan ?? false, qmakeArgs);
 
     try {
         // fresh = clean first, then build
         if (buildAction === 'fresh' && !options.plan) {
-            const cleanOpts = buildQtCliOptions(workspace, target, 'default', false);
+            const cleanOpts = buildQtCliOptions(workspace, target, 'default', false, qmakeArgs);
             cleanOpts.action = 'clean';
             const cleanPlan = await createActionPlan(cleanOpts);
             if (cleanPlan.ok && cleanPlan.commands.length > 0) {
-                const cleanResult = await runCliResult(cleanPlan, { streaming: false, detach: false, suppressedWarnings: qtSettings.suppressedWarnings });
+                const cleanResult = await runCliResult(cleanPlan, { streaming: false, detach: false, suppressedWarnings });
                 if (!cleanResult.ok) {
                     return {
                         ok: false,
@@ -310,7 +324,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
 
         if (options.plan) {
             if (buildAction === 'fresh') {
-                const cleanOpts = buildQtCliOptions(workspace, target, 'default', true);
+                const cleanOpts = buildQtCliOptions(workspace, target, 'default', true, qmakeArgs);
                 cleanOpts.action = 'clean';
                 const cleanPlan = await createActionPlan(cleanOpts);
                 const combinedCommands = [...(cleanPlan.ok ? cleanPlan.commands : []), ...planned.commands];
@@ -339,10 +353,16 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             const runtimeInfo = resolveRuntimeTarget(projectDir, target.mode, target.arch);
             if (runtimeInfo?.exePath) {
                 terminateExecutable(runtimeInfo.exePath);
+            } else {
+                // Makefile mismatch or unresolved — fall back to saved run state
+                const state = readRunState(workspace);
+                if (state?.executablePath) {
+                    terminateExecutable(state.executablePath);
+                }
             }
         }
 
-        const executed = await runCliResult(planned, { streaming: !wantsJson, detach: false, suppressedWarnings: qtSettings.suppressedWarnings });
+        const executed = await runCliResult(planned, { streaming: !wantsJson, detach: false, suppressedWarnings });
         return {
             ok: executed.ok,
             action: 'build',
@@ -355,7 +375,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             warningSummary: executed.warningSummary,
             logFile: executed.logFile ?? undefined,
             diagnostics: executed.ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.qtBuildFailed')} (${executed.errors.length} error${executed.errors.length > 1 ? 's' : ''})` : T('cmd.qtBuildFailed'))],
-            nextAction: executed.ok ? 'forja run' : 'forja doctor',
+            nextAction: executed.ok ? 'forja run' : (executed.errors?.length ? undefined : 'forja doctor'),
         };
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -379,7 +399,8 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
         console.log(`${T('build')} ${status}`);
         if (result.activeTarget) {
             const t = result.activeTarget;
-            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}`);
+            const qt = t.toolchain.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}` : '';
+            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
         }
         if (result.durationMs) {
             console.log(`${T('duration')}${result.durationMs}ms`);

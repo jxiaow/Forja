@@ -1,14 +1,27 @@
 /**
- * 统一配置存储 — 配置文件位于 ~/.forja/projects/
+ * 统一配置存储 — Qt/SDK 从 workspaceStore 读写，Sync/Remote 仍走 settingsIO。
  *
- * 纯 IO 逻辑在 settingsIO.ts 中，本模块负责 vscode 集成（workspace 路径、文件监听）。
- * 对外暴露 Qt / SDK / Sync 三个子模块的读写 API。
+ * Qt / SDK 配置已迁移到 workroot-based workspaceStore（~/.forja/workspaces/<hash>.json）。
+ * Sync / Remote 配置仍使用 settingsIO（~/.forja/projects/<hash>.json）。
+ *
+ * 对外暴露 Qt / SDK / Sync 三个子模块的读写 API，消费方无需感知底层存储差异。
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { createLogger } from './logger';
-import { ForjaSettings, QtSettings, SdkSettings, SyncSettings, DEFAULT_SETTINGS, loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings, saveQtSettings, saveSdkSettings, saveSyncSettings, projectsDir } from '../core/settingsIO';
+import { ForjaSettings, QtSettings, SdkSettings, SyncSettings, DEFAULT_SETTINGS, loadSyncSettings, saveSyncSettings, loadRemoteSettings, projectsDir } from '../core/settingsIO';
 import { resolveProjectRoot } from './workspaceResolver';
+import {
+    resolveWorkroot,
+    loadWorkspaceConfig,
+    saveWorkspaceConfig,
+    getActiveTarget,
+    workspacesDir,
+    DEFAULT_QT_MODULE_PREFS,
+    type WorkspaceConfig,
+    type TargetProfile,
+    type QtModulePrefs,
+} from '../core/workspaceStore';
 
 export type { ForjaSettings, QtSettings, SdkSettings, SyncSettings } from '../core/settingsIO';
 export { DEFAULT_SETTINGS, DEFAULT_QT, DEFAULT_SDK, DEFAULT_SYNC, resolveVsDevShellPath, resolveVsDevCmdPath } from '../core/settingsIO';
@@ -30,28 +43,227 @@ function _getWorkspace(module: 'qt' | 'sdk' | 'sync' = 'qt'): string | null {
     return root || null;
 }
 
-function _load(): ForjaSettings {
-    const qtWs = _getWorkspace('qt');
-    const sdkWs = _getWorkspace('sdk');
-    const syncWs = _getWorkspace('sync');
+/** 从 workspace 路径解析 workroot（用于 workspaceStore 查找） */
+function _resolveWorkrootForModule(module: 'qt' | 'sdk'): string | null {
+    const ws = _getWorkspace(module);
+    if (!ws) { return null; }
+    return resolveWorkroot(ws);
+}
+
+// ── Build QtSettings from workspaceStore ──
+
+function _buildQtSettings(config: WorkspaceConfig, target: TargetProfile | null): QtSettings {
+    const prefs = config.qtModulePrefs;
+    const d = DEFAULT_SETTINGS.qt;
+
+    let pinnedProject: QtSettings['pinnedProject'] = null;
+    if (target && target.project) {
+        pinnedProject = { root: config.workroot, relative: target.project };
+    }
+
     return {
-        qt: qtWs ? loadQtSettings(qtWs) : { ...DEFAULT_SETTINGS.qt },
-        sdk: sdkWs ? loadSdkSettings(sdkWs) : { ...DEFAULT_SETTINGS.sdk },
-        sync: syncWs ? loadSyncSettings(syncWs) : { ...DEFAULT_SETTINGS.sync },
-        remote: syncWs ? loadRemoteSettings(syncWs) : { ...DEFAULT_SETTINGS.remote }
+        mode: target ? target.mode : d.mode,
+        arch: target ? target.arch : d.arch,
+        vsInstall: target?.toolchain.vsInstall ?? d.vsInstall,
+        qtPath: target?.toolchain.qtPath ?? d.qtPath,
+        qtVersion: target?.toolchain.qtVersion ?? d.qtVersion,
+        jomPath: target?.toolchain.jomPath ?? d.jomPath,
+        pinnedProject,
+        target: target?.toolchain.qmakeTarget ?? d.target,
+        qmakeArgs: prefs.qmakeArgs,
+        cStandard: prefs.cStandard,
+        cppStandard: prefs.cppStandard,
+        designerPath: prefs.designerPath,
+        qtSourcePath: prefs.qtSourcePath,
+        manualProPath: prefs.manualProPath,
+        rccProjectPath: prefs.rccProjectPath,
+        scanExcludeDirs: [...prefs.scanExcludeDirs],
+        customCommands: prefs.customCommands.map(c => ({ ...c })),
+        fileSyncPromptEnabled: prefs.fileSyncPromptEnabled,
+        qmakeReminderEnabled: prefs.qmakeReminderEnabled,
+        suppressedWarnings: prefs.suppressedWarnings.length > 0 ? [...prefs.suppressedWarnings] : undefined,
     };
 }
 
-function _saveQt(): void {
-    const ws = _getWorkspace('qt');
-    if (!ws) { return; }
-    saveQtSettings(ws, _settings.qt);
+// ── Build SdkSettings from workspaceStore ──
+
+function _buildSdkSettings(config: WorkspaceConfig, target: TargetProfile | null): SdkSettings {
+    const prefs = config.sdkModulePrefs;
+    const d = DEFAULT_SETTINGS.sdk;
+
+    return {
+        mode: target ? target.mode : d.mode,
+        arch: target ? target.arch : d.arch,
+        vsInstall: target?.toolchain.vsInstall ?? d.vsInstall,
+        pinnedProject: (target && target.project) ? target.project : null,
+        scanDepth: prefs.scanDepth,
+    };
 }
 
-function _saveSdk(): void {
-    const ws = _getWorkspace('sdk');
-    if (!ws) { return; }
-    saveSdkSettings(ws, _settings.sdk);
+// ── Write Qt setting back to workspaceStore ──
+
+function _saveQtToStore(key: QtKey, value: QtSettings[QtKey]): void {
+    const workroot = _resolveWorkrootForModule('qt');
+    if (!workroot) { return; }
+
+    const config = loadWorkspaceConfig(workroot);
+
+    // QtModulePrefs fields — workspace-level, saved even without active target
+    switch (key) {
+        case 'qmakeArgs':
+            config.qtModulePrefs.qmakeArgs = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'cStandard':
+            config.qtModulePrefs.cStandard = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'cppStandard':
+            config.qtModulePrefs.cppStandard = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'designerPath':
+            config.qtModulePrefs.designerPath = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'qtSourcePath':
+            config.qtModulePrefs.qtSourcePath = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'manualProPath':
+            config.qtModulePrefs.manualProPath = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'rccProjectPath':
+            config.qtModulePrefs.rccProjectPath = value as string;
+            saveWorkspaceConfig(config); return;
+        case 'scanExcludeDirs':
+            config.qtModulePrefs.scanExcludeDirs = value as string[];
+            saveWorkspaceConfig(config); return;
+        case 'customCommands':
+            config.qtModulePrefs.customCommands = value as QtSettings['customCommands'];
+            saveWorkspaceConfig(config); return;
+        case 'fileSyncPromptEnabled':
+            config.qtModulePrefs.fileSyncPromptEnabled = value as boolean;
+            saveWorkspaceConfig(config); return;
+        case 'qmakeReminderEnabled':
+            config.qtModulePrefs.qmakeReminderEnabled = value as boolean;
+            saveWorkspaceConfig(config); return;
+        case 'suppressedWarnings':
+            config.qtModulePrefs.suppressedWarnings = (value as string[] | undefined) ?? [];
+            saveWorkspaceConfig(config); return;
+    }
+
+    // Target-specific fields — require active target
+    const targetId = config.activeTarget;
+    if (!targetId) {
+        logger.warn(`Qt setting '${key}' not persisted: no active target`);
+        return;
+    }
+
+    const target = config.targets[targetId];
+    if (!target || target.kind !== 'qt') {
+        logger.warn(`Qt setting '${key}' not persisted: active target kind mismatch`);
+        return;
+    }
+
+    switch (key) {
+        case 'mode':
+            if (value === 'debug' || value === 'release') { target.mode = value; }
+            break;
+        case 'arch':
+            if (value === 'x86' || value === 'x64') { target.arch = value; }
+            break;
+        case 'qtPath':
+            target.toolchain.qtPath = value as string;
+            break;
+        case 'qtVersion':
+            target.toolchain.qtVersion = value as string;
+            break;
+        case 'vsInstall':
+            target.toolchain.vsInstall = value as string;
+            break;
+        case 'jomPath':
+            target.toolchain.jomPath = value as string;
+            break;
+        case 'target':
+            target.toolchain.qmakeTarget = value as string;
+            break;
+        case 'pinnedProject': {
+            const pp = value as QtSettings['pinnedProject'];
+            target.project = pp ? pp.relative : '';
+            break;
+        }
+    }
+
+    saveWorkspaceConfig(config);
+}
+
+// ── Write SDK setting back to workspaceStore ──
+
+function _saveSdkToStore(key: SdkKey, value: SdkSettings[SdkKey]): void {
+    const workroot = _resolveWorkrootForModule('sdk');
+    if (!workroot) { return; }
+
+    const config = loadWorkspaceConfig(workroot);
+    const targetId = config.activeTarget;
+    if (!targetId) {
+        logger.warn(`SDK setting '${key}' not persisted: no active target`);
+        return;
+    }
+
+    const target = config.targets[targetId];
+    if (!target || target.kind !== 'sdk') {
+        logger.warn(`SDK setting '${key}' not persisted: active target kind mismatch`);
+        return;
+    }
+
+    switch (key) {
+        case 'mode':
+            if (value === 'debug' || value === 'release') { target.mode = value; }
+            break;
+        case 'arch':
+            if (value === 'x86' || value === 'x64') { target.arch = value; }
+            break;
+        case 'vsInstall':
+            target.toolchain.vsInstall = value as string;
+            break;
+        case 'pinnedProject':
+            target.project = (value as string | null) ?? '';
+            break;
+        case 'scanDepth':
+            if (typeof value === 'number') { config.sdkModulePrefs.scanDepth = value; }
+            break;
+    }
+
+    saveWorkspaceConfig(config);
+}
+
+// ── Load all ──
+
+function _load(): ForjaSettings {
+    const qtWorkroot = _resolveWorkrootForModule('qt');
+    const sdkWorkroot = _resolveWorkrootForModule('sdk');
+    const syncWs = _getWorkspace('sync');
+
+    let qt: QtSettings;
+    if (qtWorkroot) {
+        const config = loadWorkspaceConfig(qtWorkroot);
+        const target = getActiveTarget(config);
+        qt = _buildQtSettings(config, target);
+    } else {
+        qt = { ...DEFAULT_SETTINGS.qt };
+    }
+
+    let sdk: SdkSettings;
+    if (sdkWorkroot) {
+        const config = loadWorkspaceConfig(sdkWorkroot);
+        const target = getActiveTarget(config);
+        sdk = _buildSdkSettings(config, target);
+    } else {
+        sdk = { ...DEFAULT_SETTINGS.sdk };
+    }
+
+    return {
+        qt,
+        sdk,
+        sync: syncWs ? loadSyncSettings(syncWs) : { ...DEFAULT_SETTINGS.sync },
+        remote: syncWs ? loadRemoteSettings(syncWs) : { ...DEFAULT_SETTINGS.remote },
+    };
 }
 
 function _saveSync(): void {
@@ -65,17 +277,32 @@ export function initSettingsStore(context: vscode.ExtensionContext): void {
     _settings = _load();
     _loaded = true;
 
-    // 监听 ~/.forja/projects/ 目录下的配置文件变化
+    // 监听配置文件变化：
+    // 1. ~/.forja/projects/ — sync/remote 配置
     const configDir = projectsDir();
-    // 确保目录存在，否则 watcher 无法注册，首次写入不会触发 reload
     if (!fs.existsSync(configDir)) {
         fs.mkdirSync(configDir, { recursive: true });
     }
-    const pattern = new vscode.RelativePattern(vscode.Uri.file(configDir), '*.json');
-    _watcher = vscode.workspace.createFileSystemWatcher(pattern);
-    _watcher.onDidChange(() => _reload());
-    _watcher.onDidCreate(() => _reload());
-    context.subscriptions.push(_watcher);
+    const projectsPattern = new vscode.RelativePattern(vscode.Uri.file(configDir), '*.json');
+    const projectsWatcher = vscode.workspace.createFileSystemWatcher(projectsPattern);
+    projectsWatcher.onDidChange(() => _reload());
+    projectsWatcher.onDidCreate(() => _reload());
+    context.subscriptions.push(projectsWatcher);
+
+    // 2. ~/.forja/workspaces/ — Qt/SDK 配置（workspaceStore）
+    const wsDir = workspacesDir();
+    if (!fs.existsSync(wsDir)) {
+        fs.mkdirSync(wsDir, { recursive: true });
+    }
+    {
+        const wsPattern = new vscode.RelativePattern(vscode.Uri.file(wsDir), '*.json');
+        const wsWatcher = vscode.workspace.createFileSystemWatcher(wsPattern);
+        wsWatcher.onDidChange(() => _reload());
+        wsWatcher.onDidCreate(() => _reload());
+        context.subscriptions.push(wsWatcher);
+    }
+
+    _watcher = projectsWatcher;
 
     const qtWs = _getWorkspace('qt');
     const sdkWs = _getWorkspace('sdk');
@@ -140,7 +367,7 @@ export function setQtSetting<K extends QtKey>(key: K, value: QtSettings[K]): voi
     if (JSON.stringify(_settings.qt[key]) === JSON.stringify(value)) { return; }
     _settings.qt[key] = value;
     try {
-        _saveQt();
+        _saveQtToStore(key, value);
         _listeners.forEach(fn => fn('qt', key, _settings));
     } catch (e) {
         logger.warn(`写入 Qt 配置失败，内存状态已回滚: ${e instanceof Error ? e.message : e}`);
@@ -159,7 +386,7 @@ export function setSdkSetting<K extends SdkKey>(key: K, value: SdkSettings[K]): 
     if (JSON.stringify(_settings.sdk[key]) === JSON.stringify(value)) { return; }
     _settings.sdk[key] = value;
     try {
-        _saveSdk();
+        _saveSdkToStore(key, value);
         _listeners.forEach(fn => fn('sdk', key, _settings));
     } catch (e) {
         logger.warn(`写入 SDK 配置失败，内存状态已回滚: ${e instanceof Error ? e.message : e}`);

@@ -4,14 +4,15 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { requireActiveTarget, tryPinnedProjectFallback, stripJsonFlag } from './activeTarget';
+import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
 import { createSdkPlan } from '../../sdk/shared/plan';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, diag, T } from './types';
-import { loadSdkSettings, loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 import { getServerById } from '../../core/serverStore';
 
 export interface CleanResult {
@@ -69,7 +70,8 @@ function getBuildOutputDir(projectPath: string, kind: 'qt' | 'sdk'): string {
 
 // ── CLI options builder ──
 
-function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: boolean): CliOptions {
+function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: boolean, qmakeArgs?: string): CliOptions {
+    const vsDevShell = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
     return {
         action: 'clean',
         executionMode: plan ? 'dryRun' : 'execute',
@@ -77,10 +79,10 @@ function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: b
         project: target.project,
         mode: target.mode,
         arch: target.arch,
-        qtPath: null,
-        vsDevShell: null,
-        target: null,
-        qmakeArgs: null,
+        qtPath: target.toolchain.qtPath || null,
+        vsDevShell: vsDevShell,
+        target: target.toolchain.qmakeTarget || null,
+        qmakeArgs: qmakeArgs || null,
         detach: false,
         saveLocal: false,
         json: false,
@@ -106,11 +108,6 @@ function extractCleanError(executed: { errors?: string[]; stderr?: string }): st
 export async function runClean(workspace: string, options: { plan?: boolean; json?: boolean } = {}): Promise<CleanResult> {
     const wantsJson = options.json ?? false;
     let targetResult = requireActiveTarget(workspace);
-
-    // Fallback: if no activeTarget but SDK has pinnedProject, synthesize target from SDK config
-    if ('error' in targetResult) {
-        targetResult = tryPinnedProjectFallback(workspace, targetResult);
-    }
 
     if ('error' in targetResult) {
         return {
@@ -180,8 +177,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
 
     // SDK local
     if (target.kind === 'sdk') {
-        const sdkSettings = loadSdkSettings(workspace);
-        const vsDevCmdPath = resolveVsDevCmdPath(sdkSettings.vsInstall);
+        const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
         const plan = createSdkPlan({
             action: 'clean',
             workspace,
@@ -233,7 +229,10 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     }
 
     // Qt local
-    const cliOptions = buildCleanQtCliOptions(workspace, target, options.plan ?? false);
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
+    const cliOptions = buildCleanQtCliOptions(workspace, target, options.plan ?? false, qmakeArgs);
 
     try {
         const planned = await createActionPlan(cliOptions);

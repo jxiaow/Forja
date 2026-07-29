@@ -2,72 +2,49 @@
 
 [← 返回总览](index.md)
 
-**职责**：构建当前 active target。统一承接 Qt/SDK、本地/远程、普通构建/重建/qmake/rcc，不负责选择目标或修复环境。
+**职责**：编译当前 active target。支持 Qt（qmake → make/jom）和 SDK（MSBuild/CMake）两种项目类型，支持本地和远程执行。
 
 **语法**：
 ```
-forja build [fresh|qmake|rcc] [--workspace <path>] [--plan] [--json]
+forja build [fresh|qmake|rcc] [--plan] [--project <path>] [--json]
 ```
 
-## 命令边界
+**前置条件**：workroot 已注册且有 active target。未注册时建议 `forja init`，无 target 时建议 `forja use target`。
 
-| 问题 | 归属 |
-|------|------|
-| 当前目标是什么 | `forja status` / `forja use target --project <path>` |
-| 有哪些可选项目 | `forja list` |
-| 工具链能不能用 | `forja doctor` |
-| Qt qmake/rcc/build | `forja build [qmake|rcc]` / `forja build` |
-| SDK rebuild | `forja build fresh` |
-| 清理产物 | `forja clean` |
-| 构建后运行 | `forja run` |
+## 子动作
 
-## Action 矩阵
+| 动作 | 说明 | 适用 |
+|------|------|------|
+| `build`（默认） | 编译项目 | Qt + SDK |
+| `build fresh` | 清理后重新编译 | Qt + SDK |
+| `build qmake` | 仅运行 qmake | Qt only |
+| `build rcc` | 编译 .qrc 资源文件 | Qt only |
 
-| 命令 | Qt 目标 | SDK 目标 |
-|------|---------|----------|
-| `forja build` | 必要时 qmake/rcc，然后 build | 正常 build |
-| `forja build fresh` | clean + qmake + rcc + build | rebuild；若后端无 rebuild，退化为 clean + build |
-| `forja build qmake` | 只跑 qmake | 失败：SDK 没有 qmake |
-| `forja build rcc` | 只跑 rcc | 失败：SDK 没有 rcc |
+## 行为
 
-## 路由规则
+### Qt 本地构建流程
 
-1. 读取 active target；缺失时不猜测目标，返回 `forja list` + `forja use target --project <path>`。
-2. `runAt=local` 且 `kind=qt`：调用现有 Qt qmake/rcc/build 后端。
-3. `runAt=local` 且 `kind=sdk`：调用现有 SDK build/rebuild 后端。
-4. `runAt=remote`：先做 remote preflight、workspace prepare、lock，再通过 remote prepared action/bridge 调用远端后端。
-5. `qmake`/`rcc` 只适用于 Qt target；SDK 下必须失败并给出 `build.actionUnsupported`。
-6. `--plan` 不执行外部命令，只输出 `CommandPlan`；远程模式下也不建立 SSH mutation。
-7. 构建失败保留后端退出码和关键错误摘要；不在 build 内自动执行 doctor/fix。
-8. `fresh` 先执行 clean 再 build；若 clean 步骤失败，整体返回失败，不继续 build（避免陈旧产物残留）。
+1. 检查 Makefile 是否存在且匹配当前 mode/arch
+2. 不匹配 → 自动执行 qmake 再构建
+3. 构建前终止运行中的同名进程（防止 LNK1104）
+4. 组装命令链：VS DevShell → jom/make
+5. 执行并提取编译错误
 
-## 吸收的旧命令
+### SDK 本地构建流程
 
-| 旧命令 | 新命令 |
-|--------|--------|
-| `forja qt qmake` | `forja build qmake` |
-| `forja qt rcc` | `forja build rcc` |
-| `forja qt build` | `forja build` |
-| `forja sdk build` | `forja build` |
-| `forja sdk rebuild` | `forja build fresh` |
-| `forja remote qt qmake` | `forja build qmake`（runAt=remote） |
-| `forja remote qt build` | `forja build`（runAt=remote） |
-| `forja remote sdk build` | `forja build`（runAt=remote） |
-| `forja remote sdk rebuild` | `forja build fresh`（runAt=remote） |
+1. Windows: 使用 MSBuild（通过 VS DevCmd）
+2. Linux: 使用 make
+3. 构建前终止运行中的进程
 
-## VSCode 映射
+### 远程构建
 
-| 旧 Command ID | 新 Command ID | 说明 |
-|---------------|---------------|------|
-| `forja.qt.qmake` | `forja.build` | QuickPick 中选择 qmake |
-| `forja.qt.rcc` | `forja.build` | QuickPick 中选择 rcc |
-| `forja.qt.build` | `forja.build` | 直接构建当前目标 |
-| `forja.sdk.build` | `forja.build` | 直接构建当前目标 |
-| `forja.sdk.rebuild` | `forja.build` | QuickPick 中选择 fresh |
-| `forja.remote.qt.build` | `forja.build` | activeTarget.runAt=remote |
-| `forja.remote.qt.qmake` | `forja.build` | activeTarget.runAt=remote + qmake |
-| `forja.remote.sdk.build` | `forja.build` | activeTarget.runAt=remote |
-| `forja.remote.sdk.rebuild` | `forja.build` | activeTarget.runAt=remote + fresh |
+1. 通过 `executeRemotePlan` 上传变更文件
+2. 在远端执行 `forja build --project <path> --json`
+3. `--project` 参数让远端直接构造 target，不依赖远端 active target
+
+### `--project` 快速路径
+
+提供 `--project` 时，从 saved target 复制工具链字段（qtPath/vsInstall/jomPath/qmakeTarget）和 runAt，不依赖 active target。用于远程 bridge 调用。
 
 ## Result
 
@@ -75,121 +52,38 @@ forja build [fresh|qmake|rcc] [--workspace <path>] [--plan] [--json]
 interface BuildResult extends ForjaJsonResult {
     action: 'build';
     buildAction: 'default' | 'fresh' | 'qmake' | 'rcc';
-    activeTarget?: ActiveTarget;
-    plan?: CommandPlan;
     durationMs?: number;
     exitCode?: number;
     errors?: string[];
+    logFile?: string;
+    plan?: CommandPlan;
 }
 ```
 
-## 诊断码
+## nextAction 规则
 
-| code | level | 触发条件 | nextActions |
-|------|-------|----------|-------------|
-| `build.targetNotSelected` | error | 没有 active target | `forja list`, `forja use target --project <path>` |
-| `build.targetMissing` | error | active target 项目文件不存在 | `forja list`, `forja use target --project <path>` |
-| `build.toolchainBlocked` | error | 本地工具链缺失或无效 | `forja doctor` |
-| `build.remoteMissing` | error | runAt=remote 但 server/path/bin 缺失 | `forja list remote`, `forja use remote --server <id> --remote-path <path>` |
-| `build.remoteBlocked` | error | SSH/lock/workspace prepare 失败 | `forja doctor --remote` |
-| `build.actionUnsupported` | error | SDK 执行 qmake/rcc，或 Qt/SDK 不支持该 action | `forja build` |
-| `build.commandFailed` | error | 后端命令返回非 0 | `forja doctor` |
+| 条件 | nextAction |
+|------|-----------|
+| 有编译错误 | `undefined`（用户改代码） |
+| 无错误但构建失败 | `forja doctor` |
+| 成功 | `forja run` |
 
-## 正常场景
+**绝不建议** `forja clean` 或 `forja build` 作为失败时的 nextAction（可能死循环）。
 
-_Qt 默认构建_：
-```json
-{
-    "ok": true,
-    "action": "build",
-    "buildAction": "default",
-    "activeTarget": { "kind": "qt", "project": "app/app.pro", "mode": "release", "arch": "x64", "runAt": "local" },
-    "durationMs": 1200,
-    "exitCode": 0,
-    "nextActions": ["forja run"]
-}
-```
+## 与其他命令的关系
 
-_SDK fresh build_：
-```json
-{
-    "ok": true,
-    "action": "build",
-    "buildAction": "fresh",
-    "activeTarget": { "kind": "sdk", "project": "sdk/project.sln", "mode": "release", "arch": "x64", "runAt": "local" },
-    "durationMs": 2600,
-    "exitCode": 0,
-    "nextActions": ["forja status"]
-}
-```
-
-_Plan 模式_：
-```json
-{
-    "ok": true,
-    "action": "build",
-    "buildAction": "qmake",
-    "plan": {
-        "mode": "dryRun",
-        "commands": ["qmake app/app.pro -spec win32-msvc"],
-        "willRun": ["qmake"]
-    },
-    "nextActions": ["forja build qmake"]
-}
-```
-
-## 异常场景
-
-_未选择目标_：
-```json
-{
-    "ok": false,
-    "action": "build",
-    "buildAction": "default",
-    "diagnostics": [
-        { "code": "build.targetNotSelected", "level": "error", "message": "No active target selected" }
-    ],
-    "nextActions": ["forja list", "forja use target --project <path>"]
-}
-```
-
-_SDK 执行 qmake_：
-```json
-{
-    "ok": false,
-    "action": "build",
-    "buildAction": "qmake",
-    "activeTarget": { "kind": "sdk", "project": "sdk/project.sln", "mode": "release", "arch": "x64", "runAt": "local" },
-    "diagnostics": [
-        { "code": "build.actionUnsupported", "level": "error", "message": "SDK targets do not support qmake" }
-    ],
-    "nextActions": ["forja build"]
-}
-```
-
-## 文本输出
-
-```
-Forja build succeeded
-Target: qt app/app.pro release x64 local
-Duration: 1200ms
-Next:
-  forja run
-```
-
-```
-Forja build failed (exit 2)
-Target: sdk sdk/project.sln release x64 remote
-Error: build command failed
-Next:
-  forja doctor --remote
-```
+| 命令 | 关系 |
+|------|------|
+| `forja status` | 构建前检查就绪状态 |
+| `forja run` | 构建成功后的下一步 |
+| `forja clean` | 清理构建产物 |
+| `forja doctor` | 构建失败（无编译错误）时的诊断 |
 
 ## 验证点
 
-- `forja build --json` 按 active target 分发到 Qt/SDK。
-- `forja build fresh --json` 对 SDK 等价旧 `rebuild`。
-- `forja build qmake --json` 对 Qt 可用，对 SDK 失败。
-- `forja build rcc --json` 对 Qt 可用，对 SDK 失败。
-- `forja build --plan --json` 不执行外部命令。
-- runAt=remote 时只通过 remote 后端执行，不直接 import Qt/SDK 远端实现。
+- `forja build --json` 按 active target 路由到 Qt 或 SDK 构建
+- `forja build qmake --json` 对 SDK 报错
+- `forja build fresh --json` 先 clean 再构建
+- `forja build --plan --json` 不执行，只输出命令计划
+- `--project` 路径从 saved target 复制工具链字段
+- 构建失败有编译错误时 nextAction 为 undefined

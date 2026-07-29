@@ -4,7 +4,8 @@
 import { ForjaJsonResult, TargetCandidate, ServerSummary, ServerDetail, EnvSummary, Diagnostic, Locale, T } from './types';
 import { collectTargetCandidates } from './candidates';
 import { listServers, getServerDetail } from './server';
-import { loadQtSettings, loadSdkSettings, loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
+import { loadSyncSettings, loadRemoteSettings } from '../../core/settingsIO';
+import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget as getActiveTargetFromStore } from '../../core/workspaceStore';
 import { detectMake } from '../../sdk/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 import { setSilent } from '../../core/loggerBase';
@@ -18,10 +19,21 @@ export type ListCategory = 'targets' | 'env';
 export type InternalListCategory = ListCategory | 'servers';
 export type EnvSubCategory = 'qt' | 'vs' | 'jom' | 'make';
 
+export interface SavedTargetInfo {
+    id: string;
+    name: string;
+    kind: 'qt' | 'sdk';
+    project: string;
+    mode: string;
+    arch: string;
+    active: boolean;
+}
+
 export interface ListResult extends ForjaJsonResult {
     action: 'list';
     category: InternalListCategory;
     targets?: TargetCandidate[];
+    savedTargets?: SavedTargetInfo[];
     servers?: ServerSummary[] | ServerDetail;
     env?: EnvSummary;
     envSubCategory?: EnvSubCategory;
@@ -48,16 +60,31 @@ export function formatListText(result: ListResult, locale: Locale): string {
         case 'targets': {
             lines.push(T('targets'));
             if (result.workspace) { lines.push(`${T('workspace')}${result.workspace}`); }
+
+            // Show saved targets first (from workspaceStore)
+            const saved = result.savedTargets || [];
+            if (saved.length > 0) {
+                lines.push(`  ${T('lst.savedTargets')}:`);
+                for (const t of saved) {
+                    const marker = t.active ? '* ' : '  ';
+                    lines.push(`  ${marker}${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}  ${t.project}`);
+                }
+                lines.push('');
+            }
+
+            // Show discovered targets
             const targets = result.targets || [];
-            if (targets.length === 0) {
-                lines.push(`  ${T('noneFound')}`);
-            } else {
+            if (targets.length > 0) {
+                lines.push(`  ${T('lst.discoveredTargets')}:`);
                 for (const t of targets) {
                     const marker = t.current ? '* ' : '  ';
                     const cfg = t.configured ? `${T('configuredMark')} ` : '';
                     lines.push(`  ${marker}${cfg}${t.label} — ${t.project}`);
                 }
+            } else if (saved.length === 0) {
+                lines.push(`  ${T('noneFound')}`);
             }
+
             if (result.diagnostics?.length) {
                 lines.push('');
                 for (const d of result.diagnostics) {
@@ -210,20 +237,43 @@ function listTargets(workspace: string): ListResult {
     const rawTargets = collectTargetCandidates(workspace);
     const diagnostics: Diagnostic[] = [];
 
-    const qt = loadQtSettings(workspace);
-    const sdk = loadSdkSettings(workspace);
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+
+    // Build saved targets info from workspaceStore
+    const savedTargets: SavedTargetInfo[] = [];
+    if (wsConfig) {
+        for (const [id, profile] of Object.entries(wsConfig.targets)) {
+            savedTargets.push({
+                id,
+                name: profile.name,
+                kind: profile.kind,
+                project: profile.project,
+                mode: profile.mode,
+                arch: profile.arch,
+                active: id === wsConfig.activeTarget,
+            });
+        }
+    }
+
     const hasQtTargets = rawTargets.some(t => t.kind === 'qt');
-    if (!qt.qtPath && hasQtTargets) {
+    const hasQtToolchain = activeProfile?.toolchain.qtPath;
+    const hasVsToolchain = activeProfile?.toolchain.vsInstall;
+
+    if (!hasQtToolchain && hasQtTargets) {
         diagnostics.push({ level: 'warning', message: T('lst.qtPathNotConfigured') });
     }
-    if (process.platform === 'win32' && !qt.vsInstall && !sdk.vsInstall) {
+    if (process.platform === 'win32' && !hasVsToolchain) {
         diagnostics.push({ level: 'warning', message: T('lst.vsInstallNotConfigured') });
     }
 
     // Strip internal 'kind' field from output
     const targets = rawTargets.map(({ kind: _kind, ...rest }) => rest as TargetCandidate);
 
-    const nextAction = 'forja use target --project <name|path>';
+    const nextAction = savedTargets.length > 0
+        ? 'forja use target --project <name|path>'
+        : 'forja init';
 
     return {
         ok: true,
@@ -231,6 +281,7 @@ function listTargets(workspace: string): ListResult {
         category: 'targets',
         workspace,
         targets,
+        savedTargets: savedTargets.length > 0 ? savedTargets : undefined,
         diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
         nextAction,
     };
@@ -257,18 +308,18 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
     }
     const sync = loadSyncSettings(workspace);
     const remote = loadRemoteSettings(workspace);
-    const selectedId = remote.selectedServer || sync.selectedServer || undefined;
+    const selectedId = remote.selectedServer || undefined;
     const servers = listServers(selectedId);
     let nextAction: string | undefined = undefined;
     if (servers.length === 0) {
         nextAction = 'forja server add --name <name> --host <host> --username <name>';
     } else if (servers.length === 1) {
-        nextAction = `forja remote --server ${servers[0].name}`;
+        nextAction = `forja remote set --server ${servers[0].name}`;
     } else if (servers.length <= 5) {
         const names = servers.map(s => s.name).join('|');
-        nextAction = `forja remote --server <${names}>`;
+        nextAction = `forja remote set --server <${names}>`;
     } else {
-        nextAction = 'forja remote --server <name>';
+        nextAction = 'forja remote set --server <name>';
     }
     return {
         ok: true,
@@ -281,17 +332,20 @@ function listServersCmd(workspace: string, detailId?: string): ListResult {
 
 async function listEnvAll(workspace: string): Promise<ListResult> {
     setSilent(true);
-    const qtConfig = loadQtSettings(workspace);
-    const sdkConfig = loadSdkSettings(workspace);
     const env = await detectEnv();
 
+    // Get configured paths from workspaceStore (active target's toolchain)
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+    const configuredQtPath = activeProfile?.toolchain.qtPath || '';
+    const configuredVsPath = activeProfile?.toolchain.vsInstall || '';
+
     const summary: EnvSummary = {};
-    const configuredQtPath = qtConfig.qtPath || '';
     summary.qt = env.qtCandidates.map(c => ({
         path: c.path, version: c.version,
         ...(c.path === configuredQtPath ? { configured: true } : {}),
     }));
-    const configuredVsPath = qtConfig.vsInstall || sdkConfig.vsInstall || '';
     if (process.platform === 'win32') {
         if (env.jom) { summary.jom = env.jom; }
         summary.vs = env.vsCandidates.map(v => ({
@@ -321,8 +375,10 @@ async function listEnvSub(workspace: string, sub: EnvSubCategory): Promise<ListR
 
 async function listEnvQt(workspace: string): Promise<ListResult> {
     setSilent(true);
-    const qtConfig = loadQtSettings(workspace);
-    const configuredPath = qtConfig.qtPath || '';
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+    const configuredPath = activeProfile?.toolchain.qtPath || '';
     const env = await detectEnv();
     const qt = env.qtCandidates.map(c => ({
         path: c.path, version: c.version,
@@ -341,10 +397,11 @@ async function listEnvQt(workspace: string): Promise<ListResult> {
     };
 }
 
-async function listEnvVs(_workspace: string): Promise<ListResult> {
-    const qtConfig = loadQtSettings(_workspace);
-    const sdkConfig = loadSdkSettings(_workspace);
-    const configuredPath = qtConfig.vsInstall || sdkConfig.vsInstall || '';
+async function listEnvVs(workspace: string): Promise<ListResult> {
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const activeProfile = wsConfig ? getActiveTargetFromStore(wsConfig) : null;
+    const configuredPath = activeProfile?.toolchain.vsInstall || '';
 
     setSilent(true);
     const env = await detectEnv();

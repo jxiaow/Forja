@@ -3,6 +3,7 @@
  */
 import { planSyncCli, executeSyncCli, resetSyncCli, ClassifiedChanges } from '../../sync/cli';
 import { readProjectSyncConfig, writeProjectSyncConfig, getServerById } from '../../core/serverStore';
+import { loadRemoteSettings } from '../../core/settingsIO';
 import { Diagnostic, SyncPlan, ForjaJsonResult, diag, Locale, T } from './types';
 
 // ── Types ──
@@ -197,8 +198,9 @@ export function runSyncReset(workspace: string): SyncResult {
 
 export function runSyncStatus(workspace: string): SyncResult {
     const sync = readProjectSyncConfig(workspace);
-    const server = sync.selectedServer ? getServerById(sync.selectedServer) : null;
-    const remotePath = server ? (sync.remotePaths[server.id] || '') : '';
+    const remote = loadRemoteSettings(workspace);
+    const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
+    const remotePath = server ? (remote.remotePaths[server.id] || '') : '';
 
     let nextAction: string | undefined;
     if (!sync.enabled || !server) {

@@ -1,92 +1,43 @@
 /**
- * ActiveTarget read/write — thin wrapper over settingsIO for CLI.
+ * ActiveTarget read/write — thin wrapper over workspaceStore.
+ * Returns TargetProfile directly (no adapter layer).
  */
-import * as path from 'path';
-import * as fs from 'fs';
-import { loadActiveTarget, saveActiveTarget, loadSdkSettings, loadQtSettings, loadTargetToolchains } from '../../core/settingsIO';
-import { ActiveTarget, T } from './types';
+import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig, getActiveTarget as getTargetProfile } from '../../core/workspaceStore';
+import type { TargetProfile } from '../../core/workspaceStore';
+import { T } from './types';
 
-export function getActiveTarget(workspace: string): ActiveTarget | null {
-    const raw = loadActiveTarget(workspace);
-    if (!raw) { return null; }
-    return raw;
+/** Resolve workroot from cwd and return the active target, or null. */
+export function getActiveTarget(cwd: string): TargetProfile | null {
+    const workroot = resolveWorkroot(cwd);
+    if (!workroot) { return null; }
+    const config = loadWorkspaceConfig(workroot);
+    return getTargetProfile(config);
 }
 
-export function setActiveTarget(workspace: string, target: ActiveTarget): void {
-    saveActiveTarget(workspace, target);
+/** Returns true if save succeeded, false if workroot not registered or no active target. */
+export function setActiveTarget(cwd: string, target: TargetProfile): boolean {
+    const workroot = resolveWorkroot(cwd);
+    if (!workroot) { return false; }
+    const config = loadWorkspaceConfig(workroot);
+    if (!config.activeTarget) { return false; }
+    if (!config.targets[config.activeTarget]) { return false; }
+
+    // Replace the active target profile entirely
+    config.targets[config.activeTarget] = target;
+    saveWorkspaceConfig(config);
+    return true;
 }
 
-export function requireActiveTarget(workspace: string): { target: ActiveTarget } | { error: string; nextAction?: string } {
-    const target = getActiveTarget(workspace);
+export function requireActiveTarget(cwd: string): { target: TargetProfile } | { error: string; nextAction?: string } {
+    const target = getActiveTarget(cwd);
     if (!target) {
+        const workroot = resolveWorkroot(cwd);
         return {
             error: T('cmd.noActiveTarget'),
-            nextAction: 'forja list targets',
+            nextAction: workroot ? 'forja use target' : 'forja init',
         };
     }
     return { target };
-}
-
-/**
- * Fallback: if targetResult has error, try SDK pinnedProject to synthesize a target.
- * Returns the (possibly updated) targetResult.
- */
-export function tryPinnedProjectFallback(
-    workspace: string,
-    targetResult: { target: ActiveTarget } | { error: string; nextAction?: string },
-): { target: ActiveTarget } | { error: string; nextAction?: string } {
-    if ('target' in targetResult) { return targetResult; }
-
-    const toolchains = loadTargetToolchains(workspace);
-
-    // Try Qt pinnedProject first
-    const qtSettings = loadQtSettings(workspace);
-    if (qtSettings.pinnedProject) {
-        const projectPath = path.isAbsolute(qtSettings.pinnedProject.relative)
-            ? qtSettings.pinnedProject.relative
-            : path.join(workspace, qtSettings.pinnedProject.relative);
-        if (fs.existsSync(projectPath)) {
-            const stored = toolchains[qtSettings.pinnedProject.relative];
-            return {
-                target: {
-                    kind: 'qt',
-                    project: qtSettings.pinnedProject.relative,
-                    mode: qtSettings.mode || 'debug',
-                    arch: qtSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
-                    runAt: 'local',
-                    qtPath: stored?.qtPath,
-                    vsInstall: stored?.vsInstall,
-                    jomPath: stored?.jomPath,
-                    qmakeTarget: stored?.qmakeTarget,
-                },
-            };
-        }
-    }
-
-    // Try SDK pinnedProject
-    const sdkSettings = loadSdkSettings(workspace);
-    if (sdkSettings.pinnedProject) {
-        const projectPath = path.isAbsolute(sdkSettings.pinnedProject)
-            ? sdkSettings.pinnedProject
-            : path.join(workspace, sdkSettings.pinnedProject);
-        if (fs.existsSync(projectPath)) {
-            const stored = toolchains[sdkSettings.pinnedProject];
-            return {
-                target: {
-                    kind: 'sdk',
-                    project: sdkSettings.pinnedProject,
-                    mode: sdkSettings.mode || 'debug',
-                    arch: sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
-                    runAt: 'local',
-                    vsInstall: stored?.vsInstall,
-                    qtPath: stored?.qtPath,
-                    jomPath: stored?.jomPath,
-                    qmakeTarget: stored?.qmakeTarget,
-                },
-            };
-        }
-    }
-    return targetResult;
 }
 
 /** Strip --json from nextAction strings generated by core plan helpers. */

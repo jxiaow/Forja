@@ -10,7 +10,6 @@ import { onSettingsChange } from '../vscode/settingsStore';
 import { getTarget, getCustomCommands, getWorkspaceRoot } from '../qt/services/configService';
 import { getEffectiveProjectName } from '../qt/project/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';
-import { loadActiveTarget, saveActiveTarget, loadQtSettings, loadSdkSettings } from '../core/settingsIO';
 
 export type ActiveModule = 'qt' | 'sdk';
 
@@ -32,40 +31,23 @@ export function setActiveModule(m: ActiveModule): void {
     _updateDisplay();
 }
 
-/** Switch activeTarget to match the selected module by restoring from domain config.
- *  Returns true if a matching target was restored, false if no saved project exists. */
+/** Switch activeTarget to match the selected module by finding a target of that kind in workspaceStore.
+ *  Returns true if a matching target was found, false if no saved target of that kind exists. */
 function _syncActiveTarget(kind: ActiveModule): boolean {
+    const { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } = require('../core/workspaceStore');
     const workspace = getWorkspaceRoot() || process.cwd();
-    const current = loadActiveTarget(workspace);
-    if (!current || current.kind === kind) { return true; }
+    const workroot = resolveWorkroot(workspace);
+    if (!workroot) { return false; }
 
-    if (kind === 'qt') {
-        const qt = loadQtSettings(workspace);
-        if (qt.pinnedProject) {
-            saveActiveTarget(workspace, {
-                ...current,
-                kind: 'qt',
-                project: qt.pinnedProject.relative,
-                mode: qt.mode || current.mode,
-                arch: qt.arch || current.arch,
-            });
-            return true;
-        }
-    } else {
-        const sdk = loadSdkSettings(workspace);
-        if (sdk.pinnedProject) {
-            saveActiveTarget(workspace, {
-                ...current,
-                kind: 'sdk',
-                project: sdk.pinnedProject,
-                mode: sdk.mode || current.mode,
-                arch: sdk.arch || current.arch,
-            });
-            return true;
-        }
-    }
+    const config = loadWorkspaceConfig(workroot);
+    // Find a target of the requested kind
+    const targets = config.targets as Record<string, { id: string; kind: string }>;
+    const target = Object.values(targets).find(t => t.kind === kind);
+    if (!target) { return false; }
 
-    return false;
+    config.activeTarget = target.id;
+    saveWorkspaceConfig(config);
+    return true;
 }
 
 export function activateSdkModuleIfNoQtProject(_workspace?: string): void {
@@ -200,10 +182,16 @@ function _updateSdkDisplay(): void {
 function _syncActiveTargetModeArch(mode: BuildMode, arch: Arch): void {
     const ws = getWorkspaceRoot();
     if (!ws) { return; }
-    const current = loadActiveTarget(ws);
-    if (!current) { return; }
-    if (current.mode === mode && current.arch === arch) { return; }
-    saveActiveTarget(ws, { ...current, mode, arch });
+    const { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig, getActiveTarget } = require('../core/workspaceStore');
+    const workroot = resolveWorkroot(ws);
+    if (!workroot) { return; }
+    const config = loadWorkspaceConfig(workroot);
+    const profile = getActiveTarget(config);
+    if (!profile) { return; }
+    if (profile.mode === mode && profile.arch === arch) { return; }
+    profile.mode = mode;
+    profile.arch = arch;
+    saveWorkspaceConfig(config);
 }
 
 export async function showActions(): Promise<void> {

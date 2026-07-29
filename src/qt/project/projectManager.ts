@@ -10,7 +10,6 @@ import { getQtSetting, setQtSetting } from '../../vscode/settingsStore';
 import { setProjectRoot } from '../../vscode/workspaceResolver';
 import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../shared/projectScanner';
 import { resolveRuntimeTarget, parseRuntimeLibPaths } from '../shared/runtimeTarget';
-import { saveActiveTarget, loadActiveTarget } from '../../core/settingsIO';
 import { ensureLocalStateDir } from '../shared/localState';
 
 import { ProjectInfo } from './types';
@@ -23,17 +22,34 @@ export interface MakefileInfo {
 
 /** Sync activeTarget when a Qt project is selected, so new build/run commands can find it. */
 function _syncQtActiveTarget(workspace: string, relativeProject: string): void {
-    const state = getState();
-    const existing = loadActiveTarget(workspace);
+    const { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig, getActiveTarget } = require('../../core/workspaceStore');
+    const workroot = resolveWorkroot(workspace);
+    if (!workroot) { return; }
+    const config = loadWorkspaceConfig(workroot);
+    const profile = getActiveTarget(config);
     // Only create/update if no activeTarget or if it's already Qt kind
-    if (!existing || existing.kind === 'qt') {
-        saveActiveTarget(workspace, {
-            kind: 'qt',
-            project: relativeProject,
-            mode: state.mode || 'debug',
-            arch: state.arch || 'x86',
-            runAt: existing?.runAt || 'local',
-        });
+    if (!profile || profile.kind === 'qt') {
+        const state = getState();
+        // Find existing Qt target or create new entry
+        const targets = config.targets as Record<string, { id: string; kind: string; project: string }>;
+        const existingQt = Object.values(targets).find(t => t.kind === 'qt' && t.project === relativeProject);
+        if (existingQt) {
+            config.activeTarget = existingQt.id;
+        } else {
+            const id = `qt-${relativeProject.replace(/[^a-zA-Z0-9]/g, '-')}-${state.mode || 'debug'}-${state.arch || 'x86'}`;
+            config.targets[id] = {
+                id,
+                name: `${id} (auto)`,
+                kind: 'qt',
+                project: relativeProject,
+                mode: state.mode || 'debug',
+                arch: state.arch || 'x86',
+                runAt: profile?.runAt || 'local',
+                toolchain: profile?.toolchain || {},
+            };
+            config.activeTarget = id;
+        }
+        saveWorkspaceConfig(config);
     }
 }
 

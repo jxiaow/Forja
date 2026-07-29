@@ -48,8 +48,6 @@ export interface SdkSettings {
 
 export interface SyncSettings {
     enabled: boolean;
-    selectedServer: string;
-    remotePaths: Record<string, string>;
     ignore: string[];
 }
 
@@ -94,18 +92,6 @@ export interface RemoteSettings {
     remotePaths: Record<string, string>;
 }
 
-export interface ActiveTargetSettings {
-    kind: 'qt' | 'sdk';
-    project: string;
-    mode: 'debug' | 'release';
-    arch: 'x86' | 'x64';
-    runAt: 'local' | 'remote';
-    qtPath?: string;
-    vsInstall?: string;
-    jomPath?: string;
-    qmakeTarget?: string;
-}
-
 export interface ForjaSettings {
     qt: QtSettings;
     sdk: SdkSettings;
@@ -146,8 +132,6 @@ export const DEFAULT_SDK: Readonly<SdkSettings> = {
 
 export const DEFAULT_SYNC: Readonly<SyncSettings> = {
     enabled: false,
-    selectedServer: '',
-    remotePaths: {},
     ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release']
 };
 
@@ -382,92 +366,6 @@ export function saveRemoteSettings(workspace: string, settings: RemoteSettings):
     fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
 }
 
-// ── ActiveTarget 读写 ──
-
-export function loadActiveTarget(workspace: string): ActiveTargetSettings | null {
-    const filePath = resolveConfigPath(workspace, 'activeTarget');
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            const result = sanitizeActiveTarget(raw);
-            if (result && typeof raw.workspace === 'string' && raw.workspace !== workspace) {
-                const configWorkspace = raw.workspace as string;
-                if (result.project && !path.isAbsolute(result.project)) {
-                    const absoluteProject = path.resolve(configWorkspace, result.project);
-                    const relativeToCurrent = path.relative(workspace, absoluteProject);
-                    result.project = relativeToCurrent;
-                }
-            }
-            return result;
-        }
-    } catch (e) {
-        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
-        warnSettingsLoadFailure('activeTarget', filePath, e);
-    }
-    return null;
-}
-
-export function saveActiveTarget(workspace: string, settings: ActiveTargetSettings): void {
-    const filePath = projectConfigPath(workspace, 'activeTarget');
-    _ensureDir(filePath);
-    const data: Record<string, unknown> = {
-        workspace,
-        type: 'activeTarget',
-        ...settings
-    };
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
-}
-
-function sanitizeActiveTarget(raw: Record<string, unknown>): ActiveTargetSettings | null {
-    const kind = raw.kind;
-    const project = raw.project;
-    if (kind !== 'qt' && kind !== 'sdk') { return null; }
-    if (typeof project !== 'string' || !project) { return null; }
-    return {
-        kind,
-        project,
-        mode: (raw.mode === 'debug' || raw.mode === 'release') ? raw.mode : 'debug',
-        arch: (raw.arch === 'x86' || raw.arch === 'x64') ? raw.arch : 'x64',
-        runAt: (raw.runAt === 'local' || raw.runAt === 'remote') ? raw.runAt : 'local',
-        ...(typeof raw.qtPath === 'string' ? { qtPath: raw.qtPath } : {}),
-        ...(typeof raw.vsInstall === 'string' ? { vsInstall: raw.vsInstall } : {}),
-        ...(typeof raw.jomPath === 'string' ? { jomPath: raw.jomPath } : {}),
-        ...(typeof raw.qmakeTarget === 'string' ? { qmakeTarget: raw.qmakeTarget } : {}),
-    };
-}
-
-// ── Per-target toolchain store ──
-
-export interface TargetToolchainConfig {
-    qtPath?: string;
-    qtVersion?: string;
-    vsInstall?: string;
-    jomPath?: string;
-    qmakeTarget?: string;
-}
-
-export function loadTargetToolchains(workspace: string): Record<string, TargetToolchainConfig> {
-    const filePath = resolveConfigPath(workspace, 'targetToolchains');
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-                return raw;
-            }
-        }
-    } catch (e) {
-        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
-        warnSettingsLoadFailure('targetToolchains', filePath, e);
-    }
-    return {};
-}
-
-export function saveTargetToolchains(workspace: string, toolchains: Record<string, TargetToolchainConfig>): void {
-    const filePath = projectConfigPath(workspace, 'targetToolchains');
-    _ensureDir(filePath);
-    fs.writeFileSync(filePath, JSON.stringify(toolchains, null, 2), 'utf8');
-}
-
 // ── VS 路径推导 ──
 
 export function resolveVsDevShellPath(vsInstall: string): string {
@@ -591,17 +489,8 @@ function sanitizeSdk(raw: Record<string, unknown>): SdkSettings {
 }
 function sanitizeSync(raw: Record<string, unknown>): SyncSettings {
     const d = DEFAULT_SYNC;
-    const remotePaths: Record<string, string> = {};
-    if (raw.remotePaths && typeof raw.remotePaths === 'object' && !Array.isArray(raw.remotePaths)) {
-        const rp = raw.remotePaths as Record<string, unknown>;
-        for (const [k, v] of Object.entries(rp)) {
-            if (isString(v)) { remotePaths[k] = v; }
-        }
-    }
     return {
         enabled: isBool(raw.enabled) ? raw.enabled : d.enabled,
-        selectedServer: isString(raw.selectedServer) ? raw.selectedServer : d.selectedServer,
-        remotePaths,
         ignore: isStringArray(raw.ignore) ? raw.ignore : [...d.ignore]
     };
 }
