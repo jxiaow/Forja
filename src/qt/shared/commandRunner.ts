@@ -23,31 +23,25 @@ function cleanDetachScripts(dir: string): void {
 }
 
 /**
- * 将系统 locale 编码（中文系统 = GBK）的 Buffer 解码为 UTF-8 字符串。
- * MSVC/jom 输出使用系统默认代码页（无需 chcp 65001），
- * Node.js 直接读会乱码，此处先按 GBK 解码。
+ * 将子进程输出的 Buffer 解码为字符串。
+ * 优先尝试 UTF-8（MSBuild 等现代工具），失败则退回 GBK（传统 cmd/jom 等）。
  */
 function decodeWinOutput(buffer: Buffer): string {
     try {
-        return new TextDecoder('gbk', { fatal: false }).decode(buffer);
+        return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
     } catch {
-        // TextDecoder 不支持 gbk 时退回 UTF-8
-        return buffer.toString('utf-8');
+        // Not valid UTF-8 — fall back to GBK for legacy Windows tools
+        try {
+            return new TextDecoder('gbk', { fatal: false }).decode(buffer);
+        } catch {
+            return buffer.toString('utf-8');
+        }
     }
 }
 
-/**
- * No-op wrapper kept for compatibility (previously set chcp 65001).
- * MSVC/jom output encoding is handled by decodeWinOutput using the system
- * locale encoding (e.g. GBK on zh-CN systems).
- */
-function wrapForUtf8(commandLine: string): string {
-    return commandLine;
-}
-
-function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+function execute(commandLine: string, cwd: string, suppressedWarnings?: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' }, (error, stdout, stderr) => {
+        cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' }, (error, stdout, stderr) => {
             let exitCode = 0;
             if (error) {
                 const execError = error as cp.ExecException;
@@ -59,8 +53,8 @@ function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; 
                     exitCode = 1;
                 }
             }
-            const decodedStdout = process.platform === 'win32' ? decodeWinOutput(stdout) : stdout.toString('utf-8');
-            const decodedStderr = process.platform === 'win32' ? decodeWinOutput(stderr) : stderr.toString('utf-8');
+            const decodedStdout = filterBuildOutput(process.platform === 'win32' ? decodeWinOutput(stdout) : stdout.toString('utf-8'), suppressedWarnings);
+            const decodedStderr = filterBuildOutput(process.platform === 'win32' ? decodeWinOutput(stderr) : stderr.toString('utf-8'), suppressedWarnings);
             resolve({ exitCode, stdout: decodedStdout, stderr: decodedStderr });
         });
     });
@@ -69,9 +63,9 @@ function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; 
 /**
  * Streaming execute: uses cp.exec but pipes stdout/stderr to the current process in real-time.
  */
-function executeStreaming(commandLine: string, cwd: string, executablePath?: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+function executeStreaming(commandLine: string, cwd: string, executablePath?: string, suppressedWarnings?: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        const child = cp.exec(wrapForUtf8(commandLine), { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' });
+        const child = cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' });
 
         let stdout = '';
         let stderr = '';
@@ -92,13 +86,13 @@ function executeStreaming(commandLine: string, cwd: string, executablePath?: str
         }
 
         child.stdout?.on('data', (chunk: Buffer) => {
-            const text = isWin ? decodeWinOutput(chunk) : chunk.toString('utf-8');
+            const text = filterBuildOutput(isWin ? decodeWinOutput(chunk) : chunk.toString('utf-8'), suppressedWarnings);
             stdout += text;
             process.stdout.write(text);
         });
 
         child.stderr?.on('data', (chunk: Buffer) => {
-            const text = isWin ? decodeWinOutput(chunk) : chunk.toString('utf-8');
+            const text = filterBuildOutput(isWin ? decodeWinOutput(chunk) : chunk.toString('utf-8'), suppressedWarnings);
             stderr += text;
             process.stderr.write(text);
         });
@@ -132,7 +126,7 @@ async function resolveDetachedRunPid(
     }
 
     const previous = new Set(previousPids);
-    const deadline = Date.now() + 2000;
+    const deadline = Date.now() + 5000;
 
     do {
         const currentPids = findExecutablePids(executablePath);
@@ -146,7 +140,7 @@ async function resolveDetachedRunPid(
     return null;
 }
 
-function terminateExecutable(executablePath: string | undefined): void {
+export function terminateExecutable(executablePath: string | undefined): void {
     if (!executablePath) {
         return;
     }
@@ -165,13 +159,16 @@ function terminateExecutable(executablePath: string | undefined): void {
     }
 }
 
-export function buildRunCommand(project: string, mode: string, arch: string): string | null {
+export function buildRunCommand(project: string, mode: string, arch: string, qtPath?: string): string | null {
     const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
     if (!runtimeTarget) {
         return null;
     }
 
     if (process.platform === 'win32') {
+        if (qtPath) {
+            return `set "PATH=${qtPath}\\bin;%PATH%" && ${shellQuote(runtimeTarget.exePath)}`;
+        }
         return shellQuote(runtimeTarget.exePath);
     }
 
@@ -227,6 +224,17 @@ export interface RunOptions {
     streaming?: boolean;
     /** When true, launches commands detached with output to log file. For run: builds first then detaches exe. For build/clean/rebuild: detaches entire command sequence. */
     detach?: boolean;
+    /** Warning codes to suppress from build output (e.g. ['C4819', 'C5297']) */
+    suppressedWarnings?: string[];
+}
+
+/**
+ * Filter build output lines matching suppressed warning codes.
+ * Each code is matched as a substring (e.g. "C4819" matches "warning C4819:").
+ */
+function filterBuildOutput(text: string, suppressed?: string[]): string {
+    if (!suppressed || suppressed.length === 0) return text;
+    return text.split('\n').filter(line => !suppressed.some(code => line.includes(` ${code}:`) || line.includes(` ${code} `))).join('\n');
 }
 
 export async function runCliResult(result: CliResult, options?: RunOptions): Promise<CliResult> {
@@ -234,11 +242,16 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         return result;
     }
 
+    // Pre-kill previous instance by executable path (path-aware, more precise than shell-level name-based kill)
+    if (result.action === 'run') {
+        terminateExecutable(result.executablePath);
+    }
+
     const started = Date.now();
     const commandParts = [...result.commands];
 
-    // stop is always synchronous — detach makes no sense for a kill command
-    const effectiveDetach = options?.detach && result.action !== 'stop';
+    const effectiveDetach = !!options?.detach;
+    const suppressed = options?.suppressedWarnings;
 
     // Detach mode for run: build first, then launch exe separately
     if (effectiveDetach && result.action === 'run' && commandParts.length > 1) {
@@ -247,8 +260,9 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
 
         // Execute build commands
         const buildLine = buildCommands.join(' && ');
-        const exec = options.streaming ? executeStreaming : execute;
-        const buildResult = await exec(buildLine, result.workspace);
+        const buildResult = options.streaming
+            ? await executeStreaming(buildLine, result.workspace, undefined, suppressed)
+            : await execute(buildLine, result.workspace, suppressed);
 
         // Write build log (both on success and failure)
         ensureLocalStateDir(result.workspace);
@@ -366,8 +380,9 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         const buildCommands = commandParts.slice(0, -1);
         const runCommand = commandParts[commandParts.length - 1];
         const buildLine = buildCommands.join(' && ');
-        const exec = options?.streaming ? executeStreaming : execute;
-        const buildResult = await exec(buildLine, result.workspace);
+        const buildResult = options?.streaming
+            ? await executeStreaming(buildLine, result.workspace, undefined, suppressed)
+            : await execute(buildLine, result.workspace, suppressed);
         const buildOutput = buildResult.stdout + '\n' + buildResult.stderr;
         const ws = summarizeWarnings(buildOutput);
 
@@ -392,7 +407,9 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             };
         }
 
-        const runResult = await exec(runCommand, result.project ? path.dirname(result.project) : result.workspace, result.executablePath);
+        const runResult = options?.streaming
+            ? await executeStreaming(runCommand, result.project ? path.dirname(result.project) : result.workspace, result.executablePath, suppressed)
+            : await execute(runCommand, result.project ? path.dirname(result.project) : result.workspace, suppressed);
         const durationMs = Date.now() - started;
         fs.writeFileSync(filePath, [
             `$ ${buildLine}`,
@@ -471,8 +488,8 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
     // Normal mode: execute all commands together
     const commandLine = commandParts.join(' && ');
     const executed = options?.streaming
-        ? await executeStreaming(commandLine, result.workspace, result.action === 'run' ? result.executablePath : undefined)
-        : await execute(commandLine, result.workspace);
+        ? await executeStreaming(commandLine, result.workspace, result.action === 'run' ? result.executablePath : undefined, suppressed)
+        : await execute(commandLine, result.workspace, suppressed);
     const durationMs = Date.now() - started;
     ensureLocalStateDir(result.workspace);
     const filePath = logFileFor(result.workspace, result.action);

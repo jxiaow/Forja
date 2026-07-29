@@ -67,7 +67,7 @@ test('staged remote status keeps planning repos when remote forja is missing', a
         assert.equal(result.remotePlan?.repos[0].overlayAllowed, true);
         assert.equal(result.layers.find(layer => layer.name === 'remoteForja')?.ok, false);
         assert.equal(result.layers.find(layer => layer.name === 'baselinePlan')?.ok, true);
-        assert.match(result.nextActions.join('\n'), /forja remote bootstrap/);
+        assert.match(result.nextAction || '', /forja doctor fix --remote/);
         assert.equal(commands.some(command => command.includes(stagedWorkspace)), true);
     } finally {
         fs.rmSync(fixture.root, { recursive: true, force: true });

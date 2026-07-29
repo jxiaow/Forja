@@ -9,30 +9,31 @@ test('vscode qt run stops the previous executable before building', () => {
     const rccStart = source.indexOf('export function rcc()', runStart);
     const runSource = source.slice(runStart, rccStart);
 
-    const killIndex = runSource.indexOf('await _killApp(');
+    const killIndex = runSource.indexOf('terminateExecutable(');
     const buildIndex = runSource.indexOf('builder.buildCommands(cfg)');
 
-    assert.notEqual(killIndex, -1);
+    assert.notEqual(killIndex, -1, 'run must call terminateExecutable');
     assert.notEqual(buildIndex, -1);
     assert.ok(killIndex < buildIndex, 'run must stop the old executable before the build starts');
 });
 
-test('vscode qt pre-run kill tolerates a missing executable process', () => {
+test('vscode qt pre-run kill uses path-based terminateExecutable', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'build', 'buildManager.ts'), 'utf8');
-    const killStart = source.indexOf('function _killApp(');
-    const resolveStart = source.indexOf('function _resolveMakefileInfo()', killStart);
-    const killSource = source.slice(killStart, resolveStart);
 
-    assert.notEqual(killStart, -1);
-    assert.match(killSource, /builder\.killApp\(exeName\)/);
-    assert.doesNotMatch(killSource, /taskkill \/F \/IM/);
-    assert.doesNotMatch(killSource, /pkill -x/);
+    // _killApp removed — now uses terminateExecutable from commandRunner (PID-based)
+    assert.doesNotMatch(source, /function _killApp\(/);
+    assert.match(source, /terminateExecutable\(mfInfo\.exePath\)/);
+    // No name-based kill patterns
+    assert.doesNotMatch(source, /taskkill \/F \/IM/);
+    assert.doesNotMatch(source, /pkill -x/);
 });
 
-test('vscode qt run and stop honor configured runtime process name', () => {
+test('vscode qt stop is unified via runStop (not buildManager)', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'build', 'buildManager.ts'), 'utf8');
 
-    assert.match(source, /getRuntimeProcessName/);
-    assert.match(source, /await _killApp\(getRuntimeProcessName\(\) \|\| mfInfo\.target\)/);
-    assert.match(source, /const exeName = getRuntimeProcessName\(\) \|\| mfInfo\?\.target \|\| 'app'/);
+    // stop() and stopCurrentTarget() removed — stop is now unified via runStop (PID-based)
+    assert.doesNotMatch(source, /export function stop\(\)/);
+    assert.doesNotMatch(source, /export function stopCurrentTarget\(\)/);
+    // getRuntimeProcessName no longer imported (was only used by stop and name-based kill)
+    assert.doesNotMatch(source, /getRuntimeProcessName/);
 });

@@ -93,10 +93,8 @@ export function validateMakefile(projectDir: string, config: { mode: string; arc
     // target 覆盖
     if (config.target) {
         if (!cmd.includes(`TARGET=${config.target}`)) { mismatch.push('target'); }
-    } else {
-        // 当前未指定 target，但 Makefile 里有 TARGET= 覆盖，说明旧的有覆盖新的没有
-        if (/TARGET=/.test(cmd)) { mismatch.push('target'); }
     }
+    // 未指定 target 时不检查 — Makefile 中的 TARGET= 来自 .pro 文件，不是用户覆盖
     if (config.qmakeArgs && !cmd.includes(config.qmakeArgs)) {
         mismatch.push('qmakeArgs');
     }

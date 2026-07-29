@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as cp from 'child_process';
 import { setState, getState } from '../../vscode/qtState';
-import { getBuildConfig, getRccProjectPath, getRuntimeProcessName } from '../services/configService';
+import { getBuildConfig, getRccProjectPath } from '../services/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
 import { winConfig, getVsDevCmd } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
@@ -104,22 +103,6 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
 }
 
 
-// 静默 kill（不开新 terminal）
-function _killApp(exeName: string): Promise<void> {
-    const cmd = builder.killApp(exeName);
-    logger.info(`Kill app: ${cmd}`);
-    return new Promise((resolve, reject) => {
-        cp.exec(cmd, (err) => {
-            if (!err) {
-                resolve();
-                return;
-            }
-            logger.error(`Kill app failed: ${err.message}`);
-            reject(new Error(`停止旧程序失败: ${err.message}`));
-        });
-    });
-}
-
 // 从 Makefile 解析 MakefileInfo，失败返回 null 并记录日志
 function _resolveMakefileInfo(): ReturnType<typeof getMakefileInfo> {
     const cfg = getBuildConfig();
@@ -219,13 +202,9 @@ export async function run(): Promise<void> {
         throw new Error('无法确定可执行文件路径');
     }
 
-    try {
-        await _killApp(getRuntimeProcessName() || mfInfo.target);
-    } catch (e) {
-        setState('isBuilding', false);
-        setState('buildAction', null);
-        throw e;
-    }
+    // Kill previous instance by executable path (PID-based, precise)
+    const { terminateExecutable } = await import('../shared/commandRunner');
+    terminateExecutable(mfInfo.exePath);
 
     const { commands, matcher } = builder.buildCommands(cfg);
     // Build task: 不清屏，失败时保留编译错误
@@ -370,17 +349,4 @@ export function rcc(): Thenable<vscode.TaskExecution> {
 export function runCustomCommand(name: string, command: string): Thenable<vscode.TaskExecution> {
     logger.info(`Custom command "${name}": ${command}`);
     return runTask(name, [command], []);
-}
-
-export function stop(): void {
-    const cfg = getBuildConfig();
-    const mfInfo = getMakefileInfo(cfg.projectDir, cfg.mode, cfg.arch);
-    const exeName = getRuntimeProcessName() || mfInfo?.target || 'app';
-    logger.info(`Stop current target: ${exeName}`);
-    _killApp(exeName).catch((e: Error) => vscode.window.showErrorMessage(e.message));
-    setState('isRunning', false);
-}
-
-export function stopCurrentTarget(): void {
-    stop();
 }

@@ -32,8 +32,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         ? {
             config: options.config,
             layer: { name: 'syncConfig' as const, ok: true, message: 'ready' },
-            diagnostics: [],
-            nextActions: []
+            diagnostics: []
         }
         : resolveRemoteConfig(options.workspace);
     const layers: RemoteLayer[] = [resolved.layer];
@@ -47,7 +46,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
             layers,
             remoteSettings: remoteSettingsSummary,
             diagnostics: resolved.diagnostics,
-            nextActions: resolved.nextActions
+            nextAction: resolved.nextAction
         };
     }
 
@@ -73,8 +72,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
             layers,
             lock: { locked: false },
             remoteSettings: remoteSettingsSummary,
-            diagnostics: [],
-            nextActions: []
+            diagnostics: []
         };
     }
 
@@ -109,18 +107,19 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
     const remoteForjaBin = options.remoteForjaBin ?? remoteSettings?.remoteForjaBin ?? '';
     const versionResult = await runner.run(buildRemoteForjaVersionCommand(remoteForjaBin), 10000);
     const remoteVersion = versionResult.stdout.trim();
-    const versionOk = versionResult.exitCode === 0 && remoteVersion === VERSION;
+    const baseVersion = (v: string) => v.match(/^\d+\.\d+\.\d+/)?.[0] ?? v;
+    const versionOk = versionResult.exitCode === 0 && baseVersion(remoteVersion) === baseVersion(VERSION);
     layers.push({
         name: 'remoteForja',
         ok: versionOk,
         version: remoteVersion || undefined,
         message: versionOk ? 'compatible' : 'remote forja missing or incompatible',
-        nextActions: versionOk ? undefined : ['forja remote bootstrap']
+        nextAction: versionOk ? undefined : 'forja doctor fix --remote'
     });
     if (!versionOk) {
         diagnostics.push({ level: stagedMode ? 'warning' : 'error', message: 'remote forja 未安装或版本不兼容' });
         if (!stagedMode) {
-            return finishBlocked(options.workspace, server.name || server.id, remotePath, layers, diagnostics, 'remoteForja', ['forja remote bootstrap']);
+            return finishBlocked(options.workspace, server.name || server.id, remotePath, layers, diagnostics, 'remoteForja', 'forja doctor fix --remote');
         }
     }
 
@@ -129,7 +128,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         const lockStatus = await executeRemoteReadLock({ remotePath, runner });
         lock = lockStatus.lock;
         diagnostics.push(...lockStatus.diagnostics);
-        layers.push({ name: 'targetLock', ok: lockStatus.ok && !lockStatus.lock.locked, message: lockStatus.lock.locked ? 'locked' : lockStatus.ok ? 'unlocked' : 'unknown', nextActions: lockStatus.lock.locked && lockStatus.lock.lockId ? ['forja remote unlock --lock-id ' + lockStatus.lock.lockId + ' --force'] : undefined });
+        layers.push({ name: 'targetLock', ok: lockStatus.ok && !lockStatus.lock.locked, message: lockStatus.lock.locked ? 'locked' : lockStatus.ok ? 'unlocked' : 'unknown', nextAction: lockStatus.lock.locked && lockStatus.lock.lockId ? 'forja doctor fix --remote' : undefined });
         if (lockStatus.lock.locked) {
             return {
                 ok: true,
@@ -143,7 +142,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
                 lock,
                 remoteSettings: remoteSettingsSummary,
                 diagnostics,
-                nextActions: lockStatus.lock.lockId ? ['forja remote unlock --lock-id ' + lockStatus.lock.lockId + ' --force'] : []
+                nextAction: lockStatus.lock.lockId ? 'forja doctor fix --remote' : undefined
             };
         }
     }
@@ -180,10 +179,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
                 repos: planStatus.plan.repos
             },
             diagnostics,
-            nextActions: unique([
-                ...(!versionOk ? ['forja remote bootstrap'] : []),
-                ...planStatus.plan.nextActions
-            ])
+            nextAction: !versionOk ? 'forja doctor fix --remote' : planStatus.plan.nextAction
         };
     }
 
@@ -212,7 +208,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
             remoteSettings: remoteSettingsSummary,
             repos: baseline.repos,
             diagnostics,
-            nextActions: baseline.nextActions
+            nextAction: baseline.nextAction
         };
     }
 
@@ -227,8 +223,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         layers,
         lock,
         remoteSettings: remoteSettingsSummary,
-        diagnostics,
-        nextActions: []
+        diagnostics
     };
 }
 
@@ -236,17 +231,17 @@ export async function buildRemoteTest(options: BuildRemoteTestOptions): Promise<
     const status = await buildRemoteStatus({ ...options, probe: options.probe ?? true, baseline: false, lock: false });
     const failed = status.layers.find(layer => layer.ok === false);
     if (failed?.name === 'remoteForja' && status.remoteSettings?.workspaceMode === 'staged') {
-        return testResult(true, undefined, status.diagnostics, status.nextActions);
+        return testResult(true, undefined, status.diagnostics, status.nextAction);
     }
     if (!failed || !options.bootstrap || failed.name !== 'remoteForja') {
-        return testResult(!failed, failed, status.diagnostics, failed?.nextActions || status.nextActions);
+        return testResult(!failed, failed, status.diagnostics, failed?.nextAction || status.nextAction);
     }
 
     if (!options.artifact || !options.uploader || !options.runner) {
         return testResult(false, failed, [
             ...status.diagnostics,
             { level: 'error', message: 'remote test --bootstrap 需要 bootstrap artifact 和远端上传通道' }
-        ], options.artifact?.nextActions || ['npm run build:cli', 'npm run package:all']);
+        ], options.artifact?.nextAction || 'npm run package:all');
     }
 
     const bootstrap = await executeRemoteBootstrap({ artifact: options.artifact, runner: options.runner, uploader: options.uploader });
@@ -254,20 +249,20 @@ export async function buildRemoteTest(options: BuildRemoteTestOptions): Promise<
         { stage: 'bootstrap', ok: bootstrap.ok, message: bootstrap.stages.filter(stage => !stage.ok).map(stage => stage.message).find(Boolean) }
     ];
     if (!bootstrap.ok) {
-        return testResult(false, failed, [...status.diagnostics, ...bootstrap.diagnostics], bootstrap.nextActions, stages);
+        return testResult(false, failed, [...status.diagnostics, ...bootstrap.diagnostics], bootstrap.nextAction, stages);
     }
 
     const retest = await buildRemoteStatus({ ...options, probe: true, baseline: false, lock: false });
     const retestFailed = retest.layers.find(layer => layer.ok === false);
     stages.push({ stage: 'remoteForja', ok: !retestFailed || retestFailed.name !== 'remoteForja', message: retestFailed?.message });
-    return testResult(!retestFailed, retestFailed, retest.diagnostics, retestFailed?.nextActions || retest.nextActions, stages);
+    return testResult(!retestFailed, retestFailed, retest.diagnostics, retestFailed?.nextAction || retest.nextAction, stages);
 }
 
 function testResult(
     ok: boolean,
     failed: RemoteLayer | undefined,
     diagnostics: RemoteTestResult['diagnostics'],
-    nextActions: string[],
+    nextAction?: string,
     stages?: RemoteStage[]
 ): RemoteTestResult {
     return {
@@ -276,7 +271,7 @@ function testResult(
         mode: 'remote',
         failedLayer: failed?.name,
         diagnostics,
-        nextActions,
+        nextAction,
         stages
     };
 }
@@ -288,7 +283,7 @@ function finishBlocked(
     layers: RemoteLayer[],
     diagnostics: RemoteStatusResult['diagnostics'],
     failedLayer: RemoteLayer['name'],
-    nextActions?: string[]
+    nextAction?: string
 ): RemoteStatusResult {
     const layer = layers.find(item => item.name === failedLayer);
     return {
@@ -303,7 +298,7 @@ function finishBlocked(
         lock: { locked: false },
         remoteSettings: summarizeRemoteSettings(loadRemoteSettings(workspace)),
         diagnostics,
-        nextActions: nextActions || layer?.nextActions || []
+        nextAction: nextAction || layer?.nextAction
     };
 }
 

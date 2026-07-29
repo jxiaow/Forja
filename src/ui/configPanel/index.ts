@@ -4,7 +4,7 @@ import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-         getScanExcludeDirs, getPinnedProject, getTarget, getQmakeArgs, getRuntimeProcessName, getManualProPath, getDesignerPath, getQtSourcePath,
+         getScanExcludeDirs, getPinnedProject, getTarget, getQmakeArgs, getManualProPath, getDesignerPath, getQtSourcePath,
          getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../qt/services/configService';
 import { getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
@@ -61,7 +61,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             handleMessage(msg, webviewView.webview,
                 () => this._pushEnvUpdate(),
                 () => this._updateHtml())
-                .catch(e => console.warn('[forja] configPanel message error:', (e as Error).message))
+                .catch(e => logger.warn(`消息处理错误: ${(e as Error).message}`))
         );
 
         // 监听 sync-state 变化，同步完成后刷新面板中的待同步数
@@ -125,7 +125,6 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             scanExcludeDirs: getScanExcludeDirs().join(', '),
             target: getTarget(),
             qmakeArgs: getQmakeArgs(),
-            runtimeProcessName: getRuntimeProcessName(),
             isWin: process.platform === 'win32',
             autoDevShell: env?.vs?.devShellPath || '',
             autoQtPath: env?.qt?.path || '',

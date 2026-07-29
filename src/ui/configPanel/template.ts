@@ -17,7 +17,6 @@ export interface TemplateData {
     scanExcludeDirs: string;
     target: string;
     qmakeArgs?: string;
-    runtimeProcessName: string;
     isWin: boolean;
     autoDevShell: string;
     autoQtPath: string;
@@ -76,7 +75,7 @@ function _escapeHtml(value: string): string {
 
 export function getHtml(data: TemplateData): string {
     const { env, project, vsDevShellPath, pinnedProject, cStandard, cppStandard,
-            scanExcludeDirs, target, runtimeProcessName, isWin, autoDevShell, autoQtPath, qtPath } = data;
+            scanExcludeDirs, target, isWin, autoDevShell, autoQtPath, qtPath } = data;
 
     const projectName = getEffectiveProjectName(project, target, pinnedProject || '未选择');
     const defaultTarget = project?.target || '';
@@ -136,7 +135,6 @@ export function getHtml(data: TemplateData): string {
         defaultTarget: _escapeHtml(defaultTarget),
         savedTarget: _escapeHtml(target),
         qmakeArgs: _escapeHtml(data.qmakeArgs || ''),
-        runtimeProcessName: _escapeHtml(runtimeProcessName),
         dotVsBlockClass: effectiveDevShell ? 'dot-ok' : 'dot-warn',
         vsBadgeClass: effectiveDevShell ? 'badge-ok' : 'badge-warn',
         devShellSource: _escapeHtml(devShellSource),
@@ -185,6 +183,13 @@ export function getHtml(data: TemplateData): string {
         html = html.replace(/<!--IF_WIN-->[\s\S]*?<!--END_WIN-->/g, '');
     } else {
         html = html.replace(/<!--IF_WIN-->/g, '').replace(/<!--END_WIN-->/g, '');
+    }
+
+    // 条件区块：<!--IF_QT-->...<!--END_QT-->（仅 Qt 模块激活时显示）
+    if (!data.qtActive) {
+        html = html.replace(/<!--IF_QT-->[\s\S]*?<!--END_QT-->/g, '');
+    } else {
+        html = html.replace(/<!--IF_QT-->/g, '').replace(/<!--END_QT-->/g, '');
     }
 
     // 变量替换：{{key}}

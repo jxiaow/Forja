@@ -19,15 +19,6 @@ export const linuxConfig: PlatformConfig = {
         return `cd "${dir}"`;
     },
 
-    killCommand(exeName: string): string {
-        return `(pkill -x "${exeName}" 2>/dev/null || true); `
-            + `if pgrep -x "${exeName}" >/dev/null 2>&1; then echo "Failed to stop ${exeName}"; exit 1; fi`;
-    },
-
-    stopCommands(exeName: string): string[] {
-        return [`pkill -x ${exeName}`];
-    },
-
     qmakeSpec: 'linux-g++',
     qmakeExtraArgs(): string { return ''; },
     qmakeMatcher: '$gcc',

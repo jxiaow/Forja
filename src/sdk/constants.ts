@@ -1,10 +1,3 @@
-/** 命令 ID */
-export const CMD_BUILD = 'forja.sdk.build';
-export const CMD_REBUILD = 'forja.sdk.rebuild';
-export const CMD_CLEAN = 'forja.sdk.clean';
-export const CMD_SHOW_ACTIONS = 'forja.sdk.showActions';
-export const CMD_SELECT_PROJECT = 'forja.sdk.selectProject';
-
 /** Context key */
 export const CTX_ACTIVATED = 'forja.sdk.activated';
 

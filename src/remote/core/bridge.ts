@@ -28,11 +28,13 @@ export interface ExecuteRemoteBridgeResult {
     stderr: string;
     result?: unknown;
     diagnostics: RemoteDiagnostic[];
-    nextActions: string[];
+    nextAction?: string;
 }
 
 export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): Promise<ExecuteRemoteBridgeResult> {
-    const remoteArgs = [options.target, options.action, '--workspace', options.remotePath, ...options.args];
+    // New unified CLI: commands are top-level (build, run, status, etc.)
+    // No more 'qt'/'sdk' subcommand prefix
+    const remoteArgs = [options.action, '--workspace', options.remotePath, ...options.args];
     if (options.json && !remoteArgs.includes('--json')) {
         remoteArgs.push('--json');
     }
@@ -50,7 +52,9 @@ export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): 
                 diagnostics.push(...extractRemoteDiagnostics(parsed, `远端 ${options.target} ${options.action} 返回失败`));
             }
         } catch (error) {
-            diagnostics.push({ level: 'error', message: `远端 ${options.target} ${options.action} JSON 输出解析失败: ${error instanceof Error ? error.message : String(error)}` });
+            const stdoutPreview = trim(executed.stdout);
+            const stdoutContext = stdoutPreview ? `; stdout: ${stdoutPreview}` : '';
+            diagnostics.push({ level: 'error', message: `远端 ${options.target} ${options.action} JSON 输出解析失败: ${error instanceof Error ? error.message : String(error)}${stdoutContext}` });
         }
     }
     if (executed.exitCode !== 0) {
@@ -68,8 +72,7 @@ export async function executeRemoteBridge(options: ExecuteRemoteBridgeOptions): 
         stdout: executed.stdout,
         stderr: executed.stderr,
         result: parsed,
-        diagnostics,
-        nextActions: []
+        diagnostics
     };
 }
 

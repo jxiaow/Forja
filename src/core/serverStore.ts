@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { forjaConfigDir, loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
+import { warn } from './loggerBase';
 
 function atomicWriteJson(filePath: string, data: unknown): void {
     const tmp = filePath + `.tmp.${process.pid}`;
@@ -114,7 +115,7 @@ export function readServers(): ServerConfig[] {
                 }));
         }
     } catch (e) {
-        console.warn(`[forja] servers.json 解析失败: ${e instanceof Error ? e.message : e}`);
+        warn(`servers.json 解析失败: ${e instanceof Error ? e.message : e}`);
     }
     return [];
 }
@@ -139,7 +140,7 @@ export function writeServers(servers: ServerConfig[]): void {
     // 收紧文件权限（仅当前用户可读写）— Windows 上 chmod 无效但不报错
     try { fs.chmodSync(_serversFilePath(), 0o600); } catch (e) {
         if (process.platform !== 'win32') {
-            console.warn(`[forja] chmod servers.json 失败: ${e instanceof Error ? e.message : e}`);
+            warn(`chmod servers.json 失败: ${e instanceof Error ? e.message : e}`);
         }
     }
 }

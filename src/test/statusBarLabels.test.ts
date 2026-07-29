@@ -17,7 +17,7 @@ test('non-windows mode label uses full mode text without architecture', () => {
 });
 
 test('status bar uses full display label instead of short label text', () => {
-    const statusBarPath = path.join(process.cwd(), 'src', 'ui', 'unifiedStatusBar.ts');
+    const statusBarPath = path.join(process.cwd(), 'src', 'ui', 'statusBar.ts');
     const source = fs.readFileSync(statusBarPath, 'utf8');
 
     assert.match(source, /getModeDisplayLabel/);

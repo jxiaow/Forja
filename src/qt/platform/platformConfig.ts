@@ -10,8 +10,6 @@ export interface PlatformConfig {
 
     initCommands(cfg: BuildConfig): string[];
     cdCommand(dir: string): string;
-    killCommand(exeName: string): string;
-    stopCommands(exeName: string): string[];
 
     qmakeSpec: string;
     qmakeExtraArgs(cfg: BuildConfig): string;

@@ -10,7 +10,11 @@ import { buildSyncPage } from './pages/sync';
 import { buildAdvancedPage } from './pages/advanced';
 
 export function getPageHtml(pageId: ConfigPageId, data: TemplateData): string {
-    const body = BUILDERS[pageId](data);
+    const builder = BUILDERS[pageId];
+    if (!builder) {
+        return '<!DOCTYPE html><html><body><p>Unknown config page: ' + pageId + '</p></body></html>';
+    }
+    const body = builder(data);
     return '<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">'
         + '<style>' + PAGE_CSS + '</style><script>const vscode=acquireVsCodeApi();</script></head><body>'
         + body + '<script>' + CSEL_JS + '</script>'

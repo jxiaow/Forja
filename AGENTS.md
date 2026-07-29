@@ -93,7 +93,7 @@ Scope → Solution → [Plan] → Build → Close
 - 长周期任务**必须在 Solution gate 后先写阶段级 todo/checklist**
 - 命中根目录 / workspace / 目录迁移时，**必须先创建 `docs/operations/<initiative>/`**
 - 不修改 `extension.ts` 的 activate 函数签名或导出
-- 不删除或重命名现有 VSCode 命令 ID（可新增别名命令，旧 ID 必须保留并正常工作）
+- VSCode 命令 ID 可随命令收敛方案替换；不要求旧 ID 兼容保留，但新增/替换命令后必须同步 `package.json` contributes 和 `extension.ts` 注册
 - 不修改 `package.json` 中已发布的 `activationEvents`
 - 不把平台相关逻辑写进 `shared/`（shared 必须不依赖 vscode）
 - 不在 CLI 模块中引入 `vscode` 依赖

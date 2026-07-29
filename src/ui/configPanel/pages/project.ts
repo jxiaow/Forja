@@ -80,12 +80,6 @@ function buildQtSection(data: TemplateData): string {
     h += ' placeholder="例如 DEFINES+=FEATURE_X CONFIG+=qml_debug"';
     h += " onblur=\"vscode.postMessage({command:'saveQmakeArgs',";
     h += "value:this.value.trim()})\"/></div></div>";
-    h += '<div class="ci"><div class="cii"><div class="cil">停止进程名</div>';
-    h += '<div class="cid">运行前先停止的进程名，留空使用输出名称</div></div>';
-    h += `<div class="cic"><input id="runtimeProcessName" value="${esc(data.runtimeProcessName)}"`;
-    h += ' placeholder="例如 DemoAppWorker，留空自动"';
-    h += " onblur=\"vscode.postMessage({command:'saveRuntimeProcessName',";
-    h += "value:this.value.trim().replace(/\\.exe$/i,'')})\"/></div></div>";
     h += '<div class="ci"><div class="cii"><div class="cil">RCC 项目</div>';
     h += '<div class="cid">资源编译器项目路径，留空自动扫描</div></div>';
     h += '<div class="cic"><div class="input-row">';
@@ -135,12 +129,15 @@ function buildQtSection(data: TemplateData): string {
         { value: 'c++23', label: 'C++23' }
     ], data.cppStandard);
     h += '</div></div>';
-    h += '<div class="ci" style="flex-direction:column;align-items:stretch"><div class="cii"><div class="cil">排除目录</div>';
-    h += '<div class="cid">IntelliSense 扫描时跳过，已内置 build*, debug, release</div></div>';
-    h += '<div style="margin-top:8px">';
-    h += '<div class="tag-input" id="edw">';
-    h += '<input id="edi" placeholder="回车添加" onkeydown="onEK(event)"/>';
-    h += '</div></div></div>';
+    // 排除目录 — 仅 Qt 目录扫描模式需要，SDK 从 .vcxproj 解析不需要
+    if (data.qtActive) {
+        h += '<div class="ci" style="flex-direction:column;align-items:stretch"><div class="cii"><div class="cil">排除目录</div>';
+        h += '<div class="cid">Qt IntelliSense 目录扫描时跳过，已内置 build*, debug, release</div></div>';
+        h += '<div style="margin-top:8px">';
+        h += '<div class="tag-input" id="edw">';
+        h += '<input id="edi" placeholder="回车添加" onkeydown="onEK(event)"/>';
+        h += '</div></div></div>';
+    }
     h += '<div style="margin-top:12px"><button class="btn btn-primary"';
     h += " onclick=\"vscode.postMessage({command:'generateIntelliSense',";
     h += "cStandard:document.querySelector('#cStd .csel-trigger').dataset.value,";
@@ -279,6 +276,14 @@ function buildSdkSection(data: TemplateData): string {
     h += 'event.currentTarget.classList.add("active");';
     h += 'vscode.postMessage({command:"saveSdkArch",value:a})}';
     h += '</script>';
+
+    // SDK IntelliSense 生成按钮
+    h += '<div class="ci" style="margin-top:12px">';
+    h += '<button class="btn btn-primary"';
+    h += " onclick=\"vscode.postMessage({command:'generateIntelliSense',";
+    h += "cStandard:document.querySelector('#cStd .csel-trigger')?.dataset.value,";
+    h += "cppStandard:document.querySelector('#cppStd .csel-trigger')?.dataset.value})\">";
+    h += '生成 SDK IntelliSense 配置</button></div>';
 
     h += '</details>';
     return h;
