@@ -6,11 +6,9 @@ import * as fs from 'fs';
 import { ForjaJsonResult, ActiveTarget, Locale, T, Question } from './types';
 import { getActiveTarget, setActiveTarget } from './activeTarget';
 import {
-    loadQtSettings, saveQtSettings,
-    loadSdkSettings, saveSdkSettings,
-    loadSyncSettings,
-    saveGlobalConfig, loadGlobalConfig,
+    saveGlobalConfig,
 } from '../../core/settingsIO';
+import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } from '../../core/workspaceStore';
 import {
     runUseTarget as runUseTargetNew,
     runSwitchTarget,
@@ -55,9 +53,9 @@ export function formatUseText(result: UseResult, locale: Locale): string {
         if (result.activeTarget) {
             const t = result.activeTarget;
             lines.push(`  ${T('target')}${t.project}`);
-            if (t.qtPath) lines.push(`  ${T('setupSummaryQt')}: ${t.qtPath}`);
-            if (t.vsInstall) lines.push(`  ${T('setupSummaryVs')}: ${t.vsInstall}`);
-            if (t.jomPath) lines.push(`  ${T('init.currentJom')}: ${t.jomPath}`);
+            if (t.toolchain.qtPath) lines.push(`  ${T('setupSummaryQt')}: ${t.toolchain.qtPath}`);
+            if (t.toolchain.vsInstall) lines.push(`  ${T('setupSummaryVs')}: ${t.toolchain.vsInstall}`);
+            if (t.toolchain.jomPath) lines.push(`  ${T('init.currentJom')}: ${t.toolchain.jomPath}`);
             lines.push(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
             lines.push(`  ${T('use.execution')}: ${t.runAt}`);
         }
@@ -128,27 +126,57 @@ export interface UseTargetArgs {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
-    suppressWarnings?: string;
     reset?: boolean;
     interactive?: boolean;
     json?: boolean;
 }
 
-export async function runUseTarget(workspace: string, args: UseTargetArgs): Promise<UseResult> {
-    // Handle --suppress-warnings (can combine with other flags or standalone)
-    if (args.suppressWarnings) {
-        const codes = args.suppressWarnings.split(',').map(s => s.trim()).filter(Boolean);
-        const qt = loadQtSettings(workspace);
-        qt.suppressedWarnings = codes;
-        saveQtSettings(workspace, qt);
-        // If no other flags, return immediately
-        if (!args.project && !args.mode && !args.arch && !args.qtPath && !args.vsInstall && !args.jomPath) {
-            return {
-                ok: true, action: 'use', useScope: 'target', workspace, changed: ['qt.suppressedWarnings'],
-                nextAction: 'forja build',
-            };
-        }
+export function runSuppressWarnings(workspace: string, codes: string[], add: boolean, rm: boolean): UseResult {
+    const workroot = resolveWorkroot(workspace);
+    if (!workroot) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: T('use.noActiveTargetSelected') }],
+            nextAction: 'forja init',
+        };
     }
+    const config = loadWorkspaceConfig(workroot);
+    const current = config.qtModulePrefs.suppressedWarnings ?? [];
+
+    if (!add && !rm && codes.length === 0) {
+        return {
+            ok: true, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: current.length > 0
+                ? [{ level: 'info', message: `Suppressed warnings: ${current.join(', ')}` }]
+                : [{ level: 'info', message: 'No suppressed warnings' }],
+        };
+    }
+
+    let updated: string[];
+    if (add) {
+        const set = new Set(current);
+        for (const c of codes) set.add(c);
+        updated = [...set];
+    } else if (rm) {
+        const toRemove = new Set(codes);
+        updated = current.filter(c => !toRemove.has(c));
+    } else {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: T('use.suppressWarningsRequiresFlag') }],
+            nextAction: 'forja use target suppress-warnings --add <code>',
+        };
+    }
+
+    config.qtModulePrefs.suppressedWarnings = updated;
+    saveWorkspaceConfig(config);
+    return {
+        ok: true, action: 'use', useScope: 'target', workspace, changed: ['qt.suppressedWarnings'],
+        nextAction: 'forja build',
+    };
+}
+
+export async function runUseTarget(workspace: string, args: UseTargetArgs): Promise<UseResult> {
 
     // If --project is specified, use the switch path
     if (args.project) {
@@ -156,6 +184,7 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
             project: args.project,
             mode: args.mode,
             arch: args.arch,
+            reset: args.reset,
             interactive: args.interactive,
             json: args.json,
         });
@@ -178,7 +207,35 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
         });
     }
 
-    // No flags: full interactive flow (absorbs setup functionality)
+    // No flags: interactive picker if saved targets exist, otherwise full flow
+    const { resolveWorkroot, loadWorkspaceConfig } = await import('../../core/workspaceStore');
+    const workroot = resolveWorkroot(workspace);
+    if (workroot && args.interactive !== false && !args.json) {
+        const wsConfig = loadWorkspaceConfig(workroot);
+        const savedTargets = Object.values(wsConfig.targets);
+        if (savedTargets.length > 0) {
+            const { choose } = await import('./prompt');
+            const { T: tr } = await import('./types');
+            const ADD_NEW = '__add_new__';
+            interface PickerItem { value: string; label: string }
+            const items: PickerItem[] = savedTargets.map(t => ({
+                value: t.id,
+                label: `${t.id === wsConfig.activeTarget ? '* ' : '  '}${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}`,
+            }));
+            items.push({ value: ADD_NEW, label: tr('use.addNewTarget') });
+
+            const chosen = await choose(tr('use.selectTarget'), items, item => item.label);
+            if (chosen && chosen.value !== ADD_NEW) {
+                return runSwitchTarget(workspace, {
+                    project: chosen.value,
+                    interactive: true,
+                    json: false,
+                });
+            }
+            // User chose "add new" or cancelled — fall through to full flow
+        }
+    }
+
     return runUseTargetNew(workspace, {
         interactive: args.interactive ?? false,
         json: args.json ?? false,
@@ -223,13 +280,12 @@ export function runUseExecution(workspace: string, local: boolean, remote: boole
     }
 
     const updated = { ...currentTarget, runAt };
-    try {
-        setActiveTarget(workspace, updated);
-    } catch (e) {
+    const saved = setActiveTarget(workspace, updated);
+    if (!saved) {
         return {
             ok: false, action: 'use', useScope: 'execution', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveExecMode')}: ${e instanceof Error ? e.message : String(e)}` }],
-            nextAction: 'forja use execution --local',
+            diagnostics: [{ level: 'error', message: T('use.failedToSaveExecMode') }],
+            nextAction: 'forja init',
         };
     }
     return {
@@ -274,26 +330,6 @@ export function runUseShow(workspace: string): UseResult {
             nextAction: 'forja use target',
         };
     }
-
-    const qt = loadQtSettings(workspace);
-    const sdk = loadSdkSettings(workspace);
-    const globalConfig = loadGlobalConfig();
-
-    const lines: string[] = [];
-    lines.push(T('setupTitle'));
-    lines.push(`  ${T('target')}${target.project}`);
-    if (target.qtPath) {
-        lines.push(`  ${T('setupSummaryQt')}: ${target.qtPath}`);
-    }
-    if (target.vsInstall) {
-        lines.push(`  ${T('setupSummaryVs')}: ${target.vsInstall}`);
-    }
-    if (target.jomPath) {
-        lines.push(`  ${T('init.currentJom')}: ${target.jomPath}`);
-    }
-    lines.push(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
-    lines.push(`  ${T('use.execution')}: ${target.runAt}`);
-    lines.push(`  ${T('use.language')}: ${globalConfig.lang || 'en'}`);
 
     return {
         ok: true, action: 'use', useScope: 'show', changed: [],

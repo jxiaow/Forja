@@ -7,7 +7,7 @@ import { resolveProjectRoot } from '../vscode/workspaceResolver';
 import { createLogger } from '../vscode/logger';
 import { resolveGitRoots } from '../core/gitRepoResolver';
 import { onSettingsChange } from '../vscode/settingsStore';
-import { forjaConfigDir } from '../core/settingsIO';
+import { forjaConfigDir, loadRemoteSettings } from '../core/settingsIO';
 import { isPathInside } from '../core/syncFileSelection';
 
 const logger = createLogger('SyncManager');
@@ -207,11 +207,12 @@ export async function executeSyncChangedFiles(uri?: vscode.Uri): Promise<void> {
 export async function executeTestConnection(): Promise<void> {
     const wsRoot = getWorkspaceRoot();
     const project = wsRoot ? readProjectSyncConfig(wsRoot) : null;
+    const remote = wsRoot ? loadRemoteSettings(wsRoot) : null;
     const servers = readServers();
 
     let server: ServerConfig | undefined;
-    if (project?.selectedServer) {
-        server = servers.find(s => s.id === project.selectedServer);
+    if (remote?.selectedServer) {
+        server = servers.find(s => s.id === remote.selectedServer);
     }
     if (!server) {
         if (servers.length === 0) {

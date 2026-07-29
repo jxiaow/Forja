@@ -12,11 +12,13 @@ test('SDK extension observes unified settingsStore changes instead of old worksp
     assert.doesNotMatch(configService, /\.forja\/settings\.json/);
 });
 
-test('workspace resolver watches unified project config files instead of old workspace settings file', () => {
+test('workspace resolver watches workspaces.json registry instead of old project config files', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'vscode', 'workspaceResolver.ts'), 'utf8');
 
-    assert.match(source, /projectsDir/);
+    assert.match(source, /forjaConfigDir/);
+    assert.match(source, /workspaces\.json/);
     assert.match(source, /createFileSystemWatcher\(pattern\)/);
+    assert.doesNotMatch(source, /projectsDir/);
     assert.doesNotMatch(source, /\.forja\/settings\.json/);
 });
 

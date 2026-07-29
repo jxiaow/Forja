@@ -82,10 +82,9 @@ test('sync command surface is minimal (plan subcommand + reset flag)', () => {
     const syncSrc = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'sync.ts'), 'utf8');
     const indexSrc = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'index.ts'), 'utf8');
 
-    // SyncAction only has run/plan/reset
+    // SyncAction only has run/plan/reset/status/ignore
     assert.match(syncSrc, /SyncAction\s*=\s*'run'\s*\|\s*'plan'\s*\|\s*'reset'/);
-    // No status/transfer subcommands in dispatcher
-    assert.doesNotMatch(indexSrc, /subArg === 'status'/);
+    // No transfer subcommand in dispatcher
     assert.doesNotMatch(indexSrc, /subArg === 'transfer'/);
     // --reset flag is supported
     assert.match(indexSrc, /--reset/);

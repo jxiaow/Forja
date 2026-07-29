@@ -1,6 +1,6 @@
 {
   "name": "forja",
-  "displayName": "Forja",
+  "displayName": "Forja (Dev)",
   "publisher": "forja",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
   "version": "0.7.55.dev",
@@ -26,6 +26,10 @@
       {
         "command": "forja.status",
         "title": "Forja: Status"
+      },
+      {
+        "command": "forja.init",
+        "title": "Forja: Init Workspace"
       },
       {
         "command": "forja.list",

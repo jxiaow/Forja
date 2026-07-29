@@ -1,24 +1,25 @@
 /**
  * useTarget/detect — Phase 1: scan targets + detect toolchain environment.
+ * Reads from workspaceStore instead of old settingsIO.
  */
 import * as fs from 'fs';
 import * as os from 'os';
 import { collectTargetCandidates } from '../candidates';
 import { detectEnv } from '../../../qt/env/envDetector';
 import { setSilent } from '../../../core/loggerBase';
-import {
-    loadQtSettings, loadSdkSettings, loadActiveTarget, loadTargetToolchains,
-} from '../../../core/settingsIO';
+import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget } from '../../../core/workspaceStore';
 import type { DetectContext, ToolchainInfo } from './types';
 
 export async function detectContext(workspace: string): Promise<DetectContext> {
     const candidates = collectTargetCandidates(workspace);
     const toolchain = await detectToolchain(workspace);
 
-    const existingTarget = loadActiveTarget(workspace);
-    const qt = loadQtSettings(workspace);
-    const sdk = loadSdkSettings(workspace);
-    const storedToolchains = loadTargetToolchains(workspace);
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const profile = wsConfig ? getActiveTarget(wsConfig) : null;
+
+    // Pass profile directly as existingTarget (now TargetProfile)
+    const existingTarget = profile;
 
     return {
         workspace,
@@ -28,21 +29,21 @@ export async function detectContext(workspace: string): Promise<DetectContext> {
         toolchain,
         existingTarget,
         existingQt: {
-            pinnedProject: qt.pinnedProject,
-            qtPath: qt.qtPath || '',
-            vsInstall: qt.vsInstall || '',
-            jomPath: qt.jomPath || '',
-            mode: qt.mode || '',
-            arch: qt.arch || '',
-            target: qt.target || '',
+            pinnedProject: profile && profile.kind === 'qt' ? { root: workroot || workspace, relative: profile.project } : null,
+            qtPath: profile?.toolchain.qtPath || '',
+            vsInstall: profile?.toolchain.vsInstall || '',
+            jomPath: profile?.toolchain.jomPath || '',
+            mode: profile?.mode || '',
+            arch: profile?.arch || '',
+            target: profile?.toolchain.qmakeTarget || '',
         },
         existingSdk: {
-            pinnedProject: sdk.pinnedProject ?? null,
-            vsInstall: sdk.vsInstall || '',
-            mode: sdk.mode || '',
-            arch: sdk.arch || '',
+            pinnedProject: profile && profile.kind === 'sdk' ? profile.project : null,
+            vsInstall: profile?.toolchain.vsInstall || '',
+            mode: profile?.mode || '',
+            arch: profile?.arch || '',
         },
-        storedToolchains,
+        storedToolchains: {},
     };
 }
 
@@ -73,17 +74,25 @@ async function detectToolchain(workspace: string): Promise<ToolchainInfo> {
         else { result.make = true; }
     }
 
-    // Fall back to saved config
+    // Fall back to saved config from workspaceStore
     if (!result.qt || !result.vs || (!result.jom && !result.make)) {
-        const qt = loadQtSettings(workspace);
-        if (!result.qt && qt.qtPath && fs.existsSync(qt.qtPath)) { result.qt = true; result.qtPath = qt.qtPath; }
-        if (!result.vs && qt.vsInstall && fs.existsSync(qt.vsInstall)) { result.vs = true; result.vsInstall = qt.vsInstall; }
-        if (!result.jom && !result.make && qt.jomPath && fs.existsSync(qt.jomPath)) {
-            if (os.platform() === 'win32') { result.jom = true; result.jomPath = qt.jomPath; }
-            else { result.make = true; }
+        const workroot = resolveWorkroot(workspace);
+        if (workroot) {
+            const wsConfig = loadWorkspaceConfig(workroot);
+            const profile = getActiveTarget(wsConfig);
+            if (profile) {
+                if (!result.qt && profile.toolchain.qtPath && fs.existsSync(profile.toolchain.qtPath)) {
+                    result.qt = true; result.qtPath = profile.toolchain.qtPath;
+                }
+                if (!result.vs && profile.toolchain.vsInstall && fs.existsSync(profile.toolchain.vsInstall)) {
+                    result.vs = true; result.vsInstall = profile.toolchain.vsInstall;
+                }
+                if (!result.jom && !result.make && profile.toolchain.jomPath && fs.existsSync(profile.toolchain.jomPath)) {
+                    if (os.platform() === 'win32') { result.jom = true; result.jomPath = profile.toolchain.jomPath; }
+                    else { result.make = true; }
+                }
+            }
         }
-        const sdk = loadSdkSettings(workspace);
-        if (!result.vs && sdk.vsInstall && fs.existsSync(sdk.vsInstall)) { result.vs = true; result.vsInstall = sdk.vsInstall; }
     }
 
     return result;

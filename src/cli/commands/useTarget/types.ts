@@ -1,8 +1,8 @@
 /**
  * useTarget module — shared types.
  */
-import { ActiveTarget, TargetCandidate, Diagnostic, Question, ForjaJsonResult } from '../types';
-import { TargetToolchainConfig } from '../../../core/settingsIO';
+import { TargetCandidate, Diagnostic, Question, ForjaJsonResult } from '../types';
+import type { TargetProfile } from '../../../core/workspaceStore';
 
 // ── Detection context ──
 
@@ -26,7 +26,7 @@ export interface DetectContext {
     qtCandidates: TargetCandidate[];
     sdkCandidates: TargetCandidate[];
     toolchain: ToolchainInfo;
-    existingTarget: ActiveTarget | null;
+    existingTarget: TargetProfile | null;
     existingQt: {
         pinnedProject: { root: string; relative: string } | null;
         qtPath: string;
@@ -42,7 +42,7 @@ export interface DetectContext {
         mode: string;
         arch: string;
     };
-    storedToolchains: Record<string, TargetToolchainConfig>;
+    storedToolchains: Record<string, never>;
 }
 
 // ── Resolve options ──
@@ -71,6 +71,7 @@ export interface ResolvedConfig {
     qtPath?: string;
     qtVersion?: string;
     vsInstall?: string;
+    vsVersion?: string;
     jomPath?: string;
     qmakeTarget?: string;
 }
@@ -83,7 +84,7 @@ export interface UseTargetResult extends ForjaJsonResult {
     status?: 'needs-input';
     questions?: Question[];
     config?: {
-        qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qtVersion?: string; vsVersion?: string };
+        qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qtVersion?: string; vsVersion?: string; qmakeTarget?: string };
         sdk?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
     };
     changed: string[];

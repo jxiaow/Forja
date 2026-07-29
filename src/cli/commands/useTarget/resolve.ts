@@ -52,9 +52,11 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
         jomPath = await resolveJomPath(ctx, options, stored);
     }
     // For Qt targets, filter VS candidates by compiler tag in Qt path
+    // Only when Qt is newly selected — skip for existing config to avoid spurious warnings
     let vsCandidatesOverride: typeof ctx.toolchain.vsCandidates | undefined;
     let vsForceInteractive = false;
-    if (kind === 'qt' && qtPath.value) {
+    const isQtFromExisting = !!(qtPath.value && ctx.existingQt.qtPath && qtPath.value === ctx.existingQt.qtPath);
+    if (kind === 'qt' && qtPath.value && !isQtFromExisting) {
         const vsYear = extractVsYearFromQtPath(qtPath.value);
         if (vsYear) {
             const filtered = ctx.toolchain.vsCandidates.filter(v => v.version === vsYear);

@@ -123,12 +123,12 @@ test('remote transfer status uses the primary staged repo path for artifact sour
     saveSyncSettings(workspace, {
         ...DEFAULT_SYNC,
         enabled: true,
-        selectedServer: 'build',
-        remotePaths: { build: '/home/xw/workspace/dev' },
         ignore: []
     });
     saveRemoteSettings(workspace, {
         ...DEFAULT_REMOTE,
+        selectedServer: 'build',
+        remotePaths: { build: '/home/xw/workspace/dev' },
         workspaceMode: 'staged',
         profile: 'release',
         remoteWorkspace: '/home/xw/workspace/forja-remote/release',

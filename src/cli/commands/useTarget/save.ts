@@ -1,121 +1,89 @@
 /**
- * useTarget/save — Phase 3: unified save functions.
- * Kind dispatch happens once inside each function, not at every call site.
+ * useTarget/save — Phase 3: save to workspaceStore.
+ * Single source of truth: per-workspace config file.
  */
-import * as path from 'path';
-import { ActiveTarget } from '../types';
 import {
-    loadQtSettings, saveQtSettings,
-    loadSdkSettings, saveSdkSettings,
-    loadActiveTarget, saveActiveTarget,
-    loadTargetToolchains, saveTargetToolchains,
-} from '../../../core/settingsIO';
+    resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig,
+    generateTargetId, registerWorkroot,
+} from '../../../core/workspaceStore';
+import type { TargetProfile } from '../../../core/workspaceStore';
 import type { ResolvedConfig } from './types';
 
 /**
- * Save target fields to the appropriate domain config (Qt or SDK).
- * Kind dispatch happens here — callers don't need if/else on kind.
+ * Build a TargetProfile from resolved config (for result output).
  */
-export function saveDomainFields(workspace: string, config: ResolvedConfig): { ok: true } | { ok: false; error: string } {
-    try {
-        if (config.kind === 'qt') {
-            const qt = loadQtSettings(workspace);
-            qt.pinnedProject = { root: workspace, relative: config.project };
-            if (config.mode) qt.mode = config.mode;
-            if (config.arch) qt.arch = config.arch;
-            if (config.qtPath) qt.qtPath = config.qtPath;
-            if (config.qtVersion) qt.qtVersion = config.qtVersion;
-            if (config.vsInstall) qt.vsInstall = config.vsInstall;
-            if (config.jomPath) qt.jomPath = config.jomPath;
-            if (config.qmakeTarget) qt.target = config.qmakeTarget;
-            saveQtSettings(workspace, qt);
-        } else {
-            const sdk = loadSdkSettings(workspace);
-            sdk.pinnedProject = config.project;
-            if (config.mode) sdk.mode = config.mode;
-            if (config.arch) sdk.arch = config.arch;
-            if (config.vsInstall) sdk.vsInstall = config.vsInstall;
-            saveSdkSettings(workspace, sdk);
-        }
-        return { ok: true };
-    } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e) };
-    }
-}
-
-/**
- * Save the active target pointer.
- */
-export function saveActive(workspace: string, target: ActiveTarget): { ok: true } | { ok: false; error: string } {
-    try {
-        saveActiveTarget(workspace, target);
-        return { ok: true };
-    } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e) };
-    }
-}
-
-/**
- * Save per-target toolchain snapshot.
- */
-export function saveToolchain(workspace: string, config: ResolvedConfig): void {
-    const toolchains = loadTargetToolchains(workspace);
-    toolchains[config.project] = {
-        qtPath: config.qtPath,
-        qtVersion: config.qtVersion,
-        vsInstall: config.vsInstall,
-        jomPath: config.jomPath,
-        qmakeTarget: config.qmakeTarget,
-    };
-    saveTargetToolchains(workspace, toolchains);
-}
-
-/**
- * Build an ActiveTarget from resolved config.
- */
-export function buildActiveTarget(config: ResolvedConfig): ActiveTarget {
+export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
     return {
+        id: '',
+        name: '',
         kind: config.kind,
         project: config.project,
         mode: (config.mode || 'debug') as 'debug' | 'release',
         arch: (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
         runAt: config.runAt,
-        qtPath: config.qtPath,
-        vsInstall: config.vsInstall,
-        jomPath: config.jomPath,
-        qmakeTarget: config.qmakeTarget,
+        toolchain: {
+            qtPath: config.qtPath,
+            qtVersion: config.qtVersion,
+            vsInstall: config.vsInstall,
+            vsVersion: config.vsVersion,
+            jomPath: config.jomPath,
+            qmakeTarget: config.qmakeTarget,
+        },
     };
 }
 
 /**
- * Full save: domain config + active target + per-target toolchain.
- * Returns list of changed field names (only fields whose value actually differs).
+ * Full save: write target profile to workspaceStore.
+ * Returns list of changed field names.
  */
 export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; changed: string[] } | { ok: false; error: string } {
-    const oldTarget = loadActiveTarget(workspace);
-    const oldQt = config.kind === 'qt' ? loadQtSettings(workspace) : null;
-    const oldSdk = config.kind === 'sdk' ? loadSdkSettings(workspace) : null;
+    try {
+        const workroot = resolveWorkroot(workspace) || workspace;
+        const wsConfig = loadWorkspaceConfig(workroot);
 
-    const domainSave = saveDomainFields(workspace, config);
-    if (!domainSave.ok) return domainSave;
+        // Ensure workroot is registered
+        registerWorkroot(workroot);
 
-    const target = buildActiveTarget(config);
-    const activeSave = saveActive(workspace, target);
-    if (!activeSave.ok) return activeSave;
+        const existingIds = new Set(Object.keys(wsConfig.targets));
+        const id = generateTargetId(config.kind, config.project, config.mode || 'debug', config.arch || 'x86', existingIds);
+        const basename = config.project.split('/').pop()?.replace(/\.\w+$/, '') || config.project;
 
-    saveToolchain(workspace, config);
+        const oldProfile = wsConfig.activeTarget ? wsConfig.targets[wsConfig.activeTarget] : null;
 
-    const changed: string[] = [];
-    const oldProject = oldTarget?.project || oldQt?.pinnedProject?.relative || oldSdk?.pinnedProject || '';
-    if (config.project !== oldProject) {
-        changed.push(config.kind === 'qt' ? 'qt.pinnedProject' : 'sdk.pinnedProject');
+        const profile: TargetProfile = {
+            id,
+            name: `${basename} ${config.mode || 'debug'} ${config.arch || 'x86'}`,
+            kind: config.kind,
+            project: config.project,
+            mode: (config.mode || 'debug') as 'debug' | 'release',
+            arch: (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+            runAt: config.runAt || 'local',
+            toolchain: {
+                qtPath: config.qtPath,
+                qtVersion: config.qtVersion,
+                vsInstall: config.vsInstall,
+                vsVersion: config.vsVersion,
+                jomPath: config.jomPath,
+                qmakeTarget: config.qmakeTarget,
+            },
+        };
+
+        wsConfig.targets[id] = profile;
+        wsConfig.activeTarget = id;
+        saveWorkspaceConfig(wsConfig);
+
+        // Compute changed fields
+        const changed: string[] = [];
+        if (!oldProfile || oldProfile.project !== config.project) changed.push('project');
+        if (config.qtPath && config.qtPath !== oldProfile?.toolchain.qtPath) changed.push('qtPath');
+        if (config.vsInstall && config.vsInstall !== oldProfile?.toolchain.vsInstall) changed.push('vsInstall');
+        if (config.jomPath && config.jomPath !== oldProfile?.toolchain.jomPath) changed.push('jomPath');
+        if (config.mode && config.mode !== oldProfile?.mode) changed.push('mode');
+        if (config.arch && config.arch !== oldProfile?.arch) changed.push('arch');
+        if (config.qmakeTarget && config.qmakeTarget !== oldProfile?.toolchain.qmakeTarget) changed.push('qmakeTarget');
+
+        return { ok: true, changed };
+    } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
-    if (config.qtPath && config.qtPath !== (oldQt?.qtPath || oldTarget?.qtPath)) changed.push('qtPath');
-    if (config.vsInstall && config.vsInstall !== (oldQt?.vsInstall || oldSdk?.vsInstall || oldTarget?.vsInstall)) changed.push('vsInstall');
-    if (config.jomPath && config.jomPath !== (oldQt?.jomPath || oldTarget?.jomPath)) changed.push('jomPath');
-    if (config.mode && config.mode !== (oldTarget?.mode || oldQt?.mode || oldSdk?.mode)) changed.push('mode');
-    if (config.arch && config.arch !== (oldTarget?.arch || oldQt?.arch || oldSdk?.arch)) changed.push('arch');
-    if (config.qmakeTarget && config.qmakeTarget !== oldQt?.target) changed.push('qmakeTarget');
-
-    return { ok: true, changed };
 }

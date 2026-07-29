@@ -30,12 +30,9 @@ import {
 export function registerCommands(context: vscode.ExtensionContext): void {
     const workspace = () => getWorkspaceRoot() || process.cwd();
 
-    // Resolve active target from any configured workspace (Qt or SDK)
+    // Resolve active target from workspaceStore
     async function resolveActiveTarget() {
-        const { resolveProjectRoot } = await import('./workspaceResolver');
-        const sdkWs = resolveProjectRoot('sdk') || '';
-        const qtWs = resolveProjectRoot('qt') || '';
-        return getActiveTarget(sdkWs) || getActiveTarget(qtWs) || getActiveTarget(workspace());
+        return getActiveTarget(workspace());
     }
 
     // After selecting a project, prompt for toolchain version if multiple detected and none configured
@@ -195,7 +192,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                             const { setActiveModule, setSdkState } = await import('../ui/statusBar');
                             const { setState } = await import('../vscode/qtState');
                             const { parseProFile } = await import('../qt/project/projectManager');
-                            const { loadActiveTarget } = await import('../core/settingsIO');
                             const { ensureLocalStateDir } = await import('../qt/shared/localState');
                             const path = await import('path');
                             ensureLocalStateDir(targetWs);
@@ -214,9 +210,12 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                                 } catch { /* fallback */ }
                             } else {
                                 const projectName = path.default.basename(target.project, path.default.extname(target.project));
-                                const activeTarget = loadActiveTarget(targetWs);
-                                const mode = activeTarget?.mode ?? 'debug';
-                                const arch = activeTarget?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
+                                const { resolveWorkroot, loadWorkspaceConfig, getActiveTarget: getProfile } = await import('../core/workspaceStore');
+                                const workroot = resolveWorkroot(targetWs);
+                                const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+                                const profile = wsConfig ? getProfile(wsConfig) : null;
+                                const mode = profile?.mode ?? 'debug';
+                                const arch = profile?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
                                 setSdkState({ projectName, mode, arch });
                                 // Generate IntelliSense for SDK project
                                 const { generateSdkCppProperties } = await import('../qt/build/configGenerator');
@@ -416,11 +415,16 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     const sdkSettings = loadSdkSettings(workspace());
                     if (sdkSettings.pinnedProject) {
                         target = {
-                            kind: 'sdk',
+                            id: '',
+                            name: '',
+                            kind: 'sdk' as const,
                             project: sdkSettings.pinnedProject,
-                            mode: sdkSettings.mode || 'debug',
-                            arch: sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
-                            runAt: 'local',
+                            mode: (sdkSettings.mode || 'debug') as 'debug' | 'release',
+                            arch: (sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+                            runAt: 'local' as const,
+                            toolchain: {
+                                vsInstall: sdkSettings.vsInstall,
+                            },
                         };
                     }
                 }
@@ -603,11 +607,16 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                     const sdkSettings = loadSdkSettings(workspace());
                     if (sdkSettings.pinnedProject) {
                         target = {
-                            kind: 'sdk',
+                            id: '',
+                            name: '',
+                            kind: 'sdk' as const,
                             project: sdkSettings.pinnedProject,
-                            mode: sdkSettings.mode || 'debug',
-                            arch: sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64'),
-                            runAt: 'local',
+                            mode: (sdkSettings.mode || 'debug') as 'debug' | 'release',
+                            arch: (sdkSettings.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
+                            runAt: 'local' as const,
+                            toolchain: {
+                                vsInstall: sdkSettings.vsInstall,
+                            },
                         };
                     }
                 }

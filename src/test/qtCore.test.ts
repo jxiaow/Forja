@@ -680,10 +680,10 @@ test('run without Makefile includes status hint when CLI-passed mode/arch', asyn
     assert.ok(!!result.nextAction);
 });
 
-test('build action plan ignores config override fields and uses saved settings', async () => {
+test('build action plan prioritizes CliOptions over saved settings', async () => {
     const workspace = makeWorkspace();
     saveQtSettings(workspace, { ...DEFAULT_QT, pinnedProject: { root: workspace, relative: 'demo.pro' }, mode: 'debug', arch: 'x86', qtPath: 'D:/Qt-old', vsInstall: 'C:/VS-old' });
-    writeMatchingMakefile(workspace, { mode: 'debug', arch: 'x86', qtPath: 'D:/Qt-old' });
+    writeMatchingMakefile(workspace, { mode: 'release', arch: 'x64', qtPath: 'D:/Qt-new' });
 
     const result = await createActionPlan({
         action: 'build',
@@ -700,10 +700,10 @@ test('build action plan ignores config override fields and uses saved settings',
     });
 
     assert.equal(result.ok, true);
-    assert.equal(result.resolved?.mode, 'debug');
-    assert.equal(result.resolved?.arch, 'x86');
-    assert.equal(result.resolved?.qtPath, 'D:/Qt-old');
-    assert.notEqual(result.resolved?.vsDevShell, 'C:/VS-new/Launch-VsDevShell.ps1');
+    assert.equal(result.resolved?.mode, 'release');
+    assert.equal(result.resolved?.arch, 'x64');
+    assert.equal(result.resolved?.qtPath, 'D:/Qt-new');
+    assert.equal(result.resolved?.vsDevShell, 'C:/VS-new/Launch-VsDevShell.ps1');
 });
 
 test('build with stale Makefile auto-runs qmake then builds', async () => {

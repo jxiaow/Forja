@@ -11,7 +11,9 @@ import { runCliResult } from '../../qt/shared/commandRunner';
 import { CliOptions } from '../../qt/cli/types';
 import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
-import { loadQtSettings, loadRemoteSettings } from '../../core/settingsIO';
+import { getActiveTarget } from './activeTarget';
+import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 import { getServerById } from '../../core/serverStore';
 import { launchDesigner } from '../../qt/build/designer';
 
@@ -31,7 +33,8 @@ export interface RunResult {
     nextAction?: string;
 }
 
-function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: { detach?: boolean; plan?: boolean }): CliOptions {
+function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: { detach?: boolean; plan?: boolean }, qmakeArgs?: string): CliOptions {
+    const vsDevShell = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
     return {
         action: 'run',
         executionMode: options.plan ? 'dryRun' : 'execute',
@@ -39,10 +42,10 @@ function buildRunQtCliOptions(workspace: string, target: ActiveTarget, options: 
         project: target.project,
         mode: target.mode,
         arch: target.arch,
-        qtPath: null,
-        vsDevShell: null,
-        target: null,
-        qmakeArgs: null,
+        qtPath: target.toolchain.qtPath || null,
+        vsDevShell: vsDevShell,
+        target: target.toolchain.qmakeTarget || null,
+        qmakeArgs: qmakeArgs || null,
         detach: options.detach ?? false,
         saveLocal: false,
         json: false,
@@ -87,6 +90,7 @@ export async function runRun(workspace: string, options: {
         }
         console.log(`  ${T('target')}${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
+        if (target.toolchain.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.toolchain.qmakeTarget}`); }
         console.log();
     }
 
@@ -106,7 +110,7 @@ export async function runRun(workspace: string, options: {
         };
     }
 
-    // ── --debug：CLI 层无法启动 VSCode 调试器 ──
+    // ── --debug：CLI 层无法启动 VSCode 调试器（仅 VSCode 扩展内部调用时使用） ──
     if (options.debug) {
         return {
             ok: false,
@@ -181,7 +185,10 @@ export async function runRun(workspace: string, options: {
 
     // Qt local
     const wantsJson = options.json ?? false;
-    const cliOptions = buildRunQtCliOptions(workspace, target, options);
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
+    const cliOptions = buildRunQtCliOptions(workspace, target, options, qmakeArgs);
 
     try {
         const planned = await createActionPlan(cliOptions);
@@ -216,8 +223,13 @@ export async function runRun(workspace: string, options: {
             logFile: executed.logFile ?? undefined,
         } : undefined;
 
+        // Foreground run: app exited with non-zero code → reflect failure
+        const appExitedNonZero = !options.detach
+            && executed.runtimeExitCode !== undefined
+            && executed.runtimeExitCode !== 0;
+
         return {
-            ok: executed.ok,
+            ok: executed.ok && !appExitedNonZero,
             action: 'run',
             runAction,
             workspace,
@@ -225,12 +237,14 @@ export async function runRun(workspace: string, options: {
             runtime,
             exitCode: executed.runtimeExitCode ?? executed.exitCode ?? undefined,
             logFile: executed.logFile ?? undefined,
-            diagnostics: executed.ok ? undefined : [diag('error', T('cmd.qtRunFailed'))],
-            nextAction: executed.ok
-                ? (executed.runtimeExitCode !== undefined
-                    ? undefined
-                    : 'forja stop')
-                : 'forja doctor',
+            diagnostics: appExitedNonZero
+                ? [diag('warning', `${T('cmd.appExitedWithError')}: ${executed.runtimeExitCode}`)]
+                : (executed.ok ? undefined : [diag('error', T('cmd.qtRunFailed'))]),
+            nextAction: appExitedNonZero
+                ? 'forja build'
+                : (executed.ok
+                    ? (executed.runtimeExitCode !== undefined ? undefined : 'forja stop')
+                    : 'forja doctor'),
         };
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -249,8 +263,12 @@ export async function runRun(workspace: string, options: {
 async function handleDesigner(workspace: string, uiFile: string): Promise<RunResult> {
     const resolvedPath = path.isAbsolute(uiFile) ? uiFile : path.join(workspace, uiFile);
 
-    const qtConfig = loadQtSettings(workspace);
-    const designerResult = await launchDesigner(resolvedPath, qtConfig.designerPath, qtConfig.qtPath);
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const designerPath = wsConfig?.qtModulePrefs.designerPath || '';
+    const target = getActiveTarget(workspace);
+    const qtPath = target?.toolchain.qtPath || '';
+    const designerResult = await launchDesigner(resolvedPath, designerPath, qtPath);
 
     if (!designerResult.ok) {
         const isUiFileError = designerResult.error?.endsWith('.ui') || designerResult.error?.includes('.ui ');
@@ -286,10 +304,12 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
         };
     }
 
-    const qtConfig = loadQtSettings(workspace);
-    const customCmd = qtConfig.customCommands.find(c => c.name === customName);
+    const workroot = resolveWorkroot(workspace);
+    const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
+    const customCommands = wsConfig?.qtModulePrefs.customCommands ?? [];
+    const customCmd = customCommands.find(c => c.name === customName);
     if (!customCmd) {
-        const available = qtConfig.customCommands.map(c => c.name).join(', ') || '(none)';
+        const available = customCommands.map(c => c.name).join(', ') || '(none)';
         return {
             ok: false,
             action: 'run',
@@ -306,11 +326,18 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
             ? path.dirname(target.project)
             : path.join(workspace, path.dirname(target.project));
 
+        // Inject Qt bin into PATH so custom commands can find Qt tools
+        const env = { ...process.env };
+        if (target.toolchain.qtPath) {
+            env.PATH = `${target.toolchain.qtPath}${path.sep}bin${path.delimiter}${env.PATH || ''}`;
+        }
+
         const result = cp.spawnSync(customCmd.command, {
             cwd: projectDir,
             shell: true,
             stdio: ['inherit', 'pipe', 'pipe'],
             timeout: 5 * 60 * 1000,
+            env,
         });
 
         const stdout = result.stdout?.toString() ?? '';
@@ -377,7 +404,8 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
         console.log(`${T('run')} ${status}`);
         if (result.activeTarget) {
             const t = result.activeTarget;
-            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}`);
+            const qt = t.toolchain.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}` : '';
+            console.log(`${T('target')}${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
         }
         if (result.runtime?.pid) {
             console.log(`${T('pidLabel')}${result.runtime.pid}`);

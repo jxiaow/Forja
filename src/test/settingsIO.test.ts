@@ -302,11 +302,11 @@ test('saveSyncSettings round-trips with loadSyncSettings', () => {
     const workspace = makeWorkspace();
     trackFile(projectConfigPath(workspace, 'sync'));
 
-    saveSyncSettings(workspace, { ...DEFAULT_SYNC, enabled: true, selectedServer: 'dev-server' });
+    saveSyncSettings(workspace, { ...DEFAULT_SYNC, enabled: true, ignore: ['*.tmp'] });
     const loaded = loadSyncSettings(workspace);
 
     assert.equal(loaded.enabled, true);
-    assert.equal(loaded.selectedServer, 'dev-server');
+    assert.deepEqual(loaded.ignore, ['*.tmp']);
 });
 
 test('loadSyncSettings looks up parent directory', () => {
@@ -316,12 +316,12 @@ test('loadSyncSettings looks up parent directory', () => {
 
     // Save sync config for parent
     trackFile(projectConfigPath(parent, 'sync'));
-    saveSyncSettings(parent, { ...DEFAULT_SYNC, enabled: true, selectedServer: 'parent-server' });
+    saveSyncSettings(parent, { ...DEFAULT_SYNC, enabled: true, ignore: ['build'] });
 
     // Load from child should find parent's config
     const loaded = loadSyncSettings(child);
     assert.equal(loaded.enabled, true);
-    assert.equal(loaded.selectedServer, 'parent-server');
+    assert.deepEqual(loaded.ignore, ['build']);
 });
 
 test('loadSyncSettings prefers current directory over parent', () => {
@@ -332,11 +332,12 @@ test('loadSyncSettings prefers current directory over parent', () => {
     trackFile(projectConfigPath(parent, 'sync'));
     trackFile(projectConfigPath(child, 'sync'));
 
-    saveSyncSettings(parent, { ...DEFAULT_SYNC, enabled: true, selectedServer: 'parent-server' });
-    saveSyncSettings(child, { ...DEFAULT_SYNC, enabled: true, selectedServer: 'child-server' });
+    saveSyncSettings(parent, { ...DEFAULT_SYNC, enabled: true, ignore: ['parent-ignore'] });
+    saveSyncSettings(child, { ...DEFAULT_SYNC, enabled: false, ignore: ['child-ignore'] });
 
     const loaded = loadSyncSettings(child);
-    assert.equal(loaded.selectedServer, 'child-server');
+    assert.equal(loaded.enabled, false);
+    assert.deepEqual(loaded.ignore, ['child-ignore']);
 });
 
 // ── Remote ──

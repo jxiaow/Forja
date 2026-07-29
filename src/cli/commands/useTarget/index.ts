@@ -5,16 +5,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { T, Diagnostic } from '../types';
-import type { ActiveTarget } from '../types';
+import type { TargetProfile } from '../../../core/workspaceStore';
 import { detectContext } from './detect';
 import { resolveAll } from './resolve';
-import { saveAll, buildActiveTarget } from './save';
+import { saveAll, buildTargetProfile } from './save';
 import { buildSuccessResult, formatUseTargetText } from './report';
 import type { ResolveOptions, UseTargetResult, ResolvedConfig } from './types';
-import {
-    loadQtSettings, saveQtSettings, loadSdkSettings, saveSdkSettings,
-    loadActiveTarget,
-} from '../../../core/settingsIO';
 import { detectProjectType } from '../../../core/projectTypeDetector';
 import { detectEnv } from '../../../qt/env/envDetector';
 import { setSilent } from '../../../core/loggerBase';
@@ -119,7 +115,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
     if (!saveResult.ok) {
         return {
             ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveActiveTarget')}: ${saveResult.error}` }],
+            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${saveResult.error}` }],
             nextAction: 'forja doctor',
         };
     }
@@ -141,6 +137,7 @@ export async function runSwitchTarget(workspace: string, args: {
     project: string;
     mode?: 'debug' | 'release';
     arch?: 'x86' | 'x64';
+    reset?: boolean;
     interactive?: boolean;
     json?: boolean;
 }): Promise<UseTargetResult> {
@@ -152,6 +149,67 @@ export async function runSwitchTarget(workspace: string, args: {
     }
 
     const ctx = await detectContext(workspace);
+
+    // First: try to match against saved targets by ID or name (quick switch)
+    const workroot = (await import('../../../core/workspaceStore')).resolveWorkroot(workspace);
+    if (workroot) {
+        const wsConfig = (await import('../../../core/workspaceStore')).loadWorkspaceConfig(workroot);
+        const savedTargets = Object.values(wsConfig.targets);
+        const inputLower = args.project.toLowerCase();
+
+        // Exact ID match
+        const exactId = savedTargets.find(t => t.id === args.project);
+        if (exactId) {
+            // Quick switch: just update activeTarget pointer
+            wsConfig.activeTarget = exactId.id;
+            (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
+            return {
+                ok: true, action: 'use', useScope: 'target',
+                workspace, activeTarget: exactId, changed: ['activeTarget'],
+                nextAction: 'forja status',
+            };
+        }
+
+        // ID prefix match or name match
+        const prefixMatches = savedTargets.filter(t =>
+            t.id.toLowerCase().startsWith(inputLower) ||
+            t.name.toLowerCase().includes(inputLower)
+        );
+        if (prefixMatches.length === 1) {
+            wsConfig.activeTarget = prefixMatches[0].id;
+            (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
+            return {
+                ok: true, action: 'use', useScope: 'target',
+                workspace, activeTarget: prefixMatches[0], changed: ['activeTarget'],
+                nextAction: 'forja status',
+            };
+        }
+        if (prefixMatches.length > 1) {
+            if (args.interactive) {
+                const chosen = await choose(
+                    T('use.multipleTargetsFound'),
+                    prefixMatches,
+                    t => `${t.id}  ${t.name}  [${t.kind}]`,
+                );
+                if (chosen) {
+                    wsConfig.activeTarget = chosen.id;
+                    (await import('../../../core/workspaceStore')).saveWorkspaceConfig(wsConfig);
+                    return {
+                        ok: true, action: 'use', useScope: 'target',
+                        workspace, activeTarget: chosen, changed: ['activeTarget'],
+                        nextAction: 'forja status',
+                    };
+                }
+            } else {
+                const ids = prefixMatches.map(t => t.id).join('\n    ');
+                return {
+                    ok: false, action: 'use', useScope: 'target', changed: [],
+                    diagnostics: [{ level: 'error', message: `${T('use.multipleTargetsFound')}: ${args.project}\n    ${ids}` }],
+                    nextAction: 'forja list targets',
+                };
+            }
+        }
+    }
 
     // Resolve project path
     const projectPath = path.isAbsolute(args.project) ? args.project : path.join(workspace, args.project);
@@ -179,7 +237,7 @@ export async function runSwitchTarget(workspace: string, args: {
                 if (chosen) {
                     canonicalProject = chosen.project;
                     kind = chosen.kind;
-                    console.log(`  ✓ ${chosen.label} — ${chosen.project}`);
+                    if (!args.json) { console.log(`  ✓ ${chosen.label} — ${chosen.project}`); }
                 } else {
                     return {
                         ok: false, action: 'use', useScope: 'target', changed: [],
@@ -213,11 +271,11 @@ export async function runSwitchTarget(workspace: string, args: {
     }
 
     // Resolve toolchain for the new target
-    const stored = ctx.storedToolchains[canonicalProject];
     const currentTarget = ctx.existingTarget;
     const mode = args.mode ?? currentTarget?.mode ?? 'debug';
     const arch = args.arch ?? currentTarget?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
-    const runAt = currentTarget?.runAt ?? 'local';
+    // SDK targets don't support remote execution — force local when switching to SDK
+    const runAt = (kind === 'sdk') ? 'local' : (currentTarget?.runAt ?? 'local');
 
     let qtPath: string | undefined;
     let vsInstall: string | undefined;
@@ -225,13 +283,15 @@ export async function runSwitchTarget(workspace: string, args: {
     let qmakeTarget: string | undefined;
     const changed: string[] = [];
 
-    if (stored?.qtPath || stored?.vsInstall) {
+    // Try to get toolchain from existing target profile (workspaceStore)
+    // When reset is true, skip inherited toolchain and force re-detection
+    if (!args.reset && (currentTarget?.toolchain.qtPath || currentTarget?.toolchain.vsInstall)) {
         if (kind === 'qt') {
-            qtPath = stored.qtPath;
-            jomPath = stored.jomPath;
-            qmakeTarget = stored.qmakeTarget;
+            qtPath = currentTarget.toolchain.qtPath;
+            jomPath = currentTarget.toolchain.jomPath;
+            qmakeTarget = currentTarget.toolchain.qmakeTarget;
         }
-        vsInstall = stored.vsInstall;
+        vsInstall = currentTarget.toolchain.vsInstall;
     } else if (args.interactive) {
         setSilent(true);
         const env = await detectEnv();
@@ -256,7 +316,7 @@ export async function runSwitchTarget(workspace: string, args: {
                 if (filtered.length > 0) {
                     vsCandidates = filtered;
                 } else {
-                    console.log(`  ⚠ ${T('use.vsVersionMismatch', [vsYear])}`);
+                    if (!args.json) { console.log(`  ⚠ ${T('use.vsVersionMismatch', [vsYear])}`); }
                     vsCandidates = [];
                     vsMismatch = true;
                 }
@@ -307,11 +367,18 @@ export async function runSwitchTarget(workspace: string, args: {
 
     const qtVersion = qtPath ? ctx.toolchain.qtCandidates.find(q => q.path === qtPath)?.version : undefined;
 
+    // Resolve vsVersion before config construction
+    let vsVersion = ctx.toolchain.vsVersion;
+    if (vsInstall) {
+        const match = ctx.toolchain.vsCandidates.find(v => v.installPath === vsInstall);
+        if (match) vsVersion = match.version;
+    }
+
     const config: ResolvedConfig = {
         kind, project: canonicalProject,
         mode: mode as 'debug' | 'release',
         arch: arch as 'x86' | 'x64',
-        runAt, qtPath, qtVersion, vsInstall, jomPath, qmakeTarget,
+        runAt, qtPath, qtVersion, vsInstall, vsVersion, jomPath, qmakeTarget,
     };
 
     // Save
@@ -319,7 +386,7 @@ export async function runSwitchTarget(workspace: string, args: {
     if (!saveResult.ok) {
         return {
             ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveActiveTarget')}: ${saveResult.error}` }],
+            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${saveResult.error}` }],
             nextAction: 'forja doctor',
         };
     }
@@ -328,14 +395,7 @@ export async function runSwitchTarget(workspace: string, args: {
     changed.push(kind === 'qt' ? 'qt.pinnedProject' : 'sdk.pinnedProject');
     changed.push('activeTarget');
 
-    const target = buildActiveTarget(config);
-
-    // Match VS version for report
-    let vsVersion = ctx.toolchain.vsVersion;
-    if (vsInstall) {
-        const match = ctx.toolchain.vsCandidates.find(v => v.installPath === vsInstall);
-        if (match) vsVersion = match.version;
-    }
+    const target = buildTargetProfile(config);
 
     return {
         ok: true, action: 'use', useScope: 'target',
@@ -354,7 +414,8 @@ export async function runUpdateModeArch(workspace: string, args: {
     mode?: 'debug' | 'release';
     arch?: 'x86' | 'x64';
 }): Promise<UseTargetResult> {
-    const currentTarget = loadActiveTarget(workspace);
+    const { setActiveTarget, getActiveTarget } = await import('../activeTarget');
+    const currentTarget = getActiveTarget(workspace);
     if (!currentTarget) {
         return {
             ok: false, action: 'use', useScope: 'target', changed: [],
@@ -364,7 +425,7 @@ export async function runUpdateModeArch(workspace: string, args: {
     }
 
     const changed: string[] = [];
-    const updated = { ...currentTarget };
+    const updated: TargetProfile = { ...currentTarget, toolchain: { ...currentTarget.toolchain } };
 
     if (args.mode && args.mode !== currentTarget.mode) {
         updated.mode = args.mode;
@@ -376,27 +437,12 @@ export async function runUpdateModeArch(workspace: string, args: {
     }
 
     if (changed.length > 0) {
-        // Save to domain config
-        if (updated.kind === 'qt') {
-            const qt = loadQtSettings(workspace);
-            if (args.mode) qt.mode = args.mode;
-            if (args.arch) qt.arch = args.arch;
-            saveQtSettings(workspace, qt);
-        } else {
-            const sdk = loadSdkSettings(workspace);
-            if (args.mode) sdk.mode = args.mode;
-            if (args.arch) sdk.arch = args.arch;
-            saveSdkSettings(workspace, sdk);
-        }
-
-        try {
-            const { setActiveTarget } = await import('../activeTarget');
-            setActiveTarget(workspace, updated);
-        } catch (e) {
+        const saved = setActiveTarget(workspace, updated);
+        if (!saved) {
             return {
                 ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: `${T('use.failedToSaveActiveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
-                nextAction: 'forja doctor',
+                diagnostics: [{ level: 'error', message: T('use.failedToSaveTarget') }],
+                nextAction: 'forja init',
             };
         }
     }
@@ -418,7 +464,8 @@ export async function runUpdateToolchain(workspace: string, args: {
     vsInstall?: string;
     jomPath?: string;
 }): Promise<UseTargetResult> {
-    const currentTarget = loadActiveTarget(workspace);
+    const { getActiveTarget, setActiveTarget } = await import('../activeTarget');
+    const currentTarget = getActiveTarget(workspace);
     if (!currentTarget) {
         return {
             ok: false, action: 'use', useScope: 'target', changed: [],
@@ -428,54 +475,36 @@ export async function runUpdateToolchain(workspace: string, args: {
     }
 
     const changed: string[] = [];
-    const updated = { ...currentTarget };
+    const updated: TargetProfile = { ...currentTarget, toolchain: { ...currentTarget.toolchain } };
 
-    if (currentTarget.kind === 'qt') {
-        const qt = loadQtSettings(workspace);
-        if (args.qtPath && args.qtPath !== qt.qtPath) {
-            qt.qtPath = args.qtPath;
-            updated.qtPath = args.qtPath;
-            changed.push('qtPath');
-            // Look up version from detected candidates
-            setSilent(true);
-            const env = await detectEnv();
-            setSilent(false);
-            const match = env.qtCandidates.find(q => q.path === args.qtPath);
-            if (match) {
-                qt.qtVersion = match.version;
-                changed.push('qtVersion');
-            }
+    if (args.qtPath && args.qtPath !== currentTarget.toolchain.qtPath) {
+        updated.toolchain.qtPath = args.qtPath;
+        changed.push('qtPath');
+        setSilent(true);
+        const env = await detectEnv();
+        setSilent(false);
+        const match = env.qtCandidates.find(q => q.path === args.qtPath);
+        if (match) {
+            updated.toolchain.qtVersion = match.version;
+            changed.push('qtVersion');
         }
-        if (args.vsInstall && args.vsInstall !== qt.vsInstall) {
-            qt.vsInstall = args.vsInstall;
-            updated.vsInstall = args.vsInstall;
-            changed.push('vsInstall');
-        }
-        if (args.jomPath && args.jomPath !== qt.jomPath) {
-            qt.jomPath = args.jomPath;
-            updated.jomPath = args.jomPath;
-            changed.push('jomPath');
-        }
-        saveQtSettings(workspace, qt);
-    } else {
-        const sdk = loadSdkSettings(workspace);
-        if (args.vsInstall && args.vsInstall !== sdk.vsInstall) {
-            sdk.vsInstall = args.vsInstall;
-            updated.vsInstall = args.vsInstall;
-            changed.push('vsInstall');
-        }
-        saveSdkSettings(workspace, sdk);
+    }
+    if (args.vsInstall && args.vsInstall !== currentTarget.toolchain.vsInstall) {
+        updated.toolchain.vsInstall = args.vsInstall;
+        changed.push('vsInstall');
+    }
+    if (args.jomPath && args.jomPath !== currentTarget.toolchain.jomPath) {
+        updated.toolchain.jomPath = args.jomPath;
+        changed.push('jomPath');
     }
 
     if (changed.length > 0) {
-        try {
-            const { setActiveTarget } = await import('../activeTarget');
-            setActiveTarget(workspace, updated);
-        } catch (e) {
+        const saved = setActiveTarget(workspace, updated);
+        if (!saved) {
             return {
                 ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: `${T('use.failedToSaveActiveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
-                nextAction: 'forja doctor',
+                diagnostics: [{ level: 'error', message: T('use.failedToSaveTarget') }],
+                nextAction: 'forja init',
             };
         }
     }
