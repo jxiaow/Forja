@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { detectEnv } from '../../qt/env/envDetector';
 import { generateCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
 import { getState, setState } from '../../vscode/qtState';
-import { updateConfig, getTarget, getWorkspaceRoot } from '../../qt/services/configService';
+import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, readProjectSyncConfig } from '../../core/serverStore';
@@ -66,8 +66,9 @@ export async function handleMessage(
             break;
         }
         case 'refreshEnv': {
-            const env = await detectEnv();
+            const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env);
+            updateHtml();
             pushEnvUpdate();
             break;
         }
@@ -79,8 +80,7 @@ export async function handleMessage(
         case 'saveVsPath': {
             logger.info(`保存 VS 路径: "${msg.value}"`);
             await updateConfig('vsInstall', inferVsInstall(String(msg.value || '')));
-            webview.postMessage({ command: 'envDetecting', scope: 'vs' });
-            const env = await detectEnv();
+            const env = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env);
             pushEnvUpdate();
             break;
@@ -88,8 +88,7 @@ export async function handleMessage(
         case 'saveQtPath': {
             logger.info(`保存 Qt 路径: "${msg.value}"`);
             await updateConfig('qtPath', String(msg.value || ''));
-            webview.postMessage({ command: 'envDetecting', scope: 'qt' });
-            const env2 = await detectEnv();
+            const env2 = await detectEnv(getQtPath() || undefined, getVsDevShellPath() || undefined);
             setState('envInfo', env2);
             pushEnvUpdate();
             break;
@@ -145,6 +144,12 @@ export async function handleMessage(
         case 'saveQmakeTarget': {
             logger.info(`保存 QMake TARGET: "${msg.value}"`);
             await updateConfig('target', String(msg.value || ''));
+            break;
+        }
+        case 'saveRuntimeProcessName': {
+            const value = String(msg.value || '').replace(/\.exe$/i, '');
+            logger.info(`保存运行前停止进程名: "${value}"`);
+            await updateConfig('runtimeProcessName', value);
             break;
         }
         case 'saveManualProPath': {

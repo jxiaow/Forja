@@ -57,6 +57,10 @@ export function getTarget(): string {
     return getQtSetting('target');
 }
 
+export function getRuntimeProcessName(): string {
+    return getQtSetting('runtimeProcessName');
+}
+
 export function getManualProPath(): string {
     return getQtSetting('manualProPath');
 }

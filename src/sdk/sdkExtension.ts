@@ -10,7 +10,7 @@ import { SdkBuilder } from './modules/sdkBuilder';
 import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN, CMD_SHOW_ACTIONS, CMD_SELECT_PROJECT, CTX_ACTIVATED, TASK_SOURCE } from './constants';
 import { isWindows } from './platform';
 import { initLogger, log, logError } from './utils/logger';
-import { setSdkState, setActiveModule, onSdkUpdate } from '../ui/unifiedStatusBar';
+import { setSdkState, activateSdkModuleIfNoQtProject, onSdkUpdate } from '../ui/unifiedStatusBar';
 import { setSdkProjectRoot } from '../vscode/workspaceResolver';
 import { onSettingsChange } from '../vscode/settingsStore';
 
@@ -116,7 +116,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     }));
     // 有 SDK 项目时激活 SDK 模块
     if (stateManager.currentProject) {
-        setActiveModule('sdk');
+        activateSdkModuleIfNoQtProject();
     }
     log('状态栏已初始化（统一模式）');
 

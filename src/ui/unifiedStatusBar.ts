@@ -31,6 +31,11 @@ export function setActiveModule(m: ActiveModule): void {
     _updateDisplay();
 }
 
+export function activateSdkModuleIfNoQtProject(): void {
+    if (getState().currentProject) { return; }
+    setActiveModule('sdk');
+}
+
 export function getRunStatusBarItem(): vscode.StatusBarItem { return _runItem; }
 
 // SDK 模块调用这些函数来更新状态栏

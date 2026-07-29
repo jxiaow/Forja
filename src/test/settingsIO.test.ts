@@ -65,6 +65,7 @@ test('loadQtSettings reads from ~/.compilot/projects/<hash>.json', () => {
     assert.equal(settings.cStandard, 'c11');
     assert.equal(settings.fileSyncPromptEnabled, true);
     assert.equal(settings.pinnedProject, null);
+    assert.equal(settings.runtimeProcessName, '');
 });
 
 test('loadQtSettings preserves all field types correctly', () => {
@@ -80,6 +81,7 @@ test('loadQtSettings preserves all field types correctly', () => {
         qtPath: 'D:/Qt',
         arch: 'x64',
         mode: 'release',
+        runtimeProcessName: 'XYWinQTPri',
         scanExcludeDirs: ['vendor'],
         pinnedProject: { root: 'C:/ws', relative: 'app.pro' },
         fileSyncPromptEnabled: false,
@@ -90,6 +92,7 @@ test('loadQtSettings preserves all field types correctly', () => {
     assert.equal(settings.qtPath, 'D:/Qt');
     assert.equal(settings.arch, 'x64');
     assert.equal(settings.mode, 'release');
+    assert.equal(settings.runtimeProcessName, 'XYWinQTPri');
     assert.deepEqual(settings.scanExcludeDirs, ['vendor']);
     assert.deepEqual(settings.pinnedProject, { root: 'C:/ws', relative: 'app.pro' });
     assert.equal(settings.fileSyncPromptEnabled, false);
@@ -262,4 +265,3 @@ test('listProjectConfigs returns saved configs', () => {
     const found = configs.find(c => c.workspace === workspace && c.type === 'qt');
     assert.ok(found, 'should find the saved qt config');
 });
-
