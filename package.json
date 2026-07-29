@@ -1,9 +1,9 @@
 {
   "name": "forja",
-  "displayName": "Forja (Dev)",
+  "displayName": "Forja",
   "publisher": "forja",
-  "description": "Build C++ projects — Qt (qmake) and C++ (.sln/Makefile/CMake) with local and remote execution",
-  "version": "0.7.55.dev",
+  "description": "Build C++ projects — Qt (qmake) and C++ (.sln/Makefile/CMake) with local execution and remote sync",
+  "version": "0.7.56",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -73,10 +73,6 @@
         "title": "Forja: Clean"
       },
       {
-        "command": "forja.doctor",
-        "title": "Forja: Doctor"
-      },
-      {
         "command": "forja.sync",
         "title": "Forja: Sync Changes"
       },
@@ -93,24 +89,8 @@
         "title": "Forja: 测试远程连接"
       },
       {
-        "command": "forja.remoteWorkbench",
-        "title": "Forja Remote: Workbench"
-      },
-      {
-        "command": "forja.remoteTest",
-        "title": "Forja Remote: Test"
-      },
-      {
         "command": "forja.remoteBootstrap",
         "title": "Forja Remote: Bootstrap"
-      },
-      {
-        "command": "forja.remoteTransferStatus",
-        "title": "Forja Remote: Transfer Status"
-      },
-      {
-        "command": "forja.ps",
-        "title": "Forja Remote: PS"
       },
       {
         "command": "forja._showActions",
@@ -144,23 +124,7 @@
           "when": "false"
         },
         {
-          "command": "forja.remoteWorkbench",
-          "when": "false"
-        },
-        {
-          "command": "forja.remoteTest",
-          "when": "false"
-        },
-        {
           "command": "forja.remoteBootstrap",
-          "when": "false"
-        },
-        {
-          "command": "forja.remoteTransferStatus",
-          "when": "false"
-        },
-        {
-          "command": "forja.ps",
           "when": "false"
         }
       ],
@@ -198,6 +162,7 @@
   },
   "scripts": {
     "copy-html": "node scripts/copy-html.js",
+    "build:native:windows": "node scripts/build-windows-launcher.js",
     "clean-out": "node scripts/clean-out.js",
     "sync-version": "node scripts/sync-version.js",
     "compile": "npm run sync-version && npm run clean-out && tsc -p ./ && npm run copy-html",
@@ -207,15 +172,17 @@
     "build:cli": "npm run compile && node scripts/build-cli.js",
     "build:cli:dev": "npm run compile && node scripts/build-cli.js --channel dev",
     "package": "npm run compile && node scripts/package-vs.js",
+    "package:stable": "npm run compile && node scripts/package-vs.js --channel stable",
     "package:dev": "npm run compile && node scripts/package-vs.js --channel dev",
     "package:cli": "npm run build:cli",
+    "package:cli:stable": "npm run compile && node scripts/build-cli.js --channel stable",
     "package:cli:dev": "npm run build:cli:dev",
     "package:all": "npm run package && npm run package:cli",
+    "package:all:stable": "npm run package:stable && npm run package:cli:stable",
     "package:all:dev": "npm run package:dev && npm run package:cli:dev",
     "release": "node scripts/release.js",
     "vsix": "vsce package --allow-missing-repository",
     "harness:check": "node harness/core/automation/check-harness.js",
-    "harness:ops:init": "node harness/core/operations/create-operation-docs.js",
     "remote:smoke": "node scripts/remote-smoke.js"
   },
   "devDependencies": {

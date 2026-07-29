@@ -198,6 +198,45 @@ async function detectJom(qt: QtInfo | null): Promise<string | null> {
     return null;
 }
 
+/**
+ * Synchronous jom detection — filesystem checks including PATH entries.
+ * Used by status command where async detection is not available.
+ */
+export function detectJomSync(qtPath?: string): string | null {
+    // 1. Qt 编译器目录下 bin/jom.exe
+    if (qtPath) {
+        const p = path.join(qtPath, 'bin', 'jom.exe');
+        if (fs.existsSync(p)) { return p; }
+    }
+    // 2. 从 Qt 路径向上找 Tools/QtCreator/bin/jom/jom.exe
+    if (qtPath) {
+        let dir = qtPath;
+        for (let i = 0; i < 4; i++) {
+            const parent = path.dirname(dir);
+            if (parent === dir) { break; }
+            const jomPath = path.join(parent, 'Tools', 'QtCreator', 'bin', 'jom', 'jom.exe');
+            if (fs.existsSync(jomPath)) { return jomPath; }
+            dir = parent;
+        }
+    }
+    // 3. 系统 PATH
+    for (const entry of (process.env.PATH || '').split(path.delimiter)) {
+        const dir = entry.trim().replace(/^"(.*)"$/, '$1');
+        if (!dir) { continue; }
+        const jomPath = path.join(dir, 'jom.exe');
+        if (fs.existsSync(jomPath)) { return jomPath; }
+    }
+    // 4. 常见固定路径
+    const knownPaths = ['C:\\Qt', 'C:\\QtCompile', 'D:\\Qt', 'E:\\Qt'];
+    for (const root of knownPaths) {
+        const jomPath = path.join(root, 'Tools', 'QtCreator', 'bin', 'jom', 'jom.exe');
+        if (fs.existsSync(jomPath)) { return jomPath; }
+        const jomDirect = path.join(root, 'jom', 'jom.exe');
+        if (fs.existsSync(jomDirect)) { return jomDirect; }
+    }
+    return null;
+}
+
 // ── VS 扫描所有已安装实例 ──
 
 async function scanVS(): Promise<VSInfo[]> {

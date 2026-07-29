@@ -5,7 +5,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { clearSyncState, filterNeedsDelete, filterNeedsSync, markDeletedBatch, markSyncedBatch, SyncTargetContext } from '../core/syncState';
-import { readProjectSyncConfig, writeProjectSyncConfig, resolveServerSelector, ServerConfig } from '../core/serverStore';
+import { readProjectSyncConfig, writeProjectSyncConfig, resolveServerSelector, rememberServerRemotePath, ServerConfig } from '../core/serverStore';
 import { loadRemoteSettings, saveRemoteSettings } from '../core/settingsIO';
 import { deleteRemoteFile, ensureRemoteDir, scpUpload } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
@@ -111,7 +111,7 @@ function resolveSyncConfig(workspaceRoot: string): { ok: true; config: ResolvedS
 
     const remotePath = remote.remotePaths[server.id] || '';
     if (!remotePath) {
-        return { ok: false, error: T('sync.noRemotePath'), nextAction: `forja sync` };
+        return { ok: false, error: T('sync.noRemotePath'), nextAction: 'forja remote setup' };
     }
 
     return { ok: true, config: { server, remotePath, ignore: project.ignore } };
@@ -220,11 +220,13 @@ export function configureSyncSettings(workspaceRoot: string, options: ConfigureS
             remote.remotePaths[options.serverId] = options.remotePath;
         }
         saveRemoteSettings(workspaceRoot, remote);
-
-        // Then update sync enabled state
+        // Then update sync enabled state before recording shared history.
         writeProjectSyncConfig(workspaceRoot, {
             enabled: sync.enabled,
         });
+        if (options.remotePath) {
+            rememberServerRemotePath(options.serverId, options.remotePath);
+        }
         return { ok: true };
     } catch (e) {
         // Rollback both to original state

@@ -64,7 +64,6 @@ export function buildSuccessResult(config: ResolvedConfig, toolchain: ToolchainI
         project: config.project,
         mode,
         arch,
-        runAt: config.runAt,
         toolchain: {
             qtPath: config.qtPath,
             qtVersion: config.qtVersion,

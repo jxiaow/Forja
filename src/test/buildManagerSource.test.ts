@@ -37,3 +37,21 @@ test('vscode qt stop is unified via runStop (not buildManager)', () => {
     // getRuntimeProcessName no longer imported (was only used by stop and name-based kill)
     assert.doesNotMatch(source, /getRuntimeProcessName/);
 });
+
+test('vscode Qt run writes the same PID state consumed by forja stop', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'build', 'buildManager.ts'), 'utf8');
+
+    assert.match(source, /waitForNewExecutablePid\(mfInfo\.exePath, previousPids\)/);
+    assert.match(source, /writeRunState\(runWorkspace/);
+    assert.match(source, /clearRunState\(runWorkspace\)/);
+    assert.match(source, /setState\('isRunning', true\);\s+const pid = await waitForNewExecutablePid/);
+});
+
+test('vscode debug updates runtime state and clears it when the session ends', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'build', 'debugger.ts'), 'utf8');
+
+    assert.match(source, /setState\('isRunning', true\)/);
+    assert.match(source, /writeRunState\(debugWorkspace/);
+    assert.match(source, /clearRunState\(resolveProjectRoot\(\)\)/);
+    assert.match(source, /DEBUG_RUN_ID_KEY/);
+});

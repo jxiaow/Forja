@@ -5,7 +5,7 @@ import * as path from 'path';
 import { tmpdir } from 'os';
 import {
     readServers, addServer, removeServer,
-    updateServer, getServerById
+    updateServer, getServerById, rememberServerRemotePath,
 } from '../core/serverStore';
 import { setOutputWriter, setSilent } from '../core/loggerBase';
 
@@ -54,6 +54,18 @@ test('updateServer modifies fields', () => {
     assert.equal(updated.name, 'test-srv'); // unchanged
 });
 
+test('remote path history is persisted, deduplicated, and ordered by recent use', () => {
+    const id = readServers()[0].id;
+    assert.equal(rememberServerRemotePath(id, ' /srv/projects/app-a '), true);
+    assert.equal(rememberServerRemotePath(id, '/srv/projects/app-b'), true);
+    assert.equal(rememberServerRemotePath(id, '/srv/projects/app-a'), true);
+
+    assert.deepEqual(getServerById(id)?.remotePathHistory, [
+        '/srv/projects/app-a',
+        '/srv/projects/app-b',
+    ]);
+});
+
 test('updateServer returns false for non-existent id', () => {
     assert.equal(updateServer('non-existent-id', { host: 'x' }), false);
 });
@@ -64,6 +76,22 @@ test('removeServer deletes by id', () => {
     removeServer(id);
     assert.equal(getServerById(id), null);
     assert.equal(readServers().length, 0);
+});
+
+test('strictHostKeyChecking=false survives persistence round-trip', () => {
+    const added = addServer({
+        name: 'insecure-host-key-test',
+        host: '10.0.0.3',
+        port: 22,
+        username: 'dev',
+        authMode: 'key',
+        privateKeyPath: '/key',
+        password: '',
+        strictHostKeyChecking: false,
+    });
+
+    assert.equal(getServerById(added.id)?.strictHostKeyChecking, false);
+    removeServer(added.id);
 });
 
 test('readServers handles malformed JSON gracefully', () => {

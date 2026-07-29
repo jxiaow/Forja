@@ -11,11 +11,9 @@ import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
 import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
 import { createCppPlan } from '../../cpp/shared/plan';
-import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ForjaJsonResult, ActiveTarget, Diagnostic, diag, T } from './types';
-import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
-import { getServerById } from '../../core/serverStore';
 
 export type BuildAction = 'default' | 'fresh' | 'qmake' | 'rcc';
 
@@ -108,7 +106,6 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 project: relativeProject,
                 mode: fallbackMode,
                 arch: fallbackArch,
-                runAt: 'local' as const,
                 toolchain: fallbackToolchain,
             },
         };
@@ -133,13 +130,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
 
     // Print build header before execution (text mode only)
     if (!wantsJson && !options.plan) {
-        if (target.runAt === 'remote') {
-            const remote = loadRemoteSettings(workspace);
-            const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-            console.log(T('execRemote', [server?.name || remote.selectedServer || '']));
-        } else {
-            console.log(T('execLocal'));
-        }
+        console.log(T('execLocal'));
         console.log(`  ${T('target')}: ${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
         if (target.toolchain.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.toolchain.qmakeTarget}`); }
@@ -171,59 +162,6 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             activeTarget: target,
             diagnostics: [diag('error', `${T('cmd.cppNoQmakeRcc')} '${buildAction}'`)],
             nextAction: 'forja build',
-        };
-    }
-
-    // rcc is not supported on remote targets
-    if (buildAction === 'rcc' && target.runAt === 'remote') {
-        return {
-            ok: false,
-            action: 'build',
-            buildAction,
-            workspace,
-            activeTarget: target,
-            diagnostics: [diag('error', T('cmd.rccNotRemote'))],
-            nextAction: 'forja build rcc',
-        };
-    }
-
-    // --plan: return dry-run info without executing (check BEFORE remote branch)
-    if (options.plan && target.runAt === 'remote') {
-        const remoteAction = buildAction === 'fresh' ? 'rebuild' : buildAction === 'qmake' ? 'qmake' : 'build';
-        const sshCmd = buildRemoteShellCommand(workspace, remoteAction);
-        return {
-            ok: true,
-            action: 'build',
-            buildAction,
-            workspace,
-            activeTarget: target,
-            plan: {
-                mode: 'dryRun',
-                commands: [sshCmd],
-                shellCommand: sshCmd,
-            },
-        };
-    }
-
-    if (target.runAt === 'remote') {
-        const remoteAction = buildAction === 'fresh' ? 'rebuild' : buildAction === 'qmake' ? 'qmake' : 'build';
-        const remoteResult = await executeRemotePlan({
-            workspace,
-            target: target.kind,
-            action: remoteAction as 'build' | 'rebuild' | 'clean',
-            json: wantsJson,
-            activeProject: target.project,
-        });
-
-        return {
-            ok: remoteResult.ok,
-            action: 'build',
-            buildAction,
-            workspace,
-            activeTarget: target,
-            exitCode: remoteResult.exitCode,
-            diagnostics: remoteResult.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-            nextAction: remoteResult.nextAction,
         };
     }
 
@@ -281,7 +219,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 warningSummary: executed.warningSummary,
                 logFile: executed.logFile ?? undefined,
                 diagnostics: ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.cppBuildFailed')} (${T('cmd.buildErrorCount', [String(executed.errors.length)])})` : T('cmd.cppBuildFailed'))],
-                nextAction: ok ? undefined : (executed.errors?.length ? undefined : 'forja doctor'),
+                nextAction: ok ? undefined : (executed.errors?.length ? undefined : 'forja status'),
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -292,7 +230,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 workspace,
                 activeTarget: target,
                 diagnostics: [diag('error', message)],
-                nextAction: 'forja doctor',
+                nextAction: 'forja status',
             };
         }
     }
@@ -321,7 +259,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                         activeTarget: target,
                         exitCode: cleanResult.exitCode ?? undefined,
                         diagnostics: [diag('error', `${T('cmd.freshCleanFailed')}: ${cleanDetail}`)],
-                        nextAction: 'forja doctor',
+                        nextAction: 'forja status',
                     };
                 }
             }
@@ -398,7 +336,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             warningSummary: executed.warningSummary,
             logFile: executed.logFile ?? undefined,
             diagnostics: executed.ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.qtBuildFailed')} (${T('cmd.buildErrorCount', [String(executed.errors.length)])})` : T('cmd.qtBuildFailed'))],
-            nextAction: executed.ok ? (buildAction === 'qmake' ? 'forja build' : 'forja run') : (executed.errors?.length ? undefined : 'forja doctor'),
+            nextAction: executed.ok ? (buildAction === 'qmake' ? 'forja build' : 'forja run') : (executed.errors?.length ? undefined : 'forja status'),
         };
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -409,7 +347,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             workspace,
             activeTarget: target,
             diagnostics: [diag('error', message)],
-            nextAction: 'forja doctor',
+            nextAction: 'forja status',
         };
     }
 }
@@ -423,7 +361,7 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
         if (result.activeTarget) {
             const t = result.activeTarget;
             const qt = t.toolchain.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}` : '';
-            console.log(`${T('target')}: ${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
+            console.log(`${T('target')}: ${t.project} · ${t.mode}/${t.arch}${qt}`);
         }
         if (result.durationMs) {
             console.log(`${T('duration')}: ${result.durationMs}ms`);

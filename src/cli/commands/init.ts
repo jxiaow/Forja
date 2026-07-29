@@ -17,6 +17,8 @@ import { detectProjectType } from '../../core/projectTypeDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 import { setSilent } from '../../core/loggerBase';
 import { confirm, prompt, choose, chooseRequired } from './prompt';
+import { getProjectGroup } from './projectGrouping';
+export { getProjectGroup } from './projectGrouping';
 
 // ── Result type ──
 
@@ -243,6 +245,15 @@ async function handleModifyTarget(workroot: string, config: WorkspaceConfig, opt
 
 async function handleNewWorkroot(workroot: string, options: InitOptions): Promise<InitResult> {
     if (options.json && !options.answers) {
+        // Ask for the root before scanning so JSON callers can choose a
+        // different top-level directory than the current process directory.
+        if (!options.workroot) {
+            return {
+                ok: false, action: 'init', workroot,
+                questions: [{ id: 'workroot', label: T('init.workroot'), default: workroot }],
+                nextAction: 'forja init --answers <answers.json>',
+            };
+        }
         // Scan and return questions
         const candidates = await scanProjects(workroot);
         if (candidates.length === 0) {
@@ -251,13 +262,42 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
                 diagnostics: [{ level: 'error', message: T('init.noProjectsFound') }],
             };
         }
+        const projectGroups = groupProjectCandidates(candidates);
+        const groupedChoices = Object.fromEntries(projectGroups.map(group => [
+            group.name,
+            group.candidates.map(candidate => candidate.project),
+        ]));
         const questions: Question[] = [
-            { id: 'project', label: T('init.selectProject'), choices: candidates.map(c => c.project) },
+            { id: 'projectGroup', label: T('init.selectProjectGroup'), choices: projectGroups.map(group => group.name) },
+            { id: 'project', label: T('init.selectProject'), choicesBy: { questionId: 'projectGroup', values: groupedChoices } },
             { id: 'mode', label: T('init.selectMode'), choices: ['debug', 'release'] },
         ];
         // Only prompt arch on Windows where multiple options exist
         if (process.platform === 'win32') {
             questions.push({ id: 'arch', label: T('init.selectArch'), choices: ['x86', 'x64'] });
+        }
+        setSilent(true);
+        let env;
+        try { env = await detectEnv(); } finally { setSilent(false); }
+        if (candidates.some(candidate => candidate.kind === 'qt') && env.qtCandidates.length > 1) {
+            questions.push({
+                id: 'qtPath',
+                label: T('setupQuestionQtPath'),
+                choicesBy: {
+                    questionId: 'project',
+                    values: Object.fromEntries(candidates.map(candidate => [
+                        candidate.project,
+                        candidate.kind === 'qt' ? env.qtCandidates.map(q => q.path) : [],
+                    ])),
+                },
+            });
+        }
+        if (env.vsCandidates.length > 1) {
+            questions.push({
+                id: 'vsInstall',
+                label: T('setupQuestionVsInstall'),
+                choices: env.vsCandidates.map(v => v.installPath),
+            });
         }
         return {
             ok: false, action: 'init', workroot,
@@ -344,10 +384,31 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
 
 // ── Shared helpers ──
 
-interface ProjectCandidate {
+export interface ProjectCandidate {
     kind: 'qt' | 'cpp';
     project: string;
     label: string;
+}
+
+export interface ProjectGroup {
+    name: string;
+    candidates: ProjectCandidate[];
+}
+
+export function groupProjectCandidates(candidates: ProjectCandidate[]): ProjectGroup[] {
+    const groups = new Map<string, ProjectCandidate[]>();
+    for (const candidate of candidates) {
+        const name = getProjectGroup(candidate.project);
+        const items = groups.get(name) || [];
+        items.push(candidate);
+        groups.set(name, items);
+    }
+    return [...groups.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, items]) => ({
+            name,
+            candidates: items.sort((a, b) => a.project.localeCompare(b.project)),
+        }));
 }
 
 async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
@@ -356,7 +417,7 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
     // Scan Qt projects (.pro files)
     setSilent(true);
     let proFiles;
-    try { proFiles = scanProFiles(workroot); } finally { setSilent(false); }
+    try { proFiles = scanProFiles(workroot, [], ['build', '.worktrees']); } finally { setSilent(false); }
     for (const pro of proFiles) {
         candidates.push({
             kind: 'qt',
@@ -386,7 +447,7 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
     return candidates;
 }
 
-async function configureNewTarget(workroot: string, config: WorkspaceConfig, options: InitOptions, existingCandidates?: ProjectCandidate[]): Promise<{ ok: boolean; action: 'init'; target?: TargetProfile; diagnostics?: Diagnostic[] }> {
+async function configureNewTarget(workroot: string, config: WorkspaceConfig, options: InitOptions, existingCandidates?: ProjectCandidate[]): Promise<InitResult> {
     const candidates = existingCandidates || await scanProjects(workroot);
     if (candidates.length === 0) {
         return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.noProjectsFound') }] };
@@ -401,7 +462,9 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         }
         selectedProject = match;
     } else if (options.interactive) {
-        const chosen = await chooseRequired(T('init.selectProject'), candidates, c => c.label);
+        const groups = groupProjectCandidates(candidates);
+        const selectedGroup = await chooseRequired(T('init.selectProjectGroup'), groups, group => `${group.name} (${group.candidates.length})`);
+        const chosen = await chooseRequired(T('init.selectProject'), selectedGroup.candidates, c => c.label);
         selectedProject = chosen;
     } else {
         return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.answersMissingProject') }] };
@@ -409,6 +472,43 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
 
     if (options.interactive) {
         console.log(`  ${T('selectedMark')} ${selectedProject.label}`);
+    }
+
+    if (!options.interactive) {
+        const questions: Question[] = [];
+        if (!options.answers?.mode) {
+            questions.push({ id: 'mode', label: T('init.selectMode'), choices: ['debug', 'release'] });
+        }
+        if (process.platform === 'win32' && !options.answers?.arch) {
+            questions.push({ id: 'arch', label: T('init.selectArch'), choices: ['x86', 'x64'] });
+        }
+        setSilent(true);
+        let initialEnv;
+        try { initialEnv = await detectEnv(); } finally { setSilent(false); }
+        if (selectedProject.kind === 'qt' &&
+            initialEnv.qtCandidates.length > 1 && !options.answers?.qtPath) {
+            questions.push({
+                id: 'qtPath',
+                label: T('setupQuestionQtPath'),
+                choices: initialEnv.qtCandidates.map(q => q.path),
+            });
+        }
+        if (initialEnv.vsCandidates.length > 1 && !options.answers?.vsInstall) {
+            questions.push({
+                id: 'vsInstall',
+                label: T('setupQuestionVsInstall'),
+                choices: initialEnv.vsCandidates.map(v => v.installPath),
+            });
+        }
+        if (questions.length > 0) {
+            return {
+                ok: false,
+                action: 'init',
+                workroot,
+                questions,
+                nextAction: 'forja init --answers <answers.json>',
+            };
+        }
     }
 
     // Detect toolchain
@@ -454,7 +554,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
     }
 
     // Mode — validate from answers
-    let mode: 'debug' | 'release' = 'debug';
+    let mode: 'debug' | 'release' | undefined;
     if (options.answers?.mode) {
         if (options.answers.mode === 'debug' || options.answers.mode === 'release') {
             mode = options.answers.mode;
@@ -470,7 +570,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
     }
 
     // Arch — validate from answers
-    let arch: 'x86' | 'x64' = process.platform === 'win32' ? 'x86' : 'x64';
+    let arch: 'x86' | 'x64' | undefined = process.platform === 'win32' ? undefined : 'x64';
     if (options.answers?.arch) {
         if (options.answers.arch === 'x86' || options.answers.arch === 'x64') {
             arch = options.answers.arch;
@@ -483,6 +583,15 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
             { value: 'x64' as const, label: `x64` },
         ], item => item.label);
         arch = chosen.value;
+    }
+
+    if (!mode || !arch) {
+        return {
+            ok: false,
+            action: 'init',
+            workroot,
+            diagnostics: [{ level: 'error', message: T('init.configurationCancelled') }],
+        };
     }
 
     const existingIds = new Set(Object.keys(config.targets));
@@ -509,7 +618,6 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
         project: selectedProject.project,
         mode,
         arch,
-        runAt: 'local',
         toolchain: {
             qtPath,
             qtVersion,

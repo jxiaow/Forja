@@ -8,14 +8,13 @@ import * as cp from 'child_process';
 import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner';
+import { createPlatformRunExecutor } from '../../qt/platform/runExecutor';
 import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
 import { CliOptions } from '../../qt/cli/types';
-import { executeRemotePlan, buildRemoteShellCommand } from '../../remote/core/plan';
 import { ForjaJsonResult, ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
 import { getActiveTarget } from './activeTarget';
-import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
+import { resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
-import { getServerById } from '../../core/serverStore';
 import { launchDesigner } from '../../qt/build/designer';
 
 export type RunAction = 'default' | 'detach' | 'debug' | 'custom' | 'designer';
@@ -82,13 +81,7 @@ export async function runRun(workspace: string, options: {
 
     // Print run header before execution (text mode only)
     if (!options.json && !options.plan) {
-        if (target.runAt === 'remote') {
-            const remote = loadRemoteSettings(workspace);
-            const server = remote.selectedServer ? getServerById(remote.selectedServer) : null;
-            console.log(T('execRemote', [server?.name || remote.selectedServer || '']));
-        } else {
-            console.log(T('execLocal'));
-        }
+        console.log(T('execLocal'));
         console.log(`  ${T('target')}: ${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
         if (target.toolchain.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.toolchain.qmakeTarget}`); }
@@ -144,46 +137,6 @@ export async function runRun(workspace: string, options: {
         };
     }
 
-    // --plan: return dry-run info without executing (check BEFORE remote branch)
-    if (options.plan && target.runAt === 'remote') {
-        const sshCmd = buildRemoteShellCommand(workspace, `run${options.detach ? ' --detach' : ''}`);
-        return {
-            ok: true,
-            action: 'run',
-            runAction,
-            workspace,
-            activeTarget: target,
-            plan: {
-                mode: 'dryRun',
-                commands: [sshCmd],
-                shellCommand: sshCmd,
-            },
-        };
-    }
-
-    if (target.runAt === 'remote') {
-        const remoteResult = await executeRemotePlan({
-            workspace,
-            target: 'qt',
-            action: 'run',
-            args: options.detach ? ['--detach'] : [],
-            json: options.json ?? false,
-            stream: !(options.json ?? false) && !options.detach,
-            activeProject: target.project,
-        });
-
-        return {
-            ok: remoteResult.ok,
-            action: 'run',
-            runAction,
-            workspace,
-            activeTarget: target,
-            exitCode: remoteResult.exitCode,
-            diagnostics: remoteResult.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-            nextAction: remoteResult.nextAction,
-        };
-    }
-
     // Qt local
     const wantsJson = options.json ?? false;
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
@@ -225,7 +178,11 @@ export async function runRun(workspace: string, options: {
             }
         }
 
-        const executed = await runCliResult(planned, { streaming: !wantsJson, detach: options.detach ?? false });
+        const executed = await runCliResult(planned, {
+            streaming: !wantsJson,
+            detach: options.detach ?? false,
+            runExecutor: createPlatformRunExecutor()
+        });
         const runtime: RuntimeState | undefined = executed.pid ? {
             running: true,
             pid: executed.pid,
@@ -254,7 +211,7 @@ export async function runRun(workspace: string, options: {
                 ? 'forja build'
                 : (executed.ok
                     ? (executed.runtimeExitCode !== undefined ? undefined : 'forja stop')
-                    : 'forja doctor'),
+                    : 'forja status'),
         };
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -265,7 +222,7 @@ export async function runRun(workspace: string, options: {
             workspace,
             activeTarget: target,
             diagnostics: [diag('error', message)],
-            nextAction: 'forja doctor',
+            nextAction: 'forja status',
         };
     }
 }
@@ -299,7 +256,7 @@ async function handleDesigner(workspace: string, uiFile: string): Promise<RunRes
             runAction: 'designer',
             workspace,
             diagnostics: [diag('error', designerResult.error!)],
-            nextAction: isUiFileError ? undefined : 'forja doctor',
+            nextAction: isUiFileError ? undefined : 'forja status',
         };
     }
 
@@ -377,7 +334,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
                 workspace,
                 activeTarget: target,
                 diagnostics: [diag('error', `${T('cmd.customFailed')}: "${customName}" — ${result.error.message}`)],
-                nextAction: 'forja doctor',
+                nextAction: 'forja status',
             };
         }
 
@@ -402,7 +359,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
             exitCode,
             diagnostics: [diag('error', `${T('cmd.customFailed')}: "${customName}" exit code ${exitCode}`)],
             ...(json ? { customStdout: stdout || undefined, customStderr: stderr || undefined } : {}),
-            nextAction: 'forja doctor',
+            nextAction: 'forja status',
         };
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -413,7 +370,7 @@ function handleCustom(workspace: string, target: ActiveTarget, customName: strin
             workspace,
             activeTarget: target,
             diagnostics: [diag('error', message)],
-            nextAction: 'forja doctor',
+            nextAction: 'forja status',
         };
     }
 }
@@ -427,7 +384,7 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
         if (result.activeTarget) {
             const t = result.activeTarget;
             const qt = t.toolchain.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}` : '';
-            console.log(`${T('target')}: ${t.project} · ${t.mode}/${t.arch} · ${t.runAt}${qt}`);
+            console.log(`${T('target')}: ${t.project} · ${t.mode}/${t.arch}${qt}`);
         }
         if (result.runtime?.pid) {
             console.log(`${T('pidLabel')}: ${result.runtime.pid}`);

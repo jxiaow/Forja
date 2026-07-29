@@ -105,7 +105,7 @@ test('staged prepared action runs readiness and remote action in the primary sta
     const runner: RemoteRunner = {
         async run(command: string) {
             commands.push(command);
-            if (command.includes('$HOME/.forja/bin/forja')) {
+            if (command.includes('$(npm prefix -g)/bin/forja')) {
                 if (!prepared) {
                     return { exitCode: 1, stdout: '', stderr: 'workspace not prepared' };
                 }
@@ -158,7 +158,7 @@ test('staged prepared action runs readiness and remote action in the primary sta
         assert.equal(result.actionRemotePath, stagedWorkspace + '/app');
         assert.ok(commands.some(command => command.includes(`cd '${stagedWorkspace}/app'`) && command.includes('build')));
         assert.ok(commands.some(command => command.includes(`cd '${stagedWorkspace}/app'`) && command.includes('status')));
-        assert.equal(commands.some(command => command.includes("cd '/home/xw/workspace/dev'") && command.includes('$HOME/.forja/bin/forja')), false);
+        assert.equal(commands.some(command => command.includes("cd '/home/xw/workspace/dev'") && command.includes('$(npm prefix -g)/bin/forja')), false);
     } finally {
         fs.rmSync(fixture.root, { recursive: true, force: true });
         fs.rmSync(configDir, { recursive: true, force: true });
@@ -256,7 +256,7 @@ test('staged prepared action uses mapped remote repo name for primary action pat
     const runner: RemoteRunner = {
         async run(command: string) {
             commands.push(command);
-            if (command.includes('$HOME/.forja/bin/forja')) {
+            if (command.includes('$(npm prefix -g)/bin/forja')) {
                 return { exitCode: 0, stdout: '{"ok":true,"diagnostics":[],"nextActions":[]}', stderr: '' };
             }
             if (command.includes('printf "path:%s\\n"')) {
@@ -303,7 +303,7 @@ test('staged prepared action uses mapped remote repo name for primary action pat
         assert.equal(result.ok, true);
         assert.equal(result.actionRemotePath, stagedWorkspace + '/linux-app');
         assert.ok(commands.some(command => command.includes(`cd '${stagedWorkspace}/linux-app'`) && command.includes('build')));
-        assert.equal(commands.some(command => command.includes(`cd '${stagedWorkspace}'`) && command.includes('$HOME/.forja/bin/forja')), false);
+        assert.equal(commands.some(command => command.includes(`cd '${stagedWorkspace}'`) && command.includes('$(npm prefix -g)/bin/forja')), false);
         assert.ok(commands.some(command => command.includes("repo_dir='/home/xw/workspace/forja-remote/release-mapped/linux-app'")));
     } finally {
         fs.rmSync(fixture.root, { recursive: true, force: true });
@@ -333,7 +333,7 @@ test('staged prepared action falls back to remote shell when remote forja is mis
     const runner: RemoteRunner = {
         async run(command: string) {
             commands.push(command);
-            if (command.includes('$HOME/.forja/bin/forja')) {
+            if (command.includes('$(npm prefix -g)/bin/forja')) {
                 return { exitCode: 127, stdout: '', stderr: 'not found' };
             }
             if (command.includes('printf "path:%s\\n"')) {
@@ -410,10 +410,10 @@ test('staged prepared action preserves remote forja build failures instead of sh
     const runner: RemoteRunner = {
         async run(command: string) {
             commands.push(command);
-            if (command.includes('$HOME/.forja/bin/forja') && command.includes("'status'")) {
+            if (command.includes('$(npm prefix -g)/bin/forja') && command.includes("'status'")) {
                 return { exitCode: 0, stdout: '{"ok":true,"diagnostics":[],"nextActions":[]}', stderr: '' };
             }
-            if (command.includes('$HOME/.forja/bin/forja') && command.includes("'build'")) {
+            if (command.includes('$(npm prefix -g)/bin/forja') && command.includes("'build'")) {
                 return {
                     exitCode: 1,
                     stdout: '{"ok":false,"diagnostics":[{"level":"error","message":"NemoSDK.h: No such file or directory"}],"nextActions":[]}',

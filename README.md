@@ -1,6 +1,6 @@
 # Forja — VSCode 扩展
 
-C++ 项目构建扩展，支持 Qt (qmake) 和 SDK (.sln/Makefile) 项目，覆盖本地和远程执行。
+C++ 项目构建扩展，支持 Qt (qmake) 和 SDK (.sln/Makefile) 项目。本地构建、运行和环境管理由扩展与 CLI 共同提供；远端当前仅支持工作区同步和 CLI 部署。
 
 ## 安装
 
@@ -9,7 +9,7 @@ C++ 项目构建扩展，支持 Qt (qmake) 和 SDK (.sln/Makefile) 项目，覆�
 code --install-extension forja-<version>.vsix
 
 # Dev
-code --install-extension forja-<version>-dev.vsix
+code --install-extension forja-<version>-dev.<timestamp>.vsix
 ```
 
 扩展和 CLI 共享配置存储（`~/.forja/workspaces/<hash>.json`），在任一侧做的变更在另一侧立即可见。
@@ -73,24 +73,22 @@ code --install-extension forja-<version>-dev.vsix
 
 在配置面板中修改 mode/arch 会同步写入 activeTarget，CLI 的 `forja build` 立即生效。
 
-## 远程执行
+## 远程同步与部署
 
-Forja 支持通过 SSH 在远程服务器上构建和运行：
+当前仅保留远程文件同步，以及将 Forja CLI 部署到已配置服务器：
 
 ```bash
 # 1. 添加服务器（CLI 或配置面板）
 forja server add --name dev --host 192.168.1.10 --username dev
 
-# 2. 配置远程执行目标
-forja remote set --server dev --remote-path /home/dev/workspace
+# 2. 配置同步服务器与远程目录
+forja remote setup --server dev --remote-path /home/dev/workspace
 
-# 3. 切换执行位置
-forja use target --run-at remote
+# 3. 部署远端 Forja（可选）
+forja remote bootstrap
 ```
 
-切换后，状态栏 Build/Run 自动走远程路径。远程诊断：`forja doctor --remote`。
-
-远程 Forja 二进制默认安装在 `$HOME/.forja/bin/forja`，可通过 `forja remote forja-bin set --path <path>` 覆盖。
+远程构建、运行、诊断和仓库操作暂不可用；`forja build`、`run`、`stop`、`clean` 仅执行本地 target。
 
 ## 同步
 
@@ -103,15 +101,13 @@ forja use target --run-at remote
 
 认证方式：SSH 密钥（默认）或密码（通过 SSH_ASKPASS 机制）。
 
-## 诊断与修复
+## 诊断
 
 ```bash
-forja doctor                # 本地诊断：检查配置完整性
-forja doctor --remote       # 远程诊断：检查 SSH/Forja/锁状态
-forja doctor fix --remote   # 自动修复：部署/更新远程 Forja
+forja status                # 查看配置就绪状态和下一步操作
 ```
 
-诊断覆盖：配置文件损坏、工具链缺失、项目文件不存在、远程锁死、SSH 连接失败等。
+诊断覆盖：配置文件损坏、工具链缺失和项目文件不存在等本地问题。
 
 ## 配置存储
 

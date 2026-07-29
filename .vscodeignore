@@ -4,6 +4,7 @@
 .github/**
 .reasonix/**
 .tmp/**
+.tmp-*
 src/**
 dist/**
 scripts/**
@@ -25,6 +26,28 @@ node_modules/**
 AGENTS.md
 out/test/**
 out/**/*.map
+# Remote build/run/diagnostic implementations are intentionally not shipped.
+# Keep only the shared configuration, SSH, and bootstrap modules used by sync/setup/bootstrap.
+out/remote/core/baseline.js
+out/remote/core/branchSync.js
+out/remote/core/bridge.js
+out/remote/core/bundleBaseline.js
+out/remote/core/cleanUntracked.js
+out/remote/core/doctor.js
+out/remote/core/lock.js
+out/remote/core/overlayRestore.js
+out/remote/core/overlaySync.js
+out/remote/core/pipeline.js
+out/remote/core/plan.js
+out/remote/core/remoteShellFallback.js
+out/remote/core/repoPath.js
+out/remote/core/repoStrategy.js
+out/remote/core/restore.js
+out/remote/core/stagedWorkspace.js
+out/remote/core/status.js
+out/remote/core/transfer.js
+out/remote/core/workspaceLink.js
+out/remote/vscode/**
 skills/**
 harness/**
 *.bak

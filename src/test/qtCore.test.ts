@@ -291,6 +291,35 @@ test('run with Makefile generates full command chain including executable', asyn
     assert.ok(!result.diagnostics.some(d => /Makefile/.test(d.message)));
 });
 
+test('run resolves a relative project from workspace instead of process cwd', async () => {
+    const workspace = makeWorkspace();
+    writeMatchingMakefile(workspace);
+    if (process.platform === 'win32') {
+        fs.writeFileSync(path.join(workspace, 'Makefile.Debug'), 'DESTDIR_TARGET = debug\\demo.exe\n', 'utf8');
+    } else {
+        fs.appendFileSync(path.join(workspace, 'Makefile'), 'TARGET = debug/demo\n', 'utf8');
+    }
+
+    const result = await createActionPlan({
+        action: 'run',
+        executionMode: 'dryRun',
+        workspace,
+        project: 'demo.pro',
+        mode: 'debug',
+        arch: defaultArch(),
+        qtPath: 'D:/Qt',
+        vsDevShell: 'C:/VS/Launch-VsDevShell.ps1',
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.executablePath, path.join(workspace, process.platform === 'win32' ? 'debug\\demo.exe' : 'debug/demo'));
+    assert.ok(result.commands.some(command => /demo/.test(command)));
+    assert.ok(!result.diagnostics.some(diagnostic => /无法解析可执行文件/.test(diagnostic.message)));
+});
+
 test('run uses configured runtime process name only for pre-run stop', async () => {
     const workspace = makeWorkspace();
     const projectDir = workspace;

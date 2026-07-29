@@ -11,6 +11,7 @@ import { createLogger } from '../../vscode/logger';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from '../shared/rccResolver';
 import { validateMakefile } from '../shared/runtimeTarget';
+import { clearRunState, findExecutablePids, runLogPath, waitForNewExecutablePid, writeRunState } from '../shared/localState';
 import { TASK_SOURCE_QT } from '../constants';
 
 const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
@@ -276,17 +277,41 @@ export async function run(): Promise<void> {
             // 先注册 Run task 结束监听，再执行（避免竞态漏掉事件）
             // 清理上一次的 disposable（如果还在）
             _runEndDisposable?.dispose();
+            const runWorkspace = resolveProjectRoot();
+            const previousPids = findExecutablePids(mfInfo.exePath);
+            let runTaskEnded = false;
+            clearRunState(runWorkspace);
             _runEndDisposable = vscode.tasks.onDidEndTask(e => {
                 if (e.execution.task.name === `Run ${cfg.mode}` && e.execution.task.source === TASK_SOURCE_QT) {
+                    runTaskEnded = true;
                     _runEndDisposable?.dispose();
                     _runEndDisposable = undefined;
+                    clearRunState(runWorkspace);
                     setState('isRunning', false);
                 }
             });
 
-            vscode.tasks.executeTask(runTaskObj).then(() => {
-                setState('isRunning', true);
-            });
+            void (async (): Promise<void> => {
+                try {
+                    await vscode.tasks.executeTask(runTaskObj);
+                    if (runTaskEnded) { return; }
+                    setState('isRunning', true);
+                    const pid = await waitForNewExecutablePid(mfInfo.exePath, previousPids);
+                    if (runTaskEnded) { return; }
+                    if (pid) {
+                        writeRunState(runWorkspace, {
+                            pid,
+                            exePath: mfInfo.exePath,
+                            executablePath: mfInfo.exePath,
+                            logFile: runLogPath(runWorkspace),
+                            startedAt: new Date().toISOString()
+                        });
+                    }
+                } catch (error) {
+                    logger.error(`启动运行任务失败: ${error instanceof Error ? error.message : String(error)}`);
+                    setState('isRunning', false);
+                }
+            })();
 
             resolve();
         };

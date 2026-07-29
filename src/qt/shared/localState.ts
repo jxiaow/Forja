@@ -215,6 +215,22 @@ export function findExecutablePids(executablePath: string): number[] {
     }
 }
 
+/** Wait briefly for a process started after the supplied PID snapshot. */
+export async function waitForNewExecutablePid(
+    executablePath: string,
+    previousPids: readonly number[],
+    timeoutMs: number = 5000
+): Promise<number | null> {
+    const previous = new Set(previousPids);
+    const deadline = Date.now() + timeoutMs;
+    do {
+        const pid = findExecutablePids(executablePath).find(candidate => !previous.has(candidate));
+        if (pid) { return pid; }
+        await new Promise<void>(resolve => setTimeout(resolve, 100));
+    } while (Date.now() < deadline);
+    return null;
+}
+
 export function isExecutableRunning(executablePath: string): boolean {
     return findExecutablePids(executablePath).length > 0;
 }

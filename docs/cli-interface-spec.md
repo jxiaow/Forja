@@ -2,7 +2,7 @@
 
 本文档定义 forja CLI 的输入参数、输出结构和数据类型，供 AI 工具和集成方参考。
 
-> **注意**：完整的命令规范请参阅 [v2 命令 API 文档](operations/command-consolidation/command-api.zh.md)。本文档侧重于调用约定、配置格式和底层类型定义。
+> **注意**：本文是当前公开命令的接口规范；使用示例参见 [CLI 使用文档](README-cli.md)。
 
 ## 调用约定
 
@@ -10,7 +10,7 @@
 forja <subcommand> [action] [options]
 ```
 
-- 当前公开子命令：`init` | `status` | `list` | `use` | `server` | `remote` | `build` | `run` | `stop` | `clean` | `doctor` | `sync`
+- 当前公开子命令：`init` | `status` | `list` | `use` | `server` | `remote` | `build` | `run` | `stop` | `clean` | `sync`
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -43,6 +43,8 @@ forja <subcommand> [action] [options]
 | `--answers <path>` | string | 使用答案文件完成全新初始化 |
 | `--json` | boolean | 输出初始化问题或结果，不读取旧配置 |
 
+初始化项目选择先返回 `projectGroup`，再返回 `project`。分组按顶层目录生成；`.worktrees/<branch>/...` 跳过工作树层级，`xyframework/*` 统一归组，`build` 项目完整保留。JSON 中 `project.choicesBy.questionId` 指向 `projectGroup`，`project.choicesBy.values` 保存组名到完整项目路径数组的映射；答案仍使用原有 `project` 字段。
+
 ### `forja list`
 
 **必须指定分类参数**。
@@ -52,24 +54,27 @@ forja <subcommand> [action] [options]
 | `targets` | Qt/C++ 候选目标 |
 | `env` | 工具链路径（子分类 qt/vs/jom/make） |
 
+`list targets --all` 使用 `targetGroups` 按顶层项目组返回目标；扫描包含 `build` 与 `.worktrees`。
+
 注意：服务器列表通过 `forja server` 查看，远程配置通过 `forja remote` 查看。
 
 ### `forja use`
 
 | 子命令 | 参数 | 说明 |
 |--------|------|------|
-| `target` | `--project`, `--mode`, `--arch`, `--run-at`, `--qt`, `--vs`, `--jom` | 选择项目和构建配置 |
+| `target` | `--project`, `--answers`, `--mode`, `--arch`, `--qt`, `--vs`, `--jom` | 选择项目和本地构建配置 |
+
+选择新项目但缺少 mode 或 Windows arch 时，返回 `status: "needs-input"` 与对应 `questions`，不写入默认值。Linux arch 唯一为 `x64`，因此不返回 arch 问题。
 
 ### `forja remote`
 
 | 子命令 | 参数 | 说明 |
 |--------|------|------|
 | 无 | `--json` | 查看当前远程配置 |
-| `set` | `--server <id>`, `--remote-path <path>` | 设置远程服务器和路径 |
-| `restore <repo> <path...>` | `--server <id>` | 恢复远程工作区文件 |
-| `reset <repo> <path...>` | `--all`, `--server <id>` | 重置远程工作区文件；破坏性操作必须确认 |
+| `setup` | `--server <id>`, `--remote-path <path>` | 为当前 workroot 选择同步服务器、设置远端路径并启用同步，然后部署远端 CLI |
+| `bootstrap` | `--force` | 单独打包并部署当前本地 CLI 到已配置服务器 |
 
-repo/build-order/transfer 高级配置不属于当前公开 CLI 契约，待后续工作包冻结后再补充。
+远程构建、运行、诊断、仓库操作和传输配置当前不属于公开 CLI 契约。
 
 ### `forja server`
 
@@ -106,23 +111,14 @@ repo/build-order/transfer 高级配置不属于当前公开 CLI 契约，待后�
 |------|------|------|
 | `--plan` | boolean | 只输出计划 |
 
-### `forja doctor`
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| 位置参数 | `fix` \| `unlock` | 诊断动作（默认 check） |
-| `--remote` | boolean | 检查远程配置 |
-| `--server <id>` | string | 指定服务器 |
-| `--force` | boolean | 强制执行 |
-
 ### `forja sync`
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| 位置参数 | `plan` \| `status` \| `reset` \| `transfer` | 同步动作 |
+| 位置参数 | `status` \| `reset` \| `ignore` | 同步动作 |
 | `--file <path>` | path（可重复） | 指定文件 |
-| `--repo <name>` | string | 指定 repo |
-| `--server <id>` | string | 临时覆盖服务器 |
+| `--dry-run` | boolean | 预览同步文件，不执行上传或删除 |
+| `--add` / `--rm` | string | 仅用于 `sync ignore` 管理忽略规则 |
 
 **交互行为**：无 `--json` 时，`forja sync` 先显示计划摘要，交互确认 `[y/N]` 后才执行。`--json` 模式直接执行（AI/脚本用）。
 
@@ -152,7 +148,6 @@ interface ActiveTarget {
   project: string;
   mode: 'debug' | 'release';
   arch: 'x86' | 'x64';
-  runAt: 'local' | 'remote';
 }
 
 interface Diagnostic {
@@ -168,7 +163,6 @@ interface RuntimeState {
   pid?: number;
   executablePath?: string;
   logFile?: string;
-  runAt: 'local' | 'remote';
 }
 
 type ReadinessState = 'ready' | 'configured' | 'blocked' | 'missing' | 'unknown' | 'not-selected';
@@ -177,7 +171,6 @@ interface Readiness {
   target?: ReadinessState;
   toolchain?: ReadinessState;
   sync?: ReadinessState;
-  remote?: ReadinessState;
   runtime?: ReadinessState;
 }
 ```
@@ -203,13 +196,9 @@ interface InitResult extends ForjaJsonResult {
 
 interface ListResult extends ForjaJsonResult {
   action: 'list';
-  category: 'targets' | 'env' | 'servers' | 'remote' | 'config' | 'lang';
-  targets?: TargetCandidate[];
-  servers?: ServerSummary[] | ServerDetail;
+  category: 'targets' | 'env';
+  targetGroups?: Record<string, TargetCandidate[]>;
   env?: EnvSummary;
-  config?: ConfigSummary;
-  remote?: RemoteConfigDetail;
-  lang?: string;
 }
 
 interface UseResult extends ForjaJsonResult {
@@ -250,31 +239,19 @@ interface CleanResult extends ForjaJsonResult {
   exitCode?: number;
 }
 
-interface DoctorResult extends ForjaJsonResult {
-  action: 'doctor';
-  doctorAction: 'check' | 'fix' | 'unlock';
-  checks?: CheckResult[];
-  plan?: CommandPlan;
-  changed?: string[];
-}
-
 interface SyncResult extends ForjaJsonResult {
   action: 'sync';
-  syncAction: 'run' | 'plan' | 'reset' | 'transfer';
+  syncAction: 'run' | 'plan' | 'reset' | 'status' | 'ignore';
   plan?: SyncPlan;
   server?: string;
   remotePath?: string;
   uploaded?: string[];
   deleted?: string[];
   skipped?: string[];
-  transfer?: {
-    configured: boolean;
-    planned?: boolean;
-    executed?: boolean;
-    artifacts?: string[];
-  };
 }
 ```
+
+`targetGroups` 的键即项目分组；组内 `TargetCandidate` 不再重复携带 `group` 字段。
 
 ---
 
@@ -314,10 +291,16 @@ interface SyncResult extends ForjaJsonResult {
     "username": "dev",
     "authMode": "key",
     "privateKeyPath": "~/.ssh/id_rsa",
-    "password": ""
+    "password": "",
+    "remotePathHistory": [
+      "/home/dev/project-a",
+      "/home/dev/project-b"
+    ]
   }
 ]
 ```
+
+`remotePathHistory` 为可选的服务器级目录历史，按最近使用优先排列；当前项目实际选择的目录仍保存在项目 remote 配置中。
 
 ---
 

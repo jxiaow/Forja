@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Forja CLI — v2 entry point.
- * Routes to 11 top-level commands: status, init, list, use, server, build, run, stop, clean, doctor, sync.
+ * Routes to 11 top-level commands: status, init, list, use, server, remote, build, run, stop, clean, sync.
  */
 
 import { runCli } from './commands/index';

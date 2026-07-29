@@ -5,17 +5,24 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { T, Diagnostic } from '../types';
-import type { TargetProfile } from '../../../core/workspaceStore';
+import {
+    loadWorkspaceConfig,
+    normalizePath,
+    resolveWorkroot,
+    saveWorkspaceConfig,
+    type TargetProfile,
+} from '../../../core/workspaceStore';
 import { detectContext } from './detect';
 import { resolveAll } from './resolve';
-import { saveAll, buildTargetProfile } from './save';
+import { saveAll } from './save';
 import { buildSuccessResult } from './report';
-import type { ResolveOptions, UseTargetResult, ResolvedConfig } from './types';
-import { detectProjectType } from '../../../core/projectTypeDetector';
+import type { ResolveOptions, UseTargetResult } from './types';
 import { detectEnv } from '../../../qt/env/envDetector';
 import { setSilent } from '../../../core/loggerBase';
-import { choose } from '../prompt';
-import { extractVsYearFromQtPath } from './resolve';
+
+function quoteCliArg(value: string): string {
+    return /\s/.test(value) ? `"${value.replace(/(["\\$`])/g, '\\$1')}"` : value;
+}
 
 // ── Main entry ──
 
@@ -28,6 +35,7 @@ export interface UseTargetEntryOptions {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
+    qmakeTarget?: string;
     mode?: string;
     arch?: string;
     answers?: string;  // file path
@@ -58,6 +66,40 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
         };
     }
 
+    if (options.project && !options.answers && !options.mode && !options.arch
+        && !options.qtPath && !options.vsInstall && !options.jomPath && !options.qmakeTarget) {
+        const workroot = resolveWorkroot(workspace);
+        if (workroot) {
+            const workspaceConfig = loadWorkspaceConfig(workroot);
+            const savedTargets = Object.values(workspaceConfig.targets);
+            const expectedProjectPath = normalizePath(path.resolve(workroot, options.project));
+            const exactProjectMatches = savedTargets.filter(target =>
+                normalizePath(path.resolve(workroot, target.project)) === expectedProjectPath
+            );
+            const matchingTargets = exactProjectMatches.length > 0
+                ? exactProjectMatches
+                : savedTargets.filter(target => target.id === options.project);
+            if (matchingTargets.length === 1) {
+                const target = matchingTargets[0];
+                workspaceConfig.activeTarget = target.id;
+                try {
+                    saveWorkspaceConfig(workspaceConfig);
+                } catch (e) {
+                    return {
+                        ok: false, action: 'use', useScope: 'target', changed: [],
+                        diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
+                        nextAction: 'forja status',
+                    };
+                }
+                return {
+                    ok: true, action: 'use', useScope: 'target', workspace,
+                    activeTarget: target, changed: ['activeTarget'],
+                    nextAction: 'forja status',
+                };
+            }
+        }
+    }
+
     // Load answers if provided
     let parsedAnswers: Record<string, string> | undefined;
     if (options.answers) {
@@ -79,6 +121,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
         qtPath: options.qtPath,
         vsInstall: options.vsInstall,
         jomPath: options.jomPath,
+        qmakeTarget: options.qmakeTarget,
         mode: options.mode,
         arch: options.arch,
         answers: parsedAnswers,
@@ -96,7 +139,9 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
             status: 'needs-input',
             questions: resolved.questions,
             diagnostics: resolved.diagnostics as Diagnostic[],
-            nextAction: 'forja use target --json --answers <answers.json>',
+            nextAction: options.project
+                ? `forja use target --project ${quoteCliArg(options.project)} --answers <answers.json>`
+                : 'forja use target --answers <answers.json>',
         };
     }
 
@@ -116,7 +161,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
         return {
             ok: false, action: 'use', useScope: 'target', changed: [],
             diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${saveResult.error}` }],
-            nextAction: 'forja doctor',
+            nextAction: 'forja status',
         };
     }
 
@@ -129,306 +174,6 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
         if (match) { toolchain.vsVersion = match.version; }
     }
     return buildSuccessResult(config, toolchain, saveResult.changed, workspace, saveResult.targetId);
-}
-
-// ── Switch target (with --project) — simplified path for existing use.ts compatibility ──
-
-export async function runSwitchTarget(workspace: string, args: {
-    project: string;
-    mode?: 'debug' | 'release';
-    arch?: 'x86' | 'x64';
-    reset?: boolean;
-    interactive?: boolean;
-    json?: boolean;
-}): Promise<UseTargetResult> {
-    if (!fs.existsSync(workspace)) {
-        return {
-            ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.workspaceNotFound')}: ${workspace}` }],
-        };
-    }
-
-    const ctx = await detectContext(workspace);
-
-    // First: try to match against saved targets by ID or name (quick switch)
-    const workroot = (await import('../../../core/workspaceStore')).resolveWorkroot(workspace);
-    if (workroot) {
-        const wsMod = await import('../../../core/workspaceStore');
-        const wsConfig = wsMod.loadWorkspaceConfig(workroot);
-        const savedTargets = Object.values(wsConfig.targets);
-        const inputLower = args.project.toLowerCase();
-
-        const finalizeSwitch = (matched: TargetProfile): UseTargetResult => {
-            const changed: string[] = ['activeTarget'];
-            const oldId = wsConfig.activeTarget;
-            let target = matched;
-
-            if (args.mode && args.mode !== matched.mode) {
-                matched.mode = args.mode;
-                changed.push('mode');
-            }
-            if (args.arch && args.arch !== matched.arch) {
-                matched.arch = args.arch;
-                changed.push('arch');
-            }
-
-            if (changed.length > 1) {
-                const newId = wsMod.generateTargetId(matched.kind, matched.project, matched.mode, matched.arch, new Set(Object.keys(wsConfig.targets)));
-                if (newId !== matched.id) {
-                    matched.id = newId;
-                    matched.name = `${path.basename(matched.project).replace(/\.\w+$/, '')} ${matched.mode} ${matched.arch}`;
-                    if (oldId && oldId !== newId) { delete wsConfig.targets[oldId]; }
-                }
-                wsConfig.targets[newId] = matched;
-                target = matched;
-            }
-
-            wsConfig.activeTarget = target.id;
-            try { wsMod.saveWorkspaceConfig(wsConfig); } catch (e) {
-                return {
-                    ok: false, action: 'use', useScope: 'target', changed: [],
-                    diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
-                    nextAction: 'forja doctor',
-                };
-            }
-            return {
-                ok: true, action: 'use', useScope: 'target',
-                workspace, activeTarget: target, changed,
-                nextAction: 'forja status',
-            };
-        };
-
-        // Exact ID match
-        const exactId = savedTargets.find(t => t.id === args.project);
-        if (exactId) {
-            return finalizeSwitch({ ...exactId, toolchain: { ...exactId.toolchain } });
-        }
-
-        // ID prefix match or name match
-        const prefixMatches = savedTargets.filter(t =>
-            t.id.toLowerCase().startsWith(inputLower) ||
-            t.name.toLowerCase().includes(inputLower)
-        );
-        if (prefixMatches.length === 1) {
-            return finalizeSwitch({ ...prefixMatches[0], toolchain: { ...prefixMatches[0].toolchain } });
-        }
-        if (prefixMatches.length > 1) {
-            if (args.interactive) {
-                const chosen = await choose(
-                    T('use.multipleTargetsFound'),
-                    prefixMatches,
-                    t => `${t.id}  ${t.name}  [${t.kind}]`,
-                );
-                if (chosen) {
-                    return finalizeSwitch({ ...chosen, toolchain: { ...chosen.toolchain } });
-                }
-            } else {
-                const ids = prefixMatches.map(t => t.id).join('\n    ');
-                return {
-                    ok: false, action: 'use', useScope: 'target', changed: [],
-                    diagnostics: [{ level: 'error', message: `${T('use.multipleTargetsFound')}: ${args.project}\n    ${ids}` }],
-                    nextAction: 'forja list targets',
-                };
-            }
-        }
-    }
-
-    // Resolve project path
-    const projectPath = path.isAbsolute(args.project) ? args.project : path.join(workspace, args.project);
-    let canonicalProject = args.project;
-    let kind: 'qt' | 'cpp' | null = null;
-
-    if (fs.existsSync(projectPath) && !fs.statSync(projectPath).isDirectory()) {
-        canonicalProject = path.relative(workspace, projectPath).replace(/\\/g, '/');
-        const typeInfo = detectProjectType(projectPath);
-        kind = typeInfo.usesQt ? 'qt' : 'cpp';
-    } else {
-        // Try label match
-        const inputLower = path.basename(args.project).toLowerCase();
-        const matches = ctx.candidates.filter(c => c.label.toLowerCase() === inputLower);
-        if (matches.length === 1) {
-            canonicalProject = matches[0].project;
-            kind = matches[0].kind;
-        } else if (matches.length > 1) {
-            if (args.interactive) {
-                const chosen = await choose(
-                    T('use.multipleTargetsFound'),
-                    matches,
-                    c => `${c.label} — ${c.project}`,
-                );
-                if (chosen) {
-                    canonicalProject = chosen.project;
-                    kind = chosen.kind;
-                    if (!args.json) { console.log(`  ${T('selectedMark')} ${chosen.label} — ${chosen.project}`); }
-                } else {
-                    return {
-                        ok: false, action: 'use', useScope: 'target', changed: [],
-                        diagnostics: [{ level: 'error', message: `${T('use.projectNotFound')}: ${args.project}` }],
-                        nextAction: 'forja list targets',
-                    };
-                }
-            } else {
-                const paths = matches.map(m => m.project).join('\n    ');
-                return {
-                    ok: false, action: 'use', useScope: 'target', changed: [],
-                    diagnostics: [{ level: 'error', message: `${T('use.multipleTargetsFound')}: ${args.project}\n    ${paths}` }],
-                    nextAction: 'forja use target --project <path>',
-                };
-            }
-        } else {
-            return {
-                ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: `${T('use.projectNotFound')}: ${args.project}` }],
-                nextAction: 'forja list targets',
-            };
-        }
-    }
-
-    if (!kind) {
-        return {
-            ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.cannotDetermineKind')}: ${args.project}` }],
-            nextAction: 'forja list targets',
-        };
-    }
-
-    // Resolve toolchain for the new target
-    const currentTarget = ctx.existingTarget;
-    const mode = args.mode ?? currentTarget?.mode ?? 'debug';
-    const arch = args.arch ?? currentTarget?.arch ?? (process.platform === 'win32' ? 'x86' : 'x64');
-    // C++ targets don't support remote execution — force local when switching to C++
-    const runAt = (kind === 'cpp') ? 'local' : (currentTarget?.runAt ?? 'local');
-
-    let qtPath: string | undefined;
-    let vsInstall: string | undefined;
-    let jomPath: string | undefined;
-    let qmakeTarget: string | undefined;
-    const changed: string[] = [];
-
-    // Try to get toolchain from existing target profile (workspaceStore)
-    // When reset is true, skip inherited toolchain and force re-detection
-    if (!args.reset && (currentTarget?.toolchain.qtPath || currentTarget?.toolchain.vsInstall)) {
-        if (kind === 'qt') {
-            qtPath = currentTarget.toolchain.qtPath;
-            jomPath = currentTarget.toolchain.jomPath;
-            qmakeTarget = currentTarget.toolchain.qmakeTarget;
-        }
-        vsInstall = currentTarget.toolchain.vsInstall;
-    } else if (args.interactive) {
-        setSilent(true);
-        let env;
-        try { env = await detectEnv(); } finally { setSilent(false); }
-
-        if (kind === 'qt') {
-            if (env.qtCandidates.length > 1) {
-                const chosen = await choose(T('init.selectQt'), env.qtCandidates, q => `${q.version} — ${q.path}`);
-                if (chosen) qtPath = chosen.path;
-            } else if (env.qt) {
-                qtPath = env.qt.path;
-            }
-        }
-
-        // Filter VS candidates by Qt compiler tag for Qt targets
-        let vsCandidates = env.vsCandidates;
-        let vsMismatch = false;
-        if (kind === 'qt' && qtPath) {
-            const vsYear = extractVsYearFromQtPath(qtPath);
-            if (vsYear) {
-                const filtered = env.vsCandidates.filter(v => v.version === vsYear);
-                if (filtered.length > 0) {
-                    vsCandidates = filtered;
-                } else {
-                    if (!args.json) { console.log(`  ⚠ ${T('use.vsVersionMismatch', [vsYear])}`); }
-                    vsCandidates = [];
-                    vsMismatch = true;
-                }
-            }
-        }
-
-        if (vsCandidates.length > 1) {
-            const chosen = await choose(T('init.selectVs'), vsCandidates, v => `${v.version} ${v.edition} — ${v.installPath}`);
-            if (chosen) vsInstall = chosen.installPath;
-        } else if (vsCandidates.length === 1) {
-            vsInstall = vsCandidates[0].installPath;
-        } else if (vsMismatch && env.vsCandidates.length >= 1) {
-            const chosen = await choose(T('init.selectVs'), env.vsCandidates, v => `${v.version} ${v.edition} — ${v.installPath}`);
-            if (chosen) vsInstall = chosen.installPath;
-        } else if (env.vs) {
-            vsInstall = env.vs.installPath;
-        }
-    } else if (args.json) {
-        const questions: Array<{ id: string; label: string }> = [];
-        if (kind === 'qt') { questions.push({ id: 'qtPath', label: T('setupQuestionQtPath') }); }
-        questions.push({ id: 'vsInstall', label: T('setupQuestionVsInstall') });
-        return {
-            ok: false, action: 'use', useScope: 'target', changed: [],
-            status: 'needs-input',
-            questions,
-            diagnostics: [{ level: 'info', message: T('use.toolchainNotConfigured') }],
-            nextAction: `forja use target --project ${args.project}`,
-        };
-    } else {
-        setSilent(true);
-        let env;
-        try { env = await detectEnv(); } finally { setSilent(false); }
-        if (kind === 'qt') { qtPath = env.qt?.path; }
-        // Filter VS by Qt compiler tag for Qt targets
-        if (kind === 'qt' && qtPath) {
-            const vsYear = extractVsYearFromQtPath(qtPath);
-            if (vsYear) {
-                const match = env.vsCandidates.find(v => v.version === vsYear);
-                if (match) { vsInstall = match.installPath; }
-                else { vsInstall = env.vs?.installPath; }
-            } else {
-                vsInstall = env.vs?.installPath;
-            }
-        } else {
-            vsInstall = env.vs?.installPath;
-        }
-    }
-
-    const qtVersion = qtPath ? ctx.toolchain.qtCandidates.find(q => q.path === qtPath)?.version : undefined;
-
-    // Resolve vsVersion before config construction
-    let vsVersion = ctx.toolchain.vsVersion;
-    if (vsInstall) {
-        const match = ctx.toolchain.vsCandidates.find(v => v.installPath === vsInstall);
-        if (match) vsVersion = match.version;
-    }
-
-    const config: ResolvedConfig = {
-        kind, project: canonicalProject,
-        mode: mode as 'debug' | 'release',
-        arch: arch as 'x86' | 'x64',
-        runAt, qtPath, qtVersion, vsInstall, vsVersion, jomPath, qmakeTarget,
-    };
-
-    // Save
-    const saveResult = saveAll(workspace, config);
-    if (!saveResult.ok) {
-        return {
-            ok: false, action: 'use', useScope: 'target', changed: [],
-            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${saveResult.error}` }],
-            nextAction: 'forja doctor',
-        };
-    }
-
-    if (qtPath || vsInstall) changed.push('toolchain');
-    changed.push(kind === 'qt' ? 'qt.pinnedProject' : 'cpp.pinnedProject');
-    changed.push('activeTarget');
-
-    const target = buildTargetProfile(config);
-    target.id = saveResult.targetId;
-
-    return {
-        ok: true, action: 'use', useScope: 'target',
-        workspace, activeTarget: target,
-        config: kind === 'qt'
-            ? { qt: { configured: true, project: canonicalProject, mode, arch, qtPath, vsInstall, qtVersion: config.qtVersion, vsVersion } }
-            : { cpp: { configured: true, project: canonicalProject, mode, arch, vsInstall } },
-        changed,
-        nextAction: 'forja status',
-    };
 }
 
 // ── Update mode/arch only ──
@@ -510,6 +255,7 @@ export async function runUpdateToolchain(workspace: string, args: {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
+    qmakeTarget?: string;
 }): Promise<UseTargetResult> {
     const { getActiveTarget, setActiveTarget } = await import('../activeTarget');
     const currentTarget = getActiveTarget(workspace);
@@ -550,6 +296,10 @@ export async function runUpdateToolchain(workspace: string, args: {
     if (args.jomPath && args.jomPath !== currentTarget.toolchain.jomPath) {
         updated.toolchain.jomPath = args.jomPath;
         changed.push('jomPath');
+    }
+    if (args.qmakeTarget && args.qmakeTarget !== currentTarget.toolchain.qmakeTarget) {
+        updated.toolchain.qmakeTarget = args.qmakeTarget;
+        changed.push('qmakeTarget');
     }
 
     if (changed.length > 0) {

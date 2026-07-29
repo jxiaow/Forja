@@ -119,18 +119,6 @@ export interface SyncPlan {
     skippedDetails?: Array<{ file: string; reason: string }>;
 }
 
-// ── Doctor CheckResult ──
-
-export type CheckStatus = 'ready' | 'blocked' | 'warning' | 'skipped' | 'unknown';
-
-export interface CheckResult {
-    name: string;
-    status: CheckStatus;
-    message?: string;
-    diagnostics?: Diagnostic[];
-    nextAction?: string;
-}
-
 // ── Question protocol (for --json needs-input) ──
 
 export interface Question {
@@ -139,6 +127,10 @@ export interface Question {
     required?: boolean;
     default?: string | number;
     choices?: string[];
+    choicesBy?: {
+        questionId: string;
+        values: Record<string, string[]>;
+    };
     when?: Record<string, string>;
 }
 
@@ -233,7 +225,6 @@ const UI: Record<string, { en: string; zh: string }> = {
     projectLabel:                  { en: 'Project',                     zh: '项目' },
     modeLabel:                     { en: 'Mode',                        zh: '模式' },
     archLabel:                     { en: 'Arch',                        zh: '架构' },
-    runAtLabel:                    { en: 'Run at',                      zh: '执行端' },
     kind:                          { en: 'Kind',                        zh: '类型' },
     // status diagnostics
     noActiveTarget:                { en: 'No active target selected',    zh: '未选择活动目标' },
@@ -242,8 +233,8 @@ const UI: Record<string, { en: string; zh: string }> = {
     statusSetupRemote:             { en: 'local + remote setup',            zh: '本地 + 远程初始化' },
     noSyncServer:                  { en: 'No sync server added',         zh: '未添加同步服务器' },
     remotePathNotConfigured:       { en: 'Remote path not configured',   zh: '远程路径未配置' },
-    remoteNoServer:                { en: 'runAt=remote but no server configured', zh: '执行位置=远程但未配置服务器' },
-    remoteForjaBinDefault:         { en: 'Remote Forja bin not configured, will use default: $HOME/.forja/bin/forja', zh: '远程 Forja 二进制未配置，将使用默认值：$HOME/.forja/bin/forja' },
+    remoteNoServerConfigured:      { en: 'No remote server configured',  zh: '未配置远程服务器' },
+    remoteForjaBinDefault:         { en: 'Remote Forja bin not configured, will use npm global prefix', zh: '远程 Forja 二进制未配置，将使用 npm 全局 prefix' },
     qtNotFound:                    { en: 'Qt not found at configured path', zh: '在配置路径未找到 Qt' },
     vsNotFound:                    { en: 'VS dev environment not found', zh: '未找到 VS 开发环境' },
     vsNotFoundDetail:              { en: 'VS dev environment not found (vsDevShell)', zh: '未找到 VS 开发环境（vsDevShell）' },
@@ -256,7 +247,7 @@ const UI: Record<string, { en: string; zh: string }> = {
     installVs:                     { en: 'Install Visual Studio and configure vcvarsall.bat', zh: '安装 Visual Studio 并配置 vcvarsall.bat' },
     installVsCpp:                  { en: 'Install Visual Studio and configure with forja use target --vs', zh: '安装 Visual Studio 并用 forja use target --vs 配置' },
     installBuildEssential:         { en: 'Install build-essential or equivalent', zh: '安装 build-essential 或同等工具' },
-    deployRemote:                  { en: 'Run forja doctor fix --remote to deploy, or configure with forja remote forja-bin --path <path>', zh: '运行 forja doctor fix --remote 部署，或用 forja remote forja-bin --path <path> 配置' },
+    deployRemote:                  { en: 'Run forja remote bootstrap to deploy the current CLI', zh: '运行 forja remote bootstrap 部署当前 CLI' },
     // list
     targets:                       { en: 'Targets',                      zh: '目标' },
     servers:                       { en: 'Servers',                      zh: '服务器' },
@@ -292,8 +283,6 @@ const UI: Record<string, { en: string; zh: string }> = {
     username:                      { en: 'Username',                    zh: '用户名' },
     auth:                          { en: 'Auth',                        zh: '认证' },
     key:                           { en: 'Key',                         zh: '密钥' },
-    // doctor
-    doctor:                        { en: 'Doctor',                      zh: '诊断' },
     planDryRun:                    { en: 'Plan (dry run)',              zh: '计划（预演）' },
     wouldWrite:                    { en: 'Would write',                 zh: '将写入' },
     wouldRun:                      { en: 'Would run',                   zh: '将运行' },
@@ -403,75 +392,6 @@ const UI: Record<string, { en: string; zh: string }> = {
     // sync extras
     serverLabel:                   { en: 'Server',                      zh: '服务器' },
     remotePathLabel:               { en: 'Remote path',                 zh: '远程路径' },
-    // doctor level
-    levelError:                    { en: 'error',                        zh: '错误' },
-    levelWarning:                  { en: 'warning',                      zh: '警告' },
-    // doctor checks
-    doctorActiveTarget:            { en: 'Active target',                zh: '活动目标' },
-    doctorProjectMissing:          { en: 'Project file missing',         zh: '项目文件缺失' },
-    doctorNoTarget:                { en: 'No active target selected',    zh: '未选择活动目标' },
-    doctorQtPath:                  { en: 'Qt path',                      zh: 'Qt 路径' },
-    doctorQtInvalid:               { en: 'Qt path invalid',              zh: 'Qt 路径无效' },
-    doctorQtNotConfigured:         { en: 'Qt not configured',            zh: 'Qt 未配置' },
-    doctorVsPath:                  { en: 'VS path',                      zh: 'VS 路径' },
-    doctorVsInvalid:               { en: 'VS path invalid',              zh: 'VS 路径无效' },
-    doctorVsNotConfigured:         { en: 'VS not configured',            zh: 'VS 未配置' },
-    doctorJomPath:                 { en: 'jom path',                     zh: 'jom 路径' },
-    doctorJomInvalid:              { en: 'jom path invalid',             zh: 'jom 路径无效' },
-    doctorMakePath:                { en: 'make path',                    zh: 'make 路径' },
-    doctorMakeNotFound:            { en: 'make not found',               zh: '未找到 make' },
-    doctorSyncRemote:              { en: 'Sync remote path not configured', zh: '同步远程路径未配置' },
-    doctorSyncDeleted:             { en: 'Sync server deleted',          zh: '同步服务器已删除' },
-    doctorSyncNotConfigured:       { en: 'Sync not configured',          zh: '同步未配置' },
-    doctorNoServer:                { en: 'No server configured for remote', zh: '未配置远程服务器' },
-    doctorForjaBinNotConfigured:   { en: 'Remote Forja bin not configured', zh: '远程 Forja 二进制未配置' },
-    doctorStaleConfigs:            { en: 'Found stale config(s)',        zh: '发现过期配置' },
-    doctorNoStaleConfigs:          { en: 'No stale configs found',       zh: '无过期配置' },
-    doctorRemoteNotConfigured:     { en: 'Remote not configured',        zh: '远程未配置' },
-    doctorLockReleased:            { en: 'Lock released',                zh: '锁已释放' },
-    doctorLockFailed:              { en: 'Remote unlock failed',         zh: '远程解锁失败' },
-    doctorRestored:                { en: 'Restored',                     zh: '已恢复' },
-    doctorRestoreFailed:           { en: 'Remote restore failed',        zh: '远程恢复失败' },
-    doctorResetDone:               { en: 'Reset',                        zh: '已重置' },
-    doctorResetFailed:             { en: 'Remote reset failed',          zh: '远程重置失败' },
-    doctorCleanDone:               { en: 'Cleaned untracked',            zh: '已清理未跟踪文件' },
-    doctorCleanFailed:             { en: 'Remote clean-untracked failed', zh: '远程清理失败' },
-    doctorQtNotFoundAtPath:        { en: 'Qt not found at configured path: {0}', zh: '在配置路径未找到 Qt：{0}' },
-    doctorVsNotFoundAtInstall:     { en: 'VS dev environment not found: {0}', zh: '未找到 VS 开发环境：{0}' },
-    doctorJomNotFoundAtPath:       { en: 'jom not found at: {0}',       zh: '未找到 jom：{0}' },
-    doctorSyncServerNotExist:      { en: 'Sync server "{0}" does not exist', zh: '同步服务器 "{0}" 不存在' },
-    doctorCleanupErrors:           { en: 'Cleanup errors: {0}',          zh: '清理错误：{0}' },
-    doctorCleanupPartiallyFailed:  { en: 'Cleanup partially failed: {0} error(s)', zh: '清理部分失败：{0} 个错误' },
-    doctorCleanedStaleConfigs:     { en: 'Cleaned {0} stale config(s)',  zh: '已清理 {0} 个过期配置' },
-    doctorWouldDeployForjaBin:     { en: 'Would deploy/update remote Forja bin', zh: '将部署/更新远程 Forja 二进制' },
-    doctorWouldDeployForjaBinDetail: { en: 'Remote Forja bin would be deployed', zh: '将部署远程 Forja 二进制' },
-    doctorBootstrapForjaBin:       { en: 'bootstrap remote Forja bin',   zh: '引导远程 Forja 二进制' },
-    doctorBootstrapArtifactNotAvailable: { en: 'Bootstrap artifact not available', zh: '引导制品不可用' },
-    doctorRemoteForjaDeployed:     { en: 'Remote Forja deployed: {0}',   zh: '远程 Forja 已部署：{0}' },
-    doctorRemoteForjaDeployFailed: { en: 'Remote Forja deploy failed',   zh: '远程 Forja 部署失败' },
-    doctorStaleConfigWouldRemove:  { en: '{0} stale config file(s) would be removed', zh: '将移除 {0} 个过期配置' },
-    paths:                         { en: 'path(s) in',                   zh: '个路径，仓库' },
-    // doctor actions
-    doctorActionCheck:             { en: 'check',                        zh: '检查' },
-    doctorActionFix:               { en: 'fix',                          zh: '修复' },
-    doctorActionUnlock:            { en: 'unlock',                       zh: '解锁' },
-    doctorActionRestore:           { en: 'restore',                      zh: '恢复' },
-    doctorActionReset:             { en: 'reset',                        zh: '重置' },
-    doctorActionCleanUntracked:    { en: 'clean-untracked',              zh: '清理未跟踪' },
-    // doctor check names
-    doctorCheckTarget:             { en: 'target',                       zh: '目标' },
-    doctorCheckToolchainQt:        { en: 'toolchain-qt',                 zh: 'Qt工具链' },
-    doctorCheckToolchainVs:        { en: 'toolchain-vs',                 zh: 'VS工具链' },
-    doctorCheckToolchainJom:       { en: 'toolchain-jom',                zh: 'jom工具链' },
-    doctorCheckToolchainMake:      { en: 'toolchain-make',               zh: 'make工具链' },
-    doctorCheckSync:               { en: 'sync',                         zh: '同步' },
-    doctorCheckRemote:             { en: 'remote',                       zh: '远程' },
-    doctorCheckRemoteForja:        { en: 'remote-forja',                 zh: '远程Forja' },
-    doctorCheckCleanup:            { en: 'cleanup',                      zh: '清理' },
-    doctorCheckUnlock:             { en: 'unlock',                       zh: '解锁' },
-    doctorCheckRestore:            { en: 'restore',                      zh: '恢复' },
-    doctorCheckReset:              { en: 'reset',                        zh: '重置' },
-    doctorCheckCleanUntracked:     { en: 'clean-untracked',              zh: '清理未跟踪' },
     // help texts
     'help.toplevel': {
         en: `Usage: forja <command> [action] [options]
@@ -487,7 +407,6 @@ Commands:
   run        Run the built application
   stop       Stop a running application
   clean      Clean build artifacts
-  doctor     Deep diagnostics and recovery
   sync       Sync files with remote server
 
 Global options:
@@ -509,7 +428,6 @@ Global options:
   run        运行已构建的应用
   stop       停止运行中的应用
   clean      清理构建产物
-  doctor     深度诊断与修复
   sync       与远程服务器同步文件
 
 全局选项:
@@ -558,12 +476,13 @@ Options:
 
 Target options:
   --project <path>        Select target by project path or label
+  --answers <file>        Continue a needs-input flow from a JSON answers file
   --mode <debug|release>  Set build mode
   --arch <x86|x64>        Set target architecture
   --qt <path>             Set Qt installation path
   --vs <path>             Set Visual Studio installation path
   --jom <path>            Set jom installation path
-  --run-at <local|remote> Set execution location
+  --qmake-target <name>   Set qmake TARGET override
   suppress-warnings [codes]     Manage suppressed warnings (no args = show)
     --add <codes>               Add to list
     --rm <codes>                Remove from list`,
@@ -571,12 +490,13 @@ Target options:
 
 Target 选项:
   --project <路径>        按项目路径或标签选择目标
+  --answers <文件>        使用 JSON 答案文件继续 needs-input 流程
   --mode <debug|release>  设置构建模式
   --arch <x86|x64>        设置目标架构
   --qt <路径>             设置 Qt 安装路径
   --vs <路径>             设置 Visual Studio 安装路径
   --jom <路径>            设置 jom 安装路径
-  --run-at <local|remote> 设置执行位置
+  --qmake-target <名称>   设置 qmake TARGET 覆盖值
   suppress-warnings [代码]      管理被过滤的构建警告（无参数=查看）
     --add <代码>                追加到列表
     --rm <代码>                 从列表删除`,
@@ -585,19 +505,17 @@ Target 选项:
         en: `Usage: forja remote [action] [options] [--json]
 
   forja remote                                    Show remote configuration
-  forja remote set --server <name> --remote-path <path>
-                                                  Set remote server and path
-  forja remote restore <repo> <paths...>          Restore remote workspace
-  forja remote reset <repo> <paths...> [--all] [--force]
-                                                  Reset remote workspace (--force for non-interactive)`,
+  forja remote setup [--server <name> --remote-path <path>]
+                                                  Configure sync and bootstrap remote Forja
+  forja remote bootstrap                         Package and install the current local CLI remotely
+`,
         zh: `用法: forja remote [动作] [选项] [--json]
 
   forja remote                                    显示远程配置
-  forja remote set --server <名称> --remote-path <路径>
-                                                  设置远程服务器和路径
-  forja remote restore <仓库> <路径...>            恢复远程工作区
-  forja remote reset <仓库> <路径...> [--all] [--force]
-                                                  重置远程工作区（非交互模式需 --force）`,
+  forja remote setup [--server <名称> --remote-path <路径>]
+                                                  配置同步并部署远端 Forja
+  forja remote bootstrap                         打包当前本地 CLI 并安装到远端
+`,
     },
     'help.build': {
         en: `Usage:
@@ -655,10 +573,6 @@ Options:
         en: 'Usage: forja clean [--plan] [--json]',
         zh: '用法: forja clean [--plan] [--json]',
     },
-    'help.doctor': {
-        en: 'Usage: forja doctor [fix|unlock] [--remote] [--json]',
-        zh: '用法: forja doctor [fix|unlock] [--remote] [--json]',
-    },
     // init diagnostics
     'init.projectNotFound':              { en: 'Project not found in workspace',      zh: '工作区中未找到项目' },
     'init.foundQtCppNotAutoSelecting':   { en: 'Found Qt and C++ targets, not auto-selecting', zh: '找到 Qt 和 C++ 目标，未自动选择' },
@@ -705,6 +619,7 @@ Options:
     'init.workrootSuggestion':          { en: 'Choose the root that contains all project files — not a subdirectory (e.g. src/, build/) — otherwise targets outside it will be inaccessible.', zh: '应选择包含所有项目文件的顶层目录，而非子目录（如 src/、build/），否则后续无法访问上级目录中的其他目标。' },
     'init.foundProjects':               { en: 'Found projects',                       zh: '找到项目' },
     'init.noProjectsFound':             { en: 'No projects found in work root',       zh: '工作根目录下未找到项目' },
+    'init.selectProjectGroup':          { en: 'Select a project group',               zh: '选择项目分组' },
     'init.selectProject':               { en: 'Select a project',                     zh: '选择项目' },
     'init.noTargetsToModify':           { en: 'No targets to modify',                 zh: '没有可修改的目标' },
     'init.answersMissingProject':       { en: 'Answers file missing required "project" field', zh: '答案文件缺少必需的 "project" 字段' },
@@ -752,9 +667,7 @@ Options:
     'idx.unknownServerSubcommand':      { en: 'Unknown server subcommand',          zh: '未知 server 子命令' },
     'idx.unknownRemoteSubcommand':      { en: 'Unknown remote subcommand',          zh: '未知 remote 子命令' },
     'remote.setRequiresFlag':           { en: 'Specify --server and/or --remote-path', zh: '请指定 --server 和/或 --remote-path' },
-    'remote.showNoFlags':               { en: '--server and --remote-path are only valid with `forja remote set`', zh: '--server 和 --remote-path 仅在 `forja remote set` 中有效' },
-    'remote.restoreUsage':              { en: 'forja remote restore requires <repo> and at least one <path>', zh: 'forja remote restore 需要 <repo> 和至少一个 <path>' },
-    'remote.resetUsage':                { en: 'forja remote reset requires <repo> and at least one <path>', zh: 'forja remote reset 需要 <repo> 和至少一个 <path>' },
+    'remote.showNoFlags':               { en: '--server and --remote-path are only valid with `forja remote setup`', zh: '--server 和 --remote-path 仅在 `forja remote setup` 中有效' },
     'remote.invalidPath':               { en: 'Invalid path (must be relative, no \'..\')', zh: '无效路径（必须是相对路径，不能包含 \'..\'）' },
     'remote.invalidRepoName':           { en: 'Invalid repo name',                        zh: '无效仓库名' },
     'remote.invalidRepoNameChars':      { en: 'Invalid repo name (no \'..\'  / \\ ~ allowed)', zh: '无效仓库名（不能包含 \'..\'  / \\ ~）' },
@@ -771,13 +684,14 @@ Options:
     'idx.unexpectedArgument':           { en: 'Unexpected argument',                zh: '意外参数' },
     'idx.didYouMean':                   { en: 'Did you mean',                       zh: '你是否想' },
     'idx.unknownSubcommand':            { en: 'Unknown subcommand',                 zh: '未知子命令' },
-    'idx.doctorSubcommands':            { en: 'Usage: forja doctor [fix|unlock]', zh: '用法: forja doctor [fix|unlock]' },
-    'idx.doctorUnlockRequiresId':       { en: 'unlock requires a lock ID',            zh: 'unlock 需要指定锁 ID' },
     // server diagnostics
     'srv.missingName':                  { en: 'Missing required: --name',           zh: '缺少必填参数：--name' },
     'srv.missingHost':                  { en: 'Missing required: --host',           zh: '缺少必填参数：--host' },
     'srv.missingUsername':              { en: 'Missing required: --username',       zh: '缺少必填参数：--username' },
-    'srv.keyRequiresKeyOrPassword':     { en: 'auth-mode=key requires --private-key-path or password', zh: 'auth-mode=key 需要 --private-key-path 或 password' },
+    'srv.keyRequiresKeyOrPassword':     { en: 'auth-mode=key requires --private-key-path', zh: 'auth-mode=key 需要 --private-key-path' },
+    'srv.passwordRequiresPasswordMode': { en: '--password requires --auth-mode password', zh: '--password 需要同时指定 --auth-mode password' },
+    'srv.keyPathRequiresKeyMode':       { en: '--private-key-path requires --auth-mode key', zh: '--private-key-path 需要同时指定 --auth-mode key' },
+    'srv.strictHostFlagsConflict':      { en: 'Specify only one of --strict-host-key-checking and --no-strict-host-key-checking', zh: '--strict-host-key-checking 和 --no-strict-host-key-checking 只能指定一个' },
     'srv.passwordRequiresPassword':     { en: 'auth-mode=password requires --password', zh: 'auth-mode=password 需要 --password' },
     'srv.noCredentials':                { en: 'No credentials provided; server will default to key auth. Use --private-key-path or --password to configure', zh: '未提供凭证；服务器将默认使用密钥认证。请使用 --private-key-path 或 --password 配置' },
     'srv.failedToSave':                 { en: 'Failed to save',                     zh: '保存失败' },
@@ -796,7 +710,7 @@ Options:
     'sts.targetsFound':                 { en: 'Found {0} Qt and {1} C++ targets, none selected', zh: '找到 {0} 个 Qt 和 {1} 个 C++ 目标，未选择' },
     'sts.syncServerNotFound':           { en: 'Sync server "{0}" does not exist', zh: '同步服务器 "{0}" 不存在' },
     'sts.syncServerMissing':            { en: 'server not found',                  zh: '服务器未找到' },
-    'sts.syncNotEnabled':               { en: 'Sync not configured; use forja remote set for remote builds', zh: '同步未配置，远程构建可用 forja remote set 配置' },
+    'sts.syncNotEnabled':               { en: 'Sync not configured; use forja remote setup', zh: '同步未配置，请使用 forja remote setup 配置' },
     // list diagnostics
     'lst.qtPathNotConfigured':          { en: 'Qt path not configured',             zh: 'Qt 路径未配置' },
     'lst.vsInstallNotConfigured':       { en: 'VS install not configured',          zh: 'VS 安装未配置' },
@@ -828,9 +742,8 @@ Options:
     'use.useZhOrEn':                     { en: 'Use zh or en',                       zh: '请使用 zh 或 en' },
     'use.failedToSaveLanguage':          { en: 'Failed to save language',             zh: '保存语言失败' },
     'use.invalidRunAt':                  { en: 'Invalid execution location',          zh: '无效执行位置' },
-    'use.useLocalOrRemote':              { en: 'Use local or remote',                 zh: '请使用 local 或 remote' },
+    'use.useLocalOrRemote':              { en: 'Use local',                           zh: '请使用 local' },
     'use.execution':                     { en: 'Execution',                           zh: '执行位置' },
-    'use.cppRunAtLocal':                 { en: 'C++ targets do not support remote execution — ignored --run-at remote', zh: 'C++ 目标不支持远程执行——已忽略 --run-at remote' },
     'use.noChanges':                     { en: 'No changes — values already match',  zh: '无变更——当前值已匹配' },
     // build/run/clean/stop shared diagnostics
     'cmd.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
@@ -893,6 +806,7 @@ Options:
         en: `Usage: forja server [<add|update|remove>] [options] [--json]
 
   forja server                  List all servers
+  forja server --detail <id>    Show detailed info for a server
   forja server add              Add a new server
   forja server update <id>      Update an existing server
   forja server remove <id> [--force]
@@ -900,6 +814,7 @@ Options:
         zh: `用法: forja server [<add|update|remove>] [选项] [--json]
 
   forja server                  列出所有服务器
+  forja server --detail <id>    查看指定服务器详细信息
   forja server add              添加新服务器
   forja server update <id>      更新已有服务器
   forja server remove <id> [--force]

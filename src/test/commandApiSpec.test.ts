@@ -15,20 +15,22 @@ function source(relativePath: string): string {
 
 // ── Command surface ──
 
-test('CLI dispatcher registers exactly 12 commands (setup removed, init added)', () => {
+test('CLI dispatcher registers exactly 11 commands (doctor removed)', () => {
     const indexSrc = source('src/cli/commands/index.ts');
-    const expectedCommands = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync', 'init'];
+    const expectedCommands = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'sync', 'init'];
     for (const cmd of expectedCommands) {
         assert.ok(indexSrc.includes(`'${cmd}'`), `Command '${cmd}' must be registered in CLI dispatcher`);
     }
-    assert.ok(!indexSrc.includes("'setup'"), "'setup' must NOT be a registered command (removed)");
+    const commandsMatch = indexSrc.match(/const COMMANDS: Command\[\] = \[([^\]]+)\]/);
+    assert.ok(commandsMatch, 'COMMANDS array must exist');
+    assert.ok(!commandsMatch[1].includes("'setup'"), "'setup' must NOT be a top-level command");
 });
 
-test('COMMANDS array includes all implemented commands', () => {
+test('COMMANDS array includes all implemented commands except doctor', () => {
     const indexSrc = source('src/cli/commands/index.ts');
     const commandsMatch = indexSrc.match(/const COMMANDS: Command\[\] = \[([^\]]+)\]/);
     assert.ok(commandsMatch, 'COMMANDS array must exist');
-    const expectedCommands = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'doctor', 'sync', 'init'];
+    const expectedCommands = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'sync', 'init'];
     for (const cmd of expectedCommands) {
         assert.ok(commandsMatch[1].includes(`'${cmd}'`), `COMMANDS must include '${cmd}'`);
     }
@@ -99,9 +101,7 @@ test('remote.ts exports all documented functions', () => {
     const remoteSrc = source('src/cli/commands/remote.ts');
     const expectedExports = [
         'runRemoteShow',
-        'runRemoteSet',
-        'runRemoteRestore',
-        'runRemoteReset',
+        'runRemoteSetup',
         'formatRemoteText',
     ];
     for (const fn of expectedExports) {
@@ -164,7 +164,7 @@ test('use target command supports setup-equivalent options', () => {
     assert.ok(useSrc.includes('qtPath'), 'use target must support --qt');
     assert.ok(useSrc.includes('vsInstall'), 'use target must support --vs');
     assert.ok(useSrc.includes('jomPath'), 'use target must support --jom');
-    assert.ok(useSrc.includes('Question'), 'use target must have Question interface for needs-input protocol');
+    assert.ok(useSrc.includes('questions'), 'use target must expose needs-input questions');
 });
 
 // ── Sync command ──
@@ -172,21 +172,6 @@ test('use target command supports setup-equivalent options', () => {
 test('sync command supports plan and reset actions', () => {
     const syncSrc = source('src/cli/commands/sync.ts');
     assert.match(syncSrc, /SyncAction\s*=\s*'run'\s*\|\s*'plan'\s*\|\s*'reset'\s*\|\s*'status'\s*\|\s*'ignore'/, 'SyncAction must include run, plan, reset, status, and ignore');
-});
-
-// ── Doctor command ──
-
-test('doctor command supports all documented actions', () => {
-    const indexSrc = source('src/cli/commands/index.ts');
-    const doctorSrc = source('src/cli/commands/doctor.ts');
-    // 'fix' and 'unlock' are explicit subcommand cases in the CLI dispatcher
-    const dispatcherActions = ['fix', 'unlock'];
-    for (const action of dispatcherActions) {
-        assert.ok(indexSrc.includes(`'${action}'`) || indexSrc.includes(`"${action}"`),
-            `Doctor action '${action}' must be recognized in CLI dispatcher`);
-    }
-    // 'check' is the default doctor action (defined in DoctorAction type)
-    assert.match(doctorSrc, /DoctorAction\s*=.*'check'/, "DoctorAction type must include 'check'");
 });
 
 // ── Unknown flag detection ──
@@ -217,7 +202,6 @@ test('all command result types include ok and action fields', () => {
         { file: 'src/cli/commands/stop.ts', action: 'stop' },
         { file: 'src/cli/commands/clean.ts', action: 'clean' },
         { file: 'src/cli/commands/sync.ts', action: 'sync' },
-        { file: 'src/cli/commands/doctor.ts', action: 'doctor' },
     ];
     for (const { file, action } of files) {
         const content = source(file);

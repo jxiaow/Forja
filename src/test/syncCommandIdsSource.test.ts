@@ -19,7 +19,7 @@ test('package contributes only v2 commands', () => {
     assert.ok(commands.includes('forja.run'));
     assert.ok(commands.includes('forja.stop'));
     assert.ok(commands.includes('forja.clean'));
-    assert.ok(commands.includes('forja.doctor'));
+    assert.ok(!commands.includes('forja.doctor'));
     assert.ok(commands.includes('forja.sync'));
 
     // Old commands should not exist
@@ -31,20 +31,23 @@ test('package contributes only v2 commands', () => {
     // Internal/advanced commands (hidden from command palette)
     assert.ok(commands.includes('forja.syncTestConnection'));
     assert.ok(commands.includes('forja.showSyncTab'));
-    assert.ok(commands.includes('forja.remoteWorkbench'));
-    assert.ok(commands.includes('forja.remoteTest'));
     assert.ok(commands.includes('forja.remoteBootstrap'));
-    assert.ok(commands.includes('forja.remoteTransferStatus'));
-    assert.ok(commands.includes('forja.ps'));
+    for (const removedRemoteCommand of ['forja.remoteWorkbench', 'forja.remoteTest', 'forja.remoteTransferStatus', 'forja.ps']) {
+        assert.ok(!commands.includes(removedRemoteCommand), `${removedRemoteCommand} must not be contributed`);
+    }
 
     // Verify internal commands are hidden from command palette
     const palette = pkg.contributes.menus.commandPalette || [];
     const hiddenCommands = palette.filter((p: { when: string }) => p.when === 'false').map((p: { command: string }) => p.command);
-    assert.ok(hiddenCommands.includes('forja.remoteWorkbench'));
-    assert.ok(hiddenCommands.includes('forja.remoteTest'));
     assert.ok(hiddenCommands.includes('forja.remoteBootstrap'));
-    assert.ok(hiddenCommands.includes('forja.remoteTransferStatus'));
-    assert.ok(hiddenCommands.includes('forja.ps'));
+    for (const removedRemoteCommand of ['forja.remoteWorkbench', 'forja.remoteTest', 'forja.remoteTransferStatus', 'forja.ps']) {
+        assert.ok(!hiddenCommands.includes(removedRemoteCommand), `${removedRemoteCommand} must not be hidden instead of removed`);
+    }
+
+    const commandSource = fs.readFileSync(path.join(repoRoot, 'src', 'vscode', 'commands.ts'), 'utf-8');
+    for (const removedRemoteCommand of ['forja.remoteWorkbench', 'forja.remoteTest', 'forja.remoteTransferStatus', 'forja.ps']) {
+        assert.doesNotMatch(commandSource, new RegExp(`registerCommand\\('${removedRemoteCommand.replace('.', '\\.')}`));
+    }
 });
 
 test('sync command accepts a resource uri for single-file sync', () => {

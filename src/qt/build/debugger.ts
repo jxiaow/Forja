@@ -6,10 +6,14 @@ import { setState } from '../../vscode/qtState';
 import { getMakefileInfo } from '../project/projectManager';
 import { build, qmakeForDebug } from './buildManager';
 import { createLogger } from '../../vscode/logger';
+import { clearRunState, findExecutablePids, runLogPath, waitForNewExecutablePid, writeRunState } from '../shared/localState';
+import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 
 const isWin = process.platform === 'win32';
 const logger = createLogger('Debug');
+const DEBUG_RUN_ID_KEY = '__forjaDebugRunId';
 let _activeDebugProgram: string | null = null;
+let _activeDebugRunId: string | null = null;
 let _suppressTerminateNotice = false;
 let _isStartingDebug = false;
 
@@ -157,15 +161,18 @@ export function registerDebugSessionWatcher(context: vscode.ExtensionContext): v
     context.subscriptions.push(
         vscode.debug.onDidTerminateDebugSession(session => {
             const targetProgram = session.configuration?.program;
-            if (typeof targetProgram !== 'string' || !_activeDebugProgram) {
+            if (typeof targetProgram !== 'string' || !_activeDebugProgram || !_activeDebugRunId) {
                 return;
             }
-            if (path.normalize(targetProgram) !== path.normalize(_activeDebugProgram)) {
+            if (session.configuration?.[DEBUG_RUN_ID_KEY] !== _activeDebugRunId) {
                 return;
             }
 
             logger.warn(`调试会话结束: ${targetProgram}`);
             _activeDebugProgram = null;
+            _activeDebugRunId = null;
+            clearRunState(resolveProjectRoot());
+            setState('isRunning', false);
 
             if (_suppressTerminateNotice) {
                 return;
@@ -220,6 +227,7 @@ export async function startDebug(): Promise<void> {
         const qtSourcePath = getEffectiveQtSourcePath(cfg.qtPath);
         const sourceFileMap = createQtSourceFileMap(qtSourcePath);
 
+        const debugRunId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
         const config: vscode.DebugConfiguration = {
             name: `Debug ${mfInfo.target}`,
             type: isWin ? 'cppvsdbg' : 'cppdbg',
@@ -233,17 +241,42 @@ export async function startDebug(): Promise<void> {
             logging: {
                 exceptions: true,
                 programOutput: true
-            }
+            },
+            [DEBUG_RUN_ID_KEY]: debugRunId
         };
         if (sourceFileMap) {
             config.sourceFileMap = sourceFileMap;
         }
 
+        const debugWorkspace = resolveProjectRoot();
+        const previousPids = findExecutablePids(mfInfo.exePath);
+        _activeDebugProgram = mfInfo.exePath;
+        _activeDebugRunId = debugRunId;
         try {
             logger.info(`启动调试: ${mfInfo.exePath}`);
-            await vscode.debug.startDebugging(undefined, config);
-            _activeDebugProgram = mfInfo.exePath;
+            const started = await vscode.debug.startDebugging(undefined, config);
+            if (!started) {
+                _activeDebugProgram = null;
+                _activeDebugRunId = null;
+                setState('isRunning', false);
+                vscode.window.showErrorMessage('启动调试失败');
+                return;
+            }
+            setState('isRunning', true);
+            void waitForNewExecutablePid(mfInfo.exePath, previousPids).then(pid => {
+                if (!pid || _activeDebugRunId !== debugRunId) { return; }
+                writeRunState(debugWorkspace, {
+                    pid,
+                    exePath: mfInfo.exePath,
+                    executablePath: mfInfo.exePath,
+                    logFile: runLogPath(debugWorkspace),
+                    startedAt: new Date().toISOString()
+                });
+            });
         } catch (e) {
+            _activeDebugProgram = null;
+            _activeDebugRunId = null;
+            setState('isRunning', false);
             vscode.window.showErrorMessage(`启动调试失败: ${e}`);
         }
     } finally {

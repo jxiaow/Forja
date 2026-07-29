@@ -3,11 +3,10 @@
  * Delegates target operations to useTarget/ module.
  */
 import { ForjaJsonResult, ActiveTarget, Locale, T, Question } from './types';
-import { getActiveTarget, setActiveTarget } from './activeTarget';
+import { getActiveTarget } from './activeTarget';
 import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } from '../../core/workspaceStore';
 import {
     runUseTarget as runUseTargetNew,
-    runSwitchTarget,
     runUpdateModeArch,
     runUpdateToolchain,
     formatUseTargetText,
@@ -53,7 +52,6 @@ export function formatUseText(result: UseResult, _locale: Locale): string {
             if (t.toolchain.vsInstall) lines.push(`  ${T('setupSummaryVs')}: ${t.toolchain.vsInstall}`);
             if (t.toolchain.jomPath) lines.push(`  ${T('init.currentJom')}: ${t.toolchain.jomPath}`);
             lines.push(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
-            lines.push(`  ${T('use.execution')}: ${t.runAt}`);
         }
         if (result.nextAction) { lines.push(T('next')); lines.push(`  ${result.nextAction}`); }
         return lines.join('\n');
@@ -79,12 +77,13 @@ export interface UseResult extends ForjaJsonResult {
 
 export interface UseTargetArgs {
     project?: string;
+    answers?: string;
     mode?: 'debug' | 'release';
     arch?: 'x86' | 'x64';
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
-    runAt?: 'local' | 'remote';
+    qmakeTarget?: string;
     reset?: boolean;
     interactive?: boolean;
     json?: boolean;
@@ -135,7 +134,7 @@ export function runSuppressWarnings(workspace: string, codes: string[], add: boo
         return {
             ok: false, action: 'use', useScope: 'target', workspace, changed: [],
             diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
-            nextAction: 'forja doctor',
+            nextAction: 'forja status',
         };
     }
     return {
@@ -147,15 +146,21 @@ export function runSuppressWarnings(workspace: string, codes: string[], add: boo
 export async function runUseTarget(workspace: string, args: UseTargetArgs): Promise<UseResult> {
     let result: UseResult | undefined;
 
-    // If --project is specified, use the switch path
+    // A project selection always uses the resolver so every explicitly supplied
+    // toolchain field is saved and a new project cannot inherit the active one.
     if (args.project) {
-        result = await runSwitchTarget(workspace, {
+        result = await runUseTargetNew(workspace, {
+            interactive: args.interactive ?? false,
+            json: args.json ?? false,
+            reset: args.reset ?? false,
             project: args.project,
+            answers: args.answers,
             mode: args.mode,
             arch: args.arch,
-            reset: args.reset,
-            interactive: args.interactive,
-            json: args.json,
+            qtPath: args.qtPath,
+            vsInstall: args.vsInstall,
+            jomPath: args.jomPath,
+            qmakeTarget: args.qmakeTarget,
         });
     }
     // If --mode or --arch without --project, update current target
@@ -165,54 +170,14 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
             arch: args.arch,
         });
     }
-    // Toolchain-only update: --qt / --vs / --jom without --project
-    else if (args.qtPath || args.vsInstall || args.jomPath) {
+    // Toolchain-only update: --qt / --vs / --jom / --qmake-target without --project
+    else if (args.qtPath || args.vsInstall || args.jomPath || args.qmakeTarget) {
         result = await runUpdateToolchain(workspace, {
             qtPath: args.qtPath,
             vsInstall: args.vsInstall,
             jomPath: args.jomPath,
+            qmakeTarget: args.qmakeTarget,
         });
-    }
-    // Execution location update: --run-at alone
-    else if (args.runAt) {
-        const currentTarget = getActiveTarget(workspace);
-        if (!currentTarget) {
-            return {
-                ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: T('use.noActiveTargetSelected') }],
-                nextAction: 'forja use target --project <path>',
-            };
-        }
-        // C++ targets do not support remote execution
-        if (currentTarget.kind === 'cpp' && args.runAt === 'remote') {
-            return {
-                ok: true, action: 'use', useScope: 'target',
-                workspace, activeTarget: currentTarget, changed: [],
-                diagnostics: [{ level: 'warning', message: T('use.cppRunAtLocal') }],
-                nextAction: 'forja status',
-            };
-        }
-        if (currentTarget.runAt === args.runAt) {
-            return {
-                ok: true, action: 'use', useScope: 'target',
-                workspace, activeTarget: currentTarget, changed: [],
-                nextAction: 'forja status',
-            };
-        }
-        const updated = { ...currentTarget, runAt: args.runAt };
-        const saved = setActiveTarget(workspace, updated);
-        if (!saved) {
-            return {
-                ok: false, action: 'use', useScope: 'target', changed: [],
-                diagnostics: [{ level: 'error', message: T('use.failedToSaveExecMode') }],
-                nextAction: 'forja init',
-            };
-        }
-        return {
-            ok: true, action: 'use', useScope: 'target',
-            workspace, activeTarget: updated, changed: ['activeTarget.runAt'],
-            nextAction: 'forja status',
-        };
     }
     // No flags: interactive picker if saved targets exist, otherwise full flow
     else {
@@ -233,12 +198,13 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
 
                 const chosen = await choose(tr('use.selectTarget'), items, item => item.label);
                 if (chosen && chosen.value !== ADD_NEW) {
-                    result = await runSwitchTarget(workspace, {
+                    result = await runUseTargetNew(workspace, {
                         project: chosen.value,
                         interactive: true,
                         json: false,
+                        reset: false,
                     });
-                    // Skip runUseTargetNew, fall through to --run-at post-step
+                    // A saved target was selected; skip the full target flow.
                 }
                 // User chose "add new" or cancelled — fall through to full flow
             }
@@ -251,24 +217,6 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
                 json: args.json ?? false,
                 reset: args.reset ?? false,
             });
-        }
-    }
-
-    // Post-step: apply --run-at if combined with other flags (C++ targets must stay local)
-    if (args.runAt && result.ok && result.activeTarget) {
-        if (result.activeTarget.kind === 'cpp' && args.runAt === 'remote') {
-            result.diagnostics = [
-                ...(result.diagnostics || []),
-                { level: 'warning' as const, message: T('use.cppRunAtLocal') },
-            ];
-        } else {
-            const current = getActiveTarget(workspace);
-            if (current && current.runAt !== args.runAt) {
-                const updated = { ...current, runAt: args.runAt };
-                setActiveTarget(workspace, updated);
-                result.activeTarget = updated;
-                result.changed = [...(result.changed || []), 'activeTarget.runAt'];
-            }
         }
     }
 

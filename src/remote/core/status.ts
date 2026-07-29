@@ -114,12 +114,12 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         ok: versionOk,
         version: remoteVersion || undefined,
         message: versionOk ? 'compatible' : 'remote forja missing or incompatible',
-        nextAction: versionOk ? undefined : 'forja doctor fix --remote'
+        nextAction: versionOk ? undefined : 'forja remote bootstrap'
     });
     if (!versionOk) {
         diagnostics.push({ level: stagedMode ? 'warning' : 'error', message: 'remote forja 未安装或版本不兼容' });
         if (!stagedMode) {
-            return finishBlocked(options.workspace, server.name || server.id, remotePath, layers, diagnostics, 'remoteForja', 'forja doctor fix --remote');
+            return finishBlocked(options.workspace, server.name || server.id, remotePath, layers, diagnostics, 'remoteForja', 'forja remote bootstrap');
         }
     }
 
@@ -128,7 +128,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
         const lockStatus = await executeRemoteReadLock({ remotePath, runner });
         lock = lockStatus.lock;
         diagnostics.push(...lockStatus.diagnostics);
-        layers.push({ name: 'targetLock', ok: lockStatus.ok && !lockStatus.lock.locked, message: lockStatus.lock.locked ? 'locked' : lockStatus.ok ? 'unlocked' : 'unknown', nextAction: lockStatus.lock.locked && lockStatus.lock.lockId ? 'forja doctor fix --remote' : undefined });
+        layers.push({ name: 'targetLock', ok: lockStatus.ok && !lockStatus.lock.locked, message: lockStatus.lock.locked ? 'locked' : lockStatus.ok ? 'unlocked' : 'unknown', nextAction: lockStatus.lock.locked && lockStatus.lock.lockId ? 'forja remote bootstrap' : undefined });
         if (lockStatus.lock.locked) {
             return {
                 ok: true,
@@ -142,7 +142,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
                 lock,
                 remoteSettings: remoteSettingsSummary,
                 diagnostics,
-                nextAction: lockStatus.lock.lockId ? 'forja doctor fix --remote' : undefined
+                nextAction: lockStatus.lock.lockId ? 'forja remote bootstrap' : undefined
             };
         }
     }
@@ -179,7 +179,7 @@ export async function buildRemoteStatus(options: BuildRemoteStatusOptions): Prom
                 repos: planStatus.plan.repos
             },
             diagnostics,
-            nextAction: !versionOk ? 'forja doctor fix --remote' : planStatus.plan.nextAction
+            nextAction: !versionOk ? 'forja remote bootstrap' : planStatus.plan.nextAction
         };
     }
 
@@ -398,7 +398,7 @@ function buildRemoteForjaVersionCommand(remoteForjaBin: string): string {
     if (remoteForjaBin) {
         return `${remoteCommand([remoteForjaBin])} --version`;
     }
-    return '$HOME/.forja/bin/forja --version';
+    return '"$(npm prefix -g)/bin/forja" --version';
 }
 
 function trimMessage(value: string): string {

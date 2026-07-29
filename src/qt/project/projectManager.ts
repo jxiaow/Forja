@@ -22,35 +22,54 @@ export interface MakefileInfo {
 
 /** Sync activeTarget when a Qt project is selected, so new build/run commands can find it. */
 function _syncQtActiveTarget(workspace: string, relativeProject: string): void {
-    const { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig, getActiveTarget } = require('../../core/workspaceStore');
+    const {
+        resolveWorkroot,
+        loadWorkspaceConfig,
+        saveWorkspaceConfig,
+        getActiveTarget,
+        findTargetByProject,
+        generateTargetId,
+        relativeProjectPath
+    } = require('../../core/workspaceStore');
     const workroot = resolveWorkroot(workspace);
     if (!workroot) { return; }
+    const projectPath = path.resolve(workspace, relativeProject);
+    const canonicalProject = relativeProjectPath(workroot, projectPath);
     const config = loadWorkspaceConfig(workroot);
     const profile = getActiveTarget(config);
     // Only create/update if no activeTarget or if it's already Qt kind
     if (!profile || profile.kind === 'qt') {
         const state = getState();
         // Find existing Qt target or create new entry
-        const targets = config.targets as Record<string, { id: string; kind: string; project: string }>;
-        const existingQt = Object.values(targets).find(t => t.kind === 'qt' && t.project === relativeProject);
+        const targets = config.targets as Record<string, { id: string }>;
+        const existingQt = findTargetByProject(config, projectPath, 'qt');
         if (existingQt) {
             config.activeTarget = existingQt.id;
         } else {
-            const id = `qt-${relativeProject.replace(/[^a-zA-Z0-9]/g, '-')}-${state.mode || 'debug'}-${state.arch || 'x86'}`;
+            const id = generateTargetId('qt', canonicalProject, state.mode || 'debug', state.arch || 'x86', new Set(Object.keys(targets)));
             config.targets[id] = {
                 id,
                 name: `${id} (auto)`,
                 kind: 'qt',
-                project: relativeProject,
+                project: canonicalProject,
                 mode: state.mode || 'debug',
                 arch: state.arch || 'x86',
-                runAt: profile?.runAt || 'local',
                 toolchain: profile?.toolchain || {},
             };
             config.activeTarget = id;
         }
         saveWorkspaceConfig(config);
     }
+}
+
+function _canonicalProjectSelection(root: string, relative: string): { root: string; relative: string } {
+    const { resolveWorkroot, relativeProjectPath } = require('../../core/workspaceStore');
+    const workroot = resolveWorkroot(root);
+    if (!workroot) { return { root, relative }; }
+    return {
+        root: workroot,
+        relative: relativeProjectPath(workroot, path.resolve(root, relative))
+    };
 }
 
 /**
@@ -174,9 +193,10 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const fullPath = path.join(item.root, item.relative);
         const info = parseProFile(fullPath);
         info.projectDir = path.dirname(fullPath);
-        setProjectRoot(item.root);
-        setQtSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
-        _syncQtActiveTarget(item.root, item.relative);
+        const selectedProject = _canonicalProjectSelection(item.root, item.relative);
+        setProjectRoot(selectedProject.root);
+        setQtSetting('pinnedProject', encodePinnedProject(selectedProject.root, selectedProject.relative));
+        _syncQtActiveTarget(selectedProject.root, selectedProject.relative);
         return info;
     }
 
@@ -191,9 +211,10 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
             const fullPath = path.join(item.root, item.relative);
             const info = parseProFile(fullPath);
             info.projectDir = path.dirname(fullPath);
-            setProjectRoot(item.root);
-            setQtSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
-            _syncQtActiveTarget(item.root, item.relative);
+            const selectedProject = _canonicalProjectSelection(item.root, item.relative);
+            setProjectRoot(selectedProject.root);
+            setQtSetting('pinnedProject', encodePinnedProject(selectedProject.root, selectedProject.relative));
+            _syncQtActiveTarget(selectedProject.root, selectedProject.relative);
             return info;
         }
     }

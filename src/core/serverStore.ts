@@ -39,6 +39,8 @@ export interface ServerConfig {
     password: string;
     /** 是否启用严格主机密钥检查（默认 true，即 StrictHostKeyChecking=yes；显式 false 关闭） */
     strictHostKeyChecking?: boolean;
+    /** 该服务器曾用于项目配置的远端目录，最近使用的排在前面。 */
+    remotePathHistory?: string[];
 }
 
 export interface ProjectSyncConfig {
@@ -89,6 +91,7 @@ interface StoredServer {
     privateKeyPath: string;
     password?: string;
     strictHostKeyChecking?: boolean;
+    remotePathHistory?: string[];
 }
 
 export function readServers(): ServerConfig[] {
@@ -108,7 +111,8 @@ export function readServers(): ServerConfig[] {
                     authMode: (s.authMode === 'password' ? 'password' : 'key') as AuthMode,
                     privateKeyPath: s.privateKeyPath || '',
                     password: s.password || '',
-                    strictHostKeyChecking: s.strictHostKeyChecking !== false
+                    strictHostKeyChecking: s.strictHostKeyChecking !== false,
+                    remotePathHistory: normalizeRemotePathHistory(s.remotePathHistory),
                 }));
         }
     } catch (e) {
@@ -131,7 +135,8 @@ export function writeServers(servers: ServerConfig[]): void {
         authMode: s.authMode,
         privateKeyPath: s.privateKeyPath,
         password: s.password || undefined,
-        strictHostKeyChecking: s.strictHostKeyChecking || undefined
+        strictHostKeyChecking: s.strictHostKeyChecking,
+        remotePathHistory: s.remotePathHistory?.length ? normalizeRemotePathHistory(s.remotePathHistory) : undefined,
     }));
     atomicWriteJson(_serversFilePath(), stored);
     // 收紧文件权限（仅当前用户可读写）— Windows 上 chmod 无效但不报错
@@ -167,6 +172,18 @@ export function updateServer(id: string, updates: Partial<Omit<ServerConfig, 'id
 export function getServerById(id: string): ServerConfig | null {
     const servers = readServers();
     return servers.find(s => s.id === id) || null;
+}
+
+export function rememberServerRemotePath(id: string, remotePath: string): boolean {
+    const normalized = remotePath.trim();
+    if (!normalized) { return false; }
+    const server = getServerById(id);
+    if (!server) { return false; }
+    const history = [
+        normalized,
+        ...normalizeRemotePathHistory(server.remotePathHistory).filter(item => item !== normalized),
+    ];
+    return updateServer(id, { remotePathHistory: history });
 }
 
 export interface ServerSelectorResult {
@@ -229,7 +246,23 @@ export function updateRemoteSelectedServer(workspaceRoot: string, serverId: stri
 }
 
 export function updateRemotePath(workspaceRoot: string, serverId: string, remotePath: string): void {
+    const normalized = remotePath.trim();
     const remote = loadRemoteSettings(workspaceRoot);
-    remote.remotePaths[serverId] = remotePath;
+    remote.remotePaths[serverId] = normalized;
     saveRemoteSettings(workspaceRoot, remote);
+    if (normalized) { rememberServerRemotePath(serverId, normalized); }
+}
+
+function normalizeRemotePathHistory(value: unknown): string[] {
+    if (!Array.isArray(value)) { return []; }
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const item of value) {
+        if (typeof item !== 'string') { continue; }
+        const normalized = item.trim();
+        if (!normalized || seen.has(normalized)) { continue; }
+        seen.add(normalized);
+        result.push(normalized);
+    }
+    return result;
 }

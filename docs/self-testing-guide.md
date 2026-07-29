@@ -91,9 +91,6 @@ forja use target --mode release --json
 # 设置架构
 forja use target --arch x64 --json
 
-# 切换执行位置
-forja use target --run-at remote --json
-forja use target --run-at local --json
 ```
 
 ### 5. 构建命令
@@ -148,11 +145,14 @@ forja server add --name test-server --host 192.168.1.100 --username dev --json
 # 预期输出：ok: true, 包含 server id
 ```
 
-### 2. 配置远程执行
+### 2. 配置远程同步
 
 ```bash
-# 设置远程服务器和路径
-forja remote set --server <server-id> --remote-path /home/dev/workspace --json
+# 为当前 workroot 设置服务器、路径并启用同步
+forja remote setup --server <server-id> --remote-path /home/dev/workspace --json
+
+# setup 会部署远端 Forja；可单独重新部署
+forja remote bootstrap --json
 
 # 验证配置
 forja remote --json
@@ -202,13 +202,10 @@ forja sync reset --json
 
 ```bash
 # 本地诊断
-forja doctor --json
+forja status --json
 
-# 远程诊断
-forja doctor --remote --json
-
-# 修复远程问题
-forja doctor fix --remote --json
+# 远端同步连通性预览
+forja sync --dry-run --json
 ```
 
 ### 3. 服务器管理
@@ -258,13 +255,9 @@ forja server add --name test --host 127.0.0.1 --username dev --port abc --json
 forja use target --json
 # 预期：ok: true, 显示当前 target 配置
 
-# use target --run-at 无效值
-forja use target --run-at invalid --json
-# 预期：ok: false, 提示 --run-at 只接受 local 或 remote
-
-# remote set 缺少 --server
-forja remote set --json
-# 预期：ok: false, 提示缺少必要参数
+# remote setup 缺少必填参数
+forja remote setup --json
+# 预期：ok: false, 提示需要 --server 和 --remote-path
 ```
 
 ---
@@ -309,7 +302,7 @@ forja server --json
 forja remote --json
 
 # 重新配置
-forja remote set --server <id> --remote-path <path> --json
+forja remote setup --server <id> --remote-path <path> --json
 ```
 
 ### 4. nextActions 显示旧命令
@@ -342,7 +335,6 @@ forja remote set --server <id> --remote-path <path> --json
 - [ ] `forja list env --json`
 - [ ] `forja remote --json`
 - [ ] `forja use target --project <path> --json`
-- [ ] `forja use target --run-at remote --json`
 - [ ] `forja build --json`
 - [ ] `forja run --detach --json`
 - [ ] `forja stop --json`
@@ -350,11 +342,12 @@ forja remote set --server <id> --remote-path <path> --json
 
 ### 远程配置
 - [ ] `forja server add --name <name> --host <host> --username <user> --json`
-- [ ] `forja remote set --server <id> --remote-path <path> --json`
+- [ ] `forja remote setup --server <id> --remote-path <path> --json`
+- [ ] `forja remote bootstrap --json`
 
 ### 高级功能
 - [ ] `forja sync --dry-run --json`
-- [ ] `forja doctor --remote --json`
+- [ ] `forja sync --dry-run --json`
 - [ ] `forja run designer <ui-file> --json`
 
 ### 边界条件
@@ -391,14 +384,6 @@ if forja list invalid --json 2>/dev/null; then
 fi
 echo "✓ 错误处理通过"
 
-# 3. 参数验证
-echo "测试参数验证..."
-if forja use target --run-at invalid --json 2>/dev/null; then
-  echo "✗ 应该拒绝无效的 --run-at 值"
-  exit 1
-fi
-echo "✓ 参数验证通过"
-
 echo ""
 echo "=== 所有测试通过 ==="
 ```
@@ -417,8 +402,8 @@ chmod +x test-forja.sh
 
 1. **环境准备**：编译项目，全局链接
 2. **基础命令**：逐个测试 status/init/list/use/build/run/stop/clean
-3. **远程配置**：测试 server/remote set
-4. **高级功能**：测试 sync/doctor/designer
+3. **远程同步**：测试 server/remote setup/bootstrap
+4. **高级功能**：测试 sync/designer
 5. **边界条件**：测试无效参数、安全校验、必填字段
 6. **问题排查**：参考常见问题部分
 

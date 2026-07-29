@@ -2,12 +2,21 @@ import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CliResult } from '../cli/types';
+import type { PlatformRunExecutor } from '../platform/runExecutor';
 import { ensureLocalStateDir, findExecutablePids, logsDir, runLogPath, writeRunState } from './localState';
 import { parseRuntimeLibPaths, resolveRuntimeTarget } from './runtimeTarget';
 
 function logFileFor(workspace: string, action: string): string {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     return path.join(logsDir(workspace), `${stamp}-${action}.log`);
+}
+
+function resolveProjectCwd(result: CliResult): string {
+    if (!result.project) { return result.workspace; }
+    const projectPath = path.isAbsolute(result.project)
+        ? result.project
+        : path.resolve(result.workspace, result.project);
+    return path.dirname(projectPath);
 }
 
 /** Clean up stale .bat/.vbs launcher scripts from previous detach runs */
@@ -69,9 +78,11 @@ function executeStreaming(commandLine: string, cwd: string, executablePath?: str
 
         let stdout = '';
         let stderr = '';
+        let interrupted = false;
         const isWin = process.platform === 'win32';
 
         const onInterrupt = (): void => {
+            interrupted = true;
             terminateExecutable(executablePath);
             try { child.kill(); } catch { /* child may already be closed */ }
         };
@@ -99,14 +110,62 @@ function executeStreaming(commandLine: string, cwd: string, executablePath?: str
 
         child.on('close', (code) => {
             cleanupSignalHandlers();
-            resolve({ exitCode: code ?? 0, stdout, stderr });
+            resolve({ exitCode: interrupted ? 0 : (code ?? 0), stdout, stderr });
         });
 
         child.on('error', (err) => {
             cleanupSignalHandlers();
-            resolve({ exitCode: 1, stdout, stderr: stderr + err.message });
+            resolve({ exitCode: interrupted ? 0 : 1, stdout, stderr: stderr + err.message });
         });
     });
+}
+
+async function executeWithPlatformRunner(
+    executor: PlatformRunExecutor,
+    executablePath: string,
+    cwd: string,
+    qtPath: string | undefined,
+    streaming: boolean,
+    suppressedWarnings?: string[]
+): Promise<{ exitCode: number; stdout: string; stderr: string; pid: number }> {
+    let stdout = '';
+    let stderr = '';
+    let interrupted = false;
+
+    const onInterrupt = (): void => {
+        interrupted = true;
+        terminateExecutable(executablePath);
+    };
+    process.on('SIGINT', onInterrupt);
+    process.on('SIGTERM', onInterrupt);
+
+    try {
+        const launched = await executor.execute({
+            executablePath,
+            cwd,
+            qtPath,
+            detached: false,
+            onStdout: chunk => {
+                const text = filterBuildOutput(decodeWinOutput(chunk), suppressedWarnings);
+                stdout += text;
+                if (streaming) { process.stdout.write(text); }
+            },
+            onStderr: chunk => {
+                const text = filterBuildOutput(decodeWinOutput(chunk), suppressedWarnings);
+                stderr += text;
+                if (streaming) { process.stderr.write(text); }
+            }
+        });
+        return {
+            exitCode: interrupted ? 0 : (launched.exitCode ?? 0),
+            stdout,
+            stderr,
+            pid: launched.pid
+        };
+    } finally {
+        process.off('SIGINT', onInterrupt);
+        process.off('SIGTERM', onInterrupt);
+    }
 }
 
 function shellQuote(value: string): string {
@@ -226,6 +285,8 @@ export interface RunOptions {
     detach?: boolean;
     /** Warning codes to suppress from build output (e.g. ['C4819', 'C5297']) */
     suppressedWarnings?: string[];
+    /** Optional platform boundary for runtime launch workarounds. */
+    runExecutor?: PlatformRunExecutor;
 }
 
 /**
@@ -295,12 +356,21 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         fs.mkdirSync(path.dirname(logFile), { recursive: true });
         cleanDetachScripts(path.dirname(logFile));
 
-        const cwd = result.project ? path.dirname(result.project) : result.workspace;
+        const cwd = resolveProjectCwd(result);
         const isWin = process.platform === 'win32';
         const previousExecutablePids = result.executablePath ? findExecutablePids(result.executablePath) : [];
 
-        let child: cp.ChildProcess;
-        if (isWin) {
+        let pid: number | null;
+        if (options.runExecutor && result.executablePath) {
+            const launched = await options.runExecutor.execute({
+                executablePath: result.executablePath,
+                cwd,
+                qtPath: result.resolved?.qtPath,
+                detached: true,
+                outputFile: logFile
+            });
+            pid = launched.pid;
+        } else if (isWin) {
             // Use VBScript to launch without visible console window
             const batFile = path.join(path.dirname(logFile), 'run.bat');
             const vbsFile = path.join(path.dirname(logFile), 'run.vbs');
@@ -310,22 +380,23 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 : '';
             fs.writeFileSync(batFile, `@echo off\r\n${envSetup}cd /d "${cwd}"\r\n${runCommand} >"${logFile}" 2>&1\r\n`, 'utf8');
             fs.writeFileSync(vbsFile, `CreateObject("Wscript.Shell").Run "cmd /c ""${batFile}""", 0, False\r\n`, 'utf8');
-            child = cp.spawn('wscript', [vbsFile], {
+            const child = cp.spawn('wscript', [vbsFile], {
                 cwd,
                 detached: true,
                 windowsHide: true,
                 stdio: 'ignore'
             });
+            child.unref();
+            pid = await resolveDetachedRunPid(result.executablePath, previousExecutablePids);
         } else {
-            child = cp.spawn('/bin/sh', ['-c', `cd "${cwd}" && ${runCommand} >"${logFile}" 2>&1 &`], {
+            const child = cp.spawn('/bin/sh', ['-c', `cd "${cwd}" && ${runCommand} >"${logFile}" 2>&1 &`], {
                 cwd,
                 detached: true,
                 stdio: 'ignore'
             });
+            child.unref();
+            pid = await resolveDetachedRunPid(result.executablePath, previousExecutablePids);
         }
-        child.unref();
-
-        const pid = await resolveDetachedRunPid(result.executablePath, previousExecutablePids);
         writeRunState(result.workspace, {
             pid: pid || 0,
             exePath: runCommand,
@@ -407,9 +478,17 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             };
         }
 
-        const runResult = options?.streaming
-            ? await executeStreaming(runCommand, result.project ? path.dirname(result.project) : result.workspace, result.executablePath, suppressed)
-            : await execute(runCommand, result.project ? path.dirname(result.project) : result.workspace, suppressed);
+        const runResult = options?.runExecutor && result.executablePath
+            ? await executeWithPlatformRunner(
+                options.runExecutor,
+                result.executablePath,
+                resolveProjectCwd(result),
+                result.resolved?.qtPath,
+                !!options.streaming,
+                suppressed)
+            : options?.streaming
+                ? await executeStreaming(runCommand, resolveProjectCwd(result), result.executablePath, suppressed)
+                : await execute(runCommand, resolveProjectCwd(result), suppressed);
         const durationMs = Date.now() - started;
         fs.writeFileSync(filePath, [
             `$ ${buildLine}`,
@@ -448,7 +527,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         cleanDetachScripts(path.dirname(logFile));
 
         const commandLine = commandParts.join(' && ');
-        const cwd = result.project ? path.dirname(result.project) : result.workspace;
+        const cwd = resolveProjectCwd(result);
         const isWin = process.platform === 'win32';
 
         let child: cp.ChildProcess;
@@ -482,6 +561,42 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             logFile,
             commands: commandParts,
             diagnostics: [{ level: 'info', message: `${result.action} 已后台启动 (PID: ${pid})，日志: ${logFile}` }]
+        };
+    }
+
+    // A runtime-only plan can still use the selected platform runner.
+    if (result.action === 'run' && commandParts.length === 1 && options?.runExecutor && result.executablePath) {
+        const executed = await executeWithPlatformRunner(
+            options.runExecutor,
+            result.executablePath,
+            resolveProjectCwd(result),
+            result.resolved?.qtPath,
+            !!options.streaming,
+            suppressed);
+        const durationMs = Date.now() - started;
+        ensureLocalStateDir(result.workspace);
+        const filePath = logFileFor(result.workspace, result.action);
+        fs.writeFileSync(filePath, [
+            `$ ${commandParts[0]}`,
+            '',
+            executed.stdout,
+            executed.stderr
+        ].join('\n'), 'utf8');
+
+        return {
+            ...result,
+            ok: true,
+            exitCode: 0,
+            durationMs,
+            stdout: executed.stdout,
+            stderr: executed.stderr,
+            errors: [],
+            logFile: filePath,
+            runtimeExitCode: executed.exitCode,
+            commands: commandParts,
+            diagnostics: executed.exitCode === 0
+                ? result.diagnostics
+                : [...result.diagnostics, { level: 'warning', message: `程序已退出 (退出码: ${executed.exitCode})` }]
         };
     }
 

@@ -31,7 +31,6 @@ test('runtime-facing source and packaging comments use Forja branding', () => {
 test('current examples do not use legacy client project names', () => {
     const files = [
         'docs/cli-interface-spec.md',
-        'docs/operations/config-panel-redesign/ui-redesign-v2.md',
         'src/ui/configPanel/pages/project.ts',
         'src/ui/configPanel/configPanel.html',
         'src/test/settingsIO.test.ts',
@@ -52,55 +51,9 @@ test('current examples do not use legacy client project names', () => {
     assert.deepEqual(offenders, []);
 });
 
-test('current C++ CLI design docs use Forja command names', () => {
-    const files = [
-        'docs/superpowers/specs/2026-05-22-sdk-cli-use-design.md',
-        'docs/superpowers/plans/2026-05-22-sdk-cli-use.md'
-    ];
-    const forbidden = [
-        /\bCompilot\b/,
-        /\bcompilot\b/
-    ];
-
-    const offenders: string[] = [];
-    for (const file of files) {
-        const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8');
-        if (forbidden.some(pattern => pattern.test(source))) {
-            offenders.push(file);
-        }
-    }
-
-    assert.deepEqual(offenders, []);
-});
-
-test('current config migration operation docs use Forja paths and commands', () => {
-    const files = [
-        'docs/operations/config-migration/current-config-migration.md',
-        'docs/operations/config-migration/config-migration-board.md',
-        'docs/operations/config-migration/config-migration-decisions.md'
-    ];
-    const forbidden = [
-        /~\/\.compilot/,
-        /<workspace>\/\.compilot/,
-        /\.compilot\//,
-        /\bcompilot cleanup\b/
-    ];
-
-    const offenders: string[] = [];
-    for (const file of files) {
-        const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8');
-        if (forbidden.some(pattern => pattern.test(source))) {
-            offenders.push(file);
-        }
-    }
-
-    assert.deepEqual(offenders, []);
-});
-
 test('Qt environment source and docs do not keep legacy Qt Pilot env aliases', () => {
     const files = [
-        'src/qt/shared/qtCore.ts',
-        'docs/operations/cli-output-improvements/issues.md'
+        'src/qt/shared/qtCore.ts'
     ];
     const forbidden = [
         /\bQT_PILOT_QT_PATH\b/,
@@ -111,25 +64,6 @@ test('Qt environment source and docs do not keep legacy Qt Pilot env aliases', (
     for (const file of files) {
         const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8');
         if (forbidden.some(pattern => pattern.test(source))) {
-            offenders.push(file);
-        }
-    }
-
-    assert.deepEqual(offenders, []);
-});
-
-test('current CLI surfaces do not document removed --dry-run alias', () => {
-    // --dry-run was removed as an alias for --plan in build/run/clean/doctor.
-    // sync still uses --dry-run as its primary flag (not an alias).
-    const files = [
-        'docs/cli-interface-spec.md',
-        'skills/forja/SKILL.md'
-    ];
-
-    const offenders: string[] = [];
-    for (const file of files) {
-        const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8');
-        if (/--dry-run/.test(source)) {
             offenders.push(file);
         }
     }

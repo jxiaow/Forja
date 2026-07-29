@@ -24,7 +24,6 @@ export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
         project: config.project,
         mode: (config.mode || 'debug') as 'debug' | 'release',
         arch: (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
-        runAt: config.runAt,
         toolchain: {
             qtPath: config.qtPath,
             qtVersion: config.qtVersion,
@@ -72,7 +71,6 @@ export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; 
             project: config.project,
             mode,
             arch,
-            runAt: config.runAt || 'local',
             toolchain: {
                 qtPath: config.qtPath,
                 qtVersion: config.qtVersion,

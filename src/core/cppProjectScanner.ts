@@ -11,7 +11,7 @@ export const CPP_EXCLUDE_DIRS = [
     'debug', 'release',
 ];
 
-export const CPP_EXCLUDE_PATH_SEGMENTS = ['build/output'];
+export const CPP_EXCLUDE_PATH_SEGMENTS: string[] = [];
 
 export const DEFAULT_CPP_SCAN_DEPTH = 8;
 
@@ -41,6 +41,7 @@ export function scanCppProjects(options: CppScanOptions): string[] {
         ? /\.sln$/i
         : /^(Makefile|makefile|GNUmakefile)$/;
     const isCMake = (name: string) => name.toLowerCase() === 'cmakelists.txt';
+    const excludedDirs = new Set(excludeDirs.map(dir => dir.toLowerCase()));
     const results: string[] = [];
 
     function walk(dir: string, currentDepth: number): void {
@@ -53,7 +54,7 @@ export function scanCppProjects(options: CppScanOptions): string[] {
         }
         for (const entry of entries) {
             if (entry.isDirectory()) {
-                if (excludeDirs.includes(entry.name)) { continue; }
+                if (excludedDirs.has(entry.name.toLowerCase())) { continue; }
                 const subDir = path.join(dir, entry.name);
                 const rel = path.relative(workspace, subDir).replace(/\\/g, '/');
                 if (excludePathSegments.some(seg => rel.includes(seg))) { continue; }

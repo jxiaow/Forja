@@ -192,6 +192,23 @@ test('environment page allows reopened custom select lists to overflow expanded 
     assert.match(html, /\.csel-list\{[^}]*position:absolute/);
 });
 
+test('config panel validates server identity, credentials, and duplicate names', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'ui', 'configPanel', 'messageHandler.ts'), 'utf8');
+    const html = getPageHtml('sync', createTemplateData());
+    const submitBlock = html.match(/window\.submitServerForm=function\(\)\{[\s\S]*?window\.confirmRemoveServer/)?.[0] ?? '';
+
+    assert.match(source, /!newServerData\.name\.trim\(\)/);
+    assert.match(source, /newServerData\.authMode === 'key' && !newServerData\.privateKeyPath\.trim\(\)/);
+    assert.match(source, /!Number\.isInteger\(newServerData\.port\)/);
+    assert.match(source, /!updates\.name\.trim\(\)/);
+    assert.match(source, /updates\.authMode === 'key' && !updates\.privateKeyPath\.trim\(\)/);
+    assert.match(source, /!Number\.isInteger\(updates\.port\)/);
+    assert.match(source, /s\.id !== serverId && s\.name === updates\.name/);
+    assert.match(submitBlock, /Number\.isInteger\(s\.port\)/);
+    assert.match(submitBlock, /_authMode==="key"&&!s\.privateKeyPath/);
+    assert.doesNotMatch(submitBlock, /hideServerForm\(\)/);
+});
+
 test('sync page shows specific readiness hints when configuration is incomplete', () => {
     const html = getPageHtml('sync', {
         ...createTemplateData(),
@@ -207,6 +224,37 @@ test('sync page shows specific readiness hints when configuration is incomplete'
     assert.match(html, /未设置远程路径/);
 });
 
+test('sync page offers previous server paths and allows saving a new project path', () => {
+    const html = getPageHtml('sync', {
+        ...createTemplateData(),
+        syncEnabled: true,
+        syncSelectedServer: 'server-1',
+        syncServers: [{
+            id: 'server-1',
+            name: 'dev',
+            host: 'dev.example.com',
+            port: 22,
+            username: 'dev',
+            authMode: 'key',
+            privateKeyPath: '~/.ssh/id_rsa',
+            password: '',
+            remotePathHistory: ['/srv/projects/app-a', '/srv/projects/app-b'],
+        }],
+        syncRemotePath: '',
+    });
+
+    assert.match(html, /id="syncRemotePathInput"/);
+    assert.match(html, /list="syncRemotePathOptions"/);
+    assert.match(html, /option value="\/srv\/projects\/app-a"/);
+    assert.match(html, /option value="\/srv\/projects\/app-b"/);
+    assert.match(html, /saveProjectRemotePath/);
+    assert.match(html, /command:"saveSyncRemotePath",value:value/);
+
+    const commandsSource = fs.readFileSync(path.join(process.cwd(), 'src', 'vscode', 'commands.ts'), 'utf8');
+    assert.match(commandsSource, /getServerById\(pickedServer\.server\.id\)\?\.remotePathHistory/);
+    assert.match(commandsSource, /Enter a new remote path/);
+});
+
 test('sync page does not render stale remote path or fallback server when selected id is invalid', () => {
     const html = getPageHtml('sync', {
         ...createTemplateData(),
@@ -220,7 +268,8 @@ test('sync page does not render stale remote path or fallback server when select
             username: 'dev',
             authMode: 'key',
             privateKeyPath: '~/.ssh/id_rsa',
-            password: ''
+            password: '',
+            remotePathHistory: [],
         }],
         syncRemotePath: '/legacy/path',
         syncReadinessIssues: ['已选择服务器不存在', '未设置远程路径']

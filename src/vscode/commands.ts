@@ -1,28 +1,21 @@
 /**
  * VSCode command registration for v2 command surface.
- * Qt build/run/stop/clean delegate to buildManager (VSCode task system) or remote pipeline.
+ * Qt build/run/stop/clean delegate to buildManager (VSCode task system).
  * C++ build/clean delegate to C++ VSCode commands.
  * Other commands delegate to CLI handlers.
  */
 import * as vscode from 'vscode';
 import { getOutputChannel } from './logger';
 import { getWorkspaceRoot } from '../qt/services/configService';
+import { setState } from './qtState';
 import { getActiveTarget } from '../cli/commands/activeTarget';
 import { loadGlobalConfig } from '../core/settingsIO';
-import { resolveRemoteConfig, resolveRemotePrimaryActionPath } from '../remote/core/config';
+import { resolveRemoteConfig } from '../remote/core/config';
 import { createSshRunner, createScpUploader } from '../remote/core/shell';
-import { buildRemoteTest } from '../remote/core/status';
-import { buildRemoteDoctor } from '../remote/core/doctor';
-import { buildRemoteTransferStatus } from '../remote/core/transfer';
 import { executeRemoteBootstrap, findBootstrapArtifact } from '../remote/core/bootstrap';
-import { executeRemoteBridge } from '../remote/core/bridge';
-import { loadRemoteSettings } from '../core/settingsIO';
 import { getServerById } from '../core/serverStore';
-import {
-    initRemoteDiagnostics,
-    executeRemoteBuild, executeRemoteActionWithProgress, startForegroundRemoteRun,
-} from './remoteHelpers';
 import type { InternalListCategory } from '../cli/commands/list';
+import type { TargetCandidate } from '../cli/commands/types';
 import type { RemoteResult } from '../cli/commands/remote';
 
 /**
@@ -51,7 +44,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             project: pinnedProject as string,
             mode: (getCppSetting('mode') || 'debug') as 'debug' | 'release',
             arch: (getCppSetting('arch') || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64',
-            runAt: 'local' as const,
             toolchain: {
                 vsInstall: getCppSetting('vsInstall') as string,
             },
@@ -113,7 +105,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         }
     }
 
-    const remoteDiag = initRemoteDiagnostics();
+    const remoteDiag = vscode.languages.createDiagnosticCollection('forja.remote');
     context.subscriptions.push(remoteDiag);
 
     // Use the shared Forja output channel for results
@@ -201,28 +193,46 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 if (!qtWs && cppWs) { qtWs = cppWs; }
                 if (!cppWs && qtWs) { cppWs = qtWs; }
                 if (!qtWs && !cppWs) { qtWs = cppWs = workspace(); }
-                const qtResult = (!kindFilter || kindFilter === 'qt') ? await runList(qtWs, 'targets') : { targets: [] };
-                const cppResult = (!kindFilter || kindFilter === 'cpp') ? await runList(cppWs, 'targets') : { targets: [] };
+                const qtResult = (!kindFilter || kindFilter === 'qt') ? await runList(qtWs, 'targets') : { targetGroups: {} };
+                const cppResult = (!kindFilter || kindFilter === 'cpp') ? await runList(cppWs, 'targets') : { targetGroups: {} };
                 const seen = new Set<string>();
-                const allTargets = [...(qtResult.targets || []), ...(cppResult.targets || [])].filter(t => {
-                    if (kindFilter && t.kind !== kindFilter) { return false; }
-                    // Deduplicate by absolute path
-                    const key = `${t.kind}:${t.project}`;
-                    if (seen.has(key)) { return false; }
-                    seen.add(key);
-                    return true;
-                });
+                const groupedTargets = new Map<string, TargetCandidate[]>();
+                const addGroupedTargets = (result: { targetGroups?: Record<string, TargetCandidate[]> }) => {
+                    for (const [group, targets] of Object.entries(result.targetGroups || {})) {
+                        const groupTargets = groupedTargets.get(group) || [];
+                        for (const target of targets) {
+                            if (kindFilter && target.kind !== kindFilter) { continue; }
+                            // Deduplicate by absolute path
+                            const key = `${target.kind}:${target.project}`;
+                            if (seen.has(key)) { continue; }
+                            seen.add(key);
+                            groupTargets.push(target);
+                        }
+                        if (groupTargets.length > 0) {
+                            groupedTargets.set(group, groupTargets);
+                        }
+                    }
+                };
+                addGroupedTargets(qtResult);
+                addGroupedTargets(cppResult);
+                const allTargets = [...groupedTargets.values()].flat();
                 if (allTargets.length > 0) {
-                    const items = allTargets.map(t => ({
-                        label: t.project,
-                        description: t.current ? '(current)' : '',
-                        detail: t.configured ? 'Configured' : 'Not configured',
-                    }));
+                    type TargetPickerItem = vscode.QuickPickItem & { target?: TargetCandidate };
+                    const items: TargetPickerItem[] = [];
+                    for (const [group, targets] of [...groupedTargets.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+                        items.push({ label: group, kind: vscode.QuickPickItemKind.Separator });
+                        items.push(...targets.map(t => ({
+                            label: t.project,
+                            description: t.current ? '(current)' : '',
+                            detail: t.configured ? 'Configured' : 'Not configured',
+                            target: t,
+                        })));
+                    }
                     const picked = await vscode.window.showQuickPick(items, {
                         placeHolder: 'Select a target',
                     });
                     if (picked) {
-                        const target = allTargets.find(t => t.project === picked.label);
+                        const target = picked.target;
                         if (target) {
                             const { runUseTarget } = await import('../cli/commands/use');
                             const targetWs = target.kind === 'cpp' ? cppWs : qtWs;
@@ -312,14 +322,8 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         description: `Server: ${serverLabel}, Path: ${pathLabel}`,
                         command: '__show__',
                     },
-                    sep('Configuration'),
-                    { label: '$(server) Set Server', description: 'Select remote server', command: '__set_server__' },
-                    { label: '$(folder) Set Remote Path', description: 'Set remote workspace path', command: '__set_path__' },
-                    { label: '$(repo) Workspace', description: 'Configure remote workspace mode', command: '__workspace__' },
-                    { label: '$(git-merge) Repo', description: 'Manage remote repo mappings', command: '__repo__' },
-                    { label: '$(file-binary) Forja Bin', description: 'Set remote forja binary path', command: '__forja_bin__' },
-                    { label: '$(list-ordered) Build Order', description: 'Configure remote build order', command: '__build_order__' },
-                    { label: '$(cloud-upload) Transfer', description: 'Configure deploy transfer settings', command: '__transfer__' },
+                    sep('Sync setup'),
+                    { label: '$(gear) Remote Setup', description: 'Configure sync and deploy remote Forja', command: '__setup__' },
                 ];
 
                 const selected = await vscode.window.showQuickPick(items, {
@@ -338,56 +342,26 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                         showResult(result);
                         break;
                     }
-                    case '__set_server__': {
+                    case '__setup__': {
                         const { listServers } = await import('../cli/commands/server');
                         const servers = listServers();
                         if (servers.length === 0) {
-                            vscode.window.showInformationMessage('No servers configured. Use "forja server add" in terminal.');
+                            vscode.window.showInformationMessage('No servers configured. Add one with Forja: Server first.');
                             return;
                         }
-                        const serverItems = servers.map(s => ({
-                            label: s.name,
-                            description: `${s.username}@${s.host}:${s.port}`,
-                            detail: s.id === remote?.selectedServer ? '(current)' : '',
-                        }));
-                        const picked = await vscode.window.showQuickPick(serverItems, { placeHolder: 'Select server' });
-                        if (picked) {
-                            const { runRemoteSet } = await import('../cli/commands/remote');
-                            const r = runRemoteSet(ws, { server: picked.label });
-                            showResult(r);
-                        }
-                        break;
-                    }
-                    case '__set_path__': {
-                        const pathVal = await vscode.window.showInputBox({
-                            prompt: 'Remote workspace path',
-                            value: remote?.remotePath || '',
-                        });
-                        if (pathVal !== undefined) {
-                            const { runRemoteSet } = await import('../cli/commands/remote');
-                            const r = runRemoteSet(ws, { remotePath: pathVal });
-                            showResult(r);
-                        }
-                        break;
-                    }
-                    case '__workspace__': {
-                        vscode.window.showInformationMessage('Use "forja remote set --workspace-mode staged|legacy" in terminal to configure workspace mode.');
-                        break;
-                    }
-                    case '__repo__': {
-                        vscode.window.showInformationMessage('Use "forja remote set --repo <local:remote:role>" in terminal to manage repo mappings.');
-                        break;
-                    }
-                    case '__forja_bin__': {
-                        vscode.window.showInformationMessage('Use "forja remote set --forja-bin <path>" in terminal to configure remote Forja binary.');
-                        break;
-                    }
-                    case '__build_order__': {
-                        vscode.window.showInformationMessage('Use "forja remote set --build-order qt:build cpp:build" in terminal to configure build order.');
-                        break;
-                    }
-                    case '__transfer__': {
-                        vscode.window.showInformationMessage('Use "forja remote set --transfer-server/--transfer-path/--transfer-artifact" in terminal to configure transfer.');
+                        const serverItems = servers.map(s => ({ label: s.name, description: `${s.username}@${s.host}:${s.port}`, server: s }));
+                        const pickedServer = await vscode.window.showQuickPick(serverItems, { placeHolder: 'Select sync server' });
+                        if (!pickedServer) { return; }
+                        const history = getServerById(pickedServer.server.id)?.remotePathHistory || [];
+                        const pathItems = [...history.map((remotePath: string) => ({ label: remotePath, remotePath })), { label: 'Enter a new remote path', remotePath: '' }];
+                        const pickedPath = await vscode.window.showQuickPick(pathItems, { placeHolder: 'Select a previous remote path or enter a new one' });
+                        if (!pickedPath) { return; }
+                        const remotePath = pickedPath.remotePath || await vscode.window.showInputBox({ prompt: 'Remote workspace path', validateInput: value => value.trim() ? undefined : 'Remote path is required' });
+                        if (!remotePath) { return; }
+                        const { runRemoteSetup } = await import('../cli/commands/remote');
+                        const setupResult = runRemoteSetup(ws, { server: pickedServer.server.id, remotePath: remotePath.trim() });
+                        if (!setupResult.ok) { showResult(setupResult); return; }
+                        await vscode.commands.executeCommand('forja.remoteBootstrap');
                         break;
                     }
                 }
@@ -419,7 +393,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                             const actions = [
                                 { label: 'Remove server', action: 'remove' as const },
                                 { label: 'Test connection', action: 'test' as const },
-                                { label: 'Set as sync server', action: 'sync' as const },
+                                { label: 'Configure with Remote Setup', action: 'sync' as const },
                             ];
                             const action = await vscode.window.showQuickPick(actions, {
                                 placeHolder: `Server: ${server.name}`,
@@ -440,14 +414,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                                         await vscode.commands.executeCommand('forja.syncTestConnection');
                                         break;
                                     case 'sync': {
-                                        const { configureSyncSettings } = await import('../sync/cli');
-                                        const ws = workspace();
-                                        const r = configureSyncSettings(ws, { enable: true, serverId: server.id });
-                                        if (r.ok) {
-                                            vscode.window.showInformationMessage(`Sync server set to '${server.name}'`);
-                                        } else {
-                                            vscode.window.showErrorMessage(`Set sync server failed: ${r.error}`);
-                                        }
+                                        await vscode.commands.executeCommand('forja.remote');
                                         break;
                                     }
                                 }
@@ -462,7 +429,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.build — Qt: buildManager (VSCode task); C++: buildCpp(); Remote: executeRemotePlan
+    // forja.build — Qt: buildManager (VSCode task); C++: buildCpp()
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.build', async (action?: string) => {
             let target = await resolveActiveTarget();
@@ -472,19 +439,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 target = await synthesizeCppTarget();
             }
 
-            // Remote dispatch
-            if (target?.runAt === 'remote') {
-                // rcc is not supported on remote targets
-                if (action === 'rcc') {
-                    vscode.window.showErrorMessage('RCC is not supported on remote targets. Use local target instead.');
-                    return;
-                }
-                const remoteAction = action === 'fresh' ? 'rebuild' as const
-                    : action === 'qmake' ? 'qmake' as const
-                    : 'build' as const;
-                await executeRemoteBuild(workspace(), target.kind, remoteAction);
-                return;
-            }
 
             if (target?.kind === 'cpp') {
                 // C++ doesn't support qmake/rcc
@@ -513,7 +467,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.run — Qt: buildManager.run() (VSCode task); custom/debug handled separately; Remote: foreground pty
+    // forja.run — Qt: buildManager.run() (VSCode task); custom/debug handled separately
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.run', async (customName?: string, customCommand?: string) => {
             // Legacy call from status bar: customName + customCommand both provided
@@ -531,11 +485,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             // --detach: remote detached run (must be checked before generic customName)
             if (customName === '--detach') {
                 const target = await resolveActiveTarget();
-                if (target?.runAt === 'remote') {
-                    await executeRemoteActionWithProgress(workspace(), target.kind, 'run', 'Run Detached', ['--detach']);
-                } else {
-                    vscode.window.showWarningMessage('Detached run is only supported for remote targets.');
-                }
+                vscode.window.showWarningMessage('Detached run is not supported by the VSCode command.');
                 return;
             }
             // --custom <name>: look up saved command and run via buildManager (VSCode task)
@@ -558,11 +508,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            // Remote dispatch
-            if (target?.runAt === 'remote') {
-                startForegroundRemoteRun(context, workspace(), target.kind);
-                return;
-            }
 
             const buildManager = await import('../qt/build/buildManager');
             try {
@@ -579,10 +524,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             const target = await resolveActiveTarget();
             if (target?.kind === 'cpp') {
                 vscode.window.showWarningMessage('C++ target does not support debug. Use Build instead.');
-                return;
-            }
-            if (target?.runAt === 'remote') {
-                vscode.window.showWarningMessage('Remote target does not support debug.');
                 return;
             }
             const { startDebug } = await import('../qt/build/debugger');
@@ -615,14 +556,13 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             const { runStop } = await import('../cli/commands/stop');
             const target = await resolveActiveTarget();
 
-            // Remote dispatch with progress UI
-            if (target?.runAt === 'remote') {
-                await executeRemoteActionWithProgress(workspace(), target.kind, 'stop', 'Stop');
-                return;
-            }
 
             const result = await runStop(workspace());
             const msg = result.diagnostics?.[0]?.message;
+
+            if (result.state === 'stopped' || result.state === 'not-running') {
+                setState('isRunning', false);
+            }
 
             if (result.state === 'stopped') {
                 vscode.window.showInformationMessage(msg ?? `Process stopped (PID: ${result.runtime?.pid ?? 'unknown'})`);
@@ -636,7 +576,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.clean — Qt: buildManager.clean() (VSCode task); C++: cleanCpp(); Remote: executeRemotePlan
+    // forja.clean — Qt: buildManager.clean() (VSCode task); C++: cleanCpp()
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.clean', async () => {
             let target = await resolveActiveTarget();
@@ -646,11 +586,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 target = await synthesizeCppTarget();
             }
 
-            // Remote dispatch
-            if (target?.runAt === 'remote') {
-                await executeRemoteActionWithProgress(workspace(), target.kind, 'clean', 'Clean');
-                return;
-            }
 
             if (target?.kind === 'cpp') {
                 const { cleanCpp } = await import('../cpp/cppExtension');
@@ -662,28 +597,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 await buildManager.clean();
             } catch (e) {
                 vscode.window.showErrorMessage(e instanceof Error ? e.message : String(e));
-            }
-        })
-    );
-
-    // forja.doctor
-    context.subscriptions.push(
-        vscode.commands.registerCommand('forja.doctor', async () => {
-            try {
-                const { runDoctor } = await import('../cli/commands/doctor');
-                const result = await runDoctor(workspace());
-                const checks = result.checks || [];
-                const blocked = checks.filter(c => c.status === 'blocked');
-                const warnings = checks.filter(c => c.status === 'warning');
-                if (blocked.length === 0 && warnings.length === 0) {
-                    vscode.window.showInformationMessage('Doctor: All checks passed');
-                } else {
-                    const msg = `Doctor: ${blocked.length} blocked, ${warnings.length} warnings`;
-                    vscode.window.showWarningMessage(msg);
-                }
-            } catch (e: unknown) {
-                const msg = e instanceof Error ? e.message : String(e);
-                vscode.window.showErrorMessage(`Forja: ${msg}`);
             }
         })
     );
@@ -718,24 +631,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
 
     // ── Remote management commands ──
 
-    // forja.remoteTest — remote channel and version check
-    context.subscriptions.push(
-        vscode.commands.registerCommand('forja.remoteTest', async () => {
-            const ws = workspace();
-            const result = await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: 'Forja Remote: Test',
-                cancellable: false,
-            }, () => buildRemoteTest({ workspace: ws }));
-            if (result.ok) {
-                vscode.window.showInformationMessage('Forja Remote Test: 通过');
-            } else {
-                const msg = result.diagnostics.map(d => d.message).filter(Boolean).join('\n');
-                vscode.window.showErrorMessage('Forja Remote Test: ' + (msg || '失败'));
-            }
-        })
-    );
-
     // forja.remoteBootstrap — install or update remote forja
     context.subscriptions.push(
         vscode.commands.registerCommand('forja.remoteBootstrap', async () => {
@@ -765,116 +660,4 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         })
     );
 
-    // forja.remoteTransferStatus — check local transfer plan
-    context.subscriptions.push(
-        vscode.commands.registerCommand('forja.remoteTransferStatus', async () => {
-            const ws = workspace();
-            const settings = loadRemoteSettings(ws);
-            const resolved = resolveRemoteConfig(ws);
-            // Use transfer.deployServer for deploy server, not sync server
-            const deployServer = settings.transfer?.deployServer ? getServerById(settings.transfer.deployServer) : null;
-            const status = buildRemoteTransferStatus({
-                remotePath: resolved.config ? resolveRemotePrimaryActionPath(resolved.config.workspace, resolved.config.remotePath) : null,
-                transfer: settings.transfer,
-                deployServer,
-            });
-            if (status.ready) {
-                vscode.window.showInformationMessage('Forja Remote Transfer: 就绪');
-            } else {
-                const msg = status.diagnostics.map(d => d.message).filter(Boolean).join('\n');
-                vscode.window.showWarningMessage('Forja Remote Transfer: ' + (msg || '未就绪'));
-            }
-        })
-    );
-
-    // forja.ps — remote process list (bridge action, Qt only)
-    context.subscriptions.push(
-        vscode.commands.registerCommand('forja.ps', async () => {
-            const ws = workspace();
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: 'Forja Remote: PS',
-                cancellable: false,
-            }, async () => {
-                const resolved = resolveRemoteConfig(ws);
-                if (!resolved.config) {
-                    vscode.window.showErrorMessage('Forja Remote: ' + resolved.diagnostics.map(d => d.message).join('; '));
-                    return;
-                }
-                const password = resolved.config.server.password || process.env.FORJA_SSH_PASSWORD || null;
-                const runner = createSshRunner(resolved.config.server, password);
-                const actionRemotePath = resolveRemotePrimaryActionPath(resolved.config.workspace, resolved.config.remotePath);
-                const result = await executeRemoteBridge({
-                    target: 'qt',
-                    action: 'ps',
-                    args: [],
-                    json: true,
-                    remotePath: actionRemotePath,
-                    runner,
-                });
-                if (result.ok && result.stdout) {
-                    vscode.window.showInformationMessage('Forja Remote PS: ' + result.stdout.trim());
-                } else if (!result.ok) {
-                    const msg = result.diagnostics?.map(d => d.message).filter(Boolean).join('\n') || '失败';
-                    vscode.window.showErrorMessage('Forja Remote PS: ' + msg);
-                } else {
-                    vscode.window.showInformationMessage('Forja Remote PS: 无运行进程');
-                }
-            });
-        })
-    );
-
-    // forja.remoteWorkbench — QuickPick menu for remote management
-    context.subscriptions.push(
-        vscode.commands.registerCommand('forja.remoteWorkbench', async () => {
-            const ws = workspace();
-            const doctor = await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: 'Forja Remote: Workbench',
-                cancellable: false,
-            }, () => buildRemoteDoctor({ workspace: ws }));
-
-            type WorkbenchItem = vscode.QuickPickItem & { command?: string };
-            const sep = (label: string): WorkbenchItem => ({ label, kind: vscode.QuickPickItemKind.Separator });
-            const items: WorkbenchItem[] = [
-                {
-                    label: '$(pulse) Doctor',
-                    description: doctor.overall,
-                    command: 'forja.doctor',
-                },
-                {
-                    label: '$(info) Status',
-                    description: '配置和 readiness 摘要',
-                    command: 'forja.status',
-                },
-                {
-                    label: '$(beaker) Test',
-                    description: '远程通道和版本检查',
-                    command: 'forja.remoteTest',
-                },
-                {
-                    label: '$(cloud-upload) Bootstrap',
-                    description: '安装或更新远端 forja',
-                    command: 'forja.remoteBootstrap',
-                },
-                {
-                    label: '$(arrow-swap) Transfer Status',
-                    description: '本地校验 transfer plan',
-                    command: 'forja.remoteTransferStatus',
-                },
-                sep('操作'),
-                { label: '$(tools) Build', description: 'Remote', command: 'forja.build' },
-                { label: '$(play) Run', description: 'Remote foreground Terminal', command: 'forja.run' },
-                { label: '$(debug-stop) Stop', description: 'Stop remote process', command: 'forja.stop' },
-                { label: '$(list-ordered) PS', description: 'Remote process list', command: 'forja.ps' },
-            ];
-
-            const selected = await vscode.window.showQuickPick(items, {
-                placeHolder: `Remote ${doctor.overall}`,
-            });
-            if (selected?.command) {
-                await vscode.commands.executeCommand(selected.command);
-            }
-        })
-    );
 }

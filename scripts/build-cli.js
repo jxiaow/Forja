@@ -19,6 +19,12 @@ const channelIdx = process.argv.indexOf('--channel');
 const channel = channelIdx >= 0 && process.argv[channelIdx + 1]
     ? process.argv[channelIdx + 1]
     : (version.endsWith('.dev') ? 'dev' : 'stable');
+if (channel !== 'stable' && channel !== 'dev') {
+    throw new Error(`Unsupported package channel: ${channel}`);
+}
+if (channel === 'stable' && version.endsWith('.dev')) {
+    throw new Error('Stable packages require a version without the .dev suffix.');
+}
 
 // Dev builds append date: 0.7.55.dev.202607031430
 function dateStamp() {
@@ -42,9 +48,17 @@ const dirs = [
     'qt/platform/win',
     'qt/platform/linux',
     'cpp/cli',
-    'cpp/shared',
-    'remote/cli',
-    'remote/core'
+    'cpp/shared'
+];
+
+// Only bootstrap support is shipped for remote operations. Sync owns file transfer.
+const remoteFiles = [
+    'remote/cli/index.js',
+    'remote/core/bootstrap.js',
+    'remote/core/config.js',
+    'remote/core/shell.js',
+    'remote/core/stagedWorkspace.js',
+    'remote/core/types.js'
 ];
 
 // Individual files from sync/ needed by CLI (only pure Node files)
@@ -73,6 +87,7 @@ const coreFiles = [
 const platformFiles = [
     'qt/platform/platformConfig.js',
     'qt/platform/requirements.js',
+    'qt/platform/runExecutor.js',
     'qt/platform/shellPlan.js'
 ];
 
@@ -129,6 +144,9 @@ for (const dir of dirs) {
     copyDir(path.join(srcOut, dir), path.join(tmpBuild, dir));
 }
 
+const windowsLauncher = 'qt/platform/win/forja-desktop-launcher.exe';
+fs.copyFileSync(path.join(srcOut, windowsLauncher), path.join(tmpBuild, windowsLauncher));
+
 // Copy individual core files
 for (const file of coreFiles) {
     const srcFile = path.join(srcOut, file);
@@ -162,6 +180,15 @@ if (dateSuffix && fs.existsSync(path.join(tmpBuild, 'version.js'))) {
 
 // Copy individual sync files (non-vscode only)
 for (const file of syncFiles) {
+    const srcFile = path.join(srcOut, file);
+    const dstFile = path.join(tmpBuild, file);
+    if (fs.existsSync(srcFile)) {
+        fs.mkdirSync(path.dirname(dstFile), { recursive: true });
+        fs.copyFileSync(srcFile, dstFile);
+    }
+}
+
+for (const file of remoteFiles) {
     const srcFile = path.join(srcOut, file);
     const dstFile = path.join(tmpBuild, file);
     if (fs.existsSync(srcFile)) {

@@ -22,6 +22,16 @@ test('isIgnored supports glob wildcard', () => {
     assert.equal(isIgnored('src/main.o', ['*.o']), true);
 });
 
+test('isIgnored treats non-wildcard regex characters literally', () => {
+    assert.equal(isIgnored('src/main.xlog', ['*.log']), false);
+    assert.equal(isIgnored('src/file[1].log', ['file[1].*']), true);
+});
+
+test('isIgnored does not throw for unmatched regex metacharacters', () => {
+    assert.doesNotThrow(() => isIgnored('src/main.log', ['[*.log']));
+    assert.equal(isIgnored('src/main.log', ['[*.log']), false);
+});
+
 test('isIgnored glob does not match across segments', () => {
     assert.equal(isIgnored('src/lib/test.cpp', ['*.o']), false);
 });

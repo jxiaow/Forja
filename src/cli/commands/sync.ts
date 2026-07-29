@@ -3,7 +3,7 @@
  */
 import * as path from 'path';
 import { planSyncCli, executeSyncCli, resetSyncCli, ClassifiedChanges, configureSyncSettings } from '../../sync/cli';
-import { readProjectSyncConfig, writeProjectSyncConfig, getServerById, readServers, addServer } from '../../core/serverStore';
+import { readProjectSyncConfig, writeProjectSyncConfig, getServerById, readServers, addServer, ServerConfig } from '../../core/serverStore';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { Diagnostic, SyncPlan, ForjaJsonResult, diag, Locale, T } from './types';
 import { prompt, choose } from './prompt';
@@ -165,7 +165,7 @@ export async function runSyncPlan(workspace: string, fileFilters: string[] = [])
             server: plan.server,
             remotePath: plan.remotePath,
             diagnostics: plan.ok ? undefined : plan.failed.map(f => diag('error', `${T('sync.planFailed')}: ${f.error}`)),
-            nextAction: plan.ok ? 'forja sync' : (plan.nextAction || 'forja doctor fix --remote'),
+            nextAction: plan.ok ? 'forja sync' : (plan.nextAction || 'forja remote setup'),
         };
     } catch (e) {
         return syncCatchResult('plan', workspace, e);
@@ -188,7 +188,7 @@ export async function runSyncExecute(workspace: string, fileFilters: string[] = 
             skippedDetails: result.skippedDetails?.length ? result.skippedDetails : undefined,
             failed: result.failed?.length ? result.failed : undefined,
             diagnostics: result.ok ? undefined : (result.failed?.length ? result.failed.map(f => diag('error', `${T('sync.syncFailed')}: ${f.error}`)) : [diag('error', T('sync.syncFailed'))]),
-            nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja doctor fix --remote'),
+            nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja remote setup'),
         };
     } catch (e) {
         return syncCatchResult('run', workspace, e);
@@ -346,7 +346,7 @@ function syncCatchResult(syncAction: SyncAction, workspace: string, e: unknown):
     return {
         ok: false, action: 'sync', syncAction, workspace,
         diagnostics: [diag('error', `${T('sync.remoteBlocked')}: ${message}`)],
-        nextAction: 'forja doctor fix --remote',
+        nextAction: 'forja remote setup',
     };
 }
 
@@ -356,10 +356,10 @@ function syncCatchResult(syncAction: SyncAction, workspace: string, e: unknown):
  * Interactive sync setup — guides user to select/create server and input remote path.
  * Returns true if configuration was completed successfully.
  */
-export async function interactiveSyncSetup(workroot: string): Promise<{ ok: true } | { ok: false; reason: 'cancelled' | 'configError'; error?: string }> {
+export async function interactiveRemoteSetup(workroot: string): Promise<{ ok: true } | { ok: false; reason: 'cancelled' | 'configError'; error?: string }> {
     const existingServers = readServers();
     let serverId: string | undefined;
-    let selectedServer: { username: string } | undefined;
+    let selectedServer: ServerConfig | undefined;
 
     if (existingServers.length === 0) {
         // No servers — guide creation
@@ -401,12 +401,19 @@ export async function interactiveSyncSetup(workroot: string): Promise<{ ok: true
         selectedServer = server;
     }
 
-    // Remote path: reuse existing or prompt
+    // Remote path: reuse a server-specific history entry or prompt for a new one.
     const remoteCfg = loadRemoteSettings(workroot);
     let remotePath = remoteCfg.remotePaths[serverId || ''] || '';
     if (!remotePath) {
-        const defaultPath = `/home/${selectedServer?.username || 'user'}/${path.basename(workroot)}`;
-        remotePath = await prompt(T('setupRemotePathPrompt'), defaultPath);
+        const history = selectedServer?.remotePathHistory || [];
+        if (history.length > 0) {
+            const choice = await choose(T('setupRemotePathPrompt'), [...history, ''], item => item || 'Enter a new path');
+            if (choice !== null) { remotePath = choice; }
+        }
+        if (!remotePath) {
+            const defaultPath = `/home/${selectedServer?.username || 'user'}/${path.basename(workroot)}`;
+            remotePath = await prompt(T('setupRemotePathPrompt'), defaultPath);
+        }
         if (!remotePath) return { ok: false, reason: 'cancelled' };
     }
 
