@@ -48,3 +48,20 @@ test('sync test connection quick pick resolves duplicate server names by id', ()
     assert.match(watcher, /servers\.find\(s => s\.id === pick\.serverId\)/);
     assert.doesNotMatch(watcher, /servers\.find\(s => s\.name === pick\.label\)/);
 });
+
+test('sync failure clears cached password on authentication errors', () => {
+    const watcher = fs.readFileSync(path.join(repoRoot, 'src', 'sync', 'syncWatcher.ts'), 'utf-8');
+
+    assert.match(watcher, /isAuthenticationError/);
+    assert.match(watcher, /if \(isAuthenticationError\(msg\)\) \{\s*clearPasswordCache\(\);\s*\}/);
+});
+
+test('sync cli and vscode sync reuse shared git changed file collection', () => {
+    const cli = fs.readFileSync(path.join(repoRoot, 'src', 'sync', 'cli.ts'), 'utf-8');
+    const sftp = fs.readFileSync(path.join(repoRoot, 'src', 'sync', 'sftpClient.ts'), 'utf-8');
+
+    assert.match(cli, /from '\.\.\/core\/gitChangedFiles'/);
+    assert.match(sftp, /from '\.\.\/core\/gitChangedFiles'/);
+    assert.doesNotMatch(cli, /function getGitChangedFiles\s*\(/);
+    assert.doesNotMatch(sftp, /function getGitChangedFiles\s*\(/);
+});

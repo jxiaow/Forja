@@ -3,16 +3,17 @@
  * Reads config from ~/.forja/servers.json and ~/.forja/projects/<hash>.json (type=sync)
  */
 import * as path from 'path';
-import * as cp from 'child_process';
-import { clearSyncState, filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syncState';
-import { addServer, readProjectSyncConfig, getServerById, readServers, removeServer, ServerConfig, updateServer, writeProjectSyncConfig } from '../core/serverStore';
-import { ensureRemoteDir, scpUpload, testConnection } from '../core/sshTransport';
+import { clearSyncState, filterNeedsDelete, filterNeedsSync, markDeletedBatch, markSyncedBatch, SyncTargetContext } from '../core/syncState';
+import { addServer, readProjectSyncConfig, getServerById, readServers, removeServer, resolveServerSelector, ServerConfig, updateServer, writeProjectSyncConfig } from '../core/serverStore';
+import { deleteRemoteFile, ensureRemoteDir, scpUpload, testConnection } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
 import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
+import { getGitChangedEntries, GitChangedFile, isIgnored } from '../core/gitChangedFiles';
 
 export interface SyncResult {
     ok: boolean;
     uploaded: string[];
+    deleted: string[];
     skipped: string[];
     skippedDetails?: { file: string; reason: string }[];
     failed: { file: string; error: string }[];
@@ -26,6 +27,7 @@ export interface SyncPlanResult {
     action: 'sync';
     mode: 'dryRun';
     pending: string[];
+    deleted: string[];
     skipped: string[];
     skippedDetails: { file: string; reason: string }[];
     failed: { file: string; error: string }[];
@@ -110,37 +112,26 @@ interface FailedRepoTargets {
     error: string;
 }
 
-// ── Git diff ──
+export { isIgnored };
 
-function getGitChangedFiles(workspaceRoot: string): Promise<string[]> {
-    return new Promise((resolve, reject) => {
-        const isWin = process.platform === 'win32';
-        const separator = isWin ? ' & ' : ' ; ';
-        const cmd = `git diff --name-only HEAD${separator}git diff --name-only --cached${separator}git ls-files --others --exclude-standard`;
-        cp.exec(cmd, { cwd: workspaceRoot }, (err, stdout) => {
-            if (err) {
-                cp.exec('git status --porcelain -uall', { cwd: workspaceRoot }, (err2, stdout2) => {
-                    if (err2) {
-                        // 非 git 仓库时返回空数组而非报错
-                        if (err2.message.includes('not a git repository')) {
-                            resolve([]);
-                            return;
-                        }
-                        reject(new Error(`git 命令失败: ${err2.message}`));
-                        return;
-                    }
-                    const files = stdout2.trim().split('\n')
-                        .filter(line => line.length > 3)
-                        .map(line => line.substring(3).trim())
-                        .filter(f => f.length > 0);
-                    resolve([...new Set(files)]);
-                });
-                return;
-            }
-            const files = stdout.trim().split('\n').map(f => f.trim()).filter(f => f.length > 0);
-            resolve([...new Set(files)]);
-        });
-    });
+interface ResolvedServer {
+    server: ServerConfig | null;
+    error?: string;
+}
+
+function resolveCliServer(selector: string): ResolvedServer {
+    const resolved = resolveServerSelector(selector);
+    if (resolved.ambiguous) {
+        return { server: null, error: `服务器 "${selector}" 匹配到多个服务器，请使用 id` };
+    }
+    if (!resolved.server) {
+        return { server: null, error: `服务器 "${selector}" 未找到` };
+    }
+    return { server: resolved.server };
+}
+
+function remotePathForServer(project: ReturnType<typeof readProjectSyncConfig>, server: ServerConfig, selector: string): string {
+    return project.remotePaths[server.id] || project.remotePaths[selector] || '';
 }
 
 function availableRepoNames(gitRoots: GitRoot[]): string {
@@ -251,22 +242,6 @@ function publicSyncServer(server: ServerConfig): Pick<ServerConfig, 'id' | 'name
     };
 }
 
-// ── 忽略判断 ──
-
-export function isIgnored(relativePath: string, ignoreList: string[]): boolean {
-    const parts = relativePath.split(/[\\/]/);
-    for (const pattern of ignoreList) {
-        for (const part of parts) {
-            if (part === pattern) { return true; }
-            if (pattern.includes('*')) {
-                const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-                if (regex.test(part)) { return true; }
-            }
-        }
-    }
-    return false;
-}
-
 // ── 密码解析（CLI 侧） ──
 
 /**
@@ -309,18 +284,19 @@ async function resolveCliPassword(server: ServerConfig): Promise<string | null> 
 export async function executeSyncCli(workspaceRoot: string, serverId?: string, repoFilter?: string, fileFilters: string[] = []): Promise<SyncResult> {
     const project = readProjectSyncConfig(workspaceRoot);
     if (!project.enabled) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '远程同步未启用' }], server: '', remotePath: '', nextActions: syncFailureActions() };
+        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: '远程同步未启用' }], server: '', remotePath: '', nextActions: syncFailureActions() };
     }
 
     const targetId = serverId || project.selectedServer;
-    const server = getServerById(targetId);
+    const resolvedServer = resolveCliServer(targetId);
+    const server = resolvedServer.server;
     if (!server) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json` }], server: targetId, remotePath: '', nextActions: syncFailureActions() };
+        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: resolvedServer.error || `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json` }], server: targetId, remotePath: '', nextActions: syncFailureActions() };
     }
 
-    const remotePath = project.remotePaths[server.id] || '';
+    const remotePath = remotePathForServer(project, server, targetId);
     if (!remotePath) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未配置远程路径' }], server: server.name, remotePath: '', nextActions: syncFailureActions() };
+        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: '未配置远程路径' }], server: server.name, remotePath: '', nextActions: syncFailureActions() };
     }
 
     // 密码解析（password 模式）
@@ -328,16 +304,16 @@ export async function executeSyncCli(workspaceRoot: string, serverId?: string, r
     if (server.authMode === 'password') {
         resolvedPassword = await resolveCliPassword(server);
         if (!resolvedPassword) {
-            return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: '未提供密码。可通过环境变量 FORJA_SSH_PASSWORD 设置，或在 TTY 中交互输入' }], server: server.name, remotePath, nextActions: ['设置环境变量 FORJA_SSH_PASSWORD 后重试'] };
+            return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: '未提供密码。可通过环境变量 FORJA_SSH_PASSWORD 设置，或在 TTY 中交互输入' }], server: server.name, remotePath, nextActions: ['设置环境变量 FORJA_SSH_PASSWORD 后重试'] };
         }
     }
 
     const repoTargets = resolveRepoTargets(workspaceRoot, remotePath, repoFilter);
     if (!repoTargets.ok) {
-        return { ok: false, uploaded: [], skipped: [], failed: [{ file: '', error: repoTargets.error }], server: server.name, remotePath, nextActions: syncFailureActions() };
+        return { ok: false, uploaded: [], deleted: [], skipped: [], failed: [{ file: '', error: repoTargets.error }], server: server.name, remotePath, nextActions: syncFailureActions() };
     }
 
-    const result: SyncResult = { ok: true, uploaded: [], skipped: [], skippedDetails: [], failed: [], server: server.name, remotePath: repoTargets.remotePath };
+    const result: SyncResult = { ok: true, uploaded: [], deleted: [], skipped: [], skippedDetails: [], failed: [], server: server.name, remotePath: repoTargets.remotePath };
     const ignore = project.ignore;
 
     for (const gitRoot of repoTargets.gitRoots) {
@@ -345,32 +321,53 @@ export async function executeSyncCli(workspaceRoot: string, serverId?: string, r
         const repoRemotePath = remotePathForRepo(remotePath, gitRoot, repoTargets.remotePathOverrides);
         const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
 
-        const changedFiles = fileFilters.length > 0
-            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters)
-            : await getGitChangedFiles(gitDir);
-        if (changedFiles.length === 0) { continue; }
+        const changedEntries: GitChangedFile[] = fileFilters.length > 0
+            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters).map(file => ({ path: file, kind: 'upload', status: '??' }))
+            : await getGitChangedEntries(gitDir);
+        if (changedEntries.length === 0) { continue; }
 
-        const notIgnored: string[] = [];
-        for (const f of changedFiles) {
-            if (isIgnored(f, ignore)) {
-                const file = `${gitName}/${f}`;
+        const uploadCandidates: string[] = [];
+        const deleteCandidates: string[] = [];
+        for (const change of changedEntries) {
+            if (isIgnored(change.path, ignore)) {
+                const file = `${gitName}/${change.path}`;
                 result.skipped.push(file);
                 result.skippedDetails?.push({ file, reason: 'ignored' });
             }
-            else { notIgnored.push(f); }
+            else if (change.kind === 'delete') { deleteCandidates.push(change.path); }
+            else { uploadCandidates.push(change.path); }
         }
 
-        const needSync = filterNeedsSync(gitDir, notIgnored, syncTarget);
-        for (const f of notIgnored.filter(f => !needSync.includes(f))) {
+        const needSync = filterNeedsSync(gitDir, uploadCandidates, syncTarget);
+        const needDelete = filterNeedsDelete(gitDir, deleteCandidates, syncTarget);
+        for (const f of uploadCandidates.filter(f => !needSync.includes(f))) {
             const file = `${gitName}/${f}`;
             result.skipped.push(file);
             result.skippedDetails?.push({ file, reason: 'alreadySynced' });
         }
+        for (const f of deleteCandidates.filter(f => !needDelete.includes(f))) {
+            const file = `${gitName}/${f}`;
+            result.skipped.push(file);
+            result.skippedDetails?.push({ file, reason: 'alreadyDeleted' });
+        }
 
-        if (needSync.length === 0) { continue; }
+        if (needSync.length === 0 && needDelete.length === 0) { continue; }
 
         const remoteDirs = new Set<string>();
         const successFiles: string[] = [];
+        const deletedFiles: string[] = [];
+
+        for (const relativePath of needDelete) {
+            const remoteFile = repoRemotePath + '/' + relativePath.replace(/\\/g, '/');
+            try {
+                await deleteRemoteFile(server, remoteFile, resolvedPassword);
+                result.deleted.push(`${gitName}/${relativePath}`);
+                deletedFiles.push(relativePath);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                result.failed.push({ file: `${gitName}/${relativePath}`, error: msg });
+            }
+        }
 
         for (const relativePath of needSync) {
             const localFile = path.join(gitDir, relativePath);
@@ -401,6 +398,9 @@ export async function executeSyncCli(workspaceRoot: string, serverId?: string, r
         if (successFiles.length > 0) {
             markSyncedBatch(gitDir, successFiles, syncTarget);
         }
+        if (deletedFiles.length > 0) {
+            markDeletedBatch(gitDir, deletedFiles, syncTarget);
+        }
     }
 
     result.ok = result.failed.length === 0;
@@ -414,6 +414,7 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
         action: 'sync',
         mode: 'dryRun',
         pending: [],
+        deleted: [],
         skipped: [],
         skippedDetails: [],
         failed: [{ file: '', error }],
@@ -428,12 +429,13 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
     }
 
     const targetId = serverId || project.selectedServer;
-    const server = getServerById(targetId);
+    const resolvedServer = resolveCliServer(targetId);
+    const server = resolvedServer.server;
     if (!server) {
-        return empty(`服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json`, targetId, '');
+        return empty(resolvedServer.error || `服务器 "${targetId}" 未找到，请检查 ~/.forja/servers.json`, targetId, '');
     }
 
-    const remotePath = project.remotePaths[server.id] || '';
+    const remotePath = remotePathForServer(project, server, targetId);
     if (!remotePath) {
         return empty('未配置远程路径', server.name, '');
     }
@@ -448,6 +450,7 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
         action: 'sync',
         mode: 'dryRun',
         pending: [],
+        deleted: [],
         skipped: [],
         skippedDetails: [],
         failed: [],
@@ -462,28 +465,37 @@ export async function planSyncCli(workspaceRoot: string, serverId?: string, repo
         const { dir: gitDir, name: gitName } = gitRoot;
         const repoRemotePath = remotePathForRepo(remotePath, gitRoot, repoTargets.remotePathOverrides);
         const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
-        const changedFiles = fileFilters.length > 0
-            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters)
-            : await getGitChangedFiles(gitDir);
-        if (changedFiles.length === 0) { continue; }
+        const changedEntries: GitChangedFile[] = fileFilters.length > 0
+            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters).map(file => ({ path: file, kind: 'upload', status: '??' }))
+            : await getGitChangedEntries(gitDir);
+        if (changedEntries.length === 0) { continue; }
 
-        const notIgnored: string[] = [];
-        for (const f of changedFiles) {
-            if (isIgnored(f, project.ignore)) {
-                const file = `${gitName}/${f}`;
+        const uploadCandidates: string[] = [];
+        const deleteCandidates: string[] = [];
+        for (const change of changedEntries) {
+            if (isIgnored(change.path, project.ignore)) {
+                const file = `${gitName}/${change.path}`;
                 plan.skipped.push(file);
                 plan.skippedDetails.push({ file, reason: 'ignored' });
             }
-            else { notIgnored.push(f); }
+            else if (change.kind === 'delete') { deleteCandidates.push(change.path); }
+            else { uploadCandidates.push(change.path); }
         }
 
-        const needSync = filterNeedsSync(gitDir, notIgnored, syncTarget);
-        for (const f of notIgnored.filter(f => !needSync.includes(f))) {
+        const needSync = filterNeedsSync(gitDir, uploadCandidates, syncTarget);
+        const needDelete = filterNeedsDelete(gitDir, deleteCandidates, syncTarget);
+        for (const f of uploadCandidates.filter(f => !needSync.includes(f))) {
             const file = `${gitName}/${f}`;
             plan.skipped.push(file);
             plan.skippedDetails.push({ file, reason: 'alreadySynced' });
         }
+        for (const f of deleteCandidates.filter(f => !needDelete.includes(f))) {
+            const file = `${gitName}/${f}`;
+            plan.skipped.push(file);
+            plan.skippedDetails.push({ file, reason: 'alreadyDeleted' });
+        }
         plan.pending.push(...needSync.map(f => `${gitName}/${f}`));
+        plan.deleted.push(...needDelete.map(f => `${gitName}/${f}`));
     }
 
     return plan;
@@ -493,8 +505,9 @@ export function statusSyncCli(workspaceRoot: string, serverId?: string): SyncSta
     const project = readProjectSyncConfig(workspaceRoot);
     const servers = readServers();
     const targetId = serverId || project.selectedServer;
-    const server = targetId ? getServerById(targetId) : null;
-    const remotePath = server ? (project.remotePaths[server.id] || '') : '';
+    const resolvedServer = targetId ? resolveCliServer(targetId) : { server: null };
+    const server = resolvedServer.server;
+    const remotePath = server ? remotePathForServer(project, server, targetId) : '';
 
     const checks = {
         enabled: project.enabled,
@@ -516,7 +529,7 @@ export function statusSyncCli(workspaceRoot: string, serverId?: string): SyncSta
             enabled: '远程同步未启用',
             servers: '未添加同步服务器',
             selectedServer: '未选择同步服务器',
-            server: `服务器 "${targetId}" 未找到`,
+            server: resolvedServer.error || `服务器 "${targetId}" 未找到`,
             remotePath: '未配置远程路径'
         };
         return { level: 'error' as const, message: messages[key] || key };
@@ -572,12 +585,13 @@ export function showSyncServerCli(workspaceRoot: string, serverId: string | null
         };
     }
 
-    const server = getServerById(targetId);
+    const resolvedServer = resolveCliServer(targetId);
+    const server = resolvedServer.server;
     if (!server) {
         return {
             ok: false,
             action: 'server',
-            diagnostics: [{ level: 'error', message: `服务器 "${targetId}" 未找到` }],
+            diagnostics: [{ level: 'error', message: resolvedServer.error || `服务器 "${targetId}" 未找到` }],
             nextActions: ['forja sync servers --json']
         };
     }
@@ -587,7 +601,7 @@ export function showSyncServerCli(workspaceRoot: string, serverId: string | null
         action: 'server',
         server: publicServer(server),
         selected: project.selectedServer === server.id,
-        remotePath: project.remotePaths[server.id] || '',
+        remotePath: remotePathForServer(project, server, targetId),
         diagnostics: [],
         nextActions: ['forja sync test-connection --json']
     };
@@ -623,58 +637,65 @@ export function addSyncServerCli(fields: Partial<Omit<ServerConfig, 'id'>>): Syn
 export function updateSyncServerCli(serverId: string | null, fields: Partial<Omit<ServerConfig, 'id'>>): SyncServerResult {
     if (!serverId) { return errorSyncServerResult('update-server', 'update-server 需要 --server <id>'); }
     if (Object.keys(fields).length === 0) { return errorSyncServerResult('update-server', 'update-server 至少需要一个待修改字段'); }
-    if (!getServerById(serverId)) { return errorSyncServerResult('update-server', `服务器 "${serverId}" 未找到`); }
+    const resolvedServer = resolveCliServer(serverId);
+    if (!resolvedServer.server) { return errorSyncServerResult('update-server', resolvedServer.error || `服务器 "${serverId}" 未找到`); }
 
-    updateServer(serverId, fields);
-    const updated = getServerById(serverId);
+    updateServer(resolvedServer.server.id, fields);
+    const updated = getServerById(resolvedServer.server.id);
     if (!updated) { return errorSyncServerResult('update-server', `服务器 "${serverId}" 未找到`); }
     return { ok: true, action: 'update-server', server: publicServer(updated), diagnostics: [] };
 }
 
 export function removeSyncServerCli(serverId: string | null): SyncServerResult {
     if (!serverId) { return errorSyncServerResult('remove-server', 'remove-server 需要 --server <id>'); }
-    const server = getServerById(serverId);
-    if (!server) { return errorSyncServerResult('remove-server', `服务器 "${serverId}" 未找到`); }
+    const resolvedServer = resolveCliServer(serverId);
+    const server = resolvedServer.server;
+    if (!server) { return errorSyncServerResult('remove-server', resolvedServer.error || `服务器 "${serverId}" 未找到`); }
 
-    removeServer(serverId);
+    removeServer(server.id);
     return { ok: true, action: 'remove-server', server: publicServer(server), diagnostics: [] };
 }
 
 export function useSyncCli(workspaceRoot: string, serverId: string | null, remotePath: string | null, enabled: boolean | null): SyncUseResult {
     const current = readProjectSyncConfig(workspaceRoot);
-    const selectedServer = serverId || current.selectedServer;
-    if (!selectedServer && enabled === null) {
+    const selectedServerInput = serverId || current.selectedServer;
+    if (!selectedServerInput && enabled === null) {
         return {
             ok: false,
             action: 'use',
             enabled: current.enabled,
-            selectedServer,
+            selectedServer: selectedServerInput,
             remotePath: '',
             diagnostics: [{ level: 'error', message: 'use 需要 --server <id>、--enable 或 --disable' }],
             nextActions: ['forja sync servers --json']
         };
     }
 
-    if (selectedServer && !getServerById(selectedServer)) {
+    const resolvedServer = selectedServerInput ? resolveCliServer(selectedServerInput) : { server: null };
+    if (selectedServerInput && !resolvedServer.server) {
         return {
             ok: false,
             action: 'use',
             enabled: current.enabled,
-            selectedServer,
+            selectedServer: selectedServerInput,
             remotePath: '',
-            diagnostics: [{ level: 'error', message: `服务器 "${selectedServer}" 未找到` }],
+            diagnostics: [{ level: 'error', message: resolvedServer.error || `服务器 "${selectedServerInput}" 未找到` }],
             nextActions: ['forja sync servers --json']
         };
     }
+    const selectedServer = resolvedServer.server?.id || '';
 
     const remotePaths = { ...current.remotePaths };
+    if (selectedServer && selectedServerInput !== selectedServer && remotePaths[selectedServer] === undefined && remotePaths[selectedServerInput]) {
+        remotePaths[selectedServer] = remotePaths[selectedServerInput];
+    }
     if (remotePath !== null) {
         if (!selectedServer) {
             return {
                 ok: false,
                 action: 'use',
                 enabled: current.enabled,
-                selectedServer,
+                selectedServer: selectedServerInput,
                 remotePath,
                 diagnostics: [{ level: 'error', message: '--remote-path 需要同时指定或已有 --server <id>' }],
                 nextActions: ['forja sync use --server <id> --remote-path <path> --json']
@@ -708,7 +729,8 @@ export function useSyncCli(workspaceRoot: string, serverId: string | null, remot
 export async function testSyncConnectionCli(workspaceRoot: string, serverId?: string): Promise<SyncTestConnectionResult> {
     const project = readProjectSyncConfig(workspaceRoot);
     const targetId = serverId || project.selectedServer;
-    const server = targetId ? getServerById(targetId) : null;
+    const resolvedServer = targetId ? resolveCliServer(targetId) : { server: null };
+    const server = resolvedServer.server;
     if (!targetId) {
         return {
             ok: false,
@@ -723,7 +745,7 @@ export async function testSyncConnectionCli(workspaceRoot: string, serverId?: st
             ok: false,
             action: 'test-connection',
             server: null,
-            diagnostics: [{ level: 'error', message: `服务器 "${targetId}" 未找到` }],
+            diagnostics: [{ level: 'error', message: resolvedServer.error || `服务器 "${targetId}" 未找到` }],
             nextActions: ['forja sync servers --json']
         };
     }
@@ -1199,7 +1221,7 @@ export async function runSyncCli(argv: string[]): Promise<void> {
         if (wantsJson) {
             console.log(JSON.stringify(result, null, 2));
         } else if (result.ok) {
-            console.log(`同步完成: ${result.uploaded.length} 个文件已上传`);
+            console.log(`同步完成: ${result.uploaded.length} 个文件已上传，${result.deleted.length} 个文件已删除`);
             if (result.skipped.length > 0) {
                 console.log(`跳过: ${result.skipped.length} 个`);
                 printSkippedDetails(result.skippedDetails);

@@ -8,8 +8,8 @@
 forja <subcommand> [action] [options]
 ```
 
-- 当前已实现子命令：`qt` | `sdk` | `sync` | `cleanup`
-- `remote` 相关内容是远程部署设计稿，当前 CLI dispatcher 尚未实现 `forja remote ...`
+- 当前已实现子命令：`qt` | `sdk` | `remote` | `sync` | `cleanup`
+- `remote` 基于 sync server / remotePath 配置执行远程状态检查、bootstrap、工作区准备和 Qt/SDK 命令桥接
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -121,7 +121,27 @@ forja sync remove-server --server server-1 --json
 | `--arch <arch>` | `x86` \| `x64` | 平台默认值 / 已保存值 | 目标架构；非 Windows 只支持 `x64` |
 | `--vs-dev-cmd <path>` | string | 自动检测 / 已保存值 | Windows `VsDevCmd.bat` 路径 |
 
-## 远程模式参数（设计稿，暂未实现）
+## Remote 命令参数矩阵
+
+`forja remote` 是顶层子命令，读取 sync 配置中的 server 和 remotePath 作为远端工作区基础配置。
+
+| 命令 | 允许参数 |
+|------|----------|
+| `status` | `--workspace`, `--json` |
+| `doctor` | `--workspace`, `--json`, `--bootstrap` |
+| `test` | `--workspace`, `--json`, `--bootstrap` |
+| `bootstrap` | `--workspace`, `--json` |
+| `unlock` | `--workspace`, `--json`, `--lock-id`, `--force` |
+| `build-order status\|set\|clear` | `--workspace`, `--json` |
+| `transfer status\|set\|clear\|run` | `--workspace`, `--json`, `--server`, `--path`, `--artifact` |
+| `qt status\|init\|use\|build\|clean\|qmake\|run\|stop\|ps` | `--workspace`, `--json` |
+| `qt restore\|reset` | `--workspace`, `--json`, `--repo`, `-- <paths...>` |
+| `qt clean-untracked` | `--workspace`, `--json`, `--repo`, `--recursive`, `-- <paths...>` |
+| `sdk status\|init\|use\|build\|rebuild\|clean` | `--workspace`, `--json` |
+| `sdk restore\|reset` | `--workspace`, `--json`, `--repo`, `-- <paths...>` |
+| `sdk clean-untracked` | `--workspace`, `--json`, `--repo`, `--recursive`, `-- <paths...>` |
+
+## 远程模式参数（历史设计）
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -484,7 +504,7 @@ type DeployStage = "preCheck" | "branchSync" | "baselineCheck" | "build" | "tran
 
 ---
 
-## `forja remote test` 输出结构（设计稿，暂未实现）
+## `forja remote test` 输出结构
 
 ```typescript
 interface RemoteTestResult {

@@ -14,6 +14,7 @@ import { createLogger, initLogger } from './vscode/logger';
 import { detectEnv } from './qt/env/envDetector';
 import { ensureLocalStateDir } from './qt/shared/localState';
 import { registerSyncWatcher } from './sync/syncWatcher';
+import { registerRemoteCommands } from './remote/vscode/commands';
 import { initSettingsStore } from './vscode/settingsStore';
 import { registerWorkspaceWatcher } from './vscode/workspaceResolver';
 import { activateSdk } from './sdk/sdkExtension';
@@ -78,6 +79,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerPriWatcher(context);
     registerDebugSessionWatcher(context);
     registerSyncWatcher(context);
+    registerRemoteCommands(context);
 
     // 全局任务结束监听：兜底重置 isBuilding / isRunning（防止关闭终端后状态卡住）
     context.subscriptions.push(

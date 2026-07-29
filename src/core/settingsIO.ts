@@ -51,10 +51,49 @@ export interface SyncSettings {
     ignore: string[];
 }
 
+export interface RemoteBuildOrderItem {
+    target: 'qt' | 'sdk';
+    action: 'build' | 'rebuild' | 'clean' | 'qmake';
+    args: string[];
+}
+
+export interface RemoteTransferSettings {
+    deployServer: string;
+    deployPath: string;
+    artifacts: string[];
+}
+
+export interface RemoteRepoAssetSettings {
+    localPath: string;
+    remotePath?: string;
+}
+
+export interface RemoteRepoSettings {
+    localName: string;
+    remoteName: string;
+    role: 'primary' | 'mapped' | 'remote-only' | 'existing-remote' | 'skip';
+    remotePath?: string;
+    baseline?: 'auto' | 'status-only';
+    overlay?: boolean;
+    mount?: 'symlink';
+    assets?: RemoteRepoAssetSettings[];
+}
+
+export interface RemoteSettings {
+    remoteForjaBin: string;
+    buildOrder: RemoteBuildOrderItem[];
+    transfer: RemoteTransferSettings | null;
+    workspaceMode: 'legacy' | 'staged';
+    profile: string;
+    remoteWorkspace: string;
+    repos: RemoteRepoSettings[];
+}
+
 export interface ForjaSettings {
     qt: QtSettings;
     sdk: SdkSettings;
     sync: SyncSettings;
+    remote: RemoteSettings;
 }
 
 // ── 默认值 ──
@@ -95,10 +134,21 @@ export const DEFAULT_SYNC: Readonly<SyncSettings> = {
     ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release']
 };
 
+export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
+    remoteForjaBin: '',
+    buildOrder: [],
+    transfer: null,
+    workspaceMode: 'legacy',
+    profile: '',
+    remoteWorkspace: '',
+    repos: []
+};
+
 export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
     qt: DEFAULT_QT,
     sdk: DEFAULT_SDK,
-    sync: DEFAULT_SYNC
+    sync: DEFAULT_SYNC,
+    remote: DEFAULT_REMOTE
 };
 
 // ── 路径 ──
@@ -113,7 +163,7 @@ export function projectsDir(): string {
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
-export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string {
+export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync' | 'remote'): string {
     const normalized = workspace.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     const hash = crypto.createHash('sha256').update(`${normalized}:${type}`).digest('hex').slice(0, 12);
     return path.join(projectsDir(), `${hash}.json`);
@@ -124,7 +174,7 @@ export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'
  * 子目录没有自己的配置时，自动继承父目录的。
  * 返回找到的第一个配置文件路径，没找到则返回当前 workspace 路径（用于新建）。
  */
-export function resolveConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string {
+export function resolveConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync' | 'remote'): string {
     let current = workspace;
     for (;;) {
         const filePath = projectConfigPath(current, type);
@@ -228,6 +278,30 @@ export function saveSyncSettings(workspace: string, settings: SyncSettings): voi
     fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
 }
 
+// ── Remote 配置读写 ──
+
+export function loadRemoteSettings(workspace: string): RemoteSettings {
+    const filePath = resolveConfigPath(workspace, 'remote');
+    try {
+        if (fs.existsSync(filePath)) {
+            const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            return sanitizeRemote(raw);
+        }
+    } catch { /* file missing or malformed */ }
+    return { ...DEFAULT_REMOTE };
+}
+
+export function saveRemoteSettings(workspace: string, settings: RemoteSettings): void {
+    const filePath = projectConfigPath(workspace, 'remote');
+    _ensureDir(filePath);
+    const data: Record<string, unknown> = {
+        workspace,
+        type: 'remote',
+        ...settings
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+}
+
 // ── VS 路径推导 ──
 
 export function resolveVsDevShellPath(vsInstall: string): string {
@@ -324,7 +398,6 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
         qmakeReminderEnabled: isBool(raw.qmakeReminderEnabled) ? raw.qmakeReminderEnabled : d.qmakeReminderEnabled
     };
 }
-
 function sanitizeSdk(raw: Record<string, unknown>): SdkSettings {
     const d = DEFAULT_SDK;
     return {
@@ -335,7 +408,6 @@ function sanitizeSdk(raw: Record<string, unknown>): SdkSettings {
         ...(isNumber(raw.scanDepth) && raw.scanDepth >= 1 ? { scanDepth: raw.scanDepth } : {})
     };
 }
-
 function sanitizeSync(raw: Record<string, unknown>): SyncSettings {
     const d = DEFAULT_SYNC;
     const remotePaths: Record<string, string> = {};
@@ -353,3 +425,93 @@ function sanitizeSync(raw: Record<string, unknown>): SyncSettings {
     };
 }
 
+function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
+    const d = DEFAULT_REMOTE;
+    const buildOrder: RemoteBuildOrderItem[] = [];
+    if (Array.isArray(raw.buildOrder)) {
+        for (const item of raw.buildOrder) {
+            if (!item || typeof item !== 'object') { continue; }
+            const entry = item as Record<string, unknown>;
+            const target = entry.target;
+            const action = entry.action;
+            if ((target !== 'qt' && target !== 'sdk') || !isRemoteBuildOrderAction(target, action)) { continue; }
+            buildOrder.push({
+                target,
+                action,
+                args: isStringArray(entry.args) ? entry.args : []
+            });
+        }
+    }
+
+    let transfer: RemoteTransferSettings | null = null;
+    if (raw.transfer && typeof raw.transfer === 'object') {
+        const entry = raw.transfer as Record<string, unknown>;
+        if (isString(entry.deployServer) && isString(entry.deployPath) && isStringArray(entry.artifacts)) {
+            transfer = {
+                deployServer: entry.deployServer,
+                deployPath: entry.deployPath,
+                artifacts: entry.artifacts
+            };
+        }
+    }
+
+    const repos: RemoteRepoSettings[] = [];
+    if (Array.isArray(raw.repos)) {
+        for (const item of raw.repos) {
+            if (!item || typeof item !== 'object') { continue; }
+            const entry = item as Record<string, unknown>;
+            if (!isString(entry.localName) || !isString(entry.remoteName) || !isRemoteRepoRole(entry.role)) { continue; }
+            const repo: RemoteRepoSettings = {
+                localName: entry.localName,
+                remoteName: entry.remoteName,
+                role: entry.role
+            };
+            if (isString(entry.remotePath)) { repo.remotePath = entry.remotePath; }
+            if (entry.baseline === 'auto' || entry.baseline === 'status-only') { repo.baseline = entry.baseline; }
+            if (isBool(entry.overlay)) { repo.overlay = entry.overlay; }
+            if (entry.mount === 'symlink') { repo.mount = entry.mount; }
+            const assets = sanitizeRemoteRepoAssets(entry.assets);
+            if (assets.length > 0) { repo.assets = assets; }
+            repos.push(repo);
+        }
+    }
+
+    return {
+        remoteForjaBin: isString(raw.remoteForjaBin) ? raw.remoteForjaBin : d.remoteForjaBin,
+        buildOrder,
+        transfer,
+        workspaceMode: raw.workspaceMode === 'staged' || raw.workspaceMode === 'managed' ? 'staged' : d.workspaceMode,
+        profile: isString(raw.profile) ? raw.profile : d.profile,
+        remoteWorkspace: isString(raw.remoteWorkspace) ? raw.remoteWorkspace : d.remoteWorkspace,
+        repos
+    };
+}
+
+function sanitizeRemoteRepoAssets(raw: unknown): RemoteRepoAssetSettings[] {
+    if (!Array.isArray(raw)) { return []; }
+    const assets: RemoteRepoAssetSettings[] = [];
+    for (const item of raw) {
+        if (!item || typeof item !== 'object') { continue; }
+        const entry = item as Record<string, unknown>;
+        if (!isString(entry.localPath)) { continue; }
+        const asset: RemoteRepoAssetSettings = { localPath: entry.localPath };
+        if (isString(entry.remotePath) && entry.remotePath) { asset.remotePath = entry.remotePath; }
+        assets.push(asset);
+    }
+    return assets;
+}
+
+function isRemoteBuildOrderAction(target: 'qt' | 'sdk', action: unknown): action is RemoteBuildOrderItem['action'] {
+    if (target === 'qt') {
+        return action === 'build' || action === 'clean' || action === 'qmake';
+    }
+    return action === 'build' || action === 'rebuild' || action === 'clean';
+}
+
+function isRemoteRepoRole(value: unknown): value is RemoteRepoSettings['role'] {
+    return value === 'primary'
+        || value === 'mapped'
+        || value === 'remote-only'
+        || value === 'existing-remote'
+        || value === 'skip';
+}

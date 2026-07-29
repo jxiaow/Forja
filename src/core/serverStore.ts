@@ -171,6 +171,24 @@ export function getServerById(id: string): ServerConfig | null {
     return servers.find(s => s.id === id) || null;
 }
 
+export interface ServerSelectorResult {
+    server: ServerConfig | null;
+    ambiguous: boolean;
+}
+
+export function resolveServerSelector(selector: string): ServerSelectorResult {
+    const servers = readServers();
+    const exact = servers.find(s => s.id === selector);
+    if (exact) {
+        return { server: exact, ambiguous: false };
+    }
+    const named = servers.filter(s => s.name === selector);
+    if (named.length === 1) {
+        return { server: named[0], ambiguous: false };
+    }
+    return { server: null, ambiguous: named.length > 1 };
+}
+
 // ── 项目同步配置（读写统一 settingsIO 的 sync 配置） ──
 
 const DEFAULT_IGNORE = DEFAULT_SYNC.ignore;
