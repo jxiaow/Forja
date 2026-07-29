@@ -6,4 +6,5 @@ node_modules/
 .vscode-test/
 .opencode/
 .superpowers/
+.compilot/
 .qtpilot/

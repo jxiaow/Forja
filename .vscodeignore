@@ -2,7 +2,6 @@
 .vscode-test/**
 .kiro/**
 src/**
-cli/**
 dist/**
 scripts/**
 docs/**
@@ -12,11 +11,15 @@ docs/**
 .superpowers/**
 .work/**
 .qtpilot/**
+.compilot/**
 **/tsconfig.json
 **/.eslintrc.json
-**/*.map
 **/*.ts
-!node_modules/**
 node_modules/**
 *.vsix
 AGENTS.md
+out/test/**
+out/**/*.map
+skills/**
+harness/**
+*.bak

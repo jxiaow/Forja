@@ -2,18 +2,18 @@ import * as vscode from 'vscode';
 import { getState, setState } from '../../core/stateManager';
 import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
-import { detectEnv } from '../../env/envDetector';
+import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
          getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath,
-         getFileSyncPromptEnabled, getQmakeReminderEnabled, getWorkspaceRoot } from '../../core/configService';
+         getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../core/configService';
 import { createLogger } from '../../core/logger';
-import { getEffectiveProjectName } from '../../project/projectDisplay';
-import { readServers, readProjectSyncConfig } from '../../sync/sftpClient';
+import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
+import { readServers, readProjectSyncConfig } from '../../qt/sync/sftpClient';
 
 const logger = createLogger('ConfigPanelView');
 
 export class ConfigPanel implements vscode.WebviewViewProvider {
-    static readonly viewId = 'qtPilot.configView';
+    static readonly viewId = 'compilot.configView';
     private _view?: vscode.WebviewView;
     private readonly _version: string;
 
@@ -76,7 +76,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         this._view?.webview.postMessage({ command: 'envUpdated', isWin, env: {
             vs: env?.vs ? `VS ${env.vs.version} ${env.vs.edition}` : null,
             qt: env?.qt ? `Qt ${env.qt.version} (${env.qt.compiler})` : null,
-            jom: env?.jom ?? false
+            jom: !!env?.jom
         }});
         const manualShell = getVsDevShellPath();
         const autoShell = env?.vs?.devShellPath || '';
@@ -115,10 +115,11 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             manualProPath: getManualProPath(),
             fileSyncPromptEnabled: getFileSyncPromptEnabled(),
             qmakeReminderEnabled: getQmakeReminderEnabled(),
+            rccProjectPath: getRccProjectPath(),
             version: this._version,
             ...(() => {
                 const wsRoot = getWorkspaceRoot();
-                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.qtpilot', 'build', 'debug', 'release'] };
+                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'] };
                 const servers = readServers();
                 return {
                     syncEnabled: sync.enabled,

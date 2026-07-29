@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { parseRuntimeLibPaths, resolveRuntimeTarget } from '../shared/runtimeTarget';
+import { parseRuntimeLibPaths, resolveRuntimeTarget } from '../qt/shared/runtimeTarget';
 
 function makeWorkspace(): string {
-    return fs.mkdtempSync(path.join(os.tmpdir(), 'qt-pilot-runtime-'));
+    return fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-runtime-'));
 }
 
 test('resolveRuntimeTarget reads windows makefile output path', () => {

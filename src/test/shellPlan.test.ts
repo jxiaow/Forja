@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createShellPlanBuilder, BuildConfig } from '../platform/shellPlan';
-import { winConfig } from '../platform/win/builder';
+import { createShellPlanBuilder, BuildConfig } from '../qt/platform/shellPlan';
+import { winConfig } from '../qt/platform/win/builder';
 
 const cfg: BuildConfig = {
     vsDevShell: 'C:/VS/Common7/Tools/Launch-VsDevShell.ps1',
@@ -10,7 +10,8 @@ const cfg: BuildConfig = {
     proFile: 'demo.pro',
     arch: 'x86',
     mode: 'debug',
-    qmakeTarget: ''
+    qmakeTarget: '',
+    jomPath: ''
 };
 
 test('shell plan builder creates qmake command without vscode dependency', () => {
@@ -20,6 +21,7 @@ test('shell plan builder creates qmake command without vscode dependency', () =>
     assert.equal(plan.matcher, '$msCompile');
     assert.deepEqual(plan.commands, [
         'call "C:/VS/Common7/Tools/VsDevCmd.bat" -arch=x86 -no_logo',
+        'set "PATH=D:\\Qt\\5.15.2\\msvc2019\\bin;%PATH%"',
         'cd /d "D:/demo"',
         'qmake demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86'
     ]);

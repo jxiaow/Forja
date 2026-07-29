@@ -1,10 +1,10 @@
 import * as path from 'path';
-import { BuildConfig } from '../platform/builder';
+import { BuildConfig } from '../qt/platform/builder';
 import { getState } from './stateManager';
-import { decodeSelectedProject } from '../project/selectedProject';
-import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
-import { readLocalCache } from '../shared/localState';
-import { getSetting, setSetting } from './settingsStore';
+import { decodeSelectedProject } from '../qt/project/selectedProject';
+import { resolveBuildConfig, mergeConfigInputs } from '../qt/shared/configResolver';
+import { readLocalCache } from '../qt/shared/localState';
+import { getSetting, setSetting, QtPilotSettings } from './settingsStore';
 import { resolveProjectRoot } from './workspaceResolver';
 
 // ── 配置读取 ──
@@ -66,8 +66,16 @@ export function getQmakeReminderEnabled(): boolean {
     return getSetting('qmakeReminderEnabled');
 }
 
-export function updateConfig(key: string, value: unknown): void {
-    setSetting(key as any, value as any);
+export function getRccProjectPath(): string {
+    return getSetting('rccProjectPath');
+}
+
+export function getCustomCommands(): { name: string; command: string }[] {
+    return getSetting('customCommands');
+}
+
+export function updateConfig<K extends keyof QtPilotSettings>(key: K, value: QtPilotSettings[K]): void {
+    setSetting(key, value);
 }
 
 // ── BuildConfig 组装 ──
@@ -90,19 +98,21 @@ export function getBuildConfig(): BuildConfig {
         }
     }
 
-    // Priority: settings > env detection > .qtpilot/cache.json > defaults
+    // Priority: settings > env detection > .compilot/cache.json > defaults
     const localCache = root ? readLocalCache(root) : null;
 
     const inputs = mergeConfigInputs(
         // Lowest priority: local cache (auto-detected values)
         {
             qtPath: localCache?.detected.qt?.path || '',
-            vsDevShell: localCache?.detected.vs?.devShellPath || ''
+            vsDevShell: localCache?.detected.vs?.devShellPath || '',
+            jomPath: localCache?.detected.jom || ''
         },
         // Environment detection from extension (same level as cache, but fresher)
         {
             qtPath: env?.qt?.path || '',
-            vsDevShell: env?.vs?.devShellPath || ''
+            vsDevShell: env?.vs?.devShellPath || '',
+            jomPath: env?.jom || ''
         },
         // Highest priority: explicit settings + current state
         {

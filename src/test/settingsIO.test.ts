@@ -12,7 +12,7 @@ import {
 } from '../core/settingsIO';
 
 function makeWorkspace(): string {
-    return fs.mkdtempSync(path.join(os.tmpdir(), 'qt-pilot-settings-'));
+    return fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-settings-'));
 }
 
 // ── loadSettings ──
@@ -25,7 +25,7 @@ test('loadSettings returns defaults when settings.json does not exist', () => {
 
 test('loadSettings merges partial file with defaults', () => {
     const workspace = makeWorkspace();
-    const dir = path.join(workspace, '.qtpilot');
+    const dir = path.join(workspace, '.compilot');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({
         qtPath: 'D:/Qt/5.15',
@@ -35,7 +35,7 @@ test('loadSettings merges partial file with defaults', () => {
     const settings = loadSettings(workspace);
     assert.equal(settings.qtPath, 'D:/Qt/5.15');
     assert.equal(settings.mode, 'release');
-    // 未指定的字段使用默认值
+    // 未指定的字段使用默认�?
     assert.equal(settings.arch, 'x86');
     assert.equal(settings.cStandard, 'c11');
     assert.equal(settings.fileSyncPromptEnabled, true);
@@ -44,7 +44,7 @@ test('loadSettings merges partial file with defaults', () => {
 
 test('loadSettings returns defaults when settings.json is malformed', () => {
     const workspace = makeWorkspace();
-    const dir = path.join(workspace, '.qtpilot');
+    const dir = path.join(workspace, '.compilot');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'settings.json'), '{ invalid json !!!', 'utf8');
 
@@ -54,7 +54,7 @@ test('loadSettings returns defaults when settings.json is malformed', () => {
 
 test('loadSettings preserves all field types correctly', () => {
     const workspace = makeWorkspace();
-    const dir = path.join(workspace, '.qtpilot');
+    const dir = path.join(workspace, '.compilot');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({
         qtPath: 'D:/Qt',
@@ -78,7 +78,7 @@ test('loadSettings preserves all field types correctly', () => {
 
 // ── saveSettings ──
 
-test('saveSettings creates .qtpilot directory and writes settings.json', () => {
+test('saveSettings creates .compilot directory and writes settings.json', () => {
     const workspace = makeWorkspace();
     const settings: QtPilotSettings = {
         ...DEFAULT_SETTINGS,
@@ -142,7 +142,7 @@ test('saveSettings writes valid JSON with 4-space indentation', () => {
 
 // ── settingsFilePath ──
 
-test('settingsFilePath returns correct path under .qtpilot', () => {
+test('settingsFilePath returns correct path under .compilot', () => {
     const result = settingsFilePath('C:/workspace');
-    assert.equal(result, path.join('C:/workspace', '.qtpilot', 'settings.json'));
+    assert.equal(result, path.join('C:/workspace', '.compilot', 'settings.json'));
 });

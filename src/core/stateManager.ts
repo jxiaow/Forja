@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { ProjectInfo } from '../project/projectManager';
-import { EnvInfo } from '../env/envDetector';
+import { ProjectInfo } from '../qt/project/projectManager';
+import { EnvInfo } from '../qt/env/envDetector';
 import { getSetting, setSetting } from './settingsStore';
 
 export type BuildMode = 'debug' | 'release';

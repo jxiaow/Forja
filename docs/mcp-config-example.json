@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "qt-pilot": {
-      "command": "qt-pilot-mcp",
-      "disabled": false,
-      "autoApprove": ["qt_status", "qt_detect", "qt_projects"]
-    }
-  }
-}

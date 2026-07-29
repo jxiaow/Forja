@@ -5,24 +5,24 @@ import * as os from 'os';
 import * as path from 'path';
 import {
     ensureLocalStateDir,
-    ensureQtpilotGitignored,
+    ensureCompilotGitignored,
     writeLocalCache
-} from '../shared/localState';
+} from '../qt/shared/localState';
 
 function makeWorkspace(): string {
-    return fs.mkdtempSync(path.join(os.tmpdir(), 'qt-pilot-local-state-'));
+    return fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-local-state-'));
 }
 
-test('ensureQtpilotGitignored appends .qtpilot/ once', () => {
+test('ensureCompilotGitignored appends .compilot/ once', () => {
     const workspace = makeWorkspace();
-    ensureQtpilotGitignored(workspace);
-    ensureQtpilotGitignored(workspace);
+    ensureCompilotGitignored(workspace);
+    ensureCompilotGitignored(workspace);
 
     const gitignore = fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8');
-    assert.equal(gitignore.split('.qtpilot/').length - 1, 1);
+    assert.equal(gitignore.split('.compilot/').length - 1, 1);
 });
 
-test('writeLocalCache records detected data under .qtpilot', () => {
+test('writeLocalCache records detected data under .compilot', () => {
     const workspace = makeWorkspace();
     writeLocalCache(workspace, {
         version: 1,
@@ -30,9 +30,10 @@ test('writeLocalCache records detected data under .qtpilot', () => {
         detected: {
             qt: { path: 'D:/Qt', qmake: 'D:/Qt/bin/qmake.exe' },
             vs: { devShellPath: 'C:/VS/Launch-VsDevShell.ps1' },
+            jom: null,
             projects: [path.join(workspace, 'demo.pro')]
         }
     });
 
-    assert.equal(fs.existsSync(path.join(workspace, '.qtpilot', 'cache.json')), true);
+    assert.equal(fs.existsSync(path.join(workspace, '.compilot', 'cache.json')), true);
 });
