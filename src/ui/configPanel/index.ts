@@ -16,7 +16,7 @@ import { getSyncPendingInfo } from '../../core/syncState';
 const logger = createLogger('ConfigPanelView');
 
 export class ConfigPanel implements vscode.WebviewViewProvider {
-    static readonly viewId = 'compilot.configView';
+    static readonly viewId = 'forja.configView';
     private _view?: vscode.WebviewView;
     private readonly _version: string;
 
@@ -61,7 +61,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             handleMessage(msg, webviewView.webview,
                 () => this._pushEnvUpdate(),
                 () => this._updateHtml())
-                .catch(e => console.warn('[compilot] configPanel message error:', (e as Error).message))
+                .catch(e => console.warn('[forja] configPanel message error:', (e as Error).message))
         );
 
         // 监听 sync-state 变化，同步完成后刷新面板中的待同步数
@@ -71,7 +71,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             const crypto = require('crypto');
             const normalized = wsRoot.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
             const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
-            const syncStateDir = vscode.Uri.file(require('path').join(os.homedir(), '.compilot', 'sync'));
+            const syncStateDir = vscode.Uri.file(require('path').join(os.homedir(), '.forja', 'sync'));
             const syncStatePattern = new vscode.RelativePattern(syncStateDir, `${hash}.json`);
             const syncStateWatcher = vscode.workspace.createFileSystemWatcher(syncStatePattern);
             const refreshIfVisible = () => { if (webviewView.visible) { this._updateHtml(); } };
@@ -138,7 +138,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             version: this._version,
             ...(() => {
                 const wsRoot = getWorkspaceRoot();
-                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'], remotePaths: {} };
+                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release'], remotePaths: {} };
                 const servers = readServers();
                 const pendingInfo = wsRoot ? getSyncPendingInfo(wsRoot, sync.ignore) : { count: 0, lastTime: '' };
 

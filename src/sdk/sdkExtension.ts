@@ -1,6 +1,6 @@
 /**
  * SDK Module extension entry point.
- * Called by the unified Compilot extension.ts when SDK projects are detected.
+ * Called by the unified Forja extension.ts when SDK projects are detected.
  */
 import * as vscode from 'vscode';
 import { StateManager } from './modules/stateManager';
@@ -18,7 +18,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     // 0. 初始化日志
     const outputChannel = initLogger();
     context.subscriptions.push(outputChannel);
-    log('Compilot SDK 模块开始激活...');
+    log('Forja SDK 模块开始激活...');
     log(`平台: ${isWindows ? 'Windows' : 'Linux'}`);
     log(`工作区: ${vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath).join(', ') ?? '无'}`);
 
@@ -172,7 +172,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
             if (e.exitCode !== undefined && e.exitCode !== 0) {
                 logError(`编译失败，退出码: ${e.exitCode}`);
                 vscode.window.showWarningMessage(
-                    `Compilot SDK: 编译失败，退出码 ${e.exitCode}`
+                    `Forja SDK: 编译失败，退出码 ${e.exitCode}`
                 );
             } else {
                 log('编译任务完成，退出码: 0');
@@ -187,7 +187,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     // 11. 注册 Disposables
     context.subscriptions.push(stateManager, configService);
 
-    log('Compilot SDK 模块激活完成!');
+    log('Forja SDK 模块激活完成!');
 }
 
 /**

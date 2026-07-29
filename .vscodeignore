@@ -1,6 +1,9 @@
 .vscode/**
 .vscode-test/**
 .kiro/**
+.github/**
+.reasonix/**
+.tmp/**
 src/**
 dist/**
 scripts/**

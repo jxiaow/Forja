@@ -1,15 +1,15 @@
 /** 命令 ID */
-export const CMD_BUILD = 'compilot.sdk.build';
-export const CMD_REBUILD = 'compilot.sdk.rebuild';
-export const CMD_CLEAN = 'compilot.sdk.clean';
-export const CMD_SHOW_ACTIONS = 'compilot.sdk.showActions';
-export const CMD_SELECT_PROJECT = 'compilot.sdk.selectProject';
+export const CMD_BUILD = 'forja.sdk.build';
+export const CMD_REBUILD = 'forja.sdk.rebuild';
+export const CMD_CLEAN = 'forja.sdk.clean';
+export const CMD_SHOW_ACTIONS = 'forja.sdk.showActions';
+export const CMD_SELECT_PROJECT = 'forja.sdk.selectProject';
 
 /** Context key */
-export const CTX_ACTIVATED = 'compilot.sdk.activated';
+export const CTX_ACTIVATED = 'forja.sdk.activated';
 
 /** Task source */
-export const TASK_SOURCE = 'Compilot SDK';
+export const TASK_SOURCE = 'Forja SDK';
 
 /** 排除目录 */
 export const EXCLUDE_DIRS = [

@@ -16,3 +16,12 @@ test('bump-version keeps package-lock root version in sync', () => {
     assert.match(source, /lock\.version = pkg\.version/);
     assert.match(source, /lock\.packages\[''\]\.version = pkg\.version/);
 });
+
+
+test('cli package includes generic sync cli and shared ssh transport', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'scripts', 'build-cli.js'), 'utf8');
+
+    assert.match(source, /'sync\/cli\.js'/);
+    assert.match(source, /'core\/sshTransport\.js'/);
+    assert.doesNotMatch(source, /qt\/sync/);
+});

@@ -1,27 +1,44 @@
 /**
- * Generate a 256x256 PNG icon for the Compilot extension.
- * Uses raw PNG encoding (no external dependencies).
+ * Generate a 256x256 PNG icon for the Forja extension.
+ * No external dependencies.
  *
- * Design: Indigo rounded rect background + white "C" with gear teeth accent
+ * Design:
+ * - Dark rounded rectangle background
+ * - Orange forged "F"
+ * - Gray anvil
+ * - Small sparks
+ *
+ * Anti-aliasing:
+ * - Draw at 1024x1024
+ * - Downsample to 256x256
  */
+
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
-const SIZE = 256;
+const OUTPUT_SIZE = 256;
+const SCALE = 4;
+const SIZE = OUTPUT_SIZE * SCALE;
 
-// Create RGBA pixel buffer
 const pixels = Buffer.alloc(SIZE * SIZE * 4);
 
-// Colors
-const BG = [55, 71, 133, 255];        // Indigo blue #374785
-const ACCENT = [44, 62, 120, 255];    // Darker accent for depth
-const WHITE = [255, 255, 255, 255];
-const HIGHLIGHT = [99, 179, 237, 255]; // Light blue accent #63B3ED
+const BG_TOP = [31, 41, 55, 255];
+const BG_BOTTOM = [17, 24, 39, 255];
+const ANVIL = [209, 213, 219, 255];
+const ANVIL_DARK = [107, 114, 128, 255];
+const ORANGE = [249, 115, 22, 255];
+const ORANGE_LIGHT = [251, 146, 60, 255];
+const SPARK = [251, 191, 36, 255];
 const TRANSPARENT = [0, 0, 0, 0];
+
+function S(v) {
+    return Math.round(v * SCALE);
+}
 
 function setPixel(x, y, color) {
     if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return;
+
     const i = (y * SIZE + x) * 4;
     pixels[i] = color[0];
     pixels[i + 1] = color[1];
@@ -29,176 +46,301 @@ function setPixel(x, y, color) {
     pixels[i + 3] = color[3];
 }
 
-function getPixel(x, y) {
-    if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return TRANSPARENT;
-    const i = (y * SIZE + x) * 4;
-    return [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]];
-}
-
 function dist(x1, y1, x2, y2) {
     return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
 }
 
-function blendColor(base, overlay, alpha) {
+function blendColor(a, b, t) {
     return [
-        Math.round(base[0] * (1 - alpha) + overlay[0] * alpha),
-        Math.round(base[1] * (1 - alpha) + overlay[1] * alpha),
-        Math.round(base[2] * (1 - alpha) + overlay[2] * alpha),
-        255
+        Math.round(a[0] * (1 - t) + b[0] * t),
+        Math.round(a[1] * (1 - t) + b[1] * t),
+        Math.round(a[2] * (1 - t) + b[2] * t),
+        Math.round(a[3] * (1 - t) + b[3] * t)
     ];
 }
 
-// Draw rounded rectangle background with subtle gradient
-const margin = 8;
-const radius = 48;
+function pointInPolygon(x, y, points) {
+    let inside = false;
+
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const xi = points[i][0];
+        const yi = points[i][1];
+        const xj = points[j][0];
+        const yj = points[j][1];
+
+        const intersect =
+            ((yi > y) !== (yj > y)) &&
+            x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+
+        if (intersect) inside = !inside;
+    }
+
+    return inside;
+}
+
+function drawPolygon(points, color) {
+    let minX = SIZE;
+    let minY = SIZE;
+    let maxX = 0;
+    let maxY = 0;
+
+    for (const [x, y] of points) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+    }
+
+    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y++) {
+        for (let x = Math.floor(minX); x <= Math.ceil(maxX); x++) {
+            if (pointInPolygon(x + 0.5, y + 0.5, points)) {
+                setPixel(x, y, color);
+            }
+        }
+    }
+}
+
+function drawCircle(cx, cy, r, color) {
+    for (let y = cy - r; y <= cy + r; y++) {
+        for (let x = cx - r; x <= cx + r; x++) {
+            if (dist(x, y, cx, cy) <= r) {
+                setPixel(x, y, color);
+            }
+        }
+    }
+}
+
+function drawLine(x1, y1, x2, y2, thickness, color) {
+    const minX = Math.floor(Math.min(x1, x2) - thickness);
+    const maxX = Math.ceil(Math.max(x1, x2) + thickness);
+    const minY = Math.floor(Math.min(y1, y2) - thickness);
+    const maxY = Math.ceil(Math.max(y1, y2) + thickness);
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+
+    for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+            const t = Math.max(
+                0,
+                Math.min(1, ((x - x1) * dx + (y - y1) * dy) / lenSq)
+            );
+
+            const px = x1 + t * dx;
+            const py = y1 + t * dy;
+
+            if (dist(x, y, px, py) <= thickness) {
+                setPixel(x, y, color);
+            }
+        }
+    }
+}
+
+// Background
+const margin = S(8);
+const radius = S(42);
 
 for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
         const inX = x >= margin && x < SIZE - margin;
         const inY = y >= margin && y < SIZE - margin;
 
-        if (!inX || !inY) { setPixel(x, y, TRANSPARENT); continue; }
+        if (!inX || !inY) {
+            setPixel(x, y, TRANSPARENT);
+            continue;
+        }
 
-        // Check corners for rounded rect
         let inside = true;
-        const corners = [
-            [margin + radius, margin + radius],
-            [SIZE - margin - radius - 1, margin + radius],
-            [margin + radius, SIZE - margin - radius - 1],
-            [SIZE - margin - radius - 1, SIZE - margin - radius - 1]
-        ];
 
-        if (x < margin + radius && y < margin + radius) {
-            inside = dist(x, y, corners[0][0], corners[0][1]) <= radius;
-        } else if (x >= SIZE - margin - radius && y < margin + radius) {
-            inside = dist(x, y, corners[1][0], corners[1][1]) <= radius;
-        } else if (x < margin + radius && y >= SIZE - margin - radius) {
-            inside = dist(x, y, corners[2][0], corners[2][1]) <= radius;
-        } else if (x >= SIZE - margin - radius && y >= SIZE - margin - radius) {
-            inside = dist(x, y, corners[3][0], corners[3][1]) <= radius;
+        const left = margin;
+        const right = SIZE - margin - 1;
+        const top = margin;
+        const bottom = SIZE - margin - 1;
+
+        if (x < left + radius && y < top + radius) {
+            inside = dist(x, y, left + radius, top + radius) <= radius;
+        } else if (x > right - radius && y < top + radius) {
+            inside = dist(x, y, right - radius, top + radius) <= radius;
+        } else if (x < left + radius && y > bottom - radius) {
+            inside = dist(x, y, left + radius, bottom - radius) <= radius;
+        } else if (x > right - radius && y > bottom - radius) {
+            inside = dist(x, y, right - radius, bottom - radius) <= radius;
         }
 
         if (inside) {
-            // Subtle vertical gradient
-            const gradientT = (y - margin) / (SIZE - 2 * margin);
-            const color = blendColor(BG, ACCENT, gradientT * 0.4);
-            setPixel(x, y, color);
+            const t = (y - margin) / (SIZE - 2 * margin);
+            setPixel(x, y, blendColor(BG_TOP, BG_BOTTOM, t));
         } else {
             setPixel(x, y, TRANSPARENT);
         }
     }
 }
 
-// Draw "C" letter (arc) - center at 120, 128, outer radius 68, inner radius 48
-const cx = 120, cy = 128;
-const outerR = 68, innerR = 48;
-const gapAngle = Math.PI * 0.35; // Opening angle on the right side
+// Sparks
+drawLine(S(86), S(122), S(58), S(104), S(2.4), SPARK);
+drawLine(S(92), S(116), S(78), S(82), S(2.4), SPARK);
+drawLine(S(106), S(112), S(106), S(76), S(2.4), SPARK);
+drawLine(S(92), S(134), S(58), S(138), S(2.4), SPARK);
 
-for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-        const d = dist(x, y, cx, cy);
-        if (d >= innerR && d <= outerR) {
-            // Check if we're in the gap (right side opening)
-            const angle = Math.atan2(y - cy, x - cx);
-            if (Math.abs(angle) < gapAngle) continue; // Skip the gap
-            setPixel(x, y, WHITE);
-        }
-    }
-}
+drawCircle(S(72), S(118), S(3), SPARK);
+drawCircle(S(92), S(92), S(3), SPARK);
+drawCircle(S(62), S(132), S(3), SPARK);
 
-// Draw small gear/cog in the opening of the C (bottom-right area)
-const gearCx = 178, gearCy = 148;
-const gearOuterR = 24, gearInnerR = 14;
-const gearTeeth = 8;
-const toothHeight = 8;
+// Anvil top
+drawPolygon([
+    [S(52), S(140)],
+    [S(204), S(140)],
+    [S(188), S(158)],
+    [S(154), S(158)],
+    [S(146), S(170)],
+    [S(110), S(170)],
+    [S(102), S(158)],
+    [S(70), S(158)]
+], ANVIL);
 
-for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-        const d = dist(x, y, gearCx, gearCy);
-        const angle = Math.atan2(y - gearCy, x - gearCx);
+// Anvil body
+drawPolygon([
+    [S(96), S(170)],
+    [S(160), S(170)],
+    [S(176), S(202)],
+    [S(80), S(202)]
+], ANVIL_DARK);
 
-        // Gear body (ring)
-        if (d >= gearInnerR && d <= gearOuterR) {
-            setPixel(x, y, HIGHLIGHT);
-        }
+// Anvil base
+drawPolygon([
+    [S(66), S(202)],
+    [S(190), S(202)],
+    [S(202), S(218)],
+    [S(54), S(218)]
+], ANVIL);
 
-        // Gear teeth
-        if (d > gearOuterR && d <= gearOuterR + toothHeight) {
-            const toothAngle = (angle + Math.PI) / (2 * Math.PI) * gearTeeth;
-            const toothPhase = toothAngle - Math.floor(toothAngle);
-            if (toothPhase > 0.25 && toothPhase < 0.75) {
-                setPixel(x, y, HIGHLIGHT);
+// Main Forja F
+drawPolygon([
+    [S(112), S(52)],
+    [S(188), S(52)],
+    [S(174), S(72)],
+    [S(132), S(72)],
+
+    [S(128), S(94)],
+    [S(170), S(94)],
+    [S(158), S(112)],
+    [S(124), S(112)],
+
+    [S(114), S(168)],
+    [S(94), S(168)]
+], ORANGE);
+
+// F highlight
+drawPolygon([
+    [S(116), S(52)],
+    [S(188), S(52)],
+    [S(176), S(64)],
+    [S(130), S(64)],
+    [S(126), S(86)],
+    [S(122), S(86)]
+], ORANGE_LIGHT);
+
+// Forge point
+drawPolygon([
+    [S(114), S(168)],
+    [S(126), S(112)],
+    [S(134), S(112)],
+    [S(124), S(176)]
+], ORANGE);
+
+// Downsample 1024 -> 256
+function downsampleTo256() {
+    const out = Buffer.alloc(OUTPUT_SIZE * OUTPUT_SIZE * 4);
+
+    for (let y = 0; y < OUTPUT_SIZE; y++) {
+        for (let x = 0; x < OUTPUT_SIZE; x++) {
+            let r = 0;
+            let g = 0;
+            let b = 0;
+            let a = 0;
+
+            for (let yy = 0; yy < SCALE; yy++) {
+                for (let xx = 0; xx < SCALE; xx++) {
+                    const sx = x * SCALE + xx;
+                    const sy = y * SCALE + yy;
+                    const i = (sy * SIZE + sx) * 4;
+
+                    r += pixels[i];
+                    g += pixels[i + 1];
+                    b += pixels[i + 2];
+                    a += pixels[i + 3];
+                }
             }
-        }
 
-        // Center hole
-        if (d < 7) {
-            // Restore background
-            const gradientT = (y - margin) / (SIZE - 2 * margin);
-            const color = blendColor(BG, ACCENT, gradientT * 0.4);
-            setPixel(x, y, color);
-        }
-    }
-}
+            const count = SCALE * SCALE;
+            const oi = (y * OUTPUT_SIZE + x) * 4;
 
-// Draw a small "play" triangle inside the C (subtle, represents "run")
-const triCx = 126, triCy = 128;
-const triSize = 16;
-for (let y = triCy - triSize; y <= triCy + triSize; y++) {
-    for (let x = triCx - triSize; x <= triCx + triSize; x++) {
-        // Triangle pointing right: left vertex at (triCx-8, triCy-12), (triCx-8, triCy+12), (triCx+12, triCy)
-        const x0 = triCx - 8, y0 = triCy - 12;
-        const x1 = triCx + 12, y1 = triCy;
-        const x2 = triCx - 8, y2 = triCy + 12;
-        const area = 0.5 * (-y1 * x2 + y0 * (-x1 + x2) + x0 * (y1 - y2) + x1 * y2);
-        const s = (y0 * x2 - x0 * y2 + (y2 - y0) * x + (x0 - x2) * y) / (2 * area);
-        const t = (x0 * y1 - y0 * x1 + (y0 - y1) * x + (x1 - x0) * y) / (2 * area);
-        if (s >= 0 && t >= 0 && (s + t) <= 1) {
-            setPixel(x, y, HIGHLIGHT);
+            out[oi] = Math.round(r / count);
+            out[oi + 1] = Math.round(g / count);
+            out[oi + 2] = Math.round(b / count);
+            out[oi + 3] = Math.round(a / count);
         }
     }
+
+    return out;
 }
 
-// Encode as PNG
+// PNG encoding
 function crc32(buf) {
     let crc = 0xffffffff;
+
     for (let i = 0; i < buf.length; i++) {
         crc ^= buf[i];
+
         for (let j = 0; j < 8; j++) {
             crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
         }
     }
+
     return (crc ^ 0xffffffff) >>> 0;
 }
 
 function chunk(type, data) {
     const len = Buffer.alloc(4);
     len.writeUInt32BE(data.length);
+
     const typeAndData = Buffer.concat([Buffer.from(type), data]);
+
     const crc = Buffer.alloc(4);
     crc.writeUInt32BE(crc32(typeAndData));
+
     return Buffer.concat([len, typeAndData, crc]);
 }
 
-// IHDR
-const ihdr = Buffer.alloc(13);
-ihdr.writeUInt32BE(SIZE, 0);
-ihdr.writeUInt32BE(SIZE, 4);
-ihdr[8] = 8; // bit depth
-ihdr[9] = 6; // color type RGBA
-ihdr[10] = 0; // compression
-ihdr[11] = 0; // filter
-ihdr[12] = 0; // interlace
+const finalPixels = downsampleTo256();
 
-// IDAT
-const raw = Buffer.alloc(SIZE * (SIZE * 4 + 1));
-for (let y = 0; y < SIZE; y++) {
-    raw[y * (SIZE * 4 + 1)] = 0; // no filter
-    pixels.copy(raw, y * (SIZE * 4 + 1) + 1, y * SIZE * 4, (y + 1) * SIZE * 4);
+const ihdr = Buffer.alloc(13);
+ihdr.writeUInt32BE(OUTPUT_SIZE, 0);
+ihdr.writeUInt32BE(OUTPUT_SIZE, 4);
+ihdr[8] = 8;
+ihdr[9] = 6;
+ihdr[10] = 0;
+ihdr[11] = 0;
+ihdr[12] = 0;
+
+const raw = Buffer.alloc(OUTPUT_SIZE * (OUTPUT_SIZE * 4 + 1));
+
+for (let y = 0; y < OUTPUT_SIZE; y++) {
+    raw[y * (OUTPUT_SIZE * 4 + 1)] = 0;
+
+    finalPixels.copy(
+        raw,
+        y * (OUTPUT_SIZE * 4 + 1) + 1,
+        y * OUTPUT_SIZE * 4,
+        (y + 1) * OUTPUT_SIZE * 4
+    );
 }
+
 const compressed = zlib.deflateSync(raw);
 
 const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
 const png = Buffer.concat([
     signature,
     chunk('IHDR', ihdr),
@@ -207,5 +349,8 @@ const png = Buffer.concat([
 ]);
 
 const outPath = path.join(__dirname, '..', 'media', 'icon.png');
+
+fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, png);
+
 console.log(`Generated: ${outPath} (${png.length} bytes)`);

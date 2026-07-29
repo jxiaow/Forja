@@ -1,5 +1,5 @@
 /**
- * SDK CLI 配置读写 — 基于 ~/.compilot/projects/ 的 sdk 配置。
+ * SDK CLI 配置读写 — 基于 ~/.forja/projects/ 的 sdk 配置。
  * 不依赖 vscode，供 CLI 使用。
  */
 import { loadSdkSettings as _loadSdk, saveSdkSettings as _saveSdk, projectConfigPath, SdkSettings, resolveVsDevCmdPath, inferVsInstall } from '../../core/settingsIO';

@@ -31,7 +31,7 @@
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
 | E1 | 🟡 中 | `serverStore.ts` 读取 JSON 失败时空 `catch {}`，配置损坏无任何反馈 | src/core/serverStore.ts readServers/readProjectSyncConfig | 待修 |
-| E2 | 🟡 中 | `syncCli.ts` 的 `ensureRemoteDir` 永远 resolve，mkdir 失败时后续 scp 报错信息不清晰 | src/core/syncCli.ts | 待修 |
+| E2 | 🟡 中 | `sync/cli.ts` 的 `ensureRemoteDir` 永远 resolve，mkdir 失败时后续 scp 报错信息不清晰 | src/sync/cli.ts | 待修 |
 | E3 | 🟢 低 | `ssh.ts` 的 `createAskpassEnv` 写临时文件无 try/catch，tmpdir 不可写时直接抛异常 | src/core/ssh.ts | 待修 |
 | E4 | 🟢 低 | remote/core/index.ts build 阶段 JSON.parse 失败时丢失原始 stdout | src/remote/core/index.ts | 可选 |
 
@@ -39,7 +39,7 @@
 
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
-| O1 | 🟢 低 | `sftpClient.ts` 大量 re-export 是历史遗留，syncWatcher.ts 可直接从 core/ 导入 | src/qt/sync/sftpClient.ts | 可选 |
+| O1 | 🟢 低 | `sftpClient.ts` 大量 re-export 是历史遗留，syncWatcher.ts 可直接从 core/ 导入 | src/sync/sftpClient.ts | 可选 |
 | O2 | 🟢 低 | remote/core/index.ts 25KB，锁管理可提取到 lock.ts | src/remote/core/index.ts | 可选 |
 | O3 | 🟢 低 | `DeployResult` 等类型定义散落在各文件而非集中在 types.ts | src/remote/core/ | 可选 |
 | O4 | 🟢 低 | 远程部署无取消机制，vscode 的 CancellationToken 未传递到 orchestrator | src/remote/ | 可选 |
@@ -72,17 +72,17 @@
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
 | S1 | 🔴 高 | XSS：`configPanel.html` 中 `showPassword` 使用 innerHTML — 已改为 DOM API（textContent + createElement） | src/ui/configPanel/configPanel.html | ✅ 已修 |
-| S2 | 🟡 中 | Shell 注入：`transport.ts` 中 `remoteDir`/`remoteFile` 直接拼入 SSH/SCP 命令 — 已改为单引号包裹 + 内部转义 | src/qt/sync/transport.ts | ✅ 已修 |
+| S2 | 🟡 中 | Shell 注入：`transport.ts` 中 `remoteDir`/`remoteFile` 直接拼入 SSH/SCP 命令 — 已改为单引号包裹 + 内部转义 | src/sync/transport.ts | ✅ 已修 |
 | S3 | 🟡 中 | 密码暴露：`_pushServerList` 已使用 `'••••••••'` mask，无需额外修复 | src/ui/configPanel/messageHandler.ts | ✅ 已修 |
 
 ## 测试覆盖
 
 | # | 严重度 | 问题 | 位置 | 状态 |
 |---|--------|------|------|------|
-| V1 | 🟡 中 | `core/syncCli.ts`、`core/ssh.ts`、`core/serverStore.ts` 无专属测试 | src/core/ | 待补 |
+| V1 | 🟡 中 | `sync/cli.ts`、`core/ssh.ts`、`core/serverStore.ts` 无专属测试 | src/core/ | 待补 |
 | V2 | 🟡 中 | SDK 模块测试覆盖不足；CLI、projectScanner source、settings watcher、stale project 已有覆盖，Extension Host 交互仍缺 | src/sdk/ | 部分已补 |
 | V3 | 🟡 中 | remote/core/index.ts（25KB 编排逻辑）无测试 | src/remote/core/index.ts | 待补 |
-| V4 | 🟢 低 | qt/build/、qt/sync/、cli/ 入口无测试 | src/qt/build/, src/qt/sync/, src/cli/ | 可选 |
+| V4 | 🟢 低 | qt/build/、sync/、cli/ 入口无测试 | src/qt/build/, src/sync/, src/cli/ | 可选 |
 
 ## 工程配置
 
@@ -90,9 +90,9 @@
 |---|--------|------|------|------|
 | P1 | 🟡 中 | ~~无 ESLint/Prettier 等静态分析工具~~ ESLint 已配置，`no-explicit-any` 已升为 error | eslint.config.mjs | ✅ 已修 |
 | P2 | 🟡 中 | ~~循环依赖：`core/stateManager` ↔ `qt/project/projectManager`~~ 已不存在（types 已提取到 core/types.ts） | — | ✅ 不再适用 |
-| P3 | 🟢 低 | `compilot.qt.showSyncTab` 和 `compilot.qt.loadManualProject` 注册了但未在 package.json 声明（内部命令） | src/extension.ts | 可选 |
+| P3 | 🟢 低 | `forja.qt.showSyncTab` 和 `forja.qt.loadManualProject` 注册了但未在 package.json 声明（内部命令） | src/extension.ts | 可选 |
 | P4 | 🟢 低 | ~~`_updateDeployJson` 中 `fs.writeFileSync` 无 try/catch~~ 该函数已不存在 | — | ✅ 不再适用 |
-| P5 | 🟡 中 | ~~Task source 名 `'Compilot Qt'` 是散落的字符串字面量~~ 已提取为 `TASK_SOURCE_QT` 常量 | src/qt/constants.ts | ✅ 已修 |
+| P5 | 🟡 中 | ~~Task source 名 `'Forja Qt'` 是散落的字符串字面量~~ 已提取为 `TASK_SOURCE_QT` 常量 | src/qt/constants.ts | ✅ 已修 |
 | P6 | 🟢 低 | ~~`configGenerator.ts` 中 logging 不一致~~ 已统一使用 `log()` | src/qt/build/configGenerator.ts | ✅ 已修 |
 | P7 | 🟢 低 | ~~`serverStore.ts` chmod 600 在非 Windows 平台的 catch 应加日志~~ 已加平台判断日志 | src/core/serverStore.ts | ✅ 已修 |
 | P8 | 🟢 低 | devDependencies 已锁定精确版本 | package.json | ✅ 已修 |
@@ -109,7 +109,7 @@
 - **S3** — _pushServerList 发送时 mask 密码字段（仅在编辑时按需获取）
 - ~~**P2** — 循环依赖~~ 已不存在
 - ~~**P4** — _updateDeployJson 加 try/catch~~ 已不存在
-- ~~**P5** — 提取 `'Compilot Qt'` 为常量~~ ✅ 已修
+- ~~**P5** — 提取 `'Forja Qt'` 为常量~~ ✅ 已修
 
 ### P2 — 长期改进（补充）
 
@@ -124,8 +124,8 @@
 | 问题 | 修复内容 | 状态 |
 |------|----------|------|
 | envInfo 为 null 时构建无 guard | buildManager.ts 增加 `_ensureEnvReady()` | ✅ 已修 |
-| 全局 task 监听用 name 前缀匹配 | extension.ts 改为 `task.source === 'Compilot Qt'` 精确匹配 | ✅ 已修 |
-| Run task 监听器 source 名错误 `'Qt Pilot'` | buildManager.ts 改为 `'Compilot Qt'` | ✅ 已修 |
+| 全局 task 监听用 name 前缀匹配 | extension.ts 改为 `task.source === 'Forja Qt'` 精确匹配 | ✅ 已修 |
+| Run task 监听器 source 名错误 `'Qt Pilot'` | buildManager.ts 改为 `'Forja Qt'` | ✅ 已修 |
 | configPanel TARGET 保存命令名不匹配 | HTML 改为发送 `'saveQmakeTarget'` | ✅ 已修 |
 | configPanel dataset 属性名不匹配 | HTML 改为 `data-default-target` / `data-saved-target` | ✅ 已修 |
 | SSH StrictHostKeyChecking 默认 no 无提示 | syncWatcher.ts 增加首次连接提示 | ✅ 已修 |
@@ -149,4 +149,4 @@
 | SDK CLI 非 Windows 架构默认值不一致 | 非 Windows 默认/保存/展示统一为 `x64`，拒绝不支持的 `--arch` | ✅ 已修 |
 | SDK CLI stale pinned project 会回退到候选项目 | 缺失或失效项目时返回 `status`/诊断，不静默选择其他项目 | ✅ 已修 |
 | SDK 扩展侧 stale project 状态 | 配置恢复和 build/rebuild/clean 前置检查会清理不存在的项目 | ✅ 已修 |
-| AI Skill 仍使用旧 CLI 参数流程 | `skills/compilot/SKILL.md` 改为 status → init/use → execution 流程 | ✅ 已修 |
+| AI Skill 仍使用旧 CLI 参数流程 | `skills/forja/SKILL.md` 改为 status → init/use → execution 流程 | ✅ 已修 |

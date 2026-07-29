@@ -1,7 +1,7 @@
 /**
  * 统一配置文件读写 — 不依赖 vscode，可独立测试。
  *
- * 配置存储在用户数据目录 ~/.compilot/projects/ 下，
+ * 配置存储在用户数据目录 ~/.forja/projects/ 下，
  * 文件名为 workspace 路径的 hash，内容平铺不加前缀分组。
  *
  * 每个 workspace 目录对应一个配置文件，只存一种配置（qt 或 sdk 或 sync）。
@@ -50,7 +50,7 @@ export interface SyncSettings {
     ignore: string[];
 }
 
-export interface CompilotSettings {
+export interface ForjaSettings {
     qt: QtSettings;
     sdk: SdkSettings;
     sync: SyncSettings;
@@ -90,10 +90,10 @@ export const DEFAULT_SYNC: Readonly<SyncSettings> = {
     enabled: false,
     selectedServer: '',
     remotePaths: {},
-    ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release']
+    ignore: ['.git', 'node_modules', 'out', '.forja', 'build', 'debug', 'release']
 };
 
-export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
+export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
     qt: DEFAULT_QT,
     sdk: DEFAULT_SDK,
     sync: DEFAULT_SYNC
@@ -103,7 +103,7 @@ export const DEFAULT_SETTINGS: Readonly<CompilotSettings> = {
 
 /** 用户数据目录下的 projects 配置目录 */
 export function projectsDir(): string {
-    return path.join(os.homedir(), '.compilot', 'projects');
+    return path.join(os.homedir(), '.forja', 'projects');
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
@@ -113,10 +113,27 @@ export function projectConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'
     return path.join(projectsDir(), `${hash}.json`);
 }
 
+/**
+ * 从当前 workspace 开始向上查找存在的配置文件。
+ * 子目录没有自己的配置时，自动继承父目录的。
+ * 返回找到的第一个配置文件路径，没找到则返回当前 workspace 路径（用于新建）。
+ */
+export function resolveConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string {
+    let current = workspace;
+    for (;;) {
+        const filePath = projectConfigPath(current, type);
+        if (fs.existsSync(filePath)) { return filePath; }
+        const parent = path.dirname(current);
+        if (parent === current) { break; }
+        current = parent;
+    }
+    return projectConfigPath(workspace, type);
+}
+
 // ── Qt 配置读写 ──
 
 export function loadQtSettings(workspace: string): QtSettings {
-    const filePath = projectConfigPath(workspace, 'qt');
+    const filePath = resolveConfigPath(workspace, 'qt');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -140,7 +157,7 @@ export function saveQtSettings(workspace: string, settings: QtSettings): void {
 // ── SDK 配置读写 ──
 
 export function loadSdkSettings(workspace: string): SdkSettings {
-    const filePath = projectConfigPath(workspace, 'sdk');
+    const filePath = resolveConfigPath(workspace, 'sdk');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -164,31 +181,16 @@ export function saveSdkSettings(workspace: string, settings: SdkSettings): void 
 // ── Sync 配置读写 ──
 
 /**
- * 加载 sync 配置。向上一级查找：如果当前 workspace 没有 sync 配置，
- * 尝试父目录。
+ * 加载 sync 配置（自动向上查找父目录）。
  */
 export function loadSyncSettings(workspace: string): SyncSettings {
-    // 先找当前 workspace
-    const filePath = projectConfigPath(workspace, 'sync');
+    const filePath = resolveConfigPath(workspace, 'sync');
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             return sanitizeSync(raw);
         }
     } catch { /* file missing or malformed */ }
-
-    // 向上一级查找（monorepo 场景：子项目继承父目录的 sync 配置）
-    const parent = path.dirname(workspace);
-    if (parent !== workspace) {
-        const parentPath = projectConfigPath(parent, 'sync');
-        try {
-            if (fs.existsSync(parentPath)) {
-                const raw = JSON.parse(fs.readFileSync(parentPath, 'utf8'));
-                return sanitizeSync(raw);
-            }
-        } catch { /* file missing or malformed */ }
-    }
-
     return { ...DEFAULT_SYNC };
 }
 

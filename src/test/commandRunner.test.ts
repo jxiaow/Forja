@@ -10,7 +10,7 @@ const _tmpDirs: string[] = [];
 after(() => { for (const d of _tmpDirs) { fs.rmSync(d, { recursive: true, force: true }); } });
 
 test('runCliResult leaves dry run results unexecuted', async () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-runner-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-runner-'));
     _tmpDirs.push(workspace);
     const result = await runCliResult({
         ok: true,
@@ -20,7 +20,6 @@ test('runCliResult leaves dry run results unexecuted', async () => {
         project: path.join(workspace, 'demo.pro'),
         commands: ['exit 12'],
         shellCommand: 'exit 12',
-        candidates: [],
         nextActions: [],
         exitCode: null,
         durationMs: 0,
@@ -38,7 +37,7 @@ test('runCliResult leaves dry run results unexecuted', async () => {
 });
 
 test('runCliResult executes commands and writes logs', async () => {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-runner-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-runner-'));
     _tmpDirs.push(workspace);
     const result = await runCliResult({
         ok: true,
@@ -48,7 +47,6 @@ test('runCliResult executes commands and writes logs', async () => {
         project: path.join(workspace, 'demo.pro'),
         commands: ['node -e "console.log(123)"'],
         shellCommand: 'node -e "console.log(123)"',
-        candidates: [],
         nextActions: [],
         exitCode: null,
         durationMs: 0,
@@ -73,7 +71,7 @@ test('runCliResult detach run returns target process pid', async (t) => {
         return;
     }
 
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'compilot-runner-'));
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-runner-'));
     _tmpDirs.push(workspace);
     const runner = path.join(workspace, 'target-runner.js');
     fs.writeFileSync(runner, 'setTimeout(() => {}, 5000);\n', 'utf8');
@@ -86,7 +84,6 @@ test('runCliResult detach run returns target process pid', async (t) => {
         project: path.join(workspace, 'demo.pro'),
         commands: ['node -e "process.exit(0)"', `node "${runner}"`],
         shellCommand: '',
-        candidates: [],
         nextActions: [],
         exitCode: null,
         durationMs: 0,

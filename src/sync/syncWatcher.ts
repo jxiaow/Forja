@@ -1,18 +1,22 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getResolvedConfig, ResolvedSyncConfig } from './resolver';
-import { readServers, readProjectSyncConfig, ServerConfig } from '../../core/serverStore';
+import { readServers, readProjectSyncConfig, ServerConfig } from '../core/serverStore';
 import { syncChangedFiles, askPassword, clearPasswordCache } from './sftpClient';
 import { testConnection } from './transport';
-import { getWorkspaceRoot } from '../services/configService';
-import { createLogger } from '../../vscode/logger';
-import { resolveGitRoots } from '../../core/gitRepoResolver';
-import { onSettingsChange } from '../../vscode/settingsStore';
+import { resolveProjectRoot } from '../vscode/workspaceResolver';
+import { createLogger } from '../vscode/logger';
+import { resolveGitRoots } from '../core/gitRepoResolver';
+import { onSettingsChange } from '../vscode/settingsStore';
 
 const logger = createLogger('SyncManager');
 
 let _statusItem: vscode.StatusBarItem | null = null;
 const _hostKeyWarningShown = new Set<string>();
+
+function getWorkspaceRoot(): string {
+    return resolveProjectRoot('sync');
+}
 
 /** 首次连接时提示用户 StrictHostKeyChecking 状态（已禁用） */
 function _warnHostKeyCheckingIfNeeded(_server: ServerConfig): void {
@@ -26,9 +30,9 @@ export function registerSyncWatcher(context: vscode.ExtensionContext): void {
         }
     }));
 
-    // 监听全局 servers.json（位于 ~/.compilot/）
+    // 监听全局 servers.json（位于 ~/.forja/）
     const os = require('os') as typeof import('os');
-    const globalServersDir = path.join(os.homedir(), '.compilot');
+    const globalServersDir = path.join(os.homedir(), '.forja');
     const globalPattern = new vscode.RelativePattern(vscode.Uri.file(globalServersDir), 'servers.json');
     const globalWatcher = vscode.workspace.createFileSystemWatcher(globalPattern);
     globalWatcher.onDidChange(() => _refreshStatusBar());
@@ -56,19 +60,19 @@ function _refreshStatusBar(): void {
     }
 
     if (!_statusItem) {
-        _statusItem = vscode.window.createStatusBarItem('compilot.sync', vscode.StatusBarAlignment.Left, 95);
-        _statusItem.name = 'Compilot: Sync';
+        _statusItem = vscode.window.createStatusBarItem('forja.sync', vscode.StatusBarAlignment.Left, 95);
+        _statusItem.name = 'Forja: Sync';
     }
 
     const resolved = getResolvedConfig(wsRoot);
     if (resolved) {
         _statusItem.text = '$(cloud-upload)';
-        _statusItem.tooltip = `Compilot: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
-        _statusItem.command = 'compilot.qt.syncChangedFiles';
+        _statusItem.tooltip = `Forja: 同步到 ${resolved.server.name} (${resolved.server.username}@${resolved.server.host})`;
+        _statusItem.command = 'forja.syncChangedFiles';
     } else {
         _statusItem.text = '$(cloud)';
-        _statusItem.tooltip = 'Compilot: 同步未就绪，点击配置远程服务器';
-        _statusItem.command = 'compilot.qt.showSyncTab';
+        _statusItem.tooltip = 'Forja: 同步未就绪，点击配置远程服务器';
+        _statusItem.command = 'forja.showSyncTab';
     }
     _statusItem.show();
 }
@@ -148,6 +152,12 @@ export async function executeSyncChangedFiles(): Promise<void> {
                 totalUploaded += result.uploaded.length;
                 totalSkipped += result.skipped.length;
                 totalFailed.push(...result.failed.map(f => ({ file: `${gitName}/${f.file}`, error: f.error })));
+            }
+
+            if (token.isCancellationRequested) {
+                vscode.window.showWarningMessage(`同步已取消: ${totalUploaded} 个文件已上传${totalSkipped > 0 ? `，${totalSkipped} 个已跳过` : ''}`);
+                logger.info(`同步已取消: 上传=${totalUploaded}, 跳过=${totalSkipped}, 失败=${totalFailed.length}`);
+                return;
             }
 
             if (totalUploaded === 0 && totalFailed.length === 0 && totalSkipped === 0) {

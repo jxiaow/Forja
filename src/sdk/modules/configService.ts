@@ -29,7 +29,7 @@ export class ConfigService implements vscode.Disposable {
       } else {
         logError(`用户配置的 VS 路径无效: ${userPath}`);
         vscode.window.showWarningMessage(
-          `Compilot SDK: 配置的 VsDevCmd.bat 路径无效: ${userPath}，将尝试自动检测`
+          `Forja SDK: 配置的 VsDevCmd.bat 路径无效: ${userPath}，将尝试自动检测`
         );
       }
     }

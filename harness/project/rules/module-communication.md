@@ -8,8 +8,8 @@ Prevent tight coupling between Qt and SDK modules; ensure state changes propagat
 
 - Qt state: `src/vscode/qtState.ts` (get/set/subscribe pattern)
 - SDK state: `src/sdk/modules/stateManager.ts` (class-based, config-backed)
-- Settings (Qt): `src/vscode/settingsStore.ts` → reads from `~/.compilot/projects/*.json`
-- Settings (SDK): `src/vscode/settingsStore.ts` → reads from `~/.compilot/projects/*.json`
+- Settings (Qt): `src/vscode/settingsStore.ts` → reads from `~/.forja/projects/*.json`
+- Settings (SDK): `src/vscode/settingsStore.ts` → reads from `~/.forja/projects/*.json`
 - UI sync: `src/ui/unifiedStatusBar.ts` imports state from both modules
 - Config panel: Webview ↔ extension via `postMessage` / `onDidReceiveMessage`
 
