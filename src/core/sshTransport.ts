@@ -15,6 +15,11 @@ export interface CancellationTokenLike {
     onCancellationRequested?: (listener: () => void) => DisposableLike;
 }
 
+export interface TestConnectionResult {
+    ok: boolean;
+    error?: string;
+}
+
 export const SYNC_CANCELLED_CODE = 'FORJA_SYNC_CANCELLED';
 
 interface SyncTransportError extends Error {
@@ -152,4 +157,30 @@ export async function ensureRemoteDir(server: ServerConfig, remoteDir: string, p
     if (result.code !== 0) {
         throw new Error(`创建远程目录失败 (code=${result.code}): ${result.stderr.trim() || 'mkdir -p failed'}`);
     }
+}
+
+/** 测试 SSH 连接。 */
+export async function testConnection(server: ServerConfig, password: string | null): Promise<TestConnectionResult> {
+    const sshArgs = buildSshArgs(server, { extraOptions: ['ConnectTimeout=10'] });
+    const args = [...sshArgs, sshTarget(server), 'echo ok'];
+    const askpass = createAskpassEnv(
+        server.authMode === 'password' ? password : null, `test-${process.pid}`
+    );
+    const timeoutMs = 15000;
+
+    let result: ProcessResult;
+    try {
+        result = await runCancellableProcess('ssh', args, askpass, undefined, timeoutMs);
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { ok: false, error: msg };
+    }
+
+    if (result.timedOut) {
+        return { ok: false, error: '连接超时（15s）' };
+    }
+    if (result.code === 0) {
+        return { ok: true };
+    }
+    return { ok: false, error: result.stderr.trim() || `exit code ${result.code}` };
 }

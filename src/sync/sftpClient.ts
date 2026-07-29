@@ -10,6 +10,7 @@ import { filterNeedsSync, markSyncedBatch, SyncTargetContext } from '../core/syn
 import { ServerConfig } from '../core/serverStore';
 import { ResolvedSyncConfig } from './resolver';
 import { scpUpload, ensureRemoteDir, isCancellationError } from './transport';
+import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
 
 const logger = createLogger('SftpClient');
 
@@ -103,7 +104,7 @@ export interface SyncResult {
     failed: { file: string; error: string }[];
 }
 
-export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRoot: string, token?: { isCancellationRequested: boolean }): Promise<SyncResult> {
+export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRoot: string, token?: { isCancellationRequested: boolean }, fileFilters: string[] = []): Promise<SyncResult> {
     const { server, remotePath, ignore } = resolved;
     const result: SyncResult = { uploaded: [], skipped: [], failed: [] };
 
@@ -117,7 +118,9 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
 
     const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath };
 
-    const changedFiles = await getGitChangedFiles(workspaceRoot);
+    const changedFiles = fileFilters.length > 0
+        ? resolveRequestedFilesForGitRoot(workspaceRoot, workspaceRoot, fileFilters)
+        : await getGitChangedFiles(workspaceRoot);
     if (changedFiles.length === 0) { return result; }
 
     const notIgnored: string[] = [];

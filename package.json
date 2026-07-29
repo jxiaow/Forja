@@ -3,7 +3,7 @@
   "displayName": "Forja",
   "publisher": "forja",
   "description": "Build, run, debug C++ projects — Qt (qmake) and SDK (.sln/Makefile) in one extension",
-  "version": "0.7.49",
+  "version": "0.7.54",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -115,6 +115,11 @@
           "command": "forja.qt.openWithQtDesigner",
           "when": "resourceExtname == .ui",
           "group": "navigation@100"
+        },
+        {
+          "command": "forja.syncChangedFiles",
+          "when": "resourceScheme == file",
+          "group": "navigation@101"
         }
       ]
     },
@@ -139,14 +144,15 @@
   },
   "scripts": {
     "copy-html": "node scripts/copy-html.js",
-    "compile": "tsc -p ./ && npm run copy-html",
+    "clean-out": "node scripts/clean-out.js",
+    "compile": "npm run clean-out && tsc -p ./ && npm run copy-html",
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test --test-reporter=spec out/test",
     "lint": "eslint src/",
     "build:cli": "npm run compile && node scripts/build-cli.js",
     "package": "npm run compile && node scripts/package-vs.js",
     "package:cli": "npm run build:cli",
-    "package:all": "node scripts/bump-version.js && npm run package && npm run package:cli",
+    "package:all": "npm run package && npm run package:cli",
     "release": "node scripts/release.js",
     "vsix": "vsce package --allow-missing-repository",
     "harness:check": "node harness/core/automation/check-harness.js",

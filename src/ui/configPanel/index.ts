@@ -4,7 +4,7 @@ import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-         getScanExcludeDirs, getPinnedProject, getTarget, getRuntimeProcessName, getManualProPath, getDesignerPath, getQtSourcePath,
+         getScanExcludeDirs, getPinnedProject, getTarget, getQmakeArgs, getRuntimeProcessName, getManualProPath, getDesignerPath, getQtSourcePath,
          getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../qt/services/configService';
 import { getQtSetting, getSdkSetting } from '../../vscode/settingsStore';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
@@ -124,6 +124,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             cppStandard: getCppStandard(),
             scanExcludeDirs: getScanExcludeDirs().join(', '),
             target: getTarget(),
+            qmakeArgs: getQmakeArgs(),
             runtimeProcessName: getRuntimeProcessName(),
             isWin: process.platform === 'win32',
             autoDevShell: env?.vs?.devShellPath || '',

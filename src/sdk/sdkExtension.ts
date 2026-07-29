@@ -103,16 +103,22 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         stateManager.arch = arch as import('./types').Arch;
         stateManager.persistToConfig();
     });
+    let sdkSettingsDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     context.subscriptions.push(onSettingsChange((section) => {
         if (section !== 'sdk') { return; }
-        stateManager.restoreFromConfig()
-            .then(async () => {
-                if (isWindows) {
-                    await configService.getVsDevCmdPath();
-                }
-                updateSdkStatusBar();
-            })
-            .catch((e: Error) => logError('settingsStore 变更后重新加载 SDK 配置失败', e));
+        // 防抖：连续多次 SDK settings 变更只触发一次 VS 检测
+        if (sdkSettingsDebounceTimer) { clearTimeout(sdkSettingsDebounceTimer); }
+        sdkSettingsDebounceTimer = setTimeout(() => {
+            sdkSettingsDebounceTimer = undefined;
+            stateManager.restoreFromConfig()
+                .then(async () => {
+                    if (isWindows) {
+                        await configService.getVsDevCmdPath();
+                    }
+                    updateSdkStatusBar();
+                })
+                .catch((e: Error) => logError('settingsStore 变更后重新加载 SDK 配置失败', e));
+        }, 300);
     }));
     // 有 SDK 项目时激活 SDK 模块
     if (stateManager.currentProject) {
@@ -128,7 +134,7 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         log('执行命令: Select Project');
         const projects = projectScanner.projects;
         if (projects.length === 0) {
-            vscode.window.showInformationMessage('SDK Pilot: 未找到可用的 SDK 项目');
+            vscode.window.showInformationMessage('Forja SDK: 未找到可用的 SDK 项目');
             return;
         }
         const currentPath = stateManager.currentProject?.path;

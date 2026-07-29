@@ -12,6 +12,7 @@ const cfg: BuildConfig = {
     arch: 'x86',
     mode: 'debug',
     target: '',
+    qmakeArgs: '',
     jomPath: ''
 };
 
@@ -26,6 +27,20 @@ test('shell plan builder creates qmake command without vscode dependency', () =>
         'cd /d "D:/demo"',
         '"D:/Qt/5.15.2/msvc2019/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86'
     ]);
+});
+
+test('shell plan builder appends custom qmake arguments', () => {
+    const builder = createShellPlanBuilder(winConfig);
+    const plan = builder.qmakeCommands({
+        ...cfg,
+        target: 'DemoApp',
+        qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug'
+    });
+
+    assert.match(
+        plan.commands.at(-1) || '',
+        /"TARGET=DemoApp" DEFINES\+=FEATURE_X CONFIG\+=qml_debug$/
+    );
 });
 
 test('shell plan builder exposes shell execution metadata', () => {

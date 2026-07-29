@@ -6,12 +6,18 @@ function esc(v: string): string {
         .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function syncIssues(data: TemplateData): string[] {
+    if (data.syncReadinessIssues) { return data.syncReadinessIssues; }
+    const issues: string[] = [];
+    if (!data.syncEnabled) { issues.push('未启用远程同步'); }
+    if (data.syncServers.length === 0) { issues.push('未添加服务器'); }
+    if (!data.syncSelectedServer) { issues.push('未选择同步服务器'); }
+    if (!data.syncRemotePath) { issues.push('未设置远程路径'); }
+    return issues;
+}
+
 export function buildSyncPage(data: TemplateData): string {
-    // 如果 selectedServer 没匹配到，自动取第一个
-    let srv = data.syncServers.find(s => s.id === data.syncSelectedServer);
-    if (!srv && data.syncServers.length > 0) {
-        srv = data.syncServers[0];
-    }
+    const srv = data.syncServers.find(s => s.id === data.syncSelectedServer);
     let h = '<div class="page-title">远程同步</div>';
     h += '<div class="page-desc">将变更文件同步到远程服务器</div>';
 
@@ -30,6 +36,15 @@ export function buildSyncPage(data: TemplateData): string {
     h += `<input type="checkbox" id="syncToggle" ${data.syncEnabled ? 'checked' : ''}`;
     h += " onchange=\"toggleSyncContent(this.checked);vscode.postMessage({command:'saveSyncEnabled',value:this.checked})\"/>";
     h += '<span class="toggle-slider"></span></label></div></div></div>';
+
+    const issues = syncIssues(data);
+    if (issues.length > 0) {
+        h += '<div class="env-card" style="margin-top:8px"><div class="ech">';
+        h += '<span class="sd dwn"></span><span class="ect">同步未就绪</span>';
+        h += `<span class="ecb bwn">${issues.length} 项待配置</span></div>`;
+        h += `<div class="ecp">${issues.map(esc).join(' · ')}</div>`;
+        h += '</div>';
+    }
 
     // ── 同步内容区（开关关闭时隐藏） ──
     h += `<div id="syncContent" style="${data.syncEnabled ? '' : 'display:none'}">`;
@@ -59,16 +74,23 @@ export function buildSyncPage(data: TemplateData): string {
         if (data.syncServers.length > 1) {
             h += '<div class="ci"><div class="cii"><div class="cil">切换服务器</div></div>';
             h += '<div class="cic"><div class="input-row">';
-            h += `<div class="csel" id="syncServerSelect" style="flex:1;min-width:0"><div class="csel-trigger" data-value="${esc(srv.id)}">${esc(srv.name)} (${esc(srv.username)}@${esc(srv.host)})</div>`;
-            h += '<div class="csel-list">';
-            for (const s of data.syncServers) {
-                const active = s.id === srv.id ? ' active' : '';
-                h += `<div class="csel-item${active}" data-value="${esc(s.id)}">${esc(s.name)} (${esc(s.username)}@${esc(s.host)})</div>`;
-            }
-            h += '</div></div></div></div></div>';
+            h += buildServerSelect(data, srv.id, `${srv.name} (${srv.username}@${srv.host})`);
+            h += '</div></div></div>';
         }
         // 添加新服务器入口
         h += '<div style="margin-top:8px"><button class="btn btn-sm" onclick="showServerForm(\'add\')">+ 添加新服务器</button></div>';
+    } else if (data.syncServers.length > 0) {
+        h += '<div class="env-card"><div class="ech">';
+        h += '<span class="sd dwn"></span>';
+        h += '<span class="ect">未选择有效服务器</span>';
+        h += '<span class="ecb bwn">需要选择</span></div>';
+        h += '<div class="ecp" style="font-family:var(--vscode-font-family)">请选择一个服务器作为同步目标</div>';
+        h += '<div class="ci" style="border-bottom:none;padding-bottom:0"><div class="cii"><div class="cil">选择服务器</div></div>';
+        h += '<div class="cic"><div class="input-row">';
+        h += buildServerSelect(data, '', '选择服务器');
+        h += '</div></div></div>';
+        h += '<div class="eca"><button class="btn btn-sm" onclick="showServerForm(\'add\')">+ 添加新服务器</button></div>';
+        h += '</div>';
     } else {
         // 无服务器
         h += '<div class="env-card"><div class="ech">';
@@ -93,6 +115,17 @@ export function buildSyncPage(data: TemplateData): string {
     // ── 脚本 ──
     h += buildSyncScript(data, srv);
 
+    return h;
+}
+
+function buildServerSelect(data: TemplateData, activeId: string, triggerText: string): string {
+    let h = `<div class="csel" id="syncServerSelect" style="flex:1;min-width:0"><div class="csel-trigger" data-value="${esc(activeId)}">${esc(triggerText)}</div>`;
+    h += '<div class="csel-list">';
+    for (const s of data.syncServers) {
+        const active = s.id === activeId ? ' active' : '';
+        h += `<div class="csel-item${active}" data-value="${esc(s.id)}">${esc(s.name)} (${esc(s.username)}@${esc(s.host)})</div>`;
+    }
+    h += '</div></div>';
     return h;
 }
 

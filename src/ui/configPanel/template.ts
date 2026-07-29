@@ -16,6 +16,7 @@ export interface TemplateData {
     cppStandard: string;
     scanExcludeDirs: string;
     target: string;
+    qmakeArgs?: string;
     runtimeProcessName: string;
     isWin: boolean;
     autoDevShell: string;
@@ -35,6 +36,7 @@ export interface TemplateData {
     syncRemotePath: string;
     syncPendingCount: number;
     syncLastTime: string;
+    syncReadinessIssues?: string[];
     // SDK
     sdkProjectName: string;
     sdkMode: string;
@@ -133,6 +135,7 @@ export function getHtml(data: TemplateData): string {
         effectiveTarget: _escapeHtml(effectiveTarget),
         defaultTarget: _escapeHtml(defaultTarget),
         savedTarget: _escapeHtml(target),
+        qmakeArgs: _escapeHtml(data.qmakeArgs || ''),
         runtimeProcessName: _escapeHtml(runtimeProcessName),
         dotVsBlockClass: effectiveDevShell ? 'dot-ok' : 'dot-warn',
         vsBadgeClass: effectiveDevShell ? 'badge-ok' : 'badge-warn',

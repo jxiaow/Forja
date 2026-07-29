@@ -41,6 +41,14 @@ function resolveWorkspace(input: string | null): string {
     return path.resolve(input || process.cwd());
 }
 
+function getQtPathEnv(): string {
+    return process.env.FORJA_QT_PATH || '';
+}
+
+function getVsDevShellEnv(): string {
+    return process.env.FORJA_VS_DEV_SHELL || '';
+}
+
 function withoutConfigOptions(options: CliOptions): CliOptions {
     return {
         ...options,
@@ -49,7 +57,8 @@ function withoutConfigOptions(options: CliOptions): CliOptions {
         arch: null,
         qtPath: null,
         vsDevShell: null,
-        target: null
+        target: null,
+        qmakeArgs: null
     };
 }
 
@@ -227,8 +236,11 @@ function buildInitDiagnostics(input: InitDiagnosticsInput): CliResult['diagnosti
     return diagnostics;
 }
 
-function buildInitNextActions(project: string | null, projects: string[], missingTools: ReturnType<typeof getMissingTools>): string[] {
+function buildInitNextActions(project: string | null, projects: string[], missingTools: ReturnType<typeof getMissingTools>, autoSelected: string[] = []): string[] {
     const nextActions: string[] = [];
+    if (autoSelected.includes('qtPath')) {
+        nextActions.push('forja qt env --json');
+    }
     if (!project) {
         if (projects.length > 1) {
             nextActions.push(...buildProjectSelectionActions());
@@ -311,11 +323,14 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const qtPath = settings.qtPath || '';
         const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || '';
         const jomPath = settings.jomPath || '';
-        const target = settings.target || '';
+        const targetOverride = settings.target || '';
+        const qmakeArgs = settings.qmakeArgs || '';
+        const projectInfo = projectFull && projectExists ? parseProFile(projectFull) : null;
+        const target = projectExists ? (targetOverride || projectInfo?.target || (projectRel ? path.basename(projectRel, '.pro') : '')) : '';
 
         // 快速文件系统检查（不跑环境检测）
         const projectDir = projectFull ? path.dirname(projectFull) : null;
-        const makefileValidation = projectDir ? validateMakefile(projectDir, { mode, arch, qtPath, proFile: projectFull || '', target }) : { exists: false, matches: false };
+        const makefileValidation = projectDir ? validateMakefile(projectDir, { mode, arch, qtPath, proFile: projectFull || '', target: targetOverride, qmakeArgs }) : { exists: false, matches: false };
         const hasMakefile = makefileValidation.exists && makefileValidation.matches;
         const runtimeTarget = (hasMakefile && projectDir) ? resolveRuntimeTarget(projectDir, mode, arch) : null;
         const hasExecutable = runtimeTarget ? fs.existsSync(runtimeTarget.exePath) : false;
@@ -456,7 +471,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             current: currentProject,
             available,
             configHints: {
-                usage: 'forja qt use --project <path> --json'
+                usage: 'forja qt use --project <path> [--target <name>] --json'
             }
         };
         if (currentProject && !currentExists) {
@@ -507,6 +522,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             updatedQt.target = options.target;
             updated.target = options.target;
         }
+        if (options.qmakeArgs !== undefined && options.qmakeArgs !== null) {
+            updatedQt.qmakeArgs = options.qmakeArgs;
+            updated.qmakeArgs = options.qmakeArgs;
+        }
 
         if (Object.keys(updated).length === 0) {
             result.diagnostics.push({ level: 'error', message: 'use 需要至少指定一个配置参数' });
@@ -554,8 +573,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     if (projectResult.error && options.action !== 'init') {
         const errMode = settings.mode || 'debug';
         const errArch = settings.arch || getDefaultArch();
-        const errQtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-        const errVsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+        const errQtPath = settings.qtPath || getQtPathEnv();
+        const errVsDevShell = resolveVsDevShellPath(settings.vsInstall) || getVsDevShellEnv();
         const errQmakeTarget = settings.target || '';
         result.resolved = buildResolvedConfig(errMode, errArch, errQtPath, errVsDevShell, errQmakeTarget, undefined, undefined, settings.jomPath || undefined);
         result.diagnostics.push({ level: 'error', message: projectResult.error });
@@ -568,9 +587,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const mode = settings.mode || 'debug';
     const autoArch = getAvailableArch().length === 1 ? getDefaultArch() : '';
     const arch = settings.arch || autoArch || getDefaultArch();
-    const qtPath = settings.qtPath || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const qtPath = settings.qtPath || getQtPathEnv();
+    const vsDevShell = resolveVsDevShellPath(settings.vsInstall) || getVsDevShellEnv();
     const target = settings.target || '';
+    const qmakeArgs = settings.qmakeArgs || '';
     const jomPath = settings.jomPath || '';
     const runtimeProcessName = settings.runtimeProcessName || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
@@ -632,6 +652,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 effectiveSettings: effectiveSettingsForCheck
             });
             const initNextActions = buildInitNextActions(project, detected.detected.projects, getMissingTools(effectiveSettingsForCheck));
+            if (!effectiveOptions.qtPath && allQtCandidates.length > 1 && !initNextActions.includes('forja qt env --json')) {
+                initNextActions.unshift('forja qt env --json');
+            }
 
             const initResolved = buildResolvedConfig(mode, arch, effectiveQtPath, effectiveVsDevShell, effectiveTarget, detected.detected.qt?.version, detected.detected.vs?.version, detected.detected.jom || undefined);
             if (project) {
@@ -665,6 +688,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             '确认无误后运行 forja qt init --json 写入本地配置',
             ...buildInitNextActions(project, detected.detected.projects, getMissingTools(previewSettingsForCheck))
         ];
+        if (!effectiveOptions.qtPath && detected.qtCandidates.length > 1 && !previewNextActions.includes('forja qt env --json')) {
+            previewNextActions.splice(1, 0, 'forja qt env --json');
+        }
 
         const previewResolved = buildResolvedConfig(mode, arch, previewQtPath, previewVsDevShell, target, detected.detected.qt?.version, detected.detected.vs?.version, detected.detected.jom || undefined);
 
@@ -697,6 +723,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         qtPath,
         vsDevShell,
         target,
+        qmakeArgs,
         jomPath
     });
     let commands: string[] = [];
@@ -706,11 +733,32 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     } else if (options.action === 'build') {
         const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
         if (project) {
+            if (buildConfig.projectDir && buildConfig.proFile) {
+                const validation = validateMakefile(buildConfig.projectDir, {
+                    mode: buildConfig.mode,
+                    arch: buildConfig.arch,
+                    qtPath: buildConfig.qtPath,
+                    proFile: buildConfig.proFile,
+                    target: buildConfig.target,
+                    qmakeArgs: buildConfig.qmakeArgs
+                });
+                if (!validation.exists || !validation.matches) {
+                    const reason = !validation.exists
+                        ? '未找到 Makefile'
+                        : `Makefile 与当前配置不匹配（${validation.mismatch!.join(', ')}）`;
+                    return {
+                        ...result,
+                        ok: false,
+                        diagnostics: [{ level: 'error', message: `${reason}。请先运行 forja qt qmake --json` }],
+                        nextActions: ['forja qt qmake --json']
+                    };
+                }
+            }
             const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
             const exeName = runtimeProcessName || (runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : (target || path.basename(project, '.pro')));
             const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
             commands = [killCmd, ...buildCmds];
-            result.executablePath = runtimeTarget?.exePath;
+            if (runtimeTarget) { result.executablePath = runtimeTarget.exePath; }
         } else {
             commands = buildCmds;
         }
@@ -725,7 +773,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 arch: buildConfig.arch,
                 qtPath: buildConfig.qtPath,
                 proFile: buildConfig.proFile,
-                target: buildConfig.target
+                target: buildConfig.target,
+                qmakeArgs: buildConfig.qmakeArgs
             });
             if (!validation.exists || !validation.matches) {
                 const reason = !validation.exists

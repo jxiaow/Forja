@@ -9,8 +9,21 @@ import { listProjectConfigs } from '../core/settingsIO';
 import { listSyncStates } from '../core/syncState';
 
 export function runCleanup(argv: string[]): void {
+    for (const arg of argv) {
+        if (!['--json', '--plan'].includes(arg)) {
+            const msg = `未知参数: ${arg}`;
+            if (argv.includes('--json')) {
+                console.log(JSON.stringify({ ok: false, diagnostics: [{ level: 'error', message: msg }] }));
+            } else {
+                console.error(msg);
+            }
+            process.exitCode = 1;
+            return;
+        }
+    }
+
     const wantsJson = argv.includes('--json');
-    const dryRun = argv.includes('--plan') || argv.includes('--dry-run');
+    const dryRun = argv.includes('--plan');
 
     const configs = listProjectConfigs();
     const syncStates = listSyncStates();

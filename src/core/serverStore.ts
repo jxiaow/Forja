@@ -11,7 +11,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import { forjaConfigDir, loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
 
 function atomicWriteJson(filePath: string, data: unknown): void {
     const tmp = filePath + `.tmp.${process.pid}`;
@@ -51,7 +51,7 @@ export interface ProjectSyncConfig {
 // ── 路径 ──
 
 function _globalDir(): string {
-    return process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja');
+    return forjaConfigDir();
 }
 
 /** 清理 ~/.forja/ 下残留的 .tmp 文件（原子写入失败时遗留） */
@@ -82,7 +82,7 @@ function _generateId(): string {
 // ── 全局服务器列表 ──
 
 interface StoredServer {
-    id?: string;
+    id: string;
     name: string;
     host: string;
     port: number;
@@ -99,11 +99,10 @@ export function readServers(): ServerConfig[] {
     try {
         if (fs.existsSync(filePath)) {
             const raw: StoredServer[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-            let needsMigration = false;
-            const servers = raw.map(s => {
-                if (!s.id) { needsMigration = true; }
-                return {
-                    id: s.id || _generateId(),
+            return raw
+                .filter(s => typeof s.id === 'string' && s.id.length > 0)
+                .map(s => ({
+                    id: s.id,
                     name: s.name || '',
                     host: s.host || '',
                     port: s.port || 22,
@@ -112,10 +111,7 @@ export function readServers(): ServerConfig[] {
                     privateKeyPath: s.privateKeyPath || '',
                     password: s.password || '',
                     strictHostKeyChecking: !!s.strictHostKeyChecking
-                };
-            });
-            if (needsMigration) { writeServers(servers); }
-            return servers;
+                }));
         }
     } catch (e) {
         console.warn(`[forja] servers.json 解析失败: ${e instanceof Error ? e.message : e}`);
@@ -175,15 +171,7 @@ export function getServerById(id: string): ServerConfig | null {
     return servers.find(s => s.id === id) || null;
 }
 
-/** @deprecated 兼容旧代码，优先使用 getServerById */
-export function getServerByName(name: string): ServerConfig | null {
-    const servers = readServers();
-    return servers.find(s => s.name === name) || null;
-}
-
 // ── 项目同步配置（读写统一 settingsIO 的 sync 配置） ──
-
-import { loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC } from './settingsIO';
 
 const DEFAULT_IGNORE = DEFAULT_SYNC.ignore;
 

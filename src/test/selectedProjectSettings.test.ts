@@ -12,15 +12,15 @@ test('pinnedProject setting is managed in Forja local settings (not in package.j
     assert.deepEqual(decoded, { root: 'C:/workspace', relative: 'app/demo.pro' });
 });
 
-test('pinnedProject codec supports object config values and legacy string values', () => {
+test('pinnedProject codec only accepts object config values', () => {
     assert.deepEqual(
         decodePinnedProject({ root: 'C:/workspace', relative: 'app/demo.pro' }),
         { root: 'C:/workspace', relative: 'app/demo.pro' }
     );
 
-    assert.deepEqual(
+    assert.equal(
         decodePinnedProject('{"root":"C:/workspace","relative":"app/demo.pro"}'),
-        { root: 'C:/workspace', relative: 'app/demo.pro' }
+        null
     );
 
     assert.equal(

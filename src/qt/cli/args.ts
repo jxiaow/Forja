@@ -32,16 +32,19 @@ use 选项:
   --qt-path <path>       指定 Qt 安装路径
   --vs-dev-shell <path>  指定 Launch-VsDevShell.ps1 路径
   --target <name>        指定 QMake TARGET 覆盖
+  --qmake-args <args>    指定追加到 qmake 命令末尾的自定义参数
 
 执行选项:
   --plan                 仅生成命令计划，不执行（init/use/qmake/build/run/clean/rcc）
-  --dry-run              （兼容旧版，等同于 --plan）
   --detach               run 成功构建后后台启动程序
 
 示例:
   forja qt status --json            查看配置状态和下一步
   forja qt init --json              初始化并保存可自动确定的配置
   forja qt use --mode release       确认/切换到 release 配置
+  forja qt use --project app.pro --target MyApp
+  forja qt use --qt-path /usr/local/qt5.15.2
+  forja qt use --mode release --arch x64
   forja qt build                    执行构建
   forja qt build --plan             查看构建命令（不执行）
   forja qt run --detach             后台构建并运行
@@ -63,7 +66,6 @@ function isCliAction(value: string): value is CliAction {
 
 const knownFlags = new Set([
     '--plan',
-    '--dry-run',
     '--workspace',
     '--project',
     '--mode',
@@ -71,13 +73,14 @@ const knownFlags = new Set([
     '--qt-path',
     '--vs-dev-shell',
     '--target',
+    '--qmake-args',
     '--detach',
     '--json'
 ]);
 
 const commonFlags = ['--workspace', '--json'];
-const configFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
-const planFlags = ['--plan', '--dry-run'];
+const configFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target', '--qmake-args'];
+const planFlags = ['--plan'];
 const actionAllowedFlags: Record<CliAction, Set<string>> = {
     init: new Set([...commonFlags, ...planFlags]),
     use: new Set([...commonFlags, ...planFlags, ...configFlags]),
@@ -142,6 +145,7 @@ export function parseCliArgs(args: string[]): CliOptions {
         qtPath: null,
         vsDevShell: null,
         target: null,
+        qmakeArgs: null,
         detach: false,
         saveLocal: false,
         json: false
@@ -155,8 +159,6 @@ export function parseCliArgs(args: string[]): CliOptions {
 
         switch (arg) {
             case '--plan':
-            case '--dry-run':
-                // 兼容旧版，等同于 --plan
                 options.executionMode = 'dryRun';
                 break;
             case '--workspace':
@@ -185,6 +187,10 @@ export function parseCliArgs(args: string[]): CliOptions {
                 break;
             case '--target':
                 options.target = readValue(args, i, arg);
+                i++;
+                break;
+            case '--qmake-args':
+                options.qmakeArgs = readValue(args, i, arg);
                 i++;
                 break;
             case '--detach':

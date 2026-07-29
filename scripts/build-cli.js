@@ -2,9 +2,9 @@
  * Build script for the standalone forja npm package.
  *
  * Generates dist/<version>/cli/ containing:
- *   - compilot-cli-x.x.x.tgz (npm package)
+ *   - forja-cli-x.x.x.tgz (npm package)
  *   - README.md (CLI documentation)
- *   - skills/compilot/SKILL.md + README.md (AI skill files)
+ *   - skills/forja/SKILL.md + README.md (AI skill files)
  */
 const fs = require('fs');
 const path = require('path');
@@ -42,7 +42,8 @@ const coreFiles = [
     'core/ssh.js',
     'core/sshTransport.js',
     'core/gitChangedFiles.js',
-    'core/gitRepoResolver.js'
+    'core/gitRepoResolver.js',
+    'core/syncFileSelection.js'
 ];
 
 // Individual files needed from qt/platform/ (exclude builder.js, which depends on vscode)

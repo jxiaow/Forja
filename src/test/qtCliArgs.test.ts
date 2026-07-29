@@ -34,17 +34,18 @@ test('parseCliArgs --mode and --arch are use options', () => {
 });
 
 test('parseCliArgs accepts use config options', () => {
-    const opts = parseCliArgs(['use', '--project', 'demo.pro', '--mode', 'release', '--arch', 'x64', '--target', 'demo']);
+    const opts = parseCliArgs(['use', '--project', 'demo.pro', '--mode', 'release', '--arch', 'x64', '--target', 'demo', '--qmake-args', 'DEFINES+=FEATURE_X CONFIG+=qml_debug']);
 
     assert.equal(opts.action, 'use');
     assert.equal(opts.project, 'demo.pro');
     assert.equal(opts.mode, 'release');
     assert.equal(opts.arch, 'x64');
     assert.equal(opts.target, 'demo');
+    assert.equal(opts.qmakeArgs, 'DEFINES+=FEATURE_X CONFIG+=qml_debug');
 });
 
 test('parseCliArgs rejects build config options on execution and read-only actions', () => {
-    const restrictedFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target'];
+    const restrictedFlags = ['--project', '--mode', '--arch', '--qt-path', '--vs-dev-shell', '--target', '--qmake-args'];
     for (const action of ['init', 'build', 'run', 'clean', 'qmake', 'status', 'env', 'projects', 'ps', 'stop', 'rcc']) {
         for (const flag of restrictedFlags) {
             assert.throws(

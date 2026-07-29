@@ -22,6 +22,7 @@ export interface QtSettings {
     jomPath: string;
     pinnedProject: { root: string; relative: string } | null;
     target: string;
+    qmakeArgs: string;
     runtimeProcessName: string;
     cStandard: string;
     cppStandard: string;
@@ -66,6 +67,7 @@ export const DEFAULT_QT: Readonly<QtSettings> = {
     jomPath: '',
     pinnedProject: null,
     target: '',
+    qmakeArgs: '',
     runtimeProcessName: '',
     cStandard: 'c11',
     cppStandard: 'c++11',
@@ -102,8 +104,12 @@ export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
 // ── 路径 ──
 
 /** 用户数据目录下的 projects 配置目录 */
+export function forjaConfigDir(): string {
+    return process.env.FORJA_CONFIG_DIR || path.join(os.homedir(), '.forja');
+}
+
 export function projectsDir(): string {
-    return path.join(os.homedir(), '.forja', 'projects');
+    return path.join(forjaConfigDir(), 'projects');
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
@@ -127,7 +133,24 @@ export function resolveConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'
         if (parent === current) { break; }
         current = parent;
     }
+    if (type === 'qt') {
+        const descendant = resolveUniqueDescendantConfigPath(workspace, type);
+        if (descendant) { return descendant; }
+    }
     return projectConfigPath(workspace, type);
+}
+
+function isDescendantWorkspace(parentWorkspace: string, childWorkspace: string): boolean {
+    const parent = path.resolve(parentWorkspace);
+    const child = path.resolve(childWorkspace);
+    const relative = path.relative(parent, child);
+    return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function resolveUniqueDescendantConfigPath(workspace: string, type: 'qt' | 'sdk' | 'sync'): string | null {
+    const matches = listProjectConfigs()
+        .filter(config => config.type === type && isDescendantWorkspace(workspace, config.workspace));
+    return matches.length === 1 ? matches[0].filePath : null;
 }
 
 // ── Qt 配置读写 ──
@@ -287,6 +310,7 @@ function sanitizeQt(raw: Record<string, unknown>): QtSettings {
         jomPath: isString(raw.jomPath) ? raw.jomPath : d.jomPath,
         pinnedProject,
         target: isString(raw.target) ? raw.target : d.target,
+        qmakeArgs: isString(raw.qmakeArgs) ? raw.qmakeArgs : d.qmakeArgs,
         runtimeProcessName: isString(raw.runtimeProcessName) ? raw.runtimeProcessName : d.runtimeProcessName,
         cStandard: isString(raw.cStandard) ? raw.cStandard : d.cStandard,
         cppStandard: isString(raw.cppStandard) ? raw.cppStandard : d.cppStandard,

@@ -79,10 +79,11 @@ test('parseCliArgs --plan switches to dryRun mode', () => {
     assert.equal(parsed.json, true);
 });
 
-test('parseCliArgs --dry-run is accepted as alias for --plan', () => {
-    const parsed = parseCliArgs(['build', '--dry-run']);
-
-    assert.equal(parsed.executionMode, 'dryRun');
+test('parseCliArgs rejects removed --dry-run alias', () => {
+    assert.throws(
+        () => parseCliArgs(['build', '--dry-run']),
+        /未知参数: --dry-run/
+    );
 });
 
 test('parseCliArgs rejects unknown action', () => {

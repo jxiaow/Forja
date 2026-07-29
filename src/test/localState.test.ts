@@ -37,21 +37,21 @@ test('isProcessRunning treats non-positive pids as not running', () => {
 
 test('parseTasklistPids returns matching executable pids', () => {
     const output = [
-        '"XYWinQT.exe","13228","Console","1","42,000 K"',
+        '"DemoApp.exe","13228","Console","1","42,000 K"',
         '"cmd.exe","9988","Console","1","1,000 K"'
     ].join('\r\n');
 
     assert.deepEqual(
-        parseTasklistPids(output, 'C:\\Code\\workspace\\dev\\qt_client\\qt_linux_pc_client\\release\\x86\\XYWinQT.exe'),
+        parseTasklistPids(output, 'C:\\Code\\workspace\\dev\\qt_client\\qt_linux_pc_client\\release\\x86\\DemoApp.exe'),
         [13228]
     );
 });
 
 test('parsePsPids returns matching executable pids', () => {
     const output = [
-        '13228 /opt/app/XYWinQT /opt/app/XYWinQT --flag',
+        '13228 /opt/app/DemoApp /opt/app/DemoApp --flag',
         '9988 /bin/sh /bin/sh -c test'
     ].join('\n');
 
-    assert.deepEqual(parsePsPids(output, '/opt/app/XYWinQT'), [13228]);
+    assert.deepEqual(parsePsPids(output, '/opt/app/DemoApp'), [13228]);
 });

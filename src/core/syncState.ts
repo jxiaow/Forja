@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import * as crypto from 'crypto';
 import { createLoggerBase } from './loggerBase';
+import { forjaConfigDir } from './settingsIO';
 
 const logger = createLoggerBase('SyncState');
 
@@ -28,7 +28,7 @@ interface SyncStateData {
 function _stateFilePath(workspaceRoot: string): string {
     const normalized = workspaceRoot.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
-    return path.join(os.homedir(), '.forja', 'sync', `${hash}.json`);
+    return path.join(forjaConfigDir(), 'sync', `${hash}.json`);
 }
 
 function _normalizeRemotePath(remotePath: string): string {
@@ -39,8 +39,8 @@ function _targetPrefix(context: SyncTargetContext): string {
     return `target:${encodeURIComponent(context.serverId)}:${encodeURIComponent(_normalizeRemotePath(context.remotePath))}:`;
 }
 
-function _stateKey(relativePath: string, context?: SyncTargetContext): string {
-    if (!context) { return relativePath; }
+function _stateKey(relativePath: string, context?: SyncTargetContext): string | null {
+    if (!context) { return null; }
     return `${_targetPrefix(context)}${relativePath}`;
 }
 
@@ -84,8 +84,10 @@ function _writeState(workspaceRoot: string, state: SyncStateData): void {
  * 判断文件是否需要同步：当前 mtime 比上次同步记录的 mtime 新
  */
 export function needsSync(workspaceRoot: string, relativePath: string, context?: SyncTargetContext): boolean {
+    const key = _stateKey(relativePath, context);
+    if (!key) { return true; }
     const state = _readState(workspaceRoot);
-    const record = state.files[_stateKey(relativePath, context)];
+    const record = state.files[key];
     if (!record) {
         return true;
     }
@@ -108,7 +110,12 @@ export function filterNeedsSync(workspaceRoot: string, files: string[], context?
     const result: string[] = [];
 
     for (const relativePath of files) {
-        const record = state.files[_stateKey(relativePath, context)];
+        const key = _stateKey(relativePath, context);
+        if (!key) {
+            result.push(relativePath);
+            continue;
+        }
+        const record = state.files[key];
         if (!record) {
             result.push(relativePath);
             continue;
@@ -132,11 +139,13 @@ export function filterNeedsSync(workspaceRoot: string, files: string[], context?
  * 标记文件已同步成功
  */
 export function markSynced(workspaceRoot: string, relativePath: string, context?: SyncTargetContext): void {
+    const key = _stateKey(relativePath, context);
+    if (!key) { return; }
     const state = _readState(workspaceRoot);
     const absPath = path.join(workspaceRoot, relativePath);
     try {
         const stat = fs.statSync(absPath);
-        state.files[_stateKey(relativePath, context)] = {
+        state.files[key] = {
             mtime: stat.mtimeMs,
             syncedAt: new Date().toISOString()
         };
@@ -150,6 +159,7 @@ export function markSynced(workspaceRoot: string, relativePath: string, context?
  * 批量标记已同步
  */
 export function markSyncedBatch(workspaceRoot: string, files: string[], context?: SyncTargetContext): void {
+    if (!context) { return; }
     const state = _readState(workspaceRoot);
     const now = new Date().toISOString();
 
@@ -157,7 +167,7 @@ export function markSyncedBatch(workspaceRoot: string, files: string[], context?
         const absPath = path.join(workspaceRoot, relativePath);
         try {
             const stat = fs.statSync(absPath);
-            state.files[_stateKey(relativePath, context)] = {
+            state.files[_stateKey(relativePath, context)!] = {
                 mtime: stat.mtimeMs,
                 syncedAt: now
             };
@@ -257,7 +267,7 @@ export function getSyncPendingInfo(workspaceRoot: string, ignore: string[]): { c
 
 /** 列出所有 sync state 文件（用于 cleanup 命令） */
 export function listSyncStates(): Array<{ filePath: string; workspace: string }> {
-    const dir = path.join(os.homedir(), '.forja', 'sync');
+    const dir = path.join(forjaConfigDir(), 'sync');
     if (!fs.existsSync(dir)) { return []; }
     const results: Array<{ filePath: string; workspace: string }> = [];
     try {

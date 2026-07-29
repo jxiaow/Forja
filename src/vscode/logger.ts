@@ -4,7 +4,7 @@
  * CLI / 非 VSCode 环境：委托给 loggerBase（纯 console）。
  */
 import type * as vscode from 'vscode';
-import { createLoggerBase, log as baseLog, warn as baseWarn, error as baseError } from '../core/loggerBase';
+import { createLoggerBase, setOutputWriter, log as baseLog, warn as baseWarn, error as baseError } from '../core/loggerBase';
 import type { ScopedLogger } from '../core/loggerBase';
 
 export type { ScopedLogger };
@@ -19,6 +19,12 @@ export function initLogger(): vscode.OutputChannel | null {
     try {
         const vscodeApi = require('vscode') as typeof vscode;
         _channel = vscodeApi.window.createOutputChannel('Forja');
+        // 桥接 core/loggerBase 的日志到同一 OutputChannel
+        setOutputWriter((line) => {
+            if (_channel) {
+                _channel.appendLine(line);
+            }
+        });
     } catch {
         _useConsole = true;
         return null;
