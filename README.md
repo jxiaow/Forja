@@ -7,7 +7,8 @@ VSCode 扩展，为基于 qmake 的 Qt/C++ 项目提供构建、运行、调试�
 - 状态栏快速切换 Debug/Release 模式和 x86/x64 架构
 - 一键 QMake、Build、Clean、Run、Debug
 - 自动检测 Visual Studio 和 Qt 安装路径
-- 配置面板：可视化管理所有构建参数
+- 配置面板：Tab 分区可视化管理所有构建参数
+- 远程同步：基于 git diff 将变更文件同步到远程服务器
 - 资源管理器右键 `.ui` 文件：用 Qt Designer 打开
 - `.pri`/`.pro` 文件监听：删除 `.cpp`/`.h`/`.ui` 文件时提示同步移除
 - 自动生成 `c_cpp_properties.json`（IntelliSense 配置）
@@ -37,51 +38,65 @@ VSCode 扩展，为基于 qmake 的 Qt/C++ 项目提供构建、运行、调试�
 | `$(bug) 项目名 · Debug x86` | 点击打开操作菜单，可切换模式/架构、执行构建、切换项目 |
 | `$(play) Run` | 构建并运行；构建中显示 `$(loading~spin) 构建中...`；运行中变为 `$(debug-stop) Stop` |
 | `$(debug-alt) Debug` | 构建并启动调试（需安装 C/C++ 扩展） |
+| `$(cloud-upload) 同步` | 远程同步已启用时显示，点击同步变更文件 |
 
 ---
 
 ## 配置面板
 
-点击活动栏 Qt Pilot 图标打开配置面板。
+点击活动栏 Qt Pilot 图标打开配置面板。面板分为三个 Tab：
 
-### 环境状态
+### 概览
 
-顶部状态栏显示三个指示点：
-- **VS**（仅 Windows）：Visual Studio DevShell 是否可用
-- **Qt**：Qt 是否检测到
-- **make/jom**：构建工具是否可用
+- **项目名称**：当前项目，点击「切换」选择其他 `.pro` 文件
+- **环境状态**：以芯片标签展示 VS/Qt/jom 检测状态
+- **项目设置**：C/C++ 标准、QMake TARGET、生成 IntelliSense 配置
+- **更多设置**（折叠）：排除目录、手动指定 .pro、文件同步提醒、QMake 提醒
 
-点击状态栏可展开详情，查看具体版本信息，或点击「刷新检测」重新扫描。
+### 环境
 
-### 项目
+- **Visual Studio**（仅 Windows）：显示当前 DevShell 路径及来源，可手动覆盖
+- **Qt**：显示当前 Qt 路径及来源，可手动覆盖，可选配置 Designer 和源码路径
 
-显示当前选中的项目名称，点击「切换」可选择其他 `.pro` 文件。
+### 同步
 
-**高级设置**（展开）：
-- **C/C++ 标准**：IntelliSense 使用的语言标准
-- **排除目录**：生成 IntelliSense 配置时额外跳过的目录
-- **QMake TARGET**：覆盖 `.pro` 文件中的 TARGET 名称（留空则使用默认值）
-- **生成 IntelliSense 配置**：手动重新生成 `.vscode/c_cpp_properties.json`
+远程同步功能，将本地变更文件通过 SCP 上传到远程服务器。
 
-### Visual Studio（仅 Windows）
+- **启用开关**：每个项目独立控制
+- **服务器配置（全局）**：地址、端口、用户名、认证方式（SSH 密钥/密码），所有项目共享
+- **项目路径**：当前项目在远程服务器上的对应路径
+- **同步变更文件**：基于 git diff 获取变更文件，跳过已同步且未再修改的文件
 
-显示当前生效的 DevShell 路径及来源（自动检测 / 手动配置）。
+---
 
-展开「手动覆盖」可：
-- 从下拉快速选择 VS 2019/2022 各版本
-- 手动输入 `Launch-VsDevShell.ps1` 路径，或点击「浏览」选择
+## 远程同步
 
-### Qt
+适用于本地编辑、远程编译的开发场景。
 
-显示当前生效的 Qt 路径及来源。
+### 使用方式
 
-展开「手动覆盖」可：
-- 在输入框中直接输入路径
-- 点击输入框右侧下拉箭头，从自动扫描到的所有 Qt 版本中选择
-- 点击「浏览」选择目录
-- 可选配置 `designer.exe` 路径，供右键 `.ui` 文件时直接调用 Qt Designer
+1. 在配置面板「同步」Tab 中配置服务器信息（一次配置，所有项目共享）
+2. 设置当前项目的远程路径并开启同步
+3. 修改代码后，通过以下方式触发同步：
+   - 点击状态栏「同步」按钮
+   - 命令面板执行 `Qt Pilot: 同步变更文件到远程`
+4. 扩展自动识别 git 变更文件，只上传需要同步的部分
 
-> Qt 路径应指向包含 `bin/qmake` 的目录，例如 `C:\Qt\5.15.2\msvc2019`。
+### 认证方式
+
+- **SSH 密钥**（默认）：使用 `~/.ssh/id_rsa` 或指定私钥路径
+- **密码**：首次同步时弹窗输入，会话内缓存（需要安装 `sshpass`）
+
+### 同步逻辑
+
+- 通过 `git diff` 获取变更文件列表
+- 对比本地同步记录（`.work/qt-pilot/sync-state.json`），跳过已同步且未再修改的文件
+- 上传成功后记录文件 mtime，避免重复推送
+
+### 前提条件
+
+- Windows 10+ 自带 OpenSSH（`ssh`/`scp` 命令可用）
+- 密码认证需要安装 `sshpass`（可通过 Git Bash 或 WSL 获取）
 
 ---
 
@@ -100,6 +115,8 @@ VSCode 扩展，为基于 qmake 的 Qt/C++ 项目提供构建、运行、调试�
 | `Qt Pilot: 停止` | 终止正在运行的程序 |
 | `Qt Pilot: 调试` | 构建并启动调试 |
 | `Qt Pilot: 用 Qt Designer 打开` | 用 Qt Designer 打开选中的 `.ui` 文件 |
+| `Qt Pilot: 同步变更文件到远程` | 将 git 变更文件上传到远程服务器 |
+| `Qt Pilot: 测试远程连接` | 测试 SSH 连接是否正常 |
 
 ---
 
@@ -107,21 +124,30 @@ VSCode 扩展，为基于 qmake 的 Qt/C++ 项目提供构建、运行、调试�
 
 在 VSCode 设置（`settings.json`）中可配置：
 
-| 配置项 | 类型 | 说明 |
-|--------|------|------|
-| `qtPilot.qtPath` | string | Qt 路径（留空自动检测） |
-| `qtPilot.designerPath` | string | Qt Designer 可执行文件路径（留空则自动推断） |
-| `qtPilot.vsDevShellPath` | string | `Launch-VsDevShell.ps1` 路径（留空自动检测） |
-| `qtPilot.selectedProject` | object | 当前选中的 `.pro` 文件记录（扩展内部维护） |
-| `qtPilot.manualProPath` | string | 手动指定 `.pro` 文件绝对路径 |
-| `qtPilot.qmakeTarget` | string | QMake TARGET 覆盖（留空使用默认） |
-| `qtPilot.arch` | `x86`/`x64` | 目标架构，默认 `x86` |
-| `qtPilot.mode` | `debug`/`release` | 构建模式，默认 `debug` |
-| `qtPilot.cStandard` | string | IntelliSense C 标准，默认 `c11` |
-| `qtPilot.cppStandard` | string | IntelliSense C++ 标准，默认 `c++11` |
-| `qtPilot.scanExcludeDirs` | string[] | 生成 IntelliSense 时额外排除的目录 |
-| `qtPilot.fileSyncPromptEnabled` | boolean | 文件变更时是否提示同步 .pri/.pro |
-| `qtPilot.qmakeReminderEnabled` | boolean | .pro/.pri 变更后是否提示重新 QMake |
+| 配置项 | 类型 | 作用域 | 说明 |
+|--------|------|--------|------|
+| `qtPilot.qtPath` | string | 工作区 | Qt 路径（留空自动检测） |
+| `qtPilot.designerPath` | string | 工作区 | Qt Designer 可执行文件路径 |
+| `qtPilot.qtSourcePath` | string | 工作区 | Qt 源码路径（调试用） |
+| `qtPilot.vsDevShellPath` | string | 工作区 | `Launch-VsDevShell.ps1` 路径 |
+| `qtPilot.selectedProject` | object | 工作区 | 当前选中的 `.pro` 文件记录 |
+| `qtPilot.manualProPath` | string | 工作区 | 手动指定 `.pro` 文件绝对路径 |
+| `qtPilot.qmakeTarget` | string | 工作区 | QMake TARGET 覆盖 |
+| `qtPilot.arch` | `x86`/`x64` | 工作区 | 目标架构，默认 `x86` |
+| `qtPilot.mode` | `debug`/`release` | 工作区 | 构建模式，默认 `debug` |
+| `qtPilot.cStandard` | string | 工作区 | IntelliSense C 标准 |
+| `qtPilot.cppStandard` | string | 工作区 | IntelliSense C++ 标准 |
+| `qtPilot.scanExcludeDirs` | string[] | 工作区 | IntelliSense 额外排除目录 |
+| `qtPilot.fileSyncPromptEnabled` | boolean | 工作区 | 文件变更时是否提示同步 |
+| `qtPilot.qmakeReminderEnabled` | boolean | 工作区 | .pro/.pri 变更后是否提示 QMake |
+| `qtPilot.remoteSync.host` | string | 全局 | 远程服务器地址 |
+| `qtPilot.remoteSync.port` | number | 全局 | SSH 端口，默认 22 |
+| `qtPilot.remoteSync.username` | string | 全局 | SSH 用户名 |
+| `qtPilot.remoteSync.authMode` | `key`/`password` | 全局 | 认证方式 |
+| `qtPilot.remoteSync.privateKeyPath` | string | 全局 | SSH 私钥路径 |
+| `qtPilot.remoteSync.enabled` | boolean | 工作区 | 启用远程同步 |
+| `qtPilot.remoteSync.remotePath` | string | 工作区 | 远程项目路径 |
+| `qtPilot.remoteSync.ignore` | string[] | 工作区 | 同步忽略列表 |
 
 ---
 
@@ -130,12 +156,13 @@ VSCode 扩展，为基于 qmake 的 Qt/C++ 项目提供构建、运行、调试�
 - **Windows**：需要安装 Visual Studio（含 MSVC 工具链），构建使用 `jom`（Qt 自带）或 `nmake`
 - **Linux**：需要安装 `gcc`/`g++` 和 `make`，Qt 需在 PATH 中或通过配置指定
 - **Run/Debug**：依赖 qmake 生成的 `Makefile` 来确定可执行文件路径，请确保在 Run/Debug 前已执行过 QMake
-- **调试**：需要安装 [C/C++ 扩展](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools)
+- **调试和代码跳转**：需要安装 C/C++ 扩展。基于 VSCode 的 IDE（如 Kiro、Cursor 等）请使用 [v1.24.3](https://github.com/microsoft/vscode-cpptools/releases/tag/v1.24.3) 版本，该版本兼容性最佳，支持代码跳转和 IntelliSense
 - **Qt Designer**：优先使用 `qtPilot.designerPath`，否则尝试从 `qtPilot.qtPath` 推断
 - `.pri`/`.pro` 文件变更后会提示重新运行 QMake
+- **远程同步**：需要 OpenSSH 可用（Windows 10+ 自带），密码认证需要 `sshpass`
 
 ---
 
-## CLI 和 MCP Server
+## CLI
 
-Qt Pilot 还提供独立的命令行工具和 MCP Server，供脚本和 AI 编程工具使用。安装方式：`npm install -g qt-pilot-cli`。
+Qt Pilot 还提供独立的命令行工具，供脚本和 AI 编程工具使用。安装方式：`npm install -g qt-pilot-cli`。

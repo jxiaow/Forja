@@ -1,13 +1,13 @@
 import { CliAction, CliArch, CliBuildMode, CliOptions } from './types';
 
-const validActions: CliAction[] = ['init', 'detect', 'projects', 'status', 'qmake', 'build', 'clean', 'run', 'stop'];
+const validActions: CliAction[] = ['init', 'detect', 'projects', 'status', 'qmake', 'build', 'clean', 'run', 'stop', 'sync', 'logs'];
 
 const helpText = `Qt Pilot CLI — qmake 项目构建工具
 
 用法: qt-pilot <command> [options]
 
 命令:
-  init        初始化本地配置（检测环境、保存 .work/qt-pilot/）
+  init        初始化本地配置（检测环境、保存 .qtpilot/）
   detect      检测 Qt/VS 环境（不写文件，除非 --save-local）
   projects    列出工作区内的 .pro 文件
   status      显示当前配置和项目状态
@@ -16,6 +16,8 @@ const helpText = `Qt Pilot CLI — qmake 项目构建工具
   clean       生成/查看清理命令
   run         构建并运行（--execute 时先 build 再启动）
   stop        停止运行中的程序
+  logs        查看运行日志（--detach 模式启动后的程序输出）
+  sync        同步变更文件到远程服务器（基于 git diff）
 
 选项:
   --workspace <path>     工作区路径（默认当前目录）
@@ -25,9 +27,12 @@ const helpText = `Qt Pilot CLI — qmake 项目构建工具
   --qt-path <path>       Qt 安装路径
   --vs-dev-shell <path>  Launch-VsDevShell.ps1 路径
   --target <name>        QMake TARGET 覆盖
+  --server <name>        同步时指定服务器名称
   --dry-run              仅生成命令计划，不执行（默认）
   --execute              执行命令（需显式传入）
-  --save-local           将检测结果写入 .work/qt-pilot/cache.json
+  --detach               run 时后台启动程序，日志落文件，CLI 立即返回
+  --brief                精简输出（仅 ok、diagnostics、logFile 等关键字段）
+  --save-local           将检测结果写入 .qtpilot/cache.json
   --json                 输出 JSON 格式（适合 AI 工具解析）
   --help, -h             显示此帮助信息
 
@@ -35,6 +40,7 @@ const helpText = `Qt Pilot CLI — qmake 项目构建工具
   qt-pilot init --execute --json    初始化并保存本地配置
   qt-pilot build --json             查看构建命令（dry-run）
   qt-pilot build --execute --json   执行构建
+  qt-pilot sync --execute --json    同步变更文件到远程
   qt-pilot status --json            查看当前状态
 `;
 
@@ -89,6 +95,8 @@ export function parseCliArgs(args: string[]): CliOptions {
         qtPath: null,
         vsDevShell: null,
         target: null,
+        server: null,
+        detach: false,
         saveLocal: false,
         json: false
     };
@@ -138,8 +146,18 @@ export function parseCliArgs(args: string[]): CliOptions {
                 options.target = readValue(args, i, arg);
                 i++;
                 break;
+            case '--server':
+                options.server = readValue(args, i, arg);
+                i++;
+                break;
             case '--save-local':
                 options.saveLocal = true;
+                break;
+            case '--detach':
+                options.detach = true;
+                break;
+            case '--brief':
+                options.brief = true;
                 break;
             case '--json':
                 options.json = true;

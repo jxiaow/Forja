@@ -9,17 +9,27 @@ import { winConfig } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
 import { getMakefileInfo, parseLibPaths } from '../project/projectManager';
 import { createLogger } from '../core/logger';
+import { resolveProjectRoot } from '../core/workspaceResolver';
 
 const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
 const isWin = process.platform === 'win32';
 const logger = createLogger('Build');
+
+function _getTaskFolder(): vscode.WorkspaceFolder | vscode.TaskScope {
+    const root = resolveProjectRoot();
+    if (root) {
+        const folder = vscode.workspace.workspaceFolders?.find(f => f.uri.fsPath === root);
+        if (folder) { return folder; }
+    }
+    return vscode.TaskScope.Workspace;
+}
 
 // QMake/Build/Clean 共用一个 Shared terminal（保留 problem matcher）
 function runTask(name: string, commands: string[], matcher: string | string[]): Thenable<vscode.TaskExecution> {
     logger.info(`Task ${name}: ${commands.join(' && ')}`);
     const task = new vscode.Task(
         { type: 'shell' },
-        vscode.TaskScope.Workspace, name, 'Qt Pilot',
+        _getTaskFolder(), name, 'Qt Pilot',
         builder.makeExec(commands), matcher
     );
     task.presentationOptions = {
@@ -101,7 +111,7 @@ export async function run(): Promise<void> {
     // Build task: 不清屏，失败时保留编译错误
     const buildTask = new vscode.Task(
         { type: 'shell' },
-        vscode.TaskScope.Workspace, `Build ${cfg.mode}`, 'Qt Pilot',
+        _getTaskFolder(), `Build ${cfg.mode}`, 'Qt Pilot',
         builder.makeExec(commands), matcher
     );
     buildTask.presentationOptions = {
@@ -155,7 +165,7 @@ export async function run(): Promise<void> {
             runCmds.push(`"${mfInfo.exePath}"`);
             const runTaskObj = new vscode.Task(
                 { type: 'shell' },
-                vscode.TaskScope.Workspace, `Run ${cfg.mode}`, 'Qt Pilot',
+                _getTaskFolder(), `Run ${cfg.mode}`, 'Qt Pilot',
                 builder.makeExec(runCmds), []
             );
             // 编译成功，Run task 清屏再启动

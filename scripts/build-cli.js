@@ -14,16 +14,17 @@ const dest = path.join(root, 'cli', 'out');
 // Directories to copy (relative to out/)
 const dirs = [
     'cli',
-    'coreCli',
+    'shared',
     'mcp',
     'env',
     'platform',
     'platform/win',
-    'platform/linux'
+    'platform/linux',
+    'sync'
 ];
 
-// Individual files needed from core/ (logger is used by envDetector)
-const coreFiles = ['core/logger.js'];
+// Individual files needed from core/ (logger is used by envDetector, settingsIO by qtCore)
+const coreFiles = ['core/logger.js', 'core/settingsIO.js'];
 
 function copyDir(src, dst) {
     if (!fs.existsSync(src)) { return; }

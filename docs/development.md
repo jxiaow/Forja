@@ -35,7 +35,15 @@ npm test
 
 ## 打包与分发
 
-项目有三个产物，各自独立打包：
+项目有三个产物，各自独立打包。可一键全部打包：
+
+```bash
+npm run package:all
+```
+
+产出到 `dist/` 目录：
+- `dist/qt-pilot-x.x.x.vsix` — VSCode 扩展
+- `dist/qt-pilot-cli-x.x.x.tgz` — CLI + MCP Server
 
 ### 1. VSCode 扩展（.vsix）
 
@@ -43,30 +51,24 @@ npm test
 npm run package
 ```
 
-产出：`qt-pilot-0.3.9.vsix`（约 120 KB）
-
 内容：
-- `out/` — 编译后的 JS（含 CLI 和 MCP 代码，但扩展不会调用 MCP 入口）
+- `out/` — 编译后的 JS
 - `package.json` — 扩展清单
-- `README.md` — 扩展说明（Marketplace 展示用）
+- `README.md` — 扩展说明
 - `media/icon.svg`
 - `LICENSE.txt`
 
 **不包含**：`src/`、`cli/`、`scripts/`、`docs/`、`node_modules/`、`AGENTS.md`
 
 分发方式：
-- 发给别人直接安装：`code --install-extension qt-pilot-0.3.9.vsix`
+- 直接安装：`code --install-extension dist/qt-pilot-x.x.x.vsix`
 - 发布到 Marketplace：`vsce publish`
 
 ### 2. CLI + MCP Server（npm 包）
 
 ```bash
-npm run build:cli
-cd cli
-npm pack
+npm run package:cli
 ```
-
-产出：`qt-pilot-cli-0.3.9.tgz`
 
 内容（由 `cli/package.json` 的 `files` 字段控制）：
 - `out/cli/` — CLI 入口
@@ -74,11 +76,12 @@ npm pack
 - `out/coreCli/` — 核心逻辑
 - `out/env/` — 环境检测
 - `out/platform/` — 平台配置（win/linux）
+- `out/sync/` — 远程同步
 - `out/core/logger.js` — 日志（无 VSCode 时为 no-op）
 - `README.md` — CLI 使用说明
 
 分发方式：
-- 发给别人直接安装：`npm install -g qt-pilot-cli-0.3.9.tgz`
+- 直接安装：`npm install -g dist/qt-pilot-cli-x.x.x.tgz`
 - 发布到 npm：`cd cli && npm publish`
 
 安装后提供两个命令：
@@ -101,9 +104,11 @@ MCP server 包含在上面两个产物中：
 |------|------|
 | `npm run compile` | TypeScript 编译 + 复制 HTML 模板 |
 | `npm run watch` | 监听模式编译 |
-| `npm test` | 编译 + 运行测试（43 个） |
-| `npm run package` | 编译 + 打包 vsix |
-| `npm run build:cli` | 编译 + 组装 CLI 独立包到 `cli/out/` |
+| `npm test` | 编译 + 运行测试（45 个） |
+| `npm run package` | 编译 + 打包 vsix 到 `dist/` |
+| `npm run package:cli` | 编译 + 组装 CLI + 打包 tgz 到 `dist/` |
+| `npm run package:all` | 同时打包 vsix 和 CLI tgz |
+| `npm run build:cli` | 编译 + 组装 CLI 独立包到 `cli/out/`（不打 tgz） |
 | `npm run vsix` | 仅打包 vsix（不重新编译） |
 
 ## 关键文件
@@ -120,11 +125,10 @@ MCP server 包含在上面两个产物中：
 ## 版本发布流程
 
 1. 更新 `package.json` 和 `cli/package.json` 中的 `version`
-2. 更新 `src/mcp/server.ts` 中的 version 字符串
-3. 编译并测试：`npm test`
-4. 打包扩展：`npm run package`
-5. 打包 CLI：`npm run build:cli && cd cli && npm pack`
-6. 分发 `.vsix` 和 `.tgz`
+2. 编译并测试：`npm test`
+3. 一键打包：`npm run package:all`
+4. 安装验证：`code --install-extension dist/qt-pilot-x.x.x.vsix`
+5. 分发 `dist/` 下的 `.vsix` 和 `.tgz`
 
 ---
 
@@ -142,9 +146,11 @@ xy-qt-tools/
 │   ├── project/            # 项目扫描
 │   ├── env/                # 环境检测
 │   ├── platform/           # 平台抽象（win/linux）
+│   ├── sync/               # 远程同步（SCP + git diff）
 │   ├── ui/                 # UI 层（状态栏、配置面板）
 │   └── test/               # 测试
 ├── out/                    # 编译输出（gitignored）
+├── dist/                   # 打包产物（gitignored）
 ├── cli/                    # CLI 独立包
 │   ├── package.json
 │   ├── README.md
@@ -161,3 +167,42 @@ xy-qt-tools/
 ├── AGENTS.md               # AI 编程助手指引
 └── LICENSE.txt
 ```
+
+---
+
+## 远程同步模块
+
+`src/sync/` 目录包含远程同步功能的实现：
+
+| 文件 | 作用 |
+|------|------|
+| `sftpClient.ts` | VSCode 扩展侧：配置读取、SCP 上传、连接测试（依赖 vscode） |
+| `syncCli.ts` | CLI 侧：独立的同步逻辑，读取 `.work/qt-pilot/sync-config.json`（无 vscode 依赖） |
+| `syncState.ts` | 同步状态记录，跟踪文件 mtime 避免重复上传（共用） |
+| `syncWatcher.ts` | VSCode 扩展侧：状态栏按钮、配置变更监听 |
+
+### 数据流
+
+```
+VSCode 扩展配置面板
+  → 写入 settings.json（qtPilot.remoteSync.*）
+  → 同时写入 .work/qt-pilot/sync-config.json（供 CLI 读取）
+
+CLI
+  → 读取 .work/qt-pilot/sync-config.json
+  → 执行同步
+
+两者共用
+  → .work/qt-pilot/sync-state.json（已同步文件记录）
+```
+
+### 配置存储
+
+| 配置项 | 作用域 | 存储位置 |
+|--------|--------|----------|
+| 服务器列表 | 全局 | VSCode 用户设置 + sync-config.json |
+| 启用开关 | 项目 | VSCode 工作区设置 + sync-config.json |
+| 远程路径 | 项目 | VSCode 工作区设置 + sync-config.json |
+| 忽略列表 | 项目 | VSCode 工作区设置 + sync-config.json |
+| 密码 | 全局 | VSCode SecretStorage（加密） |
+| 同步状态 | 项目 | .work/qt-pilot/sync-state.json |

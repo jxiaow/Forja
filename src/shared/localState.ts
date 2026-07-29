@@ -1,17 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { CliArch, CliBuildMode } from '../cli/types';
-
-export interface LocalConfig {
-    version: 1;
-    workspace: string;
-    project: string;
-    mode: CliBuildMode;
-    arch: CliArch;
-    qtPath: string;
-    vsDevShell: string;
-    qmakeTarget: string;
-}
 
 export interface LocalCache {
     version: 1;
@@ -24,11 +12,7 @@ export interface LocalCache {
 }
 
 export function localRoot(workspace: string): string {
-    return path.join(workspace, '.work', 'qt-pilot');
-}
-
-export function configPath(workspace: string): string {
-    return path.join(localRoot(workspace), 'config.json');
+    return path.join(workspace, '.qtpilot');
 }
 
 export function cachePath(workspace: string): string {
@@ -36,20 +20,15 @@ export function cachePath(workspace: string): string {
 }
 
 export function logsDir(workspace: string): string {
-    return path.join(localRoot(workspace), 'logs');
+    const tmpBase = process.env.TEMP || process.env.TMP || require('os').tmpdir();
+    // Use a hash-like folder name based on workspace path to avoid collisions
+    const folderName = workspace.replace(/[\\/:*?"<>|]/g, '_');
+    return path.join(tmpBase, 'qt-pilot-logs', folderName);
 }
 
 export function ensureLocalStateDir(workspace: string): void {
     fs.mkdirSync(localRoot(workspace), { recursive: true });
     fs.mkdirSync(logsDir(workspace), { recursive: true });
-}
-
-export function readLocalConfig(workspace: string): LocalConfig | null {
-    return readJson<LocalConfig>(configPath(workspace));
-}
-
-export function writeLocalConfig(workspace: string, config: LocalConfig): void {
-    writeJson(configPath(workspace), config);
 }
 
 export function readLocalCache(workspace: string): LocalCache | null {
@@ -60,7 +39,7 @@ export function writeLocalCache(workspace: string, cache: LocalCache): void {
     writeJson(cachePath(workspace), cache);
 }
 
-export function ensureWorkGitignored(workspace: string): void {
+export function ensureQtpilotGitignored(workspace: string): void {
     const gitignorePath = path.join(workspace, '.gitignore');
     let lines: string[] = [];
 
@@ -68,8 +47,10 @@ export function ensureWorkGitignored(workspace: string): void {
         lines = fs.readFileSync(gitignorePath, 'utf8').split(/\r?\n/);
     } catch {}
 
-    const otherLines = lines.filter(line => line.trim() !== '.work/' && line.length > 0);
-    otherLines.push('.work/');
+    const otherLines = lines.filter(line =>
+        line.trim() !== '.qtpilot/' && line.length > 0
+    );
+    otherLines.push('.qtpilot/');
     fs.mkdirSync(path.dirname(gitignorePath), { recursive: true });
     fs.writeFileSync(gitignorePath, `${otherLines.join('\n')}\n`, 'utf8');
 }
@@ -85,4 +66,42 @@ function readJson<T>(filePath: string): T | null {
 function writeJson(filePath: string, value: unknown): void {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+// ── Run state (detach mode) ──
+
+export interface RunState {
+    pid: number;
+    exePath: string;
+    logFile: string;
+    startedAt: string;
+}
+
+export function runStatePath(workspace: string): string {
+    return path.join(localRoot(workspace), 'run-state.json');
+}
+
+export function runLogPath(workspace: string): string {
+    return path.join(logsDir(workspace), 'run.log');
+}
+
+export function readRunState(workspace: string): RunState | null {
+    return readJson<RunState>(runStatePath(workspace));
+}
+
+export function writeRunState(workspace: string, state: RunState): void {
+    writeJson(runStatePath(workspace), state);
+}
+
+export function clearRunState(workspace: string): void {
+    try { fs.unlinkSync(runStatePath(workspace)); } catch {}
+}
+
+export function isProcessRunning(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch {
+        return false;
+    }
 }

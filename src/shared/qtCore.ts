@@ -9,14 +9,14 @@ import { resolveBuildConfig } from './configResolver';
 import { scanProFiles } from './projectScanner';
 import {
     LocalCache,
-    LocalConfig,
     ensureLocalStateDir,
-    ensureWorkGitignored,
+    ensureQtpilotGitignored,
     readLocalCache,
-    readLocalConfig,
-    writeLocalCache,
-    writeLocalConfig
+    writeLocalCache
 } from './localState';
+import { loadSettings, saveSettings, QtPilotSettings } from '../core/settingsIO';
+import { buildRunCommand } from './commandRunner';
+import { resolveRuntimeTarget } from './runtimeTarget';
 
 function emptyResult(options: CliOptions, workspace: string): CliResult {
     return {
@@ -26,12 +26,14 @@ function emptyResult(options: CliOptions, workspace: string): CliResult {
         workspace,
         project: null,
         commands: [],
+        shellCommand: '',
         candidates: [],
         nextActions: [],
         exitCode: null,
         durationMs: 0,
         stdout: '',
         stderr: '',
+        errors: [],
         logFile: null,
         diagnostics: [],
         resolved: null
@@ -47,7 +49,7 @@ function insideWorkspace(workspace: string, filePath: string): boolean {
     return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-function resolveProject(workspace: string, options: CliOptions, config: LocalConfig | null): { project: string | null; error: string | null } {
+function resolveProject(workspace: string, options: CliOptions, settings: QtPilotSettings): { project: string | null; error: string | null } {
     const explicitProject = options.project ? path.resolve(options.project) : null;
     if (explicitProject) {
         if (!insideWorkspace(workspace, explicitProject)) {
@@ -55,8 +57,14 @@ function resolveProject(workspace: string, options: CliOptions, config: LocalCon
         }
         return { project: explicitProject, error: null };
     }
-    if (config?.project && fs.existsSync(config.project)) {
-        return { project: config.project, error: null };
+    // From settings: selectedProject or manualProPath
+    const selectedProj = settings.selectedProject;
+    const savedProject = selectedProj ? path.join(selectedProj.root, selectedProj.relative) : null;
+    if (savedProject && fs.existsSync(savedProject)) {
+        return { project: savedProject, error: null };
+    }
+    if (settings.manualProPath && fs.existsSync(settings.manualProPath)) {
+        return { project: settings.manualProPath, error: null };
     }
     const found = scanProFiles(workspace).map(rel => path.join(workspace, rel));
     if (found.length === 1) {
@@ -145,22 +153,24 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         return result;
     }
 
-    const config = readLocalConfig(workspace);
     const cache = readLocalCache(workspace);
+    const settings = loadSettings(workspace);
 
     if (options.action === 'detect' || options.action === 'projects' || options.action === 'status') {
         const detected = await detectAndCache(workspace, options);
         const candidates = detected.detected.projects;
-        const project = config?.project && fs.existsSync(config.project)
-            ? config.project
+        const selectedProj = settings.selectedProject;
+        const savedProject = selectedProj ? path.join(selectedProj.root, selectedProj.relative) : null;
+        const project = savedProject && fs.existsSync(savedProject)
+            ? savedProject
             : candidates.length === 1
                 ? candidates[0]
                 : null;
-        const mode = options.mode || config?.mode || 'debug';
-        const arch = options.arch || config?.arch || 'x86';
-        const qtPath = options.qtPath || config?.qtPath || detected.detected.qt?.path || '';
-        const vsDevShell = options.vsDevShell || config?.vsDevShell || detected.detected.vs?.devShellPath || '';
-        const qmakeTarget = options.target || config?.qmakeTarget || '';
+        const mode = options.mode || settings.mode || 'debug';
+        const arch = options.arch || settings.arch || 'x86';
+        const qtPath = options.qtPath || settings.qtPath || detected.detected.qt?.path || '';
+        const vsDevShell = options.vsDevShell || settings.vsDevShellPath || detected.detected.vs?.devShellPath || '';
+        const qmakeTarget = options.target || settings.qmakeTarget || '';
         const diagnostics = [];
         const nextActions: string[] = [];
 
@@ -188,7 +198,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         };
     }
 
-    const projectResult = resolveProject(workspace, options, config);
+    const projectResult = resolveProject(workspace, options, settings);
     if (projectResult.error && options.action !== 'init') {
         result.candidates = listProjectCandidates(workspace);
         result.diagnostics.push({ level: 'error', message: projectResult.error });
@@ -203,30 +213,29 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
 
     const project = projectResult.project;
-    const mode = options.mode || config?.mode || 'debug';
-    const arch = options.arch || config?.arch || 'x86';
-    const qtPath = options.qtPath || config?.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
-    const vsDevShell = options.vsDevShell || config?.vsDevShell || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
-    const qmakeTarget = options.target || config?.qmakeTarget || '';
+    const mode = options.mode || settings.mode || 'debug';
+    const arch = options.arch || settings.arch || 'x86';
+    const qtPath = options.qtPath || settings.qtPath || cache?.detected.qt?.path || process.env.QT_PILOT_QT_PATH || '';
+    const vsDevShell = options.vsDevShell || settings.vsDevShellPath || cache?.detected.vs?.devShellPath || process.env.QT_PILOT_VS_DEV_SHELL || '';
+    const qmakeTarget = options.target || settings.qmakeTarget || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, qmakeTarget);
 
     if (options.action === 'init') {
         if (options.executionMode === 'execute') {
             ensureLocalStateDir(workspace);
-            ensureWorkGitignored(workspace);
+            ensureQtpilotGitignored(workspace);
             const detected = await detectAndCache(workspace, options);
             writeLocalCache(workspace, detected);
             if (project) {
-                writeLocalConfig(workspace, {
-                    version: 1,
-                    workspace,
-                    project,
+                const updatedSettings: QtPilotSettings = {
+                    ...settings,
                     mode,
                     arch,
                     qtPath: qtPath || detected.detected.qt?.path || '',
-                    vsDevShell: vsDevShell || detected.detected.vs?.devShellPath || '',
+                    vsDevShellPath: vsDevShell || detected.detected.vs?.devShellPath || '',
                     qmakeTarget
-                });
+                };
+                saveSettings(workspace, updatedSettings);
             }
             return { ...result, ok: true, project, diagnostics: [], resolved };
         }
@@ -236,8 +245,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const previewDiagnostics: CliResult['diagnostics'] = [];
         const previewNextActions: string[] = [];
 
-        previewDiagnostics.push({ level: 'info', message: `将创建 .work/qt-pilot/ 目录` });
-        previewDiagnostics.push({ level: 'info', message: `将确保 .gitignore 包含 .work/` });
+        previewDiagnostics.push({ level: 'info', message: `将创建 .qtpilot/ 目录` });
+        previewDiagnostics.push({ level: 'info', message: `将确保 .gitignore 包含 .qtpilot/` });
         previewDiagnostics.push({ level: 'info', message: `将写入 cache.json（环境检测结果）` });
 
         if (project) {
@@ -288,8 +297,43 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
 
     if (options.action === 'qmake') {
         commands = shellBuilder.qmakeCommands(buildConfig).commands;
-    } else if (options.action === 'build' || options.action === 'run') {
+    } else if (options.action === 'build') {
         commands = shellBuilder.buildCommands(buildConfig).commands;
+    } else if (options.action === 'run') {
+        const buildCmds = shellBuilder.buildCommands(buildConfig).commands;
+        // Append run command (launch executable) for both dry-run and execute
+        if (project) {
+            const runCmd = buildRunCommand(project, mode, arch);
+            if (runCmd) {
+                // Kill existing process before build (use actual exe name from Makefile)
+                const runtimeTarget = resolveRuntimeTarget(path.dirname(project), mode, arch);
+                const exeName = runtimeTarget ? path.basename(runtimeTarget.exePath, path.extname(runtimeTarget.exePath)) : path.basename(project, '.pro');
+                const killCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(exeName);
+                commands = [killCmd, ...buildCmds, runCmd];
+            } else {
+                // Makefile not yet generated — can't resolve executable path
+                const environmentGuidance = buildEnvironmentGuidance(options.action, qtPath, vsDevShell);
+                const fallbackExeName = path.basename(project, '.pro');
+                const fallbackKillCmd = (process.platform === 'win32' ? winConfig : linuxConfig).killCommand(fallbackExeName);
+                const fallbackCmds = [fallbackKillCmd, ...shellBuilder.buildCommands(buildConfig).commands];
+                return {
+                    ...result,
+                    ok: true,
+                    project,
+                    commands: fallbackCmds,
+                    shellCommand: fallbackCmds.join(' && '),
+                    diagnostics: [
+                        ...environmentGuidance.diagnostics,
+                        { level: 'warning', message: '无法解析可执行文件路径（Makefile 可能尚未生成），仅返回 build 命令' }
+                    ],
+                    nextActions: [
+                        ...environmentGuidance.nextActions,
+                        '先执行 qmake 生成 Makefile，再重新调用 run'
+                    ],
+                    resolved
+                };
+            }
+        }
     } else if (options.action === 'clean') {
         commands = shellBuilder.cleanCommands(buildConfig).commands;
     } else if (options.action === 'stop') {
@@ -303,6 +347,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         ok: true,
         project,
         commands,
+        shellCommand: commands.length > 0 ? commands.join(' && ') : '',
         diagnostics: environmentGuidance.diagnostics,
         nextActions: environmentGuidance.nextActions,
         resolved

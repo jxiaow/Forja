@@ -1,76 +1,73 @@
-import * as vscode from 'vscode';
 import * as path from 'path';
 import { BuildConfig } from '../platform/builder';
 import { getState } from './stateManager';
-import { decodeSelectedProject } from './selectedProject';
-import { resolveBuildConfig, mergeConfigInputs } from '../coreCli/configResolver';
-import { readLocalCache, readLocalConfig } from '../coreCli/localState';
+import { decodeSelectedProject } from '../project/selectedProject';
+import { resolveBuildConfig, mergeConfigInputs } from '../shared/configResolver';
+import { readLocalCache } from '../shared/localState';
+import { getSetting, setSetting } from './settingsStore';
+import { resolveProjectRoot } from './workspaceResolver';
 
 // ── 配置读取 ──
 
-function cfg(): vscode.WorkspaceConfiguration {
-    return vscode.workspace.getConfiguration('qtPilot');
-}
-
 export function getWorkspaceRoot(): string {
-    return vscode.workspace.workspaceFolders?.[0].uri.fsPath ?? '';
+    return resolveProjectRoot();
 }
 
 export function getVsDevShellPath(): string {
-    return cfg().get<string>('vsDevShellPath', '');
+    return getSetting('vsDevShellPath');
 }
 
 export function getQtPath(): string {
-    return cfg().get<string>('qtPath', '');
+    return getSetting('qtPath');
 }
 
 export function getDesignerPath(): string {
-    return cfg().get<string>('designerPath', '');
+    return getSetting('designerPath');
 }
 
 export function getQtSourcePath(): string {
-    return cfg().get<string>('qtSourcePath', '');
+    return getSetting('qtSourcePath');
 }
 
 export function getSelectedProject(): string {
-    const saved = cfg().get<unknown>('selectedProject');
+    const saved = getSetting('selectedProject');
     const parsed = decodeSelectedProject(saved);
     if (parsed) {
         return parsed.relative;
     }
-    return typeof saved === 'string' ? saved : '';
+    return '';
 }
 
 export function getCStandard(): string {
-    return cfg().get<string>('cStandard', 'c11');
+    return getSetting('cStandard');
 }
 
 export function getCppStandard(): string {
-    return cfg().get<string>('cppStandard', 'c++11');
+    return getSetting('cppStandard');
 }
 
 export function getScanExcludeDirs(): string[] {
-    return cfg().get<string[]>('scanExcludeDirs', []);
+    return getSetting('scanExcludeDirs');
 }
 
 export function getQmakeTarget(): string {
-    return cfg().get<string>('qmakeTarget', '');
+    return getSetting('qmakeTarget');
 }
 
 export function getManualProPath(): string {
-    return cfg().get<string>('manualProPath', '');
+    return getSetting('manualProPath');
 }
 
 export function getFileSyncPromptEnabled(): boolean {
-    return cfg().get<boolean>('fileSyncPromptEnabled', true);
+    return getSetting('fileSyncPromptEnabled');
 }
 
 export function getQmakeReminderEnabled(): boolean {
-    return cfg().get<boolean>('qmakeReminderEnabled', true);
+    return getSetting('qmakeReminderEnabled');
 }
 
-export async function updateConfig(key: string, value: unknown): Promise<void> {
-    await cfg().update(key, value, vscode.ConfigurationTarget.Workspace);
+export function updateConfig(key: string, value: unknown): void {
+    setSetting(key as any, value as any);
 }
 
 // ── BuildConfig 组装 ──
@@ -93,9 +90,8 @@ export function getBuildConfig(): BuildConfig {
         }
     }
 
-    // Priority: VSCode settings > env detection > .work/qt-pilot/config.json > .work/qt-pilot/cache.json > defaults
+    // Priority: settings > env detection > .qtpilot/cache.json > defaults
     const localCache = root ? readLocalCache(root) : null;
-    const localConfig = root ? readLocalConfig(root) : null;
 
     const inputs = mergeConfigInputs(
         // Lowest priority: local cache (auto-detected values)
@@ -108,12 +104,7 @@ export function getBuildConfig(): BuildConfig {
             qtPath: env?.qt?.path || '',
             vsDevShell: env?.vs?.devShellPath || ''
         },
-        // Local config (user-saved CLI config — higher than auto-detection)
-        {
-            qtPath: localConfig?.qtPath || '',
-            vsDevShell: localConfig?.vsDevShell || ''
-        },
-        // Highest priority: explicit VSCode settings + current state
+        // Highest priority: explicit settings + current state
         {
             workspace: root,
             projectPath,
@@ -133,10 +124,8 @@ export function getBuildConfig(): BuildConfig {
 export function getEffectiveVsDevShell(): string {
     const state = getState();
     const root = getWorkspaceRoot();
-    const localConfig = root ? readLocalConfig(root) : null;
     const localCache = root ? readLocalCache(root) : null;
     return getVsDevShellPath()
-        || localConfig?.vsDevShell
         || state.envInfo?.vs?.devShellPath
         || localCache?.detected.vs?.devShellPath
         || '';
@@ -145,10 +134,8 @@ export function getEffectiveVsDevShell(): string {
 export function getEffectiveQtPath(): string {
     const state = getState();
     const root = getWorkspaceRoot();
-    const localConfig = root ? readLocalConfig(root) : null;
     const localCache = root ? readLocalCache(root) : null;
     return getQtPath()
-        || localConfig?.qtPath
         || state.envInfo?.qt?.path
         || localCache?.detected.qt?.path
         || '';

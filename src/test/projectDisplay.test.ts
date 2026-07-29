@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getEffectiveProjectName, getProjectSelectionLabel } from '../core/projectDisplay';
+import { getEffectiveProjectName, getProjectSelectionLabel } from '../project/projectDisplay';
 import type { ProjectInfo } from '../project/projectManager';
 
 function createProject(target = 'DemoApp'): ProjectInfo {

@@ -5,9 +5,10 @@ import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
          getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath,
-         getFileSyncPromptEnabled, getQmakeReminderEnabled } from '../../core/configService';
+         getFileSyncPromptEnabled, getQmakeReminderEnabled, getWorkspaceRoot } from '../../core/configService';
 import { createLogger } from '../../core/logger';
-import { getEffectiveProjectName } from '../../core/projectDisplay';
+import { getEffectiveProjectName } from '../../project/projectDisplay';
+import { readServers, readProjectSyncConfig } from '../../sync/sftpClient';
 
 const logger = createLogger('ConfigPanelView');
 
@@ -25,11 +26,23 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         this._updateHtml();
     }
 
+    switchTab(tab: string): void {
+        if (this._view) {
+            this._view.show?.(true);
+            this._view.webview.postMessage({ command: 'switchTab', tab });
+        }
+    }
+
     resolveWebviewView(webviewView: vscode.WebviewView): void {
         logger.info('resolveWebviewView() called');
         this._view = webviewView;
         webviewView.webview.options = { enableScripts: true };
         this._updateHtml();
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible) {
+                this._updateHtml();
+            }
+        });
 
         // 复用已有的 envInfo，避免重复检测
         const existingEnv = getState().envInfo;
@@ -102,7 +115,18 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             manualProPath: getManualProPath(),
             fileSyncPromptEnabled: getFileSyncPromptEnabled(),
             qmakeReminderEnabled: getQmakeReminderEnabled(),
-            version: this._version
+            version: this._version,
+            ...(() => {
+                const wsRoot = getWorkspaceRoot();
+                const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.qtpilot', 'build', 'debug', 'release'] };
+                const servers = readServers();
+                return {
+                    syncEnabled: sync.enabled,
+                    syncSelectedServer: sync.selectedServer,
+                    syncServers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, authMode: s.authMode, privateKeyPath: s.privateKeyPath, password: s.password, remotePath: s.remotePath })),
+                    syncIgnore: sync.ignore.join(', ')
+                };
+            })()
         };
         this._view.webview.html = getHtml(data);
     }

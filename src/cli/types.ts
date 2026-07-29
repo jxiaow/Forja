@@ -1,4 +1,4 @@
-export type CliAction = 'init' | 'detect' | 'projects' | 'status' | 'qmake' | 'build' | 'clean' | 'run' | 'stop';
+export type CliAction = 'init' | 'detect' | 'projects' | 'status' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'logs';
 export type CliExecutionMode = 'dryRun' | 'execute';
 export type CliBuildMode = 'debug' | 'release';
 export type CliArch = 'x86' | 'x64';
@@ -14,6 +14,9 @@ export interface CliOptions {
     qtPath: string | null;
     vsDevShell: string | null;
     target: string | null;
+    server?: string | null;
+    detach?: boolean;
+    brief?: boolean;
     saveLocal: boolean;
     json: boolean;
 }
@@ -39,12 +42,16 @@ export interface CliResult {
     workspace: string;
     project: string | null;
     commands: string[];
+    /** 拼接好的完整 shell 命令，可直接在 workspace 目录下执行 */
+    shellCommand: string;
     candidates: string[];
     nextActions: string[];
     exitCode: number | null;
     durationMs: number;
     stdout: string;
     stderr: string;
+    /** Extracted error lines from compiler output (when exitCode !== 0) */
+    errors: string[];
     logFile: string | null;
     diagnostics: CliDiagnostic[];
     resolved: CliResolvedConfig | null;

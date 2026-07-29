@@ -23,7 +23,11 @@ function createTemplateData(): TemplateData {
         manualProPath: '',
         fileSyncPromptEnabled: true,
         qmakeReminderEnabled: false,
-        version: 'test'
+        version: 'test',
+        syncEnabled: false,
+        syncSelectedServer: '',
+        syncServers: [],
+        syncIgnore: '.git, node_modules, out'
     };
 }
 

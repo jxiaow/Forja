@@ -1,7 +1,9 @@
 .vscode/**
 .vscode-test/**
+.kiro/**
 src/**
 cli/**
+dist/**
 scripts/**
 docs/**
 .git/**
@@ -9,6 +11,7 @@ docs/**
 .opencode/**
 .superpowers/**
 .work/**
+.qtpilot/**
 **/tsconfig.json
 **/.eslintrc.json
 **/*.map

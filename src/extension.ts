@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as buildManager from './build/buildManager';
-import { setState } from './core/stateManager';
+import { getState, setState, loadPersistedState } from './core/stateManager';
 import { getQtPath, getVsDevShellPath, getWorkspaceRoot, getManualProPath, getDesignerPath } from './core/configService';
 import { createStatusBar, showActions } from './ui/statusBar';
 import { registerPriWatcher } from './project/priWatcher';
@@ -13,8 +13,11 @@ import { registerDebugSessionWatcher, startDebug } from './build/debugger';
 import { generateCppProperties } from './build/configGenerator';
 import { createLogger, initLogger } from './core/logger';
 import { detectEnv } from './env/envDetector';
-import { writeLocalCache, ensureLocalStateDir, LocalCache } from './coreCli/localState';
-import { scanProFiles } from './coreCli/projectScanner';
+import { writeLocalCache, ensureLocalStateDir, LocalCache } from './shared/localState';
+import { scanProFiles } from './shared/projectScanner';
+import { registerSyncWatcher, executeSyncChangedFiles, executeTestConnection } from './sync/syncWatcher';
+import { initSettingsStore } from './core/settingsStore';
+import { registerWorkspaceWatcher } from './core/workspaceResolver';
 
 const logger = createLogger('Extension');
 
@@ -23,15 +26,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(channel);
     logger.info('扩展激活');
 
+    // 注册 workspace folder 变化监听（多文件夹工作区切换时自动重置缓存）
+    registerWorkspaceWatcher(context);
+
+    // 初始化配置存储（必须在其他模块使用配置之前）
+    initSettingsStore(context);
+    loadPersistedState();
+
     createStatusBar(context);
 
     const panel = new ConfigPanel(context);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(ConfigPanel.viewId, panel)
     );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('qtPilot.showSyncTab', () => panel.switchTab('sync'))
+    );
 
     registerPriWatcher(context);
     registerDebugSessionWatcher(context);
+    registerSyncWatcher(context);
 
     // 全局任务结束监听：兜底重置 isBuilding / isRunning（防止关闭终端后状态卡住）
     context.subscriptions.push(
@@ -51,31 +65,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     detectEnv(getQtPath(), getVsDevShellPath()).then((env) => {
         setState('envInfo', env);
         logger.info('启动环境检测完成');
-
-        // 写入 .work/qt-pilot/cache.json 供 CLI 读取
-        const wsRoot = getWorkspaceRoot();
-        if (wsRoot) {
-            try {
-                const qtPath = env.qt?.path || '';
-                const cache: LocalCache = {
-                    version: 1,
-                    updatedAt: new Date().toISOString(),
-                    detected: {
-                        qt: qtPath ? {
-                            path: qtPath,
-                            qmake: path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake')
-                        } : null,
-                        vs: env.vs?.devShellPath ? { devShellPath: env.vs.devShellPath } : null,
-                        projects: scanProFiles(wsRoot).map(rel => path.join(wsRoot, rel))
-                    }
-                };
-                ensureLocalStateDir(wsRoot);
-                writeLocalCache(wsRoot, cache);
-                logger.info('cache.json 已更新');
-            } catch (e) {
-                logger.warn(`写入 cache.json 失败: ${e instanceof Error ? e.message : e}`);
-            }
-        }
     }).catch((e: Error) => logger.error(`启动环境检测失败: ${e.message}`));
 
     // 启动时优先恢复手动指定项目，其次再走工作区扫描/记忆选择
@@ -90,6 +79,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         project = await selectProject(context);
     }
     setState('currentProject', project);
+
+    // 有项目时确保 .qtpilot/ 存在并写入 cache.json
+    if (project) {
+        const wsRoot = getWorkspaceRoot();
+        if (wsRoot) {
+            ensureLocalStateDir(wsRoot);
+            const env = getState().envInfo;
+            if (env) {
+                try {
+                    const qtPath = env.qt?.path || '';
+                    const cache: LocalCache = {
+                        version: 1,
+                        updatedAt: new Date().toISOString(),
+                        detected: {
+                            qt: qtPath ? {
+                                path: qtPath,
+                                qmake: path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake')
+                            } : null,
+                            vs: env.vs?.devShellPath ? { devShellPath: env.vs.devShellPath } : null,
+                            projects: scanProFiles(wsRoot).map(rel => path.join(wsRoot, rel))
+                        }
+                    };
+                    writeLocalCache(wsRoot, cache);
+                    logger.info('cache.json 已更新');
+                } catch (e) {
+                    logger.warn(`写入 cache.json 失败: ${e instanceof Error ? e.message : e}`);
+                }
+            }
+        }
+    }
 
     // 自动生成 c_cpp_properties.json
     if (project) {
@@ -133,6 +152,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const cmds: [string, (...args: any[]) => void][] = [
         ['qtPilot.selectProject', async () => {
             const p = await selectProject(context, true);
+            if (p) {
+                const wsRoot = getWorkspaceRoot();
+                if (wsRoot) { ensureLocalStateDir(wsRoot); }
+            }
             setState('currentProject', p);
             panel.refresh();
         }],
@@ -141,6 +164,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             if (proPath && fs.existsSync(proPath)) {
                 const info = parseProFile(proPath);
                 info.projectDir = path.dirname(proPath);
+                const wsRoot = getWorkspaceRoot();
+                if (wsRoot) { ensureLocalStateDir(wsRoot); }
                 setState('currentProject', info);
                 panel.refresh();
                 logger.info(`手动加载项目: ${proPath}`);
@@ -182,7 +207,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 vscode.window.showErrorMessage('启动 Qt Designer 失败，请在 Qt Pilot 配置面板设置 Qt Designer 路径');
             });
             proc.unref();
-        }]
+        }],
+        ['qtPilot.syncTestConnection', () => executeTestConnection()],
+        ['qtPilot.syncChangedFiles', () => executeSyncChangedFiles()]
     ];
 
     cmds.forEach(([cmd, handler]) => {
