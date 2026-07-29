@@ -1,11 +1,11 @@
-# XY Qt Tools 功能增强设计文档
+# Qt Pilot 功能增强设计文档
 
 **日期**: 2025-03-20
 **版本**: 1.0
 
 ## 概述
 
-XY Qt Tools 是一个 VSCode 扩展，为 Qt/C++ Windows 开发提供构建工具。本次增强聚焦于：
+Qt Pilot 是一个 VSCode 扩展，为 Qt/C++ Windows 开发提供构建工具。本次增强聚焦于：
 
 1. 简化状态栏交互
 2. 自动环境检测
@@ -109,7 +109,7 @@ src/
 ```
 工作区打开
     ↓
-检查 xyQt.selectedProject 配置
+检查 qtPilot.selectedProject 配置
     ↓
 ┌─ 已配置且 .pro 存在 → 直接使用，开始工作
 │
@@ -173,12 +173,12 @@ src/
 
 ```json
 {
-  "xyQt.selectedProject": "qt_linux_pc_client/qt_linux_pc_client.pro",
-  "xyQt.arch": "x86",
-  "xyQt.buildMode": "debug",
-  "xyQt.vsDevShellPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1",
-  "xyQt.qtPath": "C:\\QtCompile\\msvc2019-accessible",
-  "xyQt.powershellPath": "powershell.exe"
+  "qtPilot.selectedProject": "qt_linux_pc_client/qt_linux_pc_client.pro",
+  "qtPilot.arch": "x86",
+  "qtPilot.buildMode": "debug",
+  "qtPilot.vsDevShellPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1",
+  "qtPilot.qtPath": "C:\\QtCompile\\msvc2019-accessible",
+  "qtPilot.powershellPath": "powershell.exe"
 }
 ```
 
@@ -189,7 +189,7 @@ src/
 ```json
 {
   "configurations": [{
-    "name": "XY Qt",
+    "name": "Qt Pilot",
     "includePath": [
       "${workspaceFolder}/${projectDir}/src",
       // ... 扫描项目源码目录
@@ -267,7 +267,7 @@ export function setBuildProgress(progress: BuildProgress | null) {
 // debugger.ts
 export async function startDebug() {
     const config = {
-        name: 'XY Qt Debug',
+        name: 'Qt Pilot Debug',
         type: 'cppvsdbg',
         request: 'launch',
         program: `${workspaceFolder}/${projectDir}/${mode}/${arch}/${exeName}.exe`,

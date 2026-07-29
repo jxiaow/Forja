@@ -1,10 +1,10 @@
-# XY Qt 配置面板 UI 重设计
+# Qt Pilot 配置面板 UI 重设计
 
 日期: 2026-03-23
 
 ## 概述
 
-重新设计 XY Qt 扩展的配置面板 UI，改进视觉层次、简化交互流程、提升用户体验。只包含现有功能，不新增功能。
+重新设计 Qt Pilot 扩展的配置面板 UI，改进视觉层次、简化交互流程、提升用户体验。只包含现有功能，不新增功能。
 
 ## 设计目标
 
@@ -98,7 +98,7 @@ C 标准        C++ 标准
 ```
 
 **交互**:
-- 点击"切换"按钮，调用 `vscode.commands.executeCommand('xyQt.selectProject')`，弹出 QuickPick 列表让用户选择项目
+- 点击"切换"按钮，调用 `vscode.commands.executeCommand('qtPilot.selectProject')`，弹出 QuickPick 列表让用户选择项目
 - 选择 C/C++ 标准，自动保存
 - 输入排除目录，自动保存
 - 点击"生成 IntelliSense 配置"，执行生成
@@ -235,8 +235,8 @@ transition: max-height 0.2s ease-out;
 | 消息 | 方向 | 说明 |
 |------|------|------|
 | refreshEnv | 前端→后端 | 刷新环境检测 |
-| selectProject | 前端→后端 | 调用 xyQt.selectProject 命令 |
-| saveExcludeDirs | 前端→后端 | 保存排除目录到 xyQt.scanExcludeDirs 配置 |
+| selectProject | 前端→后端 | 调用 qtPilot.selectProject 命令 |
+| saveExcludeDirs | 前端→后端 | 保存排除目录到 qtPilot.scanExcludeDirs 配置 |
 | generateIntelliSense | 前端→后端 | 生成 c_cpp_properties.json |
 | browse | 前端→后端 | `{ targetId: string, isDir: boolean }` 打开文件/目录选择器，选择后发送 setPath |
 | envUpdated | 后端→前端 | 环境状态更新 |

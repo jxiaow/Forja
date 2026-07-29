@@ -1,8 +1,8 @@
-# XY Qt Tools 功能增强实现计划
+# Qt Pilot 功能增强实现计划
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 增强 XY Qt Tools 扩展，实现状态栏简化、环境自动检测、项目自动发现、构建进度可视化、调试支持和 IntelliSense 配置生成。
+**Goal:** 增强 Qt Pilot 扩展，实现状态栏简化、环境自动检测、项目自动发现、构建进度可视化、调试支持和 IntelliSense 配置生成。
 
 **Architecture:** 模块化设计，新增 projectManager、envDetector、buildProgress、debugger、configGenerator 模块，重构 statusBar 和 configPanel。
 
@@ -134,7 +134,7 @@ export async function selectProject(context: vscode.ExtensionContext): Promise<P
     }
     
     // 检查已保存的项目
-    const config = vscode.workspace.getConfiguration('xyQt');
+    const config = vscode.workspace.getConfiguration('qtPilot');
     const savedProject = config.get<string>('selectedProject');
     
     if (savedProject) {
@@ -392,25 +392,25 @@ export function createStatusBar(context: vscode.ExtensionContext) {
     
     // 模式切换
     _modeItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 114);
-    _modeItem.command = 'xyQt.selectMode';
+    _modeItem.command = 'qtPilot.selectMode';
     _modeItem.tooltip = '切换构建模式';
     context.subscriptions.push(_modeItem);
     
     // Run 按钮
     _runItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 113);
-    _runItem.command = 'xyQt.run';
+    _runItem.command = 'qtPilot.run';
     _runItem.tooltip = '运行程序';
     context.subscriptions.push(_runItem);
     
     // Debug 按钮
     _debugItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 112);
-    _debugItem.command = 'xyQt.debug';
+    _debugItem.command = 'qtPilot.debug';
     _debugItem.tooltip = '启动调试 (F5)';
     context.subscriptions.push(_debugItem);
     
     // 操作菜单
     _actionItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 111);
-    _actionItem.command = 'xyQt.showActions';
+    _actionItem.command = 'qtPilot.showActions';
     _actionItem.text = '$(gear) 操作';
     _actionItem.tooltip = '构建操作菜单';
     context.subscriptions.push(_actionItem);
@@ -506,11 +506,11 @@ export async function showActions() {
     });
     
     if (selected === 'QMake') {
-        vscode.commands.executeCommand('xyQt.qmake');
+        vscode.commands.executeCommand('qtPilot.qmake');
     } else if (selected === 'Build') {
-        vscode.commands.executeCommand('xyQt.build');
+        vscode.commands.executeCommand('qtPilot.build');
     } else if (selected === 'Clean') {
-        vscode.commands.executeCommand('xyQt.clean');
+        vscode.commands.executeCommand('qtPilot.clean');
     }
 }
 ```
@@ -553,7 +553,7 @@ import { getCurrentProject, ProjectInfo } from './projectManager';
 type BuildCallback = (file: string, percent: number) => void;
 
 function getConfig() {
-    const cfg = vscode.workspace.getConfiguration('xyQt');
+    const cfg = vscode.workspace.getConfiguration('qtPilot');
     const project = getCurrentProject();
     
     return {
@@ -585,7 +585,7 @@ function runTask(name: string, command: string, problemMatcher: string | string[
         { type: 'shell', task: name },
         vscode.TaskScope.Workspace,
         name,
-        'XY Qt',
+        'Qt Pilot',
         makeShellExec(command, powershell),
         problemMatcher
     );
@@ -622,7 +622,7 @@ export async function run() {
     const buildCmd = `${killApp(exeName)}; ${initShell(vsDevShell, arch)}; Set-Location ${projectDir}; jom`;
     const buildTask = new vscode.Task(
         { type: 'shell', task: `Build ${mode} ${arch}` },
-        vscode.TaskScope.Workspace, `Build ${mode} ${arch}`, 'XY Qt',
+        vscode.TaskScope.Workspace, `Build ${mode} ${arch}`, 'Qt Pilot',
         makeShellExec(buildCmd, powershell), '$msCompile'
     );
     buildTask.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Shared };
@@ -641,7 +641,7 @@ export async function run() {
                     const runCmd = `${killApp(exeName)}; & '${exePath}'`;
                     const runTask = new vscode.Task(
                         { type: 'shell', task: `Run ${mode} ${arch}` },
-                        vscode.TaskScope.Workspace, `Run ${mode} ${arch}`, 'XY Qt',
+                        vscode.TaskScope.Workspace, `Run ${mode} ${arch}`, 'Qt Pilot',
                         makeShellExec(runCmd, powershell), []
                     );
                     vscode.tasks.executeTask(runTask);
@@ -694,7 +694,7 @@ import { getEnvInfo, detectEnv, VSInfo, QtInfo } from './envDetector';
 import { selectProject, getCurrentProject, scanProFiles } from './projectManager';
 
 export class ConfigPanel implements vscode.WebviewViewProvider {
-    static readonly viewId = 'xyQt.configView';
+    static readonly viewId = 'qtPilot.configView';
     private _view?: vscode.WebviewView;
 
     resolveWebviewView(webviewView: vscode.WebviewView) {
@@ -713,7 +713,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                 await selectProject(this._context);
                 this._updateHtml();
             } else if (msg.command === 'setArch') {
-                const cfg = vscode.workspace.getConfiguration('xyQt');
+                const cfg = vscode.workspace.getConfiguration('qtPilot');
                 await cfg.update('arch', msg.arch, vscode.ConfigurationTarget.Workspace);
                 this._updateHtml();
             } else if (msg.command === 'save') {
@@ -726,7 +726,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         if (!this._view) return;
         const env = getEnvInfo();
         const project = getCurrentProject();
-        const cfg = vscode.workspace.getConfiguration('xyQt');
+        const cfg = vscode.workspace.getConfiguration('qtPilot');
         const arch = cfg.get<string>('arch', 'x86');
         
         this._view.webview.html = this._getHtml(env, project, arch);
@@ -872,15 +872,15 @@ export async function activate(context: vscode.ExtensionContext) {
     
     // 注册命令
     const cmds: [string, () => void][] = [
-        ['xyQt.selectMode', () => selectMode()],
-        ['xyQt.selectProject', async () => { const p = await selectProject(context); setProject(p); }],
-        ['xyQt.qmake', () => buildManager.qmake()],
-        ['xyQt.build', () => buildManager.build()],
-        ['xyQt.clean', () => buildManager.clean()],
-        ['xyQt.run', () => buildManager.run().catch(err)],
-        ['xyQt.stop', () => buildManager.stop()],
-        ['xyQt.debug', () => startDebug()],
-        ['xyQt.showActions', () => showActions()],
+        ['qtPilot.selectMode', () => selectMode()],
+        ['qtPilot.selectProject', async () => { const p = await selectProject(context); setProject(p); }],
+        ['qtPilot.qmake', () => buildManager.qmake()],
+        ['qtPilot.build', () => buildManager.build()],
+        ['qtPilot.clean', () => buildManager.clean()],
+        ['qtPilot.run', () => buildManager.run().catch(err)],
+        ['qtPilot.stop', () => buildManager.stop()],
+        ['qtPilot.debug', () => startDebug()],
+        ['qtPilot.showActions', () => showActions()],
     ];
     
     cmds.forEach(([cmd, handler]) => {
@@ -932,7 +932,7 @@ export function generateCppProperties(project: ProjectInfo): void {
     
     const config = {
         configurations: [{
-            name: 'XY Qt',
+            name: 'Qt Pilot',
             includePath: [
                 '${workspaceFolder}/**',
                 `${root}/${project.projectDir}`,
@@ -1001,22 +1001,22 @@ git commit -m "feat: add configGenerator for c_cpp_properties.json"
 
 在 `contributes.commands` 中添加：
 ```json
-{ "command": "xyQt.selectMode", "title": "XY Qt: 选择构建模式" },
-{ "command": "xyQt.selectProject", "title": "XY Qt: 选择项目" },
-{ "command": "xyQt.showActions", "title": "XY Qt: 显示操作菜单" },
-{ "command": "xyQt.clean", "title": "XY Qt: Clean" },
-{ "command": "xyQt.stop", "title": "XY Qt: 停止" },
-{ "command": "xyQt.debug", "title": "XY Qt: 调试" }
+{ "command": "qtPilot.selectMode", "title": "Qt Pilot: 选择构建模式" },
+{ "command": "qtPilot.selectProject", "title": "Qt Pilot: 选择项目" },
+{ "command": "qtPilot.showActions", "title": "Qt Pilot: 显示操作菜单" },
+{ "command": "qtPilot.clean", "title": "Qt Pilot: Clean" },
+{ "command": "qtPilot.stop", "title": "Qt Pilot: 停止" },
+{ "command": "qtPilot.debug", "title": "Qt Pilot: 调试" }
 ```
 
 在 `contributes.configuration.properties` 中添加：
 ```json
-"xyQt.selectedProject": {
+"qtPilot.selectedProject": {
     "type": "string",
     "default": "",
     "description": "当前选中的 .pro 文件路径"
 },
-"xyQt.arch": {
+"qtPilot.arch": {
     "type": "string",
     "default": "x86",
     "enum": ["x86", "x64"],
