@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
-import { getState, setState } from '../../core/stateManager';
+import { getState, setState } from '../../core/qtState';
 import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-         getScanExcludeDirs, getSelectedProject, getQmakeTarget, getManualProPath, getDesignerPath, getQtSourcePath,
-         getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../core/configService';
+         getScanExcludeDirs, getPinnedProject, getTarget, getManualProPath, getDesignerPath, getQtSourcePath,
+         getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../qt/services/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { readServers, readProjectSyncConfig } from '../../qt/sync/sftpClient';
+import { readServers, readProjectSyncConfig } from '../../core/serverStore';
+import { getSyncPendingInfo } from '../../core/syncState';
 
 const logger = createLogger('ConfigPanelView');
 
@@ -44,28 +45,33 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             }
         });
 
-        // 复用已有的 envInfo，避免重复检测
-        const existingEnv = getState().envInfo;
-        if (existingEnv) {
+        // 始终全量扫描获取完整候选列表（不复用可能是快速路径产生的缓存）
+        logger.info('初始环境检测（全量扫描）');
+        detectEnv().then(env => {
+            logger.info('初始环境检测完成');
+            setState('envInfo', env);
             this._pushEnvUpdate();
-        } else {
-            const qtPath = getQtPath();
-            const vsPath = getVsDevShellPath();
-            logger.info(`初始环境检测: qtPath="${qtPath}", vsPath="${vsPath}"`);
-            detectEnv(qtPath, vsPath).then(env => {
-                logger.info('初始环境检测完成');
-                setState('envInfo', env);
-                this._pushEnvUpdate();
-            }).catch((err) => {
-                logger.error(`初始环境检测失败: ${err}`);
-            });
-        }
+        }).catch((err) => {
+            logger.error(`初始环境检测失败: ${err}`);
+        });
 
         webviewView.webview.onDidReceiveMessage(msg =>
             handleMessage(msg, webviewView.webview,
                 () => this._pushEnvUpdate(),
                 () => this._updateHtml())
+                .catch(e => console.warn('[compilot] configPanel message error:', (e as Error).message))
         );
+
+        // 监听 sync-state.json 变化，同步完成后刷新面板中的待同步数
+        const wsRoot = getWorkspaceRoot();
+        if (wsRoot) {
+            const syncStatePattern = new vscode.RelativePattern(wsRoot, '.compilot/sync-state.json');
+            const syncStateWatcher = vscode.workspace.createFileSystemWatcher(syncStatePattern);
+            const refreshIfVisible = () => { if (webviewView.visible) { this._updateHtml(); } };
+            syncStateWatcher.onDidChange(refreshIfVisible);
+            syncStateWatcher.onDidCreate(refreshIfVisible);
+            webviewView.onDidDispose(() => syncStateWatcher.dispose());
+        }
     }
 
     private _pushEnvUpdate(): void {
@@ -76,8 +82,11 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         this._view?.webview.postMessage({ command: 'envUpdated', isWin, env: {
             vs: env?.vs ? `VS ${env.vs.version} ${env.vs.edition}` : null,
             qt: env?.qt ? `Qt ${env.qt.version} (${env.qt.compiler})` : null,
-            jom: !!env?.jom
-        }});
+            jom: env?.jom || null
+        },
+        vsCandidates: (env?.vsCandidates ?? []).map(c => ({ label: `VS ${c.version} ${c.edition}`, value: c.devShellPath })),
+        qtCandidates: (env?.qtCandidates ?? []).map(c => ({ label: `Qt ${c.version} (${c.compiler})`, value: c.path }))
+        });
         const manualShell = getVsDevShellPath();
         const autoShell = env?.vs?.devShellPath || '';
         const effectiveShell = manualShell || autoShell;
@@ -96,16 +105,16 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         const state = getState();
         const env = state.envInfo;
         const project = state.currentProject;
-        logger.info(`项目: ${getEffectiveProjectName(project, getQmakeTarget(), '无')}`);
+        logger.info(`项目: ${getEffectiveProjectName(project, getTarget(), '无')}`);
         const data: TemplateData = {
             env,
             project,
             vsDevShellPath: getVsDevShellPath(),
-            selectedProject: getSelectedProject(),
+            pinnedProject: getPinnedProject(),
             cStandard: getCStandard(),
             cppStandard: getCppStandard(),
             scanExcludeDirs: getScanExcludeDirs().join(', '),
-            qmakeTarget: getQmakeTarget(),
+            target: getTarget(),
             isWin: process.platform === 'win32',
             autoDevShell: env?.vs?.devShellPath || '',
             autoQtPath: env?.qt?.path || '',
@@ -121,11 +130,16 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
                 const wsRoot = getWorkspaceRoot();
                 const sync = wsRoot ? readProjectSyncConfig(wsRoot) : { enabled: false, selectedServer: '', ignore: ['.git', 'node_modules', 'out', '.compilot', 'build', 'debug', 'release'] };
                 const servers = readServers();
+                const pendingInfo = wsRoot ? getSyncPendingInfo(wsRoot, sync.ignore) : { count: 0, lastTime: '' };
+
                 return {
                     syncEnabled: sync.enabled,
                     syncSelectedServer: sync.selectedServer,
                     syncServers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, authMode: s.authMode, privateKeyPath: s.privateKeyPath, password: s.password, remotePath: s.remotePath })),
-                    syncIgnore: sync.ignore.join(', ')
+                    syncIgnore: sync.ignore.join(', '),
+                    syncRemotePath: sync.remotePath || '',
+                    syncPendingCount: pendingInfo.count,
+                    syncLastTime: pendingInfo.lastTime
                 };
             })()
         };

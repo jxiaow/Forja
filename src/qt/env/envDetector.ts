@@ -8,25 +8,8 @@ import { log } from '../../core/logger';
 // 重新导出，供 platform 子模块使用
 export { execAsync, readDir, isDir };
 
-export interface EnvInfo {
-    vs: VSInfo | null;
-    qt: QtInfo | null;
-    qtCandidates: QtInfo[];
-    jom: string | null;
-}
-
-export interface VSInfo {
-    version: string;
-    edition: string;
-    installPath: string;
-    devShellPath: string;
-}
-
-export interface QtInfo {
-    version: string;
-    compiler: string;
-    path: string;
-}
+export type { EnvInfo, VSInfo, QtInfo } from '../../core/types';
+import type { EnvInfo, QtInfo } from '../../core/types';
 
 // ── Qt 扫描公共逻辑 ──
 

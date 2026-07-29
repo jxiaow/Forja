@@ -1,0 +1,3 @@
+[submodule "harness/core"]
+	path = harness/core
+	url = https://github.com/jxiaow/agent-harness.git

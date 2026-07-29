@@ -248,6 +248,7 @@ details[open] .arrow { transform: rotate(90deg); }
   width: 100%;
 }
 .custom-select-trigger {
+  position: relative;
   width: 100%;
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
@@ -269,11 +270,14 @@ details[open] .arrow { transform: rotate(90deg); }
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  border: 4px solid transparent;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
   border-top: 5px solid var(--vscode-descriptionForeground);
 }
 .custom-select.open .custom-select-trigger::after {
-  border-top: none;
+  border-top: 0;
   border-bottom: 5px solid var(--vscode-descriptionForeground);
 }
 .custom-select-options {
@@ -312,6 +316,79 @@ details[open] .arrow { transform: rotate(90deg); }
 /* ── Misc ── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { display: inline-block; animation: spin 1s linear infinite; }
+
+/* ── Toggle Switch ── */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  margin-left: auto;
+  cursor: pointer;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, rgba(255,255,255,0.1));
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 14px; height: 14px;
+  left: 2px; bottom: 2px;
+  background: var(--vscode-descriptionForeground);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: rgba(34,197,94,0.2);
+  border-color: #22C55E;
+}
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+  background: #22C55E;
+}
+
+/* ── Sync Status ── */
+.sync-status-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--vscode-input-background);
+  border-radius: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.sync-status-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sync-status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sync-status-meta {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  padding-left: 13px;
+}
+.sync-status-warn {
+  border-left: 2px solid #F59E0B;
+}
+.sync-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.sync-actions .btn { flex: 1; }
+
 .footer {
   padding: 8px 12px;
   text-align: center;
@@ -324,10 +401,10 @@ details[open] .arrow { transform: rotate(90deg); }
 <body>
 
 
-<!-- ═══════════ Section: 概览 ═══════════ -->
+<!-- ═══════════ Section: 项目 ═══════════ -->
 <div class="section-header" onclick="toggleSection(this)">
   <span class="section-arrow">▼</span>
-  <span class="section-title">概览</span>
+  <span class="section-title">项目</span>
 </div>
 <div class="section-body">
 
@@ -337,26 +414,8 @@ details[open] .arrow { transform: rotate(90deg); }
     <button class="btn btn-sm" onclick="selectProject()">切换</button>
   </div>
 
-  <!-- Environment Status -->
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">环境状态</span>
-      <button id="refreshBtn" class="btn btn-sm" onclick="refreshEnv()" {{refreshDisabled}}>{{refreshLabel}}</button>
-    </div>
-    <div class="status-chips">
-      <!--IF_WIN-->
-      <span class="chip"><span id="dot-vs" class="chip-dot {{dotVsClass}}"></span><span id="text-vs-chip">{{textVsChip}}</span></span>
-      <!--END_WIN-->
-      <span class="chip"><span id="dot-qt" class="chip-dot {{dotQtClass}}"></span><span id="text-qt-chip">{{textQtChip}}</span></span>
-      <span class="chip"><span id="dot-jom" class="chip-dot {{dotJomClass}}"></span><span id="text-jom-chip">{{textJomChip}}</span></span>
-    </div>
-  </div>
-
   <!-- Quick Settings -->
   <div class="card">
-    <div class="card-header">
-      <span class="card-title">项目设置</span>
-    </div>
     <div class="field-row">
       <div class="field">
         <label>C 标准</label>
@@ -380,7 +439,7 @@ details[open] .arrow { transform: rotate(90deg); }
     </div>
     <div class="field">
       <label>QMake TARGET</label>
-      <input id="qmakeTarget" value="{{effectiveQmakeTarget}}" data-default-qmake-target="{{defaultQmakeTarget}}" data-saved-qmake-target="{{savedQmakeTarget}}" placeholder="留空使用 .pro 默认值" onchange="saveQmakeTarget()" />
+      <input id="target" value="{{effectiveTarget}}" data-default-target="{{defaultTarget}}" data-saved-target="{{savedTarget}}" placeholder="留空使用 .pro 默认值" onchange="saveTarget()" />
     </div>
     <div class="field">
       <label>排除目录</label>
@@ -389,7 +448,7 @@ details[open] .arrow { transform: rotate(90deg); }
       </div>
       <div class="hint">回车添加，点击标签删除；仅影响 IntelliSense 扫描；已内置排除 build*, debug, release</div>
     </div>
-    <button class="btn btn-primary btn-full" style="margin-top:10px;" onclick="generateIntelliSense()">生成 IntelliSense 配置</button>
+    <button class="btn btn-full" style="margin-top:10px;" onclick="generateIntelliSense()">生成 IntelliSense 配置</button>
 
     <details>
       <summary><span class="arrow">▶</span> 更多设置</summary>
@@ -429,7 +488,7 @@ details[open] .arrow { transform: rotate(90deg); }
 </div>
 
 <!-- ═══════════ Section: 环境 ═══════════ -->
-<div class="section-header collapsed" onclick="toggleSection(this)">
+<div class="section-header" onclick="toggleSection(this)">
   <span class="section-arrow">▼</span>
   <span class="section-title">环境</span>
 </div>
@@ -450,12 +509,7 @@ details[open] .arrow { transform: rotate(90deg); }
           <label>快速选择</label>
           <select id="vsVersion" onchange="onVersionChange()">
             <option value="">-- 选择版本 --</option>
-            <option value="2022_community">VS 2022 Community</option>
-            <option value="2022_professional">VS 2022 Professional</option>
-            <option value="2022_enterprise">VS 2022 Enterprise</option>
-            <option value="2019_community">VS 2019 Community</option>
-            <option value="2019_professional">VS 2019 Professional</option>
-            <option value="2019_enterprise">VS 2019 Enterprise</option>
+            {{vsCandidateOptions}}
           </select>
         </div>
         <div class="field">
@@ -512,42 +566,84 @@ details[open] .arrow { transform: rotate(90deg); }
     </details>
   </div>
 
-</div>
-
-<!-- ═══════════ Section: 同步 ═══════════ -->
-<div class="section-header collapsed" onclick="toggleSection(this)">
-  <span class="section-arrow">▼</span>
-  <span class="section-title">同步</span>
-</div>
-<div id="tab-sync" class="section-body">
-
-  <!-- Enable toggle -->
-  <div class="card">
-    <div class="toggle-row">
-      <div class="toggle-copy">
-        <div class="toggle-title">启用远程同步</div>
-        <div class="hint">基于 git diff 同步变更文件到远程服务器</div>
-      </div>
-      <input id="syncEnabled" type="checkbox" {{chkSyncEnabled}} onchange="saveSyncEnabled()" />
-    </div>
-  </div>
-
-  <!-- Server selector (only shown when sync enabled) -->
-  <div id="sync-config" style="{{syncConfigDisplay}}">
+  <!-- jom/make -->
   <div class="card">
     <div class="card-header">
-      <span class="card-title">服务器</span>
-      <span class="card-badge badge-muted">全局</span>
+      <span class="card-title">{{buildToolLabel}}</span>
+      <span id="jom-badge" class="card-badge {{jomBadgeClass}}">{{jomSource}}</span>
     </div>
-    <div class="field">
-      <div class="input-row">
-        <select id="syncServerSelect" onchange="onServerSelectChange()">
-          <option value="__add__">— 添加服务器 —</option>
-          {{syncServerOptions}}
-        </select>
-        <button class="btn btn-sm" id="btnTestConn" onclick="testSyncConnection()" style="display:none">测试</button>
+    <div id="jom-path" class="path-display">{{effectiveJomPath}}</div>
+  </div>
+
+  <button id="refreshBtn" class="btn btn-full" onclick="refreshEnv()" {{refreshDisabled}}>{{refreshLabel}}</button>
+
+</div>
+
+<!-- ═══════════ Section: 远程同步 ═══════════ -->
+<div class="section-header collapsed" onclick="toggleSection(this)">
+  <span class="section-arrow">▼</span>
+  <span class="section-title">远程同步</span>
+</div>
+<div id="tab-remote" class="section-body">
+
+  <!-- 远程同步（合并卡片） -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">远程同步</span>
+      <label class="toggle-switch" title="启用/禁用远程同步">
+        <input type="checkbox" id="syncEnabledToggle" {{syncEnabledChecked}} onchange="onSyncToggle()" />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <!-- 状态区 -->
+    <div id="syncStatusArea">
+      <div id="syncStatusConfigured" class="sync-status-bar" style="display:none;">
+        <div class="sync-status-info">
+          <span class="sync-status-dot dot-ok"></span>
+          <span id="syncStatusText"></span>
+        </div>
+        <div class="sync-status-meta" id="syncStatusMeta"></div>
+      </div>
+      <div id="syncStatusUnconfigured" class="sync-status-bar sync-status-warn" style="display:none;">
+        <span class="sync-status-dot dot-warn"></span>
+        <span>未配置服务器，请先选择或添加服务器</span>
       </div>
     </div>
+
+    <!-- 操作按钮 -->
+    <div id="syncActions" class="sync-actions" style="display:none;">
+      <button class="btn" onclick="testSyncConnection()">测试连接</button>
+      <span class="hint" style="flex:1; text-align:right;">点击底部状态栏 ☁ 图标同步</span>
+    </div>
+
+    <!-- 服务器选择 -->
+    <div id="syncConfigArea" style="display:none;">
+      <div class="field" style="margin-top:10px;">
+        <label>服务器</label>
+        <div class="input-row">
+          <select id="syncServerSelect" onchange="onServerSelectChange()">
+            {{syncServerOptions}}
+          </select>
+          <button class="btn btn-sm" onclick="showAddServerForm()" title="添加服务器">+</button>
+        </div>
+      </div>
+
+      <!-- 远程路径（项目级） -->
+      <div class="field">
+        <label>远程路径</label>
+        <input id="syncRemotePath" value="{{syncRemotePath}}" placeholder="/home/user/project" onblur="saveSyncRemotePath()" />
+        <div class="hint">本项目同步到的远程目录；多文件夹工作区时自动追加文件夹名</div>
+      </div>
+
+      <!-- 服务器摘要 -->
+      <div id="serverSummary" style="display:none; margin-top:8px; padding:8px; background:var(--bg-card-inner, rgba(255,255,255,0.03)); border-radius:4px;">
+        <div id="serverSummaryText" style="font-size:12px; color:var(--text-secondary); line-height:1.5;"></div>
+        <button class="btn btn-sm" style="margin-top:6px;" onclick="toggleServerForm()">编辑服务器</button>
+      </div>
+    </div>
+
+    <!-- 服务器表单（添加/编辑） -->
     <div id="serverFormSection" style="margin-top:10px; display:none;">
       <div class="field">
         <label>名称</label>
@@ -585,32 +681,26 @@ details[open] .arrow { transform: rotate(90deg); }
           <button class="btn btn-sm" onclick="togglePasswordVisibility()" id="togglePwdBtn">显示</button>
         </div>
       </div>
-      <div class="field">
-        <label>远程根路径</label>
-        <input id="newServerRemotePath" placeholder="/home/user/project" />
-        <div class="hint">多文件夹工作区时，同步到 根路径/文件夹名</div>
-      </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button class="btn btn-primary" style="flex:1;" id="btnServerAction" onclick="submitServer()">添加</button>
         <button class="btn" style="flex:1; display:none;" id="btnDeleteServer" onclick="removeSelectedServer()">删除</button>
+        <button class="btn" onclick="cancelServerForm()">取消</button>
       </div>
     </div>
-  </div>
 
-  <!-- Sync options -->
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">同步选项</span>
-      <span class="card-badge badge-muted">当前项目</span>
-    </div>
-    <div class="field">
-      <label>忽略目录</label>
-      <div class="tag-input" id="syncIgnoreWrap">
-        <input id="syncIgnoreInput" placeholder="输入目录名，回车添加" onkeydown="onTagKey(event, 'syncIgnore')" />
+    <!-- 高级设置（卡片底部） -->
+    <details id="syncAdvancedSettings" style="margin-top:12px; display:none;">
+      <summary><span class="arrow">▶</span> 高级设置</summary>
+      <div class="details-content">
+        <div class="field">
+          <label>忽略目录</label>
+          <div class="tag-input" id="syncIgnoreWrap">
+            <input id="syncIgnoreInput" placeholder="输入目录名，回车添加" onkeydown="onTagKey(event, 'syncIgnore')" />
+          </div>
+          <div class="hint">回车添加，点击标签删除</div>
+        </div>
       </div>
-      <div class="hint">回车添加，点击标签删除</div>
-    </div>
-  </div>
+    </details>
   </div>
 
 </div>
@@ -620,6 +710,10 @@ details[open] .arrow { transform: rotate(90deg); }
 
 <script>
 const vscode = acquireVsCodeApi();
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 // ── Section toggle ──
 function toggleSection(header) {
@@ -637,26 +731,16 @@ function switchTab(name) {
   }
 }
 
-// ── VS paths ──
-const vsPaths = {
-  '2022_community':    'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1',
-  '2022_professional': 'C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\Common7\\Tools\\Launch-VsDevShell.ps1',
-  '2022_enterprise':   'C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\Tools\\Launch-VsDevShell.ps1',
-  '2019_community':    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1',
-  '2019_professional': 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Professional\\Common7\\Tools\\Launch-VsDevShell.ps1',
-  '2019_enterprise':   'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Enterprise\\Common7\\Tools\\Launch-VsDevShell.ps1',
-};
-
 // ── Actions ──
 function selectProject() { vscode.postMessage({ command: 'selectProject' }); }
 function refreshEnv() {
   const btn = document.getElementById('refreshBtn');
-  btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span>';
+  btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span> 检测中...';
   vscode.postMessage({ command: 'refreshEnv' });
 }
 function onVersionChange() {
-  const ver = document.getElementById('vsVersion').value;
-  if (ver && vsPaths[ver]) { document.getElementById('vsDevShellPath').value = vsPaths[ver]; saveVsPath(); }
+  const sel = document.getElementById('vsVersion');
+  if (sel.value) { document.getElementById('vsDevShellPath').value = sel.value; saveVsPath(); }
 }
 function onQtVersionChange() {
   const sel = document.getElementById('qtVersion');
@@ -673,16 +757,16 @@ function saveExcludeDirs() {
   const tags = Array.from(document.querySelectorAll('#scanExcludeDirsWrap .tag-item')).map(el => el.dataset.value);
   vscode.postMessage({ command: 'saveExcludeDirs', dirs: tags });
 }
-let lastSavedQmakeTarget = null;
-function saveQmakeTarget() {
-  const input = document.getElementById('qmakeTarget');
+let lastSavedTarget = null;
+function saveTarget() {
+  const input = document.getElementById('target');
   const value = input.value.trim();
-  const defaultTarget = input.dataset.defaultQmakeTarget || '';
+  const defaultTarget = input.dataset.defaultTarget || '';
   const savedValue = value === defaultTarget ? '' : value;
-  if (lastSavedQmakeTarget === null) { lastSavedQmakeTarget = input.dataset.savedQmakeTarget || ''; }
-  if (savedValue === lastSavedQmakeTarget) { return; }
-  lastSavedQmakeTarget = savedValue;
-  input.dataset.savedQmakeTarget = savedValue;
+  if (lastSavedTarget === null) { lastSavedTarget = input.dataset.savedTarget || ''; }
+  if (savedValue === lastSavedTarget) { return; }
+  lastSavedTarget = savedValue;
+  input.dataset.savedTarget = savedValue;
   vscode.postMessage({ command: 'saveQmakeTarget', value: savedValue });
 }
 function saveFileSyncPromptEnabled() { vscode.postMessage({ command: 'saveFileSyncPromptEnabled', value: document.getElementById('fileSyncPromptEnabled').checked }); }
@@ -698,16 +782,18 @@ function saveRccProjectPath() {
 function generateIntelliSense() { vscode.postMessage({ command: 'generateIntelliSense', cStandard: document.getElementById('cStandard').value, cppStandard: document.getElementById('cppStandard').value }); }
 
 // ── Sync handlers ──
-function saveSyncEnabled() {
-  const checked = document.getElementById('syncEnabled').checked;
-  vscode.postMessage({ command: 'saveSyncEnabled', value: checked });
-  document.getElementById('sync-config').style.display = checked ? '' : 'none';
+function onSyncToggle() {
+  const enabled = document.getElementById('syncEnabledToggle').checked;
+  vscode.postMessage({ command: 'saveSyncEnabled', value: enabled });
+  updateSyncUI();
 }
 function saveSyncSelectedServer() {
   const val = document.getElementById('syncServerSelect').value;
-  if (val !== '__add__') {
-    vscode.postMessage({ command: 'saveSyncSelectedServer', value: val });
-  }
+  vscode.postMessage({ command: 'saveSyncSelectedServer', value: val });
+}
+function saveSyncRemotePath() {
+  const val = document.getElementById('syncRemotePath').value.trim();
+  vscode.postMessage({ command: 'saveSyncRemotePath', value: val });
 }
 function saveSyncIgnore() {
   const tags = Array.from(document.querySelectorAll('#syncIgnoreWrap .tag-item')).map(el => el.dataset.value);
@@ -724,19 +810,54 @@ function togglePasswordVisibility() {
   if (input.type === 'password') { input.type = 'text'; btn.textContent = '隐藏'; }
   else { input.type = 'password'; btn.textContent = '显示'; }
 }
-// ── Server form interaction ──
-let _serverCache = {};
-function onServerSelectChange() {
-  const val = document.getElementById('syncServerSelect').value;
-  if (val === '__add__') {
-    _showAddMode();
+function toggleServerForm() {
+  const form = document.getElementById('serverFormSection');
+  if (form.style.display === 'none') {
+    const id = document.getElementById('syncServerSelect').value;
+    if (id) { _showEditMode(id); }
   } else {
-    _showEditMode(val);
-    saveSyncSelectedServer();
+    form.style.display = 'none';
   }
 }
+function showAddServerForm() {
+  _showAddMode();
+}
+function cancelServerForm() {
+  document.getElementById('serverFormSection').style.display = 'none';
+}
+// ── Server form interaction ──
+let _serverCache = {};
+let _serverFormMode = 'add'; // 'add' or 'edit'
+function onServerSelectChange() {
+  const val = document.getElementById('syncServerSelect').value;
+  _showServerSummary(val);
+  document.getElementById('serverFormSection').style.display = 'none';
+  saveSyncSelectedServer();
+  // 如果服务器有 remotePath 且项目级为空，自动填充
+  const s = _serverCache[val];
+  const remoteInput = document.getElementById('syncRemotePath');
+  if (s && s.remotePath && !remoteInput.value.trim()) {
+    remoteInput.value = s.remotePath;
+    saveSyncRemotePath();
+  }
+  updateSyncUI();
+}
+function _showServerSummary(id) {
+  const s = _serverCache[id];
+  if (!s) {
+    document.getElementById('serverSummary').style.display = 'none';
+    return;
+  }
+  const summary = document.getElementById('serverSummary');
+  const text = document.getElementById('serverSummaryText');
+  text.innerHTML = escapeHtml(s.username + '@' + s.host + ':' + s.port) +
+    (s.authMode === 'key' ? ' · SSH 密钥' : ' · 密码');
+  summary.style.display = '';
+}
 function _showAddMode() {
+  _serverFormMode = 'add';
   document.getElementById('serverFormSection').style.display = '';
+  document.getElementById('serverSummary').style.display = 'none';
   document.getElementById('newServerName').value = '';
   document.getElementById('newServerName').readOnly = false;
   document.getElementById('newServerHost').value = '';
@@ -745,13 +866,12 @@ function _showAddMode() {
   document.getElementById('newServerAuthMode').value = 'key';
   document.getElementById('newServerKeyPath').value = '';
   document.getElementById('newServerPassword').value = '';
-  document.getElementById('newServerRemotePath').value = '';
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '添加';
   document.getElementById('btnDeleteServer').style.display = 'none';
-  document.getElementById('btnTestConn').style.display = 'none';
 }
 function _showEditMode(id) {
+  _serverFormMode = 'edit';
   const s = _serverCache[id];
   if (!s) { return; }
   document.getElementById('serverFormSection').style.display = '';
@@ -763,15 +883,13 @@ function _showEditMode(id) {
   document.getElementById('newServerAuthMode').value = s.authMode || 'key';
   document.getElementById('newServerKeyPath').value = s.privateKeyPath || '';
   document.getElementById('newServerPassword').value = s.password || '';
-  document.getElementById('newServerRemotePath').value = s.remotePath || '';
   toggleNewServerKeyPath();
   document.getElementById('btnServerAction').textContent = '保存修改';
   document.getElementById('btnDeleteServer').style.display = '';
-  document.getElementById('btnTestConn').style.display = '';
 }
 function submitServer() {
   const select = document.getElementById('syncServerSelect');
-  const isAdd = select.value === '__add__';
+  const isAdd = _serverFormMode === 'add';
   const server = {
     name: document.getElementById('newServerName').value.trim(),
     host: document.getElementById('newServerHost').value.trim(),
@@ -780,7 +898,7 @@ function submitServer() {
     authMode: document.getElementById('newServerAuthMode').value,
     privateKeyPath: document.getElementById('newServerKeyPath').value.trim(),
     password: document.getElementById('newServerPassword').value,
-    remotePath: document.getElementById('newServerRemotePath').value.trim()
+    remotePath: ''
   };
   if (!server.name || !server.host || !server.username) { return; }
   if (isAdd) {
@@ -792,10 +910,61 @@ function submitServer() {
 }
 function removeSelectedServer() {
   const id = document.getElementById('syncServerSelect').value;
-  if (!id || id === '__add__') { return; }
+  if (!id) { return; }
   vscode.postMessage({ command: 'removeServer', id });
 }
 function testSyncConnection() { vscode.postMessage({ command: 'testSyncConnection' }); }
+
+// ── Sync UI state management ──
+function updateSyncUI() {
+  const enabled = document.getElementById('syncEnabledToggle').checked;
+  const configArea = document.getElementById('syncConfigArea');
+  const statusArea = document.getElementById('syncStatusArea');
+  const actionsArea = document.getElementById('syncActions');
+  const advancedArea = document.getElementById('syncAdvancedSettings');
+  const select = document.getElementById('syncServerSelect');
+  const hasServer = select && select.value && _serverCache[select.value];
+  const remotePath = document.getElementById('syncRemotePath')?.value?.trim();
+
+  if (!enabled) {
+    configArea.style.display = 'none';
+    statusArea.style.display = 'none';
+    actionsArea.style.display = 'none';
+    advancedArea.style.display = 'none';
+    return;
+  }
+
+  configArea.style.display = '';
+  advancedArea.style.display = '';
+
+  if (hasServer && remotePath) {
+    const s = _serverCache[select.value];
+    document.getElementById('syncStatusConfigured').style.display = '';
+    document.getElementById('syncStatusUnconfigured').style.display = 'none';
+    document.getElementById('syncStatusText').textContent = s.name + ' · ' + s.username + '@' + s.host;
+    const pendingCount = parseInt('{{syncPendingCount}}') || 0;
+    const lastTime = '{{syncLastTime}}';
+    let metaText = '';
+    if (!lastTime && pendingCount === 0) {
+      metaText = '尚未同步';
+    } else if (pendingCount > 0) {
+      metaText = pendingCount + ' 个文件待同步';
+    } else {
+      metaText = '已同步';
+    }
+    if (lastTime) { metaText += ' · 上次: ' + lastTime; }
+    document.getElementById('syncStatusMeta').textContent = metaText;
+    actionsArea.style.display = '';
+  } else if (!hasServer) {
+    document.getElementById('syncStatusConfigured').style.display = 'none';
+    document.getElementById('syncStatusUnconfigured').style.display = '';
+    actionsArea.style.display = 'none';
+  } else {
+    document.getElementById('syncStatusConfigured').style.display = 'none';
+    document.getElementById('syncStatusUnconfigured').style.display = 'none';
+    actionsArea.style.display = 'none';
+  }
+}
 
 // ── Utilities ──
 function preserveBrowseInputFocus(event) { event.preventDefault(); }
@@ -816,18 +985,33 @@ window.addEventListener('message', e => {
     else if (d.targetId === 'manualProPath') { saveManualProPath(); }
     else if (d.targetId === 'rccProjectPath') { saveRccProjectPath(); }
   } else if (d.command === 'envUpdated') {
-    const setDot = (id, ok) => { const el = document.getElementById(id); if (el) { el.className = 'chip-dot ' + (ok ? 'dot-ok' : 'dot-warn'); } };
-    setDot('dot-qt', !!d.env.qt);
-    setDot('dot-jom', d.env.jom);
-    if (d.isWin) { setDot('dot-vs', !!d.env.vs); setText('text-vs-chip', d.env.vs ? d.env.vs.split('(')[0].trim() : 'VS 未检测'); }
-    setText('text-qt-chip', d.env.qt ? d.env.qt.split('(')[0].trim() : 'Qt 未检测');
-    const makeLabel = d.isWin ? 'jom' : 'make';
-    setText('text-jom-chip', d.env.jom ? makeLabel : makeLabel + ' ✗');
-    const btn = document.getElementById('refreshBtn'); btn.disabled = false; btn.innerHTML = '刷新';
+    // 仅更新 jom 和刷新按钮状态；VS/Qt 的 badge 和路径由 devShellUpdated/qtPathUpdated 管理
+    const jomBadge = document.getElementById('jom-badge');
+    if (jomBadge) { jomBadge.className = 'card-badge ' + (d.env.jom ? 'badge-ok' : 'badge-warn'); jomBadge.textContent = d.env.jom ? '自动检测' : '未找到'; }
+    const jomPath = document.getElementById('jom-path');
+    if (jomPath) { jomPath.textContent = d.env.jom || '未检测到'; }
+    const btn = document.getElementById('refreshBtn'); btn.disabled = false; btn.innerHTML = '刷新环境检测';
+    // 更新候选下拉列表
+    if (d.vsCandidates && d.vsCandidates.length > 0) {
+      const vsSel = document.getElementById('vsVersion');
+      if (vsSel) {
+        const prev = vsSel.value;
+        vsSel.innerHTML = '<option value="">-- 选择版本 --</option>' + d.vsCandidates.map(function(c) { return '<option value="' + escapeHtml(c.value) + '">' + escapeHtml(c.label) + '</option>'; }).join('');
+        if (prev && Array.from(vsSel.options).some(function(o) { return o.value === prev; })) { vsSel.value = prev; }
+        if (vsSel._customRefresh) { vsSel._customRefresh(); }
+      }
+    }
+    if (d.qtCandidates && d.qtCandidates.length > 0) {
+      const qtSel = document.getElementById('qtVersion');
+      if (qtSel) {
+        const prev = qtSel.value;
+        qtSel.innerHTML = '<option value="">-- 选择版本 --</option>' + d.qtCandidates.map(function(c) { return '<option value="' + escapeHtml(c.value) + '">' + escapeHtml(c.label) + '</option>'; }).join('');
+        if (prev && Array.from(qtSel.options).some(function(o) { return o.value === prev; })) { qtSel.value = prev; }
+        if (qtSel._customRefresh) { qtSel._customRefresh(); }
+      }
+    }
   } else if (d.command === 'envDetecting') {
-    ['dot-vs','dot-qt','dot-jom'].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'chip-dot dot-detecting'; } });
-    setText('text-vs-chip', '检测中...'); setText('text-qt-chip', '检测中...'); setText('text-jom-chip', '检测中...');
-    const btn = document.getElementById('refreshBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span>';
+    const btn = document.getElementById('refreshBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span> 检测中...';
   } else if (d.command === 'devShellUpdated') {
     const badge = document.getElementById('vs-badge');
     if (badge) { badge.className = 'card-badge ' + (d.ok ? 'badge-ok' : 'badge-warn'); badge.textContent = d.source; }
@@ -840,7 +1024,15 @@ window.addEventListener('message', e => {
     vscode.postMessage({ command: '_noop' }); // keep context
     const reveal = document.createElement('div');
     reveal.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:10px 12px;background:var(--vscode-editor-background);border-bottom:1px solid var(--vscode-panel-border);z-index:100;font-size:13px;display:flex;align-items:center;gap:8px;';
-    reveal.innerHTML = '<span style="flex:1;word-break:break-all;font-family:monospace;">' + d.password.replace(/</g,'&lt;') + '</span><button class="btn btn-sm" onclick="this.parentElement.remove()">关闭</button>';
+    const pwSpan = document.createElement('span');
+    pwSpan.style.cssText = 'flex:1;word-break:break-all;font-family:monospace;';
+    pwSpan.textContent = d.password;
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn btn-sm';
+    closeBtn.textContent = '关闭';
+    closeBtn.onclick = function() { reveal.remove(); };
+    reveal.appendChild(pwSpan);
+    reveal.appendChild(closeBtn);
     document.body.prepend(reveal);
   } else if (d.command === 'serversUpdated') {
     const select = document.getElementById('syncServerSelect');
@@ -850,15 +1042,23 @@ window.addEventListener('message', e => {
     _serverCache = {};
     d.servers.forEach(s => { _serverCache[s.id] = s; });
     // Rebuild options
-    select.innerHTML = '<option value="__add__">\u2014 添加服务器 \u2014</option>' +
-      d.servers.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + esc(s.username) + '@' + esc(s.host) + ')</option>').join('');
+    select.innerHTML = d.servers.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + esc(s.username) + '@' + esc(s.host) + ')</option>').join('');
+    if (d.servers.length === 0) {
+      select.innerHTML = '<option value="">— 无服务器 —</option>';
+    }
     if (d.servers.some(s => s.id === prev)) {
       select.value = prev;
-      _showEditMode(prev);
+      _showServerSummary(prev);
+      document.getElementById('serverFormSection').style.display = 'none';
+    } else if (d.servers.length > 0) {
+      select.value = d.servers[0].id;
+      _showServerSummary(d.servers[0].id);
+      document.getElementById('serverFormSection').style.display = 'none';
     } else {
-      select.value = '__add__';
-      _showAddMode();
+      document.getElementById('serverSummary').style.display = 'none';
+      document.getElementById('serverFormSection').style.display = 'none';
     }
+    updateSyncUI();
     if (select._customRefresh) { select._customRefresh(); }
   }
 });
@@ -899,6 +1099,21 @@ function initTags(wrapperId, csv) {
 }
 initTags('scanExcludeDirsWrap', '{{scanExcludeDirs}}');
 initTags('syncIgnoreWrap', '{{syncIgnore}}');
+
+// ── Init sync UI ──
+(function initSyncUI() {
+  const serverDataRaw = '{{syncServerData}}';
+  try {
+    const servers = JSON.parse(serverDataRaw);
+    servers.forEach(function(s) { _serverCache[s.id] = s; });
+  } catch(e) { /* ignore */ }
+  // Show summary for selected server
+  const select = document.getElementById('syncServerSelect');
+  if (select && select.value && _serverCache[select.value]) {
+    _showServerSummary(select.value);
+  }
+  updateSyncUI();
+})();
 
 // ── Custom Select Component ──
 // 将所有 native select 转换为自定义下拉
@@ -976,20 +1191,6 @@ document.addEventListener('mousedown', (e) => {
 window.addEventListener('blur', () => {
   document.querySelectorAll('.custom-select.open').forEach(s => s.classList.remove('open'));
 });
-
-// 初始化服务器表单
-(function() {
-  const servers = JSON.parse('{{syncServerData}}');
-  servers.forEach(s => { _serverCache[s.id] = s; });
-  const select = document.getElementById('syncServerSelect');
-  const selected = select.value;
-  if (selected && selected !== '__add__' && _serverCache[selected]) {
-    _showEditMode(selected);
-  } else {
-    select.value = '__add__';
-    _showAddMode();
-  }
-})();
 
 // 初始化
 initCustomSelects();

@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { SdkProjectInfo, BuildMode, Arch, StateChangeEvent } from '../types';
-import { CFG_SECTION } from '../constants';
 import { isLinux } from '../platform';
+import { getSdkSetting, setSdkSetting } from '../../core/settingsStore';
 
 export class StateManager implements vscode.Disposable {
   private _currentProject: SdkProjectInfo | null = null;
@@ -62,40 +63,49 @@ export class StateManager implements vscode.Disposable {
     this._onStateChanged.fire({ field: 'isBuilding', oldValue: old, newValue: value });
   }
 
-  /** 从工作区配置恢复状态 */
+  /** 从统一配置 .compilot/settings.json 的 sdk 部分恢复状态 */
   async restoreFromConfig(): Promise<void> {
-    const config = vscode.workspace.getConfiguration(CFG_SECTION);
-
-    const mode = config.get<string>('mode');
+    const mode = getSdkSetting('mode');
     if (mode === 'debug' || mode === 'release') {
       this._mode = mode;
     }
 
-    const arch = config.get<string>('arch');
+    const arch = getSdkSetting('arch');
     if (!isLinux && (arch === 'x86' || arch === 'x64')) {
       this._arch = arch;
     }
 
-    const selectedProject = config.get<string>('selectedProject');
-    if (selectedProject) {
-      // 仅设置路径，后续由 scanner 验证
-      const path = require('path');
-      const name = path.basename(selectedProject, path.extname(selectedProject));
-      const type = selectedProject.endsWith('.sln') ? 'sln' : 'makefile';
-      this._currentProject = { name, path: selectedProject, type } as SdkProjectInfo;
+    const pinnedProject = getSdkSetting('pinnedProject');
+    if (pinnedProject) {
+      const folders = vscode.workspace.workspaceFolders;
+      const wsRoot = folders && folders.length > 0 ? folders[0].uri.fsPath : '';
+      let resolvedPath = pinnedProject;
+      if (wsRoot && !path.isAbsolute(resolvedPath)) {
+        resolvedPath = path.join(wsRoot, resolvedPath);
+      }
+      const name = path.basename(resolvedPath, path.extname(resolvedPath));
+      const type = resolvedPath.endsWith('.sln') ? 'sln' : 'makefile';
+      this._currentProject = { name, path: resolvedPath, type } as SdkProjectInfo;
     }
   }
 
-  /** 将当前状态持久化到工作区配置 */
+  /** 将当前状态持久化到统一配置 .compilot/settings.json 的 sdk 部分 */
   async persistToConfig(): Promise<void> {
-    const config = vscode.workspace.getConfiguration(CFG_SECTION);
-    await config.update('mode', this._mode, vscode.ConfigurationTarget.Workspace);
-    await config.update('arch', this._arch, vscode.ConfigurationTarget.Workspace);
-    await config.update(
-      'selectedProject',
-      this._currentProject?.path || '',
-      vscode.ConfigurationTarget.Workspace
-    );
+    const folders = vscode.workspace.workspaceFolders;
+    const wsRoot = folders && folders.length > 0 ? folders[0].uri.fsPath : '';
+
+    // 计算相对路径
+    let projectValue: string | null = null;
+    if (this._currentProject?.path && wsRoot) {
+      const relative = path.relative(wsRoot, this._currentProject.path);
+      projectValue = relative.startsWith('..') || path.isAbsolute(relative)
+        ? this._currentProject.path
+        : relative.replace(/\\/g, '/');
+    }
+
+    setSdkSetting('mode', this._mode);
+    setSdkSetting('arch', this._arch);
+    setSdkSetting('pinnedProject', projectValue);
   }
 
   dispose(): void {

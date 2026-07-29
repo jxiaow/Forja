@@ -5,6 +5,7 @@ export const linuxConfig: PlatformConfig = {
     shellExecutable: null,
     shellArgs: null,
     commandJoiner: ' && ',
+    qmakeBin: 'qmake',
 
     initCommands(cfg: BuildConfig): string[] {
         if (!cfg.qtPath) { return []; }
@@ -27,8 +28,8 @@ export const linuxConfig: PlatformConfig = {
     qmakeExtraArgs(): string { return ''; },
     qmakeMatcher: '$gcc',
 
-    buildCommand: 'make -j$(nproc)',
-    buildMatcher: [],
+    buildCommand: 'make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)',
+    buildMatcher: '$gcc',
 
     cleanCommand: 'make clean',
     cleanMatcher: '$gcc'

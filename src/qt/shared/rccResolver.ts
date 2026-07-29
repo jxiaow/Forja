@@ -78,7 +78,7 @@ export function rccNeedsRebuild(targets: RccTarget[]): boolean {
                     return true;
                 }
             }
-        } catch {}
+        } catch { /* qrc read failure tolerated */ }
     }
     return false;
 }

@@ -2,12 +2,24 @@ import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CliResult } from '../cli/types';
-import { ensureLocalStateDir, logsDir, runLogPath, writeRunState, clearRunState } from './localState';
+import { ensureLocalStateDir, logsDir, runLogPath, writeRunState } from './localState';
 import { parseRuntimeLibPaths, resolveRuntimeTarget } from './runtimeTarget';
 
 function logFileFor(workspace: string, action: string): string {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     return path.join(logsDir(workspace), `${stamp}-${action}.log`);
+}
+
+/** Clean up stale .bat/.vbs launcher scripts from previous detach runs */
+function cleanDetachScripts(dir: string): void {
+    try {
+        if (!fs.existsSync(dir)) { return; }
+        for (const entry of fs.readdirSync(dir)) {
+            if (entry.endsWith('.bat') || entry.endsWith('.vbs')) {
+                try { fs.unlinkSync(path.join(dir, entry)); } catch { /* stale file, ignore */ }
+            }
+        }
+    } catch { /* dir read failure, non-critical */ }
 }
 
 function execute(commandLine: string, cwd: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
@@ -107,8 +119,11 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
     const started = Date.now();
     const commandParts = [...result.commands];
 
+    // stop is always synchronous — detach makes no sense for a kill command
+    const effectiveDetach = options?.detach && result.action !== 'stop';
+
     // Detach mode for run: build first, then launch exe separately
-    if (options?.detach && result.action === 'run' && commandParts.length > 1) {
+    if (effectiveDetach && result.action === 'run' && commandParts.length > 1) {
         const buildCommands = commandParts.slice(0, -1);
         const runCommand = commandParts[commandParts.length - 1];
 
@@ -131,7 +146,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 stderr: buildResult.stderr,
                 logFile: filePath,
                 commands: commandParts,
-                diagnostics: [...result.diagnostics, { level: 'error', message: '编译失败', hint: '请查看 logFile 中的 stdout 和 stderr' }]
+                diagnostics: [...result.diagnostics, { level: 'error', message: '编译失败' }]
             };
         }
 
@@ -139,6 +154,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         ensureLocalStateDir(result.workspace);
         const logFile = runLogPath(result.workspace);
         fs.mkdirSync(path.dirname(logFile), { recursive: true });
+        cleanDetachScripts(path.dirname(logFile));
 
         const cwd = result.project ? path.dirname(result.project) : result.workspace;
         const isWin = process.platform === 'win32';
@@ -188,10 +204,11 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
     }
 
     // Detach mode for build/clean/rebuild: run entire command sequence in background
-    if (options?.detach && result.action !== 'run' && commandParts.length > 0) {
+    if (effectiveDetach && result.action !== 'run' && commandParts.length > 0) {
         ensureLocalStateDir(result.workspace);
         const logFile = logFileFor(result.workspace, result.action);
         fs.mkdirSync(path.dirname(logFile), { recursive: true });
+        cleanDetachScripts(path.dirname(logFile));
 
         const commandLine = commandParts.join(' && ');
         const cwd = result.project ? path.dirname(result.project) : result.workspace;
@@ -265,8 +282,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 ...result.diagnostics,
                 {
                     level: 'error',
-                    message: '命令执行失败',
-                    hint: errors.length > 0 ? undefined : '请查看 logFile 中的 stdout 和 stderr'
+                    message: '命令执行失败'
                 }
             ]
     };

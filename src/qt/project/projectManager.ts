@@ -2,24 +2,17 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../../core/logger';
-import { decodeSelectedProject, encodeSelectedProject } from './selectedProject';
+import { decodePinnedProject, encodePinnedProject } from './pinnedProject';
 import { getEffectiveProjectName, getProjectSelectionLabel } from './projectDisplay';
-import { getQmakeTarget } from '../../core/configService';
-import { getState } from '../../core/stateManager';
-import { getSetting, setSetting } from '../../core/settingsStore';
+import { getTarget } from '../services/configService';
+import { getState } from '../../core/qtState';
+import { getQtSetting, setQtSetting } from '../../core/settingsStore';
 import { setProjectRoot } from '../../core/workspaceResolver';
 import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../shared/projectScanner';
 import { resolveRuntimeTarget, parseRuntimeLibPaths } from '../shared/runtimeTarget';
 
-export interface ProjectInfo {
-    proPath: string;        // .pro 文件完整路径
-    projectDir: string;     // 项目目录（相对于 workspace）
-    proFile: string;        // .pro 文件名
-    target: string;         // TARGET 名称（显示用，从 .pro 粗略解析）
-    qtModules: string[];    // QT 模块列表
-    defines: string[];      // DEFINES
-}
-
+import { ProjectInfo } from './types';
+export type { ProjectInfo } from './types';
 export interface MakefileInfo {
     target: string;         // 可执行文件名（不含 .exe）
     destDir: string;        // 输出目录
@@ -77,10 +70,10 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         return null;
     }
 
-    const savedProject = getSetting('selectedProject');
+    const savedProject = getQtSetting('pinnedProject');
 
     if (!forceSelect && savedProject) {
-        const savedRef = decodeSelectedProject(savedProject);
+        const savedRef = decodePinnedProject(savedProject);
         if (savedRef) {
             const fullPath = path.join(savedRef.root, savedRef.relative);
             if (fs.existsSync(fullPath)) {
@@ -124,13 +117,13 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
         const info = parseProFile(fullPath);
         info.projectDir = path.dirname(item.relative);
         setProjectRoot(item.root);
-        setSetting('selectedProject', encodeSelectedProject(item.root, item.relative));
+        setQtSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
         return info;
     }
 
     const selected = await vscode.window.showQuickPick(
         allProFiles.map(f => f.label),
-        { placeHolder: `切换项目 · 当前 ${getEffectiveProjectName(getState().currentProject, getQmakeTarget(), '未选择项目')}` }
+        { placeHolder: `切换项目 · 当前 ${getEffectiveProjectName(getState().currentProject, getTarget(), '未选择项目')}` }
     );
 
     if (selected) {
@@ -140,7 +133,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
             const info = parseProFile(fullPath);
             info.projectDir = path.dirname(item.relative);
             setProjectRoot(item.root);
-            setSetting('selectedProject', encodeSelectedProject(item.root, item.relative));
+            setQtSetting('pinnedProject', encodePinnedProject(item.root, item.relative));
             return info;
         }
     }

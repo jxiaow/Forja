@@ -106,7 +106,7 @@
 1. THE Extension_Host SHALL register Qt configuration properties under the `compilot.qt` section in the VS Code `contributes.configuration` manifest
 2. THE Extension_Host SHALL register SDK configuration properties under the `compilot.sdk` section in the VS Code `contributes.configuration` manifest
 3. THE Extension_Host SHALL preserve all existing Qt configuration keys (qtPath, vsDevShellPath, manualProPath, designerPath, mode, arch) under the new `compilot.qt.*` namespace with their original types, defaults, and scope unchanged
-4. THE Extension_Host SHALL preserve all existing SDK configuration keys (selectedProject, mode, arch, vsDevCmdPath, scanDepth) under the new `compilot.sdk.*` namespace with their original types, defaults, and scope unchanged
+4. THE Extension_Host SHALL preserve all existing SDK configuration keys (pinnedProject, mode, arch, vsDevCmdPath, scanDepth) under the new `compilot.sdk.*` namespace with their original types, defaults, and scope unchanged
 5. WHEN the extension reads or writes configuration at runtime, THE Extension_Host SHALL use the `compilot.qt` or `compilot.sdk` namespace prefix exclusively
 6. IF a user has existing settings stored under a previous namespace, THEN THE Extension_Host SHALL read the previous namespace value as a fallback when the new namespace key has no user-defined value
 7. THE Extension_Host SHALL NOT register configuration properties under the previous `sdkPilot` or `qtPilot` namespace sections

@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getBuildConfig, getQtSourcePath } from '../../core/configService';
-import { setState } from '../../core/stateManager';
+import { getBuildConfig, getQtSourcePath } from '../services/configService';
+import { setState } from '../../core/qtState';
 import { getMakefileInfo } from '../project/projectManager';
 import { build, qmakeForDebug, stopCurrentTarget } from './buildManager';
 import { createLogger } from '../../core/logger';
@@ -93,6 +93,7 @@ function createQtSourceFileMap(qtSourcePath: string): Record<string, string> | u
 async function waitForTask(execution: vscode.TaskExecution): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         let settled = false;
+        let processEnded = false;
         const finish = (exitCode: number | undefined) => {
             if (settled) { return; }
             settled = true;
@@ -102,10 +103,15 @@ async function waitForTask(execution: vscode.TaskExecution): Promise<void> {
             else { reject(new Error(exitCode === undefined ? '任务已终止' : '任务失败')); }
         };
         const d1 = vscode.tasks.onDidEndTaskProcess(e => {
-            if (e.execution === execution) { finish(e.exitCode); }
+            if (e.execution === execution) { processEnded = true; finish(e.exitCode); }
         });
+        // Fallback: only trigger if process event never fired (e.g., terminal manually closed)
         const d2 = vscode.tasks.onDidEndTask(e => {
-            if (e.execution === execution) { finish(undefined); }
+            if (e.execution === execution && !processEnded) {
+                setTimeout(() => {
+                    if (!settled && !processEnded) { finish(undefined); }
+                }, 100);
+            }
         });
     });
 }

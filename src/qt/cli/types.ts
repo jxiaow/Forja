@@ -1,4 +1,4 @@
-export type CliAction = 'init' | 'status' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'logs' | 'rcc';
+export type CliAction = 'init' | 'status' | 'env' | 'projects' | 'qmake' | 'build' | 'clean' | 'run' | 'stop' | 'sync' | 'logs' | 'rcc';
 export type CliExecutionMode = 'dryRun' | 'execute';
 export type CliBuildMode = 'debug' | 'release';
 export type CliArch = 'x86' | 'x64';
@@ -15,8 +15,8 @@ export interface CliOptions {
     vsDevShell: string | null;
     target: string | null;
     server?: string | null;
+    repo?: string | null;
     detach?: boolean;
-    brief?: boolean;
     saveLocal: boolean;
     json: boolean;
 }
@@ -24,7 +24,6 @@ export interface CliOptions {
 export interface CliDiagnostic {
     level: DiagnosticLevel;
     message: string;
-    hint?: string;
 }
 
 export interface CliResolvedConfig {
@@ -32,7 +31,11 @@ export interface CliResolvedConfig {
     arch: CliArch;
     qtPath: string;
     vsDevShell: string;
-    qmakeTarget: string;
+    target: string;
+    jomPath?: string;
+    qtVersion?: string;
+    vsVersion?: string;
+    project?: string;
 }
 
 export interface CliResult {
@@ -57,4 +60,6 @@ export interface CliResult {
     resolved: CliResolvedConfig | null;
     /** RCC 项目路径（status 时返回） */
     rccProjectPath?: string;
+    /** 结构化数据载体（env/projects/status 用），替代 stdout JSON hack */
+    data?: Record<string, unknown>;
 }

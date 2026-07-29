@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
-import { setState } from '../../core/stateManager';
-import { getBuildConfig, getRccProjectPath, getCustomCommands } from '../../core/configService';
+import { setState, getState } from '../../core/qtState';
+import { getBuildConfig, getRccProjectPath } from '../services/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
 import { winConfig, getVsDevCmd } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
@@ -11,10 +11,25 @@ import { getMakefileInfo, parseLibPaths } from '../project/projectManager';
 import { createLogger } from '../../core/logger';
 import { resolveProjectRoot } from '../../core/workspaceResolver';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from '../shared/rccResolver';
+import { TASK_SOURCE_QT } from '../constants';
 
 const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
 const isWin = process.platform === 'win32';
 const logger = createLogger('Build');
+
+/** Guard: 环境检测未完成时阻止构建操作 */
+function _ensureEnvReady(): boolean {
+    const env = getState().envInfo;
+    if (!env) {
+        vscode.window.showWarningMessage('环境检测尚未完成，请稍后再试');
+        logger.warn('操作被阻止：envInfo 为 null（环境检测未完成）');
+        return false;
+    }
+    return true;
+}
+
+/** Module-level disposable for Run task end listener (cleaned up on next run or extension deactivate) */
+let _runEndDisposable: vscode.Disposable | undefined;
 
 function _getTaskFolder(): vscode.WorkspaceFolder | vscode.TaskScope {
     const root = resolveProjectRoot();
@@ -30,7 +45,7 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
     logger.info(`Task ${name}: ${commands.join(' && ')}`);
     const task = new vscode.Task(
         { type: 'shell' },
-        _getTaskFolder(), name, 'Qt Pilot',
+        _getTaskFolder(), name, TASK_SOURCE_QT,
         builder.makeExec(commands), matcher
     );
     task.presentationOptions = {
@@ -73,12 +88,14 @@ function _resolveMakefileInfo(): ReturnType<typeof getMakefileInfo> {
 }
 
 export function qmake(): Thenable<vscode.TaskExecution> {
+    if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     const { commands, matcher } = builder.qmakeCommands(cfg);
     return runTask(`QMake ${cfg.mode}`, commands, matcher);
 }
 
 export function qmakeForDebug(): Thenable<vscode.TaskExecution> {
+    if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     const extraConfigs = cfg.mode === 'release'
         ? ['CONFIG+=force_debug_info']
@@ -91,12 +108,14 @@ export function qmakeForDebug(): Thenable<vscode.TaskExecution> {
 }
 
 export function build(): Thenable<vscode.TaskExecution> {
+    if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     const { commands, matcher } = builder.buildCommands(cfg);
     return runTask(`Build ${cfg.mode}`, commands, matcher);
 }
 
 export function clean(): Thenable<vscode.TaskExecution> {
+    if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     const { commands, matcher } = builder.cleanCommands(cfg);
     return runTask(`Clean ${cfg.mode}`, commands, matcher);
@@ -115,6 +134,7 @@ function _rccNeedsRebuild(): boolean {
 }
 
 export async function run(): Promise<void> {
+    if (!_ensureEnvReady()) { return; }
     const cfg = getBuildConfig();
     setState('isBuilding', true);
     setState('buildAction', 'run');
@@ -146,7 +166,7 @@ export async function run(): Promise<void> {
     // Build task: 不清屏，失败时保留编译错误
     const buildTask = new vscode.Task(
         { type: 'shell' },
-        _getTaskFolder(), `Build ${cfg.mode}`, 'Qt Pilot',
+        _getTaskFolder(), `Build ${cfg.mode}`, TASK_SOURCE_QT,
         builder.makeExec(commands), matcher
     );
     buildTask.presentationOptions = {
@@ -161,6 +181,7 @@ export async function run(): Promise<void> {
 
     return new Promise<void>((resolve, reject) => {
         let settled = false;
+        let processEnded = false;
 
         const finish = (exitCode: number | undefined) => {
             if (settled) { return; }
@@ -200,7 +221,7 @@ export async function run(): Promise<void> {
             runCmds.push(`"${mfInfo.exePath}"`);
             const runTaskObj = new vscode.Task(
                 { type: 'shell' },
-                _getTaskFolder(), `Run ${cfg.mode}`, 'Qt Pilot',
+                _getTaskFolder(), `Run ${cfg.mode}`, TASK_SOURCE_QT,
                 builder.makeExec(runCmds), []
             );
             // 编译成功，Run task 清屏再启动
@@ -212,29 +233,46 @@ export async function run(): Promise<void> {
                 showReuseMessage: false,
                 clear: true
             };
-            vscode.tasks.executeTask(runTaskObj).then(runExecution => {
+
+            // 先注册 Run task 结束监听，再执行（避免竞态漏掉事件）
+            // 清理上一次的 disposable（如果还在）
+            _runEndDisposable?.dispose();
+            _runEndDisposable = vscode.tasks.onDidEndTask(e => {
+                if (e.execution.task.name === `Run ${cfg.mode}` && e.execution.task.source === TASK_SOURCE_QT) {
+                    _runEndDisposable?.dispose();
+                    _runEndDisposable = undefined;
+                    setState('isRunning', false);
+                }
+            });
+
+            vscode.tasks.executeTask(runTaskObj).then(() => {
                 setState('isRunning', true);
-                const dRun = vscode.tasks.onDidEndTask(e => {
-                    if (e.execution === runExecution) {
-                        dRun.dispose();
-                        setState('isRunning', false);
-                    }
-                });
             });
 
             resolve();
         };
 
+        // onDidEndTaskProcess gives us the exit code — preferred signal
         const d1 = vscode.tasks.onDidEndTaskProcess(e => {
-            if (e.execution === execution) { finish(e.exitCode); }
+            if (e.execution === execution) {
+                processEnded = true;
+                finish(e.exitCode);
+            }
         });
+        // onDidEndTask is a fallback only when the process event never fires
+        // (e.g., terminal manually closed). Use a short delay to let process event arrive first.
         const d2 = vscode.tasks.onDidEndTask(e => {
-            if (e.execution === execution) { finish(undefined); }
+            if (e.execution === execution && !processEnded) {
+                setTimeout(() => {
+                    if (!settled && !processEnded) { finish(undefined); }
+                }, 100);
+            }
         });
     });
 }
 
 export function rcc(): Thenable<vscode.TaskExecution> {
+    if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     const wsRoot = resolveProjectRoot();
 

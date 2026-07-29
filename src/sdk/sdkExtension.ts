@@ -6,12 +6,11 @@ import * as vscode from 'vscode';
 import { StateManager } from './modules/stateManager';
 import { ConfigService } from './modules/configService';
 import { ProjectScanner } from './modules/projectScanner';
-import { StatusBar } from './modules/statusBar';
 import { SdkBuilder } from './modules/sdkBuilder';
-import { ShowActions } from './modules/showActions';
-import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN, CMD_SHOW_ACTIONS, CTX_ACTIVATED, TASK_SOURCE, CFG_SECTION } from './constants';
+import { CMD_BUILD, CMD_REBUILD, CMD_CLEAN, CMD_SHOW_ACTIONS, CMD_SELECT_PROJECT, CTX_ACTIVATED, TASK_SOURCE } from './constants';
 import { isWindows } from './platform';
 import { initLogger, log, logError } from './utils/logger';
+import { setSdkState, setActiveModule, onSdkUpdate } from '../ui/unifiedStatusBar';
 
 export async function activateSdk(context: vscode.ExtensionContext): Promise<void> {
     // 0. 初始化日志
@@ -72,15 +71,50 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
         }
     }
 
-    // 6. 初始化 UI 组件
-    const statusBar = new StatusBar(stateManager);
-    statusBar.show();
-    log('状态栏已初始化');
+    // 6. 初始化 UI 组件（使用统一状态栏）
+    const updateSdkStatusBar = () => {
+        const project = stateManager.currentProject;
+        setSdkState({
+            projectName: project?.name || '',
+            mode: stateManager.mode,
+            arch: stateManager.arch,
+            isBuilding: stateManager.isBuilding
+        });
+    };
+    stateManager.onStateChanged(() => updateSdkStatusBar());
+    updateSdkStatusBar();
+    // 如果有 SDK 项目但没有 Qt 项目，默认激活 SDK 模块
+    if (stateManager.currentProject) {
+        setActiveModule('sdk');
+    }
+    log('状态栏已初始化（统一模式）');
 
     // 7. 初始化 Builder
     const sdkBuilder = new SdkBuilder(stateManager, configService);
 
     // 8. 注册命令
+    const selectProjectHandler = async () => {
+        log('执行命令: Select Project');
+        const projects = projectScanner.projects;
+        if (projects.length === 0) {
+            vscode.window.showInformationMessage('SDK Pilot: 未找到可用的 SDK 项目');
+            return;
+        }
+        const currentPath = stateManager.currentProject?.path;
+        const items = projects.map(p => ({
+            label: p.name,
+            description: p.path === currentPath ? '（当前）' : p.path,
+            project: p
+        }));
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: '选择 SDK 项目'
+        });
+        if (selected) {
+            stateManager.currentProject = (selected as typeof items[0]).project;
+            await stateManager.persistToConfig();
+        }
+    };
+
     context.subscriptions.push(
         vscode.commands.registerCommand(CMD_BUILD, () => {
             log('执行命令: Build');
@@ -94,12 +128,11 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
             log('执行命令: Clean');
             return sdkBuilder.clean();
         }),
-        vscode.commands.registerCommand(CMD_SHOW_ACTIONS, () => {
-            const showActions = new ShowActions(stateManager, projectScanner);
-            return showActions.show();
-        })
+        vscode.commands.registerCommand(CMD_SELECT_PROJECT, selectProjectHandler),
+        // 保留旧命令 ID 作为别名，避免用户快捷键绑定失效
+        vscode.commands.registerCommand(CMD_SHOW_ACTIONS, selectProjectHandler)
     );
-    log('命令已注册: build, rebuild, clean, showActions');
+    log('命令已注册: build, rebuild, clean, selectProject, showActions(alias)');
 
     // 9. 监听 Task 结束事件
     const taskEndListener = vscode.tasks.onDidEndTaskProcess((e) => {
@@ -117,57 +150,20 @@ export async function activateSdk(context: vscode.ExtensionContext): Promise<voi
     });
     context.subscriptions.push(taskEndListener);
 
-    // 10. 监听配置变更
-    const configListener = configService.onConfigChanged(async (e) => {
-        if (e.affectsConfiguration(`${CFG_SECTION}.selectedProject`)) {
-            const config = vscode.workspace.getConfiguration(CFG_SECTION);
-            const newPath = config.get<string>('selectedProject');
-            log(`配置变更: selectedProject = ${newPath || '(空)'}`);
-            if (newPath) {
-                const project = projectScanner.projects.find(p => p.path === newPath);
-                if (project) {
-                    stateManager.currentProject = project;
-                } else {
-                    log(`配置的项目路径不在扫描结果中: ${newPath}`);
-                    stateManager.currentProject = null;
-                }
-            } else {
-                stateManager.currentProject = null;
-            }
-        }
-
-        if (e.affectsConfiguration(`${CFG_SECTION}.mode`)) {
-            const config = vscode.workspace.getConfiguration(CFG_SECTION);
-            const mode = config.get<string>('mode');
-            log(`配置变更: mode = ${mode}`);
-            if (mode === 'debug' || mode === 'release') {
-                stateManager.mode = mode;
-            }
-        }
-
-        if (e.affectsConfiguration(`${CFG_SECTION}.arch`)) {
-            const config = vscode.workspace.getConfiguration(CFG_SECTION);
-            const arch = config.get<string>('arch');
-            log(`配置变更: arch = ${arch}`);
-            if (arch === 'x86' || arch === 'x64') {
-                stateManager.arch = arch;
-            }
-        }
-
-        if (e.affectsConfiguration(`${CFG_SECTION}.vsDevCmdPath`)) {
-            if (isWindows) {
-                log('配置变更: vsDevCmdPath，重新检测 VS 环境...');
-                await configService.getVsDevCmdPath();
-            }
+    // 10. 监听配置文件变化（外部编辑或 CLI 写入时重新加载）
+    configService.onSettingsFileChanged(context, async () => {
+        log('settings.json 变更，重新加载...');
+        await stateManager.restoreFromConfig();
+        if (isWindows) {
+            await configService.getVsDevCmdPath();
         }
     });
-    context.subscriptions.push(configListener);
 
     // 11. 设置激活上下文
     await vscode.commands.executeCommand('setContext', CTX_ACTIVATED, true);
 
     // 12. 注册 Disposables
-    context.subscriptions.push(statusBar, stateManager, configService);
+    context.subscriptions.push(stateManager, configService);
 
     log('Compilot SDK 模块激活完成!');
 }

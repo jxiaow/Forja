@@ -3,16 +3,7 @@ export const CMD_BUILD = 'compilot.sdk.build';
 export const CMD_REBUILD = 'compilot.sdk.rebuild';
 export const CMD_CLEAN = 'compilot.sdk.clean';
 export const CMD_SHOW_ACTIONS = 'compilot.sdk.showActions';
-
-/** 配置键名 */
-export const CFG_SELECTED_PROJECT = 'compilot.sdk.selectedProject';
-export const CFG_MODE = 'compilot.sdk.mode';
-export const CFG_ARCH = 'compilot.sdk.arch';
-export const CFG_VS_DEV_CMD_PATH = 'compilot.sdk.vsDevCmdPath';
-export const CFG_SCAN_DEPTH = 'compilot.sdk.scanDepth';
-
-/** 配置 section */
-export const CFG_SECTION = 'compilot.sdk';
+export const CMD_SELECT_PROJECT = 'compilot.sdk.selectProject';
 
 /** Context key */
 export const CTX_ACTIVATED = 'compilot.sdk.activated';
@@ -26,12 +17,16 @@ export const EXCLUDE_DIRS = [
     'out',
     'dist',
     '.git',
-    'build/output',
     '.work'
 ];
 
+/** 排除路径片段（用于匹配相对路径中的子路径） */
+export const EXCLUDE_PATH_SEGMENTS = [
+    'build/output'
+];
+
 /** 默认扫描深度 */
-export const DEFAULT_SCAN_DEPTH = 4;
+export const DEFAULT_SCAN_DEPTH = 8;
 
 /** 扫描超时（毫秒） */
 export const SCAN_TIMEOUT_MS = 30000;

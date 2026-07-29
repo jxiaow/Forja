@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import { detectEnv } from '../../qt/env/envDetector';
 import { generateCppProperties, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
-import { getState, setState } from '../../core/stateManager';
-import { updateConfig, getQtPath, getVsDevShellPath, getQmakeTarget, getWorkspaceRoot } from '../../core/configService';
+import { getState, setState } from '../../core/qtState';
+import { updateConfig, getTarget, getWorkspaceRoot } from '../../qt/services/configService';
 import { createLogger } from '../../core/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, ServerConfig } from '../../qt/sync/sftpClient';
-import { executeSyncChangedFiles, executeTestConnection } from '../../qt/sync/syncWatcher';
+import { updateProjectSyncField, addServer, removeServer, updateServer, readServers } from '../../core/serverStore';
+import { executeTestConnection } from '../../qt/sync/syncWatcher';
+import { inferVsInstall } from '../../core/settingsIO';
 
 const logger = createLogger('ConfigPanel');
 
@@ -42,8 +43,28 @@ export async function handleMessage(
     logger.info(`收到消息: ${msg.command}`);
 
     switch (msg.command) {
+        case 'saveMode': {
+            const modeVal = String(msg.value || '');
+            if (modeVal !== '' && modeVal !== 'debug' && modeVal !== 'release') {
+                logger.warn(`无效的构建模式值: "${modeVal}"`);
+                break;
+            }
+            logger.info(`保存构建模式: "${modeVal}"`);
+            await updateConfig('mode', modeVal as '' | 'debug' | 'release');
+            break;
+        }
+        case 'saveArch': {
+            const archVal = String(msg.value || '');
+            if (archVal !== '' && archVal !== 'x86' && archVal !== 'x64') {
+                logger.warn(`无效的目标架构值: "${archVal}"`);
+                break;
+            }
+            logger.info(`保存目标架构: "${archVal}"`);
+            await updateConfig('arch', archVal as '' | 'x86' | 'x64');
+            break;
+        }
         case 'refreshEnv': {
-            const env = await detectEnv(getQtPath(), getVsDevShellPath());
+            const env = await detectEnv();
             setState('envInfo', env);
             pushEnvUpdate();
             break;
@@ -55,10 +76,9 @@ export async function handleMessage(
         }
         case 'saveVsPath': {
             logger.info(`保存 VS 路径: "${msg.value}"`);
-            await updateConfig('vsDevShellPath', String(msg.value || ''));
-            webview.postMessage({ command: 'envDetecting' });
-            const qtPath = getQtPath();
-            const env = await detectEnv(qtPath, String(msg.value || ''));
+            await updateConfig('vsInstall', inferVsInstall(String(msg.value || '')));
+            webview.postMessage({ command: 'envDetecting', scope: 'vs' });
+            const env = await detectEnv();
             setState('envInfo', env);
             pushEnvUpdate();
             break;
@@ -66,10 +86,9 @@ export async function handleMessage(
         case 'saveQtPath': {
             logger.info(`保存 Qt 路径: "${msg.value}"`);
             await updateConfig('qtPath', String(msg.value || ''));
-            webview.postMessage({ command: 'envDetecting' });
-            const vsPath = getVsDevShellPath();
-            const env = await detectEnv(String(msg.value || ''), vsPath);
-            setState('envInfo', env);
+            webview.postMessage({ command: 'envDetecting', scope: 'qt' });
+            const env2 = await detectEnv();
+            setState('envInfo', env2);
             pushEnvUpdate();
             break;
         }
@@ -123,7 +142,7 @@ export async function handleMessage(
         }
         case 'saveQmakeTarget': {
             logger.info(`保存 QMake TARGET: "${msg.value}"`);
-            await updateConfig('qmakeTarget', String(msg.value || ''));
+            await updateConfig('target', String(msg.value || ''));
             break;
         }
         case 'saveManualProPath': {
@@ -156,7 +175,7 @@ export async function handleMessage(
             if (msg.cppStandard) { await updateConfig('cppStandard', msg.cppStandard); }
             const project = getState().currentProject;
             if (project) {
-                logger.info(`项目: ${getEffectiveProjectName(project, getQmakeTarget(), project.proFile)}`);
+                logger.info(`项目: ${getEffectiveProjectName(project, getTarget(), project.proFile)}`);
                 generateCppProperties(project);
             } else {
                 logger.warn('无项目，无法生成 IntelliSense');
@@ -173,7 +192,17 @@ export async function handleMessage(
         case 'saveSyncSelectedServer': {
             logger.info(`选择服务器: "${msg.value}"`);
             const ws2 = getWorkspaceRoot();
-            if (ws2) { updateProjectSyncField(ws2, 'selectedServer', String(msg.value || '')); }
+            if (ws2) {
+                updateProjectSyncField(ws2, 'selectedServer', String(msg.value || ''));
+                // 选中服务器时自动启用同步
+                if (msg.value) { updateProjectSyncField(ws2, 'enabled', true); }
+            }
+            break;
+        }
+        case 'saveSyncRemotePath': {
+            logger.info(`保存项目远程路径: "${msg.value}"`);
+            const ws3 = getWorkspaceRoot();
+            if (ws3) { updateProjectSyncField(ws3, 'remotePath', String(msg.value || '')); }
             break;
         }
         case 'saveSyncIgnore': {
@@ -264,11 +293,6 @@ export async function handleMessage(
             }
             break;
         }
-        case 'syncChangedFiles': {
-            logger.info('面板触发同步变更文件');
-            await executeSyncChangedFiles();
-            break;
-        }
     }
 }
 
@@ -284,7 +308,7 @@ function _pushServerList(webview: vscode.Webview, selectId?: string): void {
             username: s.username,
             authMode: s.authMode,
             privateKeyPath: s.privateKeyPath,
-            password: s.password,
+            password: s.password ? '••••••••' : '',
             remotePath: s.remotePath
         })),
         select: selectId || ''

@@ -1,18 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
-import { EnvInfo, QtInfo } from '../../qt/env/envDetector';
+import { EnvInfo, QtInfo, VSInfo } from '../../qt/env/envDetector';
 import type { ProjectInfo } from '../../qt/project/projectManager';
 
 export interface TemplateData {
     env: EnvInfo | null;
     project: ProjectInfo | null;
     vsDevShellPath: string;
-    selectedProject: string;
+    pinnedProject: string;
     cStandard: string;
     cppStandard: string;
     scanExcludeDirs: string;
-    qmakeTarget: string;
+    target: string;
     isWin: boolean;
     autoDevShell: string;
     autoQtPath: string;
@@ -28,6 +28,9 @@ export interface TemplateData {
     syncSelectedServer: string;
     syncServers: { id: string; name: string; host: string; port: number; username: string; authMode: string; privateKeyPath: string; password: string; remotePath: string }[];
     syncIgnore: string;
+    syncRemotePath: string;
+    syncPendingCount: number;
+    syncLastTime: string;
 }
 
 let _templateCache: string | null = null;
@@ -58,12 +61,12 @@ function _escapeHtml(value: string): string {
 }
 
 export function getHtml(data: TemplateData): string {
-    const { env, project, vsDevShellPath, selectedProject, cStandard, cppStandard,
-            scanExcludeDirs, qmakeTarget, isWin, autoDevShell, autoQtPath, qtPath } = data;
+    const { env, project, vsDevShellPath, pinnedProject, cStandard, cppStandard,
+            scanExcludeDirs, target, isWin, autoDevShell, autoQtPath, qtPath } = data;
 
-    const projectName = getEffectiveProjectName(project, qmakeTarget, selectedProject || '未选择');
-    const defaultQmakeTarget = project?.target || '';
-    const effectiveQmakeTarget = qmakeTarget || defaultQmakeTarget;
+    const projectName = getEffectiveProjectName(project, target, pinnedProject || '未选择');
+    const defaultTarget = project?.target || '';
+    const effectiveTarget = target || defaultTarget;
     const effectiveDevShell = vsDevShellPath || autoDevShell;
     const devShellSource = vsDevShellPath ? '手动配置' : (autoDevShell ? '自动检测' : '未配置');
     const effectiveQtPath = qtPath || autoQtPath;
@@ -103,7 +106,7 @@ export function getHtml(data: TemplateData): string {
         textQtChip: _escapeHtml(textQtChip),
         textJomChip: _escapeHtml(textJomChip),
         refreshDisabled: !env ? 'disabled' : '',
-        refreshLabel: !env ? '<span class="spin">↻</span>' : '刷新',
+        refreshLabel: !env ? '<span class="spin">↻</span> 检测中...' : '刷新环境检测',
         projectName: _escapeHtml(projectName),
         selC89: _sel(cStandard, 'c89'),
         selC99: _sel(cStandard, 'c99'),
@@ -115,9 +118,9 @@ export function getHtml(data: TemplateData): string {
         'selCpp20': _sel(cppStandard, 'c++20'),
         'selCpp23': _sel(cppStandard, 'c++23'),
         scanExcludeDirs: _escapeHtml(scanExcludeDirs),
-        effectiveQmakeTarget: _escapeHtml(effectiveQmakeTarget),
-        defaultQmakeTarget: _escapeHtml(defaultQmakeTarget),
-        savedQmakeTarget: _escapeHtml(qmakeTarget),
+        effectiveTarget: _escapeHtml(effectiveTarget),
+        defaultTarget: _escapeHtml(defaultTarget),
+        savedTarget: _escapeHtml(target),
         dotVsBlockClass: effectiveDevShell ? 'dot-ok' : 'dot-warn',
         vsBadgeClass: effectiveDevShell ? 'badge-ok' : 'badge-warn',
         devShellSource: _escapeHtml(devShellSource),
@@ -130,23 +133,33 @@ export function getHtml(data: TemplateData): string {
         qtPathValue: _escapeHtml(qtPath),
         designerPathValue: _escapeHtml(data.designerPath),
         qtSourcePathValue: _escapeHtml(data.qtSourcePath),
+        jomBadgeClass: jomOk ? 'badge-ok' : 'badge-warn',
+        jomSource: jomOk ? '自动检测' : '未找到',
+        effectiveJomPath: _escapeHtml(env?.jom || '未检测到'),
+        buildToolLabel: makeLabel,
         qtCandidateOptions: (env?.qtCandidates ?? [])
             .map((c: QtInfo) => `<option value="${_escapeHtml(c.path)}">Qt ${_escapeHtml(c.version)} (${_escapeHtml(c.compiler)})</option>`)
+            .join(''),
+        vsCandidateOptions: (env?.vsCandidates ?? [])
+            .map((c: VSInfo) => `<option value="${_escapeHtml(c.devShellPath)}">VS ${_escapeHtml(c.version)} ${_escapeHtml(c.edition)}</option>`)
             .join(''),
         manualProPath: _escapeHtml(data.manualProPath),
         rccProjectPath: _escapeHtml(data.rccProjectPath),
         chkFileSyncPrompt: data.fileSyncPromptEnabled ? 'checked' : '',
         chkQmakeReminder: data.qmakeReminderEnabled ? 'checked' : '',
         version: _escapeHtml(data.version),
-        dotSyncClass: data.syncEnabled && data.syncSelectedServer ? 'dot-ok' : (data.syncEnabled ? 'dot-warn' : 'dot-detecting'),
-        syncStatus: data.syncEnabled ? (data.syncSelectedServer ? '已启用' : '未配置') : '未启用',
-        chkSyncEnabled: data.syncEnabled ? 'checked' : '',
-        syncConfigDisplay: data.syncEnabled ? '' : 'display:none',
-        syncServerOptions: data.syncServers
-            .map(s => `<option value="${_escapeHtml(s.id)}" ${s.id === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
-            .join(''),
-        syncServerData: JSON.stringify(data.syncServers).replace(/\\/g, '\\\\').replace(/'/g, "\\'"),
+        syncServerOptions: data.syncServers.length > 0
+            ? data.syncServers
+                .map(s => `<option value="${_escapeHtml(s.id)}" ${s.id === data.syncSelectedServer ? 'selected' : ''}>${_escapeHtml(s.name)} (${_escapeHtml(s.username)}@${_escapeHtml(s.host)})</option>`)
+                .join('')
+            : '<option value="">— 无服务器 —</option>',
+        syncServerData: JSON.stringify(data.syncServers).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/<\//g, '<\\/'),
         syncIgnore: _escapeHtml(data.syncIgnore),
+        syncEnabledChecked: data.syncEnabled ? 'checked' : '',
+        syncRemotePath: _escapeHtml(data.syncRemotePath),
+        syncPendingCount: String(data.syncPendingCount),
+        syncLastTime: _escapeHtml(data.syncLastTime),
+        syncHasServer: data.syncServers.length > 0 ? 'true' : '',
     };
 
     let html = _loadTemplate();

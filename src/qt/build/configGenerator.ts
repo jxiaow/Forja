@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ProjectInfo } from '../project/projectManager';
-import { getState } from '../../core/stateManager';
-import { getWorkspaceRoot, getCStandard, getCppStandard, getEffectiveQtPath, getScanExcludeDirs } from '../../core/configService';
+import { getState } from '../../core/qtState';
+import { getWorkspaceRoot, getCStandard, getCppStandard, getEffectiveQtPath, getScanExcludeDirs } from '../services/configService';
 import { log } from '../../core/logger';
 
 // 判断目录是否应跳过（精确匹配 + build* 前缀 + 用户自定义）
@@ -25,7 +25,9 @@ function _scanSubDirsAbs(absDir: string, extraSkip: string[], depth: number = 0)
                 result.push(..._scanSubDirsAbs(path.join(absDir, e.name), extraSkip, depth + 1));
             }
         }
-    } catch {}
+    } catch (e) {
+        log(`[configGenerator] 目录扫描失败 (${absDir}): ${e instanceof Error ? e.message : e}`);
+    }
     return result;
 }
 
@@ -60,7 +62,9 @@ function detectSdkVersion(): string {
                 .reverse();
             if (versions.length > 0) { return versions[0]; }
         }
-    } catch {}
+    } catch (e) {
+        log(`[configGenerator] SDK 版本扫描失败: ${e instanceof Error ? e.message : e}，使用默认值`);
+    }
     return '10.0.22000.0';
 }
 
@@ -73,7 +77,9 @@ function _parseMakefileVar(makefilePath: string, varName: string): string | null
         const match = content.match(new RegExp(`^${varName}\\s*=\\s*(.+)$`, 'm'));
         if (!match) { return null; }
         return match[1].replace(/#.*$/, '').trim();
-    } catch {}
+    } catch (e) {
+        log(`[configGenerator] Makefile 读取失败 (${makefilePath}): ${e instanceof Error ? e.message : e}`);
+    }
     return null;
 }
 
@@ -264,6 +270,6 @@ export function updateCppPropertiesStandard(cStandard: string, cppStandard: stri
             fs.writeFileSync(propsPath, JSON.stringify(props, null, 4), 'utf-8');
         }
     } catch (e) {
-        console.error('[Compilot] 更新 c_cpp_properties.json 失败:', e);
+        log(`[configGenerator] 更新 c_cpp_properties.json 失败: ${e instanceof Error ? e.message : e}`);
     }
 }

@@ -15,7 +15,8 @@ function parseVsPath(devShellPath: string): VSInfo {
         const verMatch = installPath.match(/\\(\d{2})\\/);
         if (verMatch) {
             const n = parseInt(verMatch[1]);
-            if (n >= 17) { version = '2022'; }
+            if (n >= 18) { version = '2026'; }
+            else if (n >= 17) { version = '2022'; }
             else if (n === 16) { version = '2019'; }
             else if (n === 15) { version = '2017'; }
             else { version = verMatch[1]; }
@@ -47,10 +48,54 @@ async function detectVS(manualPath?: string): Promise<VSInfo | null> {
 
 // Windows 编译器从路径推断
 function detectCompiler(qtPath: string): string {
+    if (qtPath.includes('msvc2022_64')) { return 'msvc2022_64'; }
     if (qtPath.includes('msvc2022')) { return 'msvc2022'; }
+    if (qtPath.includes('msvc2019_64')) { return 'msvc2019_64'; }
     if (qtPath.includes('msvc2019')) { return 'msvc2019'; }
     if (qtPath.includes('mingw')) { return 'mingw'; }
     return 'msvc2019';
+}
+
+/** 从注册表扫描 Qt 安装路径 */
+async function _scanQtFromRegistry(): Promise<string[]> {
+    const results: string[] = [];
+    // 注册表扫描：Qt 安装器可能写入非标准路径
+    // HKCU\Software\QtProject 下含 QtCreator 配置，递归查询较慢但能发现非硬编码路径
+    const regKeys = [
+        'HKCU\\Software\\QtProject',
+        'HKLM\\SOFTWARE\\WOW6432Node\\Digia\\Versions',
+        'HKLM\\SOFTWARE\\Digia\\Versions'
+    ];
+    for (const key of regKeys) {
+        try {
+            const out = await execAsync('reg', ['query', key, '/s'], 30000);
+            // 提取看起来像 Qt 路径的值（包含 qmake 的目录）
+            const lines = out.split('\n');
+            for (const line of lines) {
+                const match = line.match(/REG_SZ\s+(.+)/i);
+                if (!match) { continue; }
+                const value = match[1].trim();
+                // 检查是否是有效的 Qt 编译器目录（含 bin/qmake.exe）
+                if (hasQmake(value)) {
+                    if (!results.includes(value)) {
+                        log(`[Win] 注册表找到 Qt: "${value}"`);
+                        results.push(value);
+                    }
+                }
+                // 也检查是否是 Qt 根目录（需要向下找版本子目录）
+                if (fs.existsSync(value) && !hasQmake(value)) {
+                    const subPaths = await scanQt([value], 'Win');
+                    for (const sp of subPaths) {
+                        if (!results.includes(sp)) {
+                            log(`[Win] 注册表子目录找到 Qt: "${sp}"`);
+                            results.push(sp);
+                        }
+                    }
+                }
+            }
+        } catch { /* registry key not found or access denied */ }
+    }
+    return results;
 }
 
 async function detectQt(manualPath?: string): Promise<{ qt: QtInfo | null; candidates: QtInfo[] }> {
@@ -61,6 +106,14 @@ async function detectQt(manualPath?: string): Promise<{ qt: QtInfo | null; candi
     const foundPaths = await scanQt(parentDirs, 'Win');
     for (const p of foundPaths) {
         candidates.push(await parseQtInfo(p, detectCompiler(p)));
+    }
+
+    // 1.5 注册表扫描（Qt 安装器可能写入非标准路径）
+    const regPaths = await _scanQtFromRegistry();
+    for (const rp of regPaths) {
+        if (!candidates.some(c => c.path === rp)) {
+            candidates.push(await parseQtInfo(rp, detectCompiler(rp)));
+        }
     }
 
     // 2. 系统 PATH（where qmake）
@@ -140,13 +193,63 @@ async function detectJom(qt: QtInfo | null): Promise<string | null> {
             log(`[Win] PATH 找到 jom: "${firstLine}"`);
             return firstLine;
         }
-    } catch {}
+    } catch { /* jom not in PATH */ }
 
     return null;
 }
 
+// ── VS 扫描所有已安装实例 ──
+
+async function scanVS(): Promise<VSInfo[]> {
+    const vswhere = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe';
+    if (!fs.existsSync(vswhere)) { return []; }
+    try {
+        const out = (await execAsync(vswhere, ['-all', '-property', 'installationPath'])).trim();
+        if (!out) { return []; }
+        const results: VSInfo[] = [];
+        const seen = new Set<string>();
+        for (const line of out.split('\n')) {
+            const installPath = line.trim();
+            if (!installPath) { continue; }
+            const normalized = installPath.toLowerCase();
+            if (seen.has(normalized)) { continue; }
+            seen.add(normalized);
+            const devShellPath = `${installPath}\\Common7\\Tools\\Launch-VsDevShell.ps1`;
+            if (fs.existsSync(devShellPath)) {
+                results.push(parseVsPath(devShellPath));
+            }
+        }
+        return results;
+    } catch {
+        return [];
+    }
+}
+
 export async function detectEnvWin(manualQtPath?: string, manualVsPath?: string): Promise<EnvInfo> {
-    const [vs, { qt, candidates }] = await Promise.all([detectVS(manualVsPath || undefined), detectQt(manualQtPath)]);
+    // 指定了哪个就跳过哪个的全量扫描，只验证指定路径
+    const vsPromise = manualVsPath
+        ? Promise.resolve(fs.existsSync(manualVsPath) ? parseVsPath(manualVsPath) : null)
+        : detectVS();
+
+    const qtPromise = manualQtPath
+        ? (async () => {
+            if (!hasQmake(manualQtPath)) { return { qt: null, candidates: [] as QtInfo[] }; }
+            const qt = await parseQtInfo(manualQtPath, detectCompiler(manualQtPath));
+            return { qt, candidates: [qt] };
+        })()
+        : detectQt();
+
+    const vsCandidatesPromise = manualVsPath
+        ? Promise.resolve(
+            fs.existsSync(manualVsPath) ? [parseVsPath(manualVsPath)] : [] as VSInfo[]
+        )
+        : scanVS();
+
+    const [vs, { qt, candidates }, vsCandidates] = await Promise.all([
+        vsPromise,
+        qtPromise,
+        vsCandidatesPromise
+    ]);
     const jom = await detectJom(qt);
-    return { vs, qt, qtCandidates: candidates, jom };
+    return { vs, qt, qtCandidates: candidates, vsCandidates, jom };
 }
