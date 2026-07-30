@@ -114,8 +114,8 @@ description: Build, run, clean, diagnose, configure, or remotely sync C++ projec
 - `build` 默认前台执行。前台达到执行器时限时，只有执行器确认能将**同一仍在运行的
   进程**接管到后台，才自动接管并回显任务 ID；不能接管时只报告超时和进程状态，绝不
   重新发起后台构建。用户明确要求后台时可直接后台执行。
-- `run` 默认前台执行；仅用户明确要求后台时传 `--detach`。不得因项目规模或运行时长
-  推断后台模式。
+- agent 执行 `run` 时默认传 `--detach --json`，使目标在后台运行；除非用户明确要求前台
+  运行，否则不得省略 `--detach`。
 - Forja 已覆盖的操作，不要自行拼接 qmake、make、MSBuild、SSH 或 SCP 命令。
 
 ## 标准流程
