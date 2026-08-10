@@ -1,4 +1,0 @@
-interface:
-  display_name: "Forja CLI"
-  short_description: "Build and manage C++ workspaces with Forja"
-  default_prompt: "Use $forja to inspect this C++ workspace and perform the requested Forja workflow."

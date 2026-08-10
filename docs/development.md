@@ -220,7 +220,6 @@ forja/
 ├── skills/
 │   └── forja/                  # AI 工具 Skill 包
 │       ├── SKILL.md
-│       ├── agents/openai.yaml
 │       └── references/
 │           ├── interactive-selection.md
 │           └── remote-operations.md

@@ -54,13 +54,12 @@ skills 根目录，不要只复制 `SKILL.md`：
 <agent-skills-dir>/
 └── forja/
     ├── SKILL.md
-    ├── agents/openai.yaml
     └── references/
         ├── interactive-selection.md
         └── remote-operations.md
 ```
 
-兼容 `SKILL.md` / Agent Skills 的工具可使用 `SKILL.md` 与 `references/` 作为通用主体；`agents/openai.yaml` 是 Codex/OpenAI 的可选界面元数据，其他工具可忽略。目标目录以对应工具的配置为准。
+兼容 `SKILL.md` / Agent Skills 的工具可直接使用完整的 `forja` 目录；目标目录以对应工具的配置为准。
 POSIX shell 示例：
 
 ```bash
