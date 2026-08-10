@@ -145,7 +145,11 @@ for (const dir of dirs) {
 }
 
 const windowsLauncher = 'qt/platform/win/forja-desktop-launcher.exe';
-fs.copyFileSync(path.join(srcOut, windowsLauncher), path.join(tmpBuild, windowsLauncher));
+const launcherSrc = path.join(root, 'src', windowsLauncher);
+if (fs.existsSync(launcherSrc)) {
+    fs.mkdirSync(path.join(tmpBuild, path.dirname(windowsLauncher)), { recursive: true });
+    fs.copyFileSync(launcherSrc, path.join(tmpBuild, windowsLauncher));
+}
 
 // Copy individual core files
 for (const file of coreFiles) {
