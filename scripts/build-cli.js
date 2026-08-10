@@ -4,7 +4,7 @@
  * Generates dist/<version>/cli/ containing:
  *   - forja-cli-x.x.x.tgz (npm package)
  *   - README.md (CLI documentation)
- *   - skills/forja/SKILL.md + README.md (AI skill files)
+ *   - skills/forja/** (AI skill bundle)
  */
 const fs = require('fs');
 const path = require('path');

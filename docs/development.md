@@ -218,7 +218,12 @@ forja/
 │   ├── bump-version.js         # 版本号递增
 │   └── generate-icon.js        # 图标生成
 ├── skills/
-│   └── forja/SKILL.md       # AI 工具 Skill 文件
+│   └── forja/                  # AI 工具 Skill 包
+│       ├── SKILL.md
+│       ├── agents/openai.yaml
+│       └── references/
+│           ├── interactive-selection.md
+│           └── remote-operations.md
 ├── docs/                       # 文档
 ├── media/                      # 图标资源
 ├── package.json                # 扩展清单 + 开发依赖
