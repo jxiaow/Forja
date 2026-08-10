@@ -621,6 +621,8 @@ Options:
     'init.noProjectsFound':             { en: 'No projects found in work root',       zh: '工作根目录下未找到项目' },
     'init.selectProjectGroup':          { en: 'Select a project group',               zh: '选择项目分组' },
     'init.selectProject':               { en: 'Select a project',                     zh: '选择项目' },
+    'init.manualProjectPath':           { en: 'Enter project path manually...',        zh: '手动输入项目路径...' },
+    'init.enterProjectPath':            { en: 'Enter project file path',               zh: '输入项目文件路径' },
     'init.noTargetsToModify':           { en: 'No targets to modify',                 zh: '没有可修改的目标' },
     'init.answersMissingProject':       { en: 'Answers file missing required "project" field', zh: '答案文件缺少必需的 "project" 字段' },
     'init.targetNotFound':              { en: 'Target not found',                       zh: '目标未找到' },
@@ -745,6 +747,8 @@ Options:
     'use.useLocalOrRemote':              { en: 'Use local',                           zh: '请使用 local' },
     'use.execution':                     { en: 'Execution',                           zh: '执行位置' },
     'use.noChanges':                     { en: 'No changes — values already match',  zh: '无变更——当前值已匹配' },
+    'use.buildScriptCppOnly':            { en: 'Build scripts are only supported for C++ targets', zh: '构建脚本仅支持 C++ 目标' },
+    'use.buildScriptUnsupportedExtension': { en: 'Build script must use a .sh or .bat extension', zh: '构建脚本必须使用 .sh 或 .bat 扩展名' },
     // build/run/clean/stop shared diagnostics
     'cmd.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
     'cmd.projectNotFound':               { en: 'Project file not found',             zh: '项目文件未找到' },

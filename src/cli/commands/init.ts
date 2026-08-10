@@ -353,12 +353,6 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
     }
 
     const candidates = await scanProjects(workroot);
-    if (candidates.length === 0) {
-        return {
-            ok: false, action: 'init', workroot,
-            diagnostics: [{ level: 'error', message: T('init.noProjectsFound') }],
-        };
-    }
 
     console.log(`  ${T('init.foundProjects')}: ${candidates.length}`);
 
@@ -449,25 +443,69 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
 
 async function configureNewTarget(workroot: string, config: WorkspaceConfig, options: InitOptions, existingCandidates?: ProjectCandidate[]): Promise<InitResult> {
     const candidates = existingCandidates || await scanProjects(workroot);
-    if (candidates.length === 0) {
-        return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.noProjectsFound') }] };
-    }
 
     // Select project
     let selectedProject: ProjectCandidate;
     if (options.answers?.project) {
-        const match = candidates.find(c => c.project === options.answers!.project || c.label === options.answers!.project);
-        if (!match) {
-            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('init.projectNotFound')}: ${options.answers.project}` }] };
+        // Check if the project path is a build script (.sh/.bat) — create synthetic candidate
+        const projExt = path.extname(options.answers.project).toLowerCase();
+        if (projExt === '.sh' || projExt === '.bat') {
+            const scriptPath = options.answers.project;
+            const absoluteScript = path.isAbsolute(scriptPath) ? scriptPath : path.join(workroot, scriptPath);
+            if (!fs.existsSync(absoluteScript)) {
+                return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: `${T('init.projectNotFound')}: ${scriptPath}` }] };
+            }
+            selectedProject = {
+                kind: 'cpp',
+                project: scriptPath,
+                label: `${path.basename(scriptPath, projExt)} (${scriptPath})`,
+            };
+        } else {
+            const match = candidates.find(c => c.project === options.answers!.project || c.label === options.answers!.project);
+            if (!match) {
+                return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('init.projectNotFound')}: ${options.answers.project}` }] };
+            }
+            selectedProject = match;
         }
-        selectedProject = match;
     } else if (options.interactive) {
-        const groups = groupProjectCandidates(candidates);
-        const selectedGroup = await chooseRequired(T('init.selectProjectGroup'), groups, group => `${group.name} (${group.candidates.length})`);
-        const chosen = await chooseRequired(T('init.selectProject'), selectedGroup.candidates, c => c.label);
-        selectedProject = chosen;
+        const MANUAL_INPUT = '__manual_input__' as const;
+        interface PickerItem { project: string; label: string; kind: 'qt' | 'cpp'; __manual?: boolean }
+        let groupCandidates: ProjectCandidate[] = [];
+        if (candidates.length > 0) {
+            const groups = groupProjectCandidates(candidates);
+            const selectedGroup = await chooseRequired(T('init.selectProjectGroup'), groups, group => `${group.name} (${group.candidates.length})`);
+            groupCandidates = selectedGroup.candidates;
+        }
+        const items: PickerItem[] = [
+            ...groupCandidates,
+            { project: MANUAL_INPUT, label: T('init.manualProjectPath'), kind: 'cpp' as const, __manual: true },
+        ];
+        const chosen = await chooseRequired(T('init.selectProject'), items, c => c.label);
+        if (chosen.__manual) {
+            const manualPath = await prompt(T('init.enterProjectPath'));
+            if (!manualPath) {
+                return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.projectNotFound') }] };
+            }
+            const absolutePath = path.isAbsolute(manualPath) ? manualPath : path.join(workroot, manualPath);
+            if (!fs.existsSync(absolutePath)) {
+                return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: `${T('init.projectNotFound')}: ${manualPath}` }] };
+            }
+            const ext = path.extname(manualPath).toLowerCase();
+            const typeInfo = detectProjectType(absolutePath);
+            selectedProject = {
+                kind: typeInfo.usesQt ? 'qt' : 'cpp',
+                project: manualPath,
+                label: `${path.basename(manualPath, ext)} (${manualPath})`,
+            };
+        } else {
+            selectedProject = chosen;
+        }
     } else {
-        return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.answersMissingProject') }] };
+        return {
+            ok: false,
+            action: 'init',
+            diagnostics: [{ level: 'error', message: candidates.length === 0 ? T('init.noProjectsFound') : T('init.answersMissingProject') }],
+        };
     }
 
     if (options.interactive) {

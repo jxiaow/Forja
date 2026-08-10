@@ -9,6 +9,7 @@ import {
     runUseTarget as runUseTargetNew,
     runUpdateModeArch,
     runUpdateToolchain,
+    runUpdateBuildScript,
     formatUseTargetText,
 } from './useTarget';
 import type { UseTargetResult } from './useTarget';
@@ -84,6 +85,7 @@ export interface UseTargetArgs {
     vsInstall?: string;
     jomPath?: string;
     qmakeTarget?: string;
+    buildScript?: string;
     reset?: boolean;
     interactive?: boolean;
     json?: boolean;
@@ -161,6 +163,13 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
             vsInstall: args.vsInstall,
             jomPath: args.jomPath,
             qmakeTarget: args.qmakeTarget,
+            buildScript: args.buildScript,
+        });
+    }
+    // --build-script without --project: update active target's build script
+    else if (args.buildScript !== undefined) {
+        result = await runUpdateBuildScript(workspace, {
+            buildScript: args.buildScript,
         });
     }
     // If --mode or --arch without --project, update current target

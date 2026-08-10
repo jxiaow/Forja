@@ -31,6 +31,7 @@ export interface TargetProfile {
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';
     toolchain: ToolchainConfig;
+    buildScript?: string;
 }
 
 export interface QtModulePrefs {
@@ -193,7 +194,7 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
                 if (typeof rawToolchain.jomPath === 'string') toolchain.jomPath = rawToolchain.jomPath;
                 if (typeof rawToolchain.qmakeTarget === 'string') toolchain.qmakeTarget = rawToolchain.qmakeTarget;
                 if (typeof rawToolchain.vsVersion === 'string') toolchain.vsVersion = rawToolchain.vsVersion;
-                targets[id] = {
+                const target: TargetProfile = {
                     id: typeof obj.id === 'string' ? obj.id : id,
                     name: typeof obj.name === 'string' ? obj.name : id,
                     kind: obj.kind === 'cpp' ? 'cpp' : 'qt',
@@ -202,6 +203,10 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
                     arch: obj.arch === 'x64' ? 'x64' : 'x86',
                     toolchain,
                 };
+                if (typeof obj.buildScript === 'string' && obj.buildScript) {
+                    target.buildScript = obj.buildScript;
+                }
+                targets[id] = target;
             }
         }
     }

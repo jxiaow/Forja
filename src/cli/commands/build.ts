@@ -55,7 +55,7 @@ function buildQtCliOptions(workspace: string, target: ActiveTarget, action: Buil
     };
 }
 
-export async function runBuild(workspace: string, buildAction: BuildAction, options: { plan?: boolean; json?: boolean; project?: string } = {}): Promise<BuildResult> {
+export async function runBuild(workspace: string, buildAction: BuildAction, options: { plan?: boolean; json?: boolean; project?: string; buildArgs?: string } = {}): Promise<BuildResult> {
     const wantsJson = options.json ?? false;
     let targetResult: ReturnType<typeof requireActiveTarget>;
 
@@ -66,7 +66,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         const basename = path.basename(projectPath);
         let kind: 'qt' | 'cpp';
         if (ext === '.pro') { kind = 'qt'; }
-        else if (ext === '.sln' || basename.toLowerCase() === 'makefile' || basename.toLowerCase() === 'cmakelists.txt') { kind = 'cpp'; }
+        else if (ext === '.sln' || basename.toLowerCase() === 'makefile' || basename.toLowerCase() === 'cmakelists.txt' || ext === '.sh' || ext === '.bat') { kind = 'cpp'; }
         else {
             return {
                 ok: false, action: 'build', buildAction, workspace,
@@ -89,9 +89,6 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             : projectPath;
         const wsConfigEarly = earlyWorkroot ? loadWorkspaceConfig(earlyWorkroot) : null;
         const allTargets = wsConfigEarly ? Object.values(wsConfigEarly.targets) : [];
-        const savedProfile = allTargets.find(t => t.kind === kind && t.id === wsConfigEarly?.activeTarget)
-            || allTargets.find(t => t.kind === kind)
-            || null;
         const fallbackMode = 'debug' as const;
         const fallbackArch = (process.platform === 'win32' ? 'x86' : 'x64') as 'x86' | 'x64';
         const projectBasename = path.basename(projectPath, path.extname(projectPath));
@@ -99,7 +96,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         const sameKindTarget = allTargets.find(t => t.kind === kind);
         const fallbackToolchain = sameKindTarget ? { ...sameKindTarget.toolchain } : {};
         targetResult = {
-            target: savedProfile || {
+            target: {
                 id: `${kind}-${projectBasename}-${fallbackMode}-${fallbackArch}`,
                 name: projectBasename,
                 kind,
@@ -169,13 +166,18 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         try {
             const cppAction = buildAction === 'fresh' ? 'rebuild' : 'build';
             const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
+            // Use buildScript as the build entry point when set, otherwise use project
+            const buildProject = target.buildScript
+                ? (path.isAbsolute(target.buildScript) ? target.buildScript : path.join(workroot || workspace, target.buildScript))
+                : (path.isAbsolute(target.project) ? target.project : path.join(workroot || workspace, target.project));
             const plan = createCppPlan({
                 action: cppAction as 'build' | 'rebuild' | 'clean',
                 workspace,
-                project: path.isAbsolute(target.project) ? target.project : path.join(workroot || workspace, target.project),
+                project: buildProject,
                 mode: target.mode,
                 arch: target.arch,
                 vsDevCmdPath: vsDevCmdPath || undefined,
+                buildArgs: options.buildArgs,
             });
 
             if (options.plan) {

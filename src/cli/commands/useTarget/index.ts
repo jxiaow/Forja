@@ -24,6 +24,20 @@ function quoteCliArg(value: string): string {
     return /\s/.test(value) ? `"${value.replace(/(["\\$`])/g, '\\$1')}"` : value;
 }
 
+function validateBuildScript(workspace: string, kind: TargetProfile['kind'], buildScript: string): string | undefined {
+    if (kind !== 'cpp') return T('use.buildScriptCppOnly');
+    const extension = path.extname(buildScript).toLowerCase();
+    if (extension !== '.sh' && extension !== '.bat') return T('use.buildScriptUnsupportedExtension');
+    const workroot = resolveWorkroot(workspace);
+    const absolutePath = path.isAbsolute(buildScript)
+        ? buildScript
+        : path.join(workroot || workspace, buildScript);
+    if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+        return `${T('init.projectNotFound')}: ${buildScript}`;
+    }
+    return undefined;
+}
+
 // ── Main entry ──
 
 /** Entry options — answers is a file path string, resolved to Record internally */
@@ -36,6 +50,7 @@ export interface UseTargetEntryOptions {
     vsInstall?: string;
     jomPath?: string;
     qmakeTarget?: string;
+    buildScript?: string;
     mode?: string;
     arch?: string;
     answers?: string;  // file path
@@ -67,7 +82,8 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
     }
 
     if (options.project && !options.answers && !options.mode && !options.arch
-        && !options.qtPath && !options.vsInstall && !options.jomPath && !options.qmakeTarget) {
+        && !options.qtPath && !options.vsInstall && !options.jomPath && !options.qmakeTarget
+        && options.buildScript === undefined) {
         const workroot = resolveWorkroot(workspace);
         if (workroot) {
             const workspaceConfig = loadWorkspaceConfig(workroot);
@@ -122,6 +138,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
         vsInstall: options.vsInstall,
         jomPath: options.jomPath,
         qmakeTarget: options.qmakeTarget,
+        buildScript: options.buildScript,
         mode: options.mode,
         arch: options.arch,
         answers: parsedAnswers,
@@ -153,6 +170,17 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
             diagnostics: diags.length > 0 ? diags : [{ level: 'error', message: T('use.noActiveTargetSelected') }],
             nextAction: 'forja list targets',
         };
+    }
+
+    if (resolved.config.buildScript) {
+        const validationError = validateBuildScript(workspace, resolved.config.kind, resolved.config.buildScript);
+        if (validationError) {
+            return {
+                ok: false, action: 'use', useScope: 'target', changed: [],
+                diagnostics: [{ level: 'error', message: validationError }],
+                nextAction: 'forja use target --build-script <path>',
+            };
+        }
     }
 
     // Phase 3: Save
@@ -317,5 +345,50 @@ export async function runUpdateToolchain(workspace: string, args: {
         ok: true, action: 'use', useScope: 'target',
         workspace, activeTarget: updated, changed,
         nextAction: 'forja status',
+    };
+}
+
+export async function runUpdateBuildScript(workspace: string, args: {
+    buildScript: string;
+}): Promise<UseTargetResult> {
+    const { getActiveTarget, setActiveTarget } = await import('../activeTarget');
+    const currentTarget = getActiveTarget(workspace);
+    if (!currentTarget) {
+        return {
+            ok: false, action: 'use', useScope: 'target', changed: [],
+            diagnostics: [{ level: 'error', message: T('use.noActiveTargetSelected') }],
+            nextAction: 'forja use target --project <path>',
+        };
+    }
+
+    const updated: TargetProfile = { ...currentTarget };
+    if (args.buildScript === '') {
+        delete updated.buildScript;
+    } else {
+        const validationError = validateBuildScript(workspace, currentTarget.kind, args.buildScript);
+        if (validationError) {
+            return {
+                ok: false, action: 'use', useScope: 'target', changed: [],
+                diagnostics: [{ level: 'error', message: validationError }],
+                nextAction: 'forja use target --build-script <path>',
+            };
+        }
+        updated.buildScript = args.buildScript;
+    }
+
+    const saved = setActiveTarget(workspace, updated);
+    if (!saved) {
+        return {
+            ok: false, action: 'use', useScope: 'target', changed: [],
+            diagnostics: [{ level: 'error', message: T('use.failedToSaveTarget') }],
+            nextAction: 'forja init',
+        };
+    }
+
+    return {
+        ok: true, action: 'use', useScope: 'target',
+        workspace, activeTarget: updated,
+        changed: ['buildScript'],
+        nextAction: 'forja build',
     };
 }

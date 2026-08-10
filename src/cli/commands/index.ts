@@ -167,12 +167,13 @@ function extractWorkspace(argv: string[]): { cwd: string; error?: string } {
     return { cwd: process.cwd() };
 }
 
-function extractFlag(argv: string[], flag: string): string | undefined {
+function extractFlag(argv: string[], flag: string, options: { allowEmpty?: boolean; allowOptionLikeValue?: boolean } = {}): string | undefined {
     const idx = argv.indexOf(flag);
-    if (idx >= 0 && argv[idx + 1] && !argv[idx + 1].startsWith('--')) {
-        return argv[idx + 1];
-    }
-    return undefined;
+    if (idx < 0 || idx + 1 >= argv.length) return undefined;
+    const value = argv[idx + 1];
+    if (!options.allowEmpty && value === '') return undefined;
+    if (!options.allowOptionLikeValue && value.startsWith('--')) return undefined;
+    return value;
 }
 
 /** Check if a flag was provided with an empty value (e.g., --flag "") */
@@ -245,7 +246,12 @@ function unknownFlagsMessage(unknown: string[], knownFlags: Set<string>): string
  * @param knownFlags - Set of known flags for this command (excluding global flags)
  * @param flagsWithValues - Set of flags that take a value argument (e.g., --server <name>)
  */
-function findUnknownFlags(argv: string[], knownFlags: Set<string>, flagsWithValues: Set<string>): string[] {
+function findUnknownFlags(
+    argv: string[],
+    knownFlags: Set<string>,
+    flagsWithValues: Set<string>,
+    options: { allowEmptyValues?: Set<string>; allowOptionLikeValues?: Set<string> } = {},
+): string[] {
     const unknown: string[] = [];
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i];
@@ -254,7 +260,9 @@ function findUnknownFlags(argv: string[], knownFlags: Set<string>, flagsWithValu
         if (knownFlags.has(arg)) {
             if (flagsWithValues.has(arg)) {
                 const next = argv[i + 1];
-                if (!next || next.startsWith('--')) {
+                const allowsEmpty = options.allowEmptyValues?.has(arg) ?? false;
+                const allowsOptionLike = options.allowOptionLikeValues?.has(arg) ?? false;
+                if (next === undefined || (!allowsEmpty && next === '') || (!allowsOptionLike && next.startsWith('--'))) {
                     unknown.push(`${arg} requires a value`);
                 } else {
                     i++;
@@ -527,15 +535,17 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 outputResult(result, wantsJson, (r) => formatUseText(r, locale));
                 return;
             }
-            const targetKnown = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target', '--reset']);
-            const targetWithVal = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target']);
-            const targetUnknown = findUnknownFlags(argv, targetKnown, targetWithVal);
+            const targetKnown = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target', '--reset', '--build-script']);
+            const targetWithVal = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target', '--build-script']);
+            const targetUnknown = findUnknownFlags(argv, targetKnown, targetWithVal, {
+                allowEmptyValues: new Set(['--build-script']),
+            });
             if (targetUnknown.length > 0) {
                 outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(targetUnknown, targetKnown) }], nextAction: 'forja use target' }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
-            // Check for empty flag values
+            // Check for empty flag values (--build-script allows empty to clear)
             const emptyFlags = ['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target'];
             for (const f of emptyFlags) {
                 if (hasEmptyFlagValue(argv, f)) {
@@ -553,6 +563,7 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 vsInstall: extractFlag(argv, '--vs'),
                 jomPath: extractFlag(argv, '--jom'),
                 qmakeTarget: extractFlag(argv, '--qmake-target'),
+                buildScript: extractFlag(argv, '--build-script', { allowEmpty: true }),
                 reset: hasFlag(argv, '--reset'),
                 interactive: !wantsJson,
                 json: wantsJson,
@@ -872,9 +883,14 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
 // ── Build ──
 
 async function handleBuild(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
-    const buildUnknown = findUnknownFlags(argv, new Set(['--plan', '--project']), new Set(['--project']));
+    const buildUnknown = findUnknownFlags(
+        argv,
+        new Set(['--plan', '--project', '--build-args']),
+        new Set(['--project', '--build-args']),
+        { allowOptionLikeValues: new Set(['--build-args']) },
+    );
     if (buildUnknown.length > 0) {
-        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: unknownFlagsMessage(buildUnknown, new Set(['--plan','--project'])) }], nextAction: 'forja build' }, wantsJson);
+        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: unknownFlagsMessage(buildUnknown, new Set(['--plan','--project','--build-args'])) }], nextAction: 'forja build' }, wantsJson);
         process.exitCode = 1;
         return;
     }
@@ -907,7 +923,12 @@ async function handleBuild(argv: string[], workroot: string, wantsJson: boolean,
         return;
     }
 
-    const result = await runBuild(workroot, buildAction, { plan: hasFlag(argv, '--plan'), json: wantsJson, project: extractFlag(argv, '--project') });
+    const result = await runBuild(workroot, buildAction, {
+        plan: hasFlag(argv, '--plan'),
+        json: wantsJson,
+        project: extractFlag(argv, '--project'),
+        buildArgs: extractFlag(argv, '--build-args', { allowOptionLikeValue: true }),
+    });
     outputBuildResult(result, wantsJson);
 }
 

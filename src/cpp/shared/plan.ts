@@ -14,6 +14,7 @@ export interface CppPlanOptions {
     mode: 'debug' | 'release';
     arch: 'x86' | 'x64';
     vsDevCmdPath?: string;
+    buildArgs?: string;
 }
 
 /**
@@ -70,9 +71,10 @@ function resolveSolutionPlatform(projectPath: string, configuration: string, arc
  */
 export function buildCommand(options: CppPlanOptions): string[] {
     const isWindows = os.platform() === 'win32';
+    const projectExtension = path.extname(options.project).toLowerCase();
     const commands: string[] = [];
 
-    if (isWindows && options.project.endsWith('.sln')) {
+    if (isWindows && projectExtension === '.sln') {
         // Initialize VS environment
         if (options.vsDevCmdPath) {
             commands.push(`call "${options.vsDevCmdPath}" -arch=${options.arch} -no_logo`);
@@ -98,6 +100,19 @@ export function buildCommand(options: CppPlanOptions): string[] {
             const parallelFlag = '--parallel';
             const buildAction = options.action === 'rebuild' ? '--clean-first' : '';
             commands.push(`cmake --build "${buildDir}" ${buildAction} ${parallelFlag}`.trim());
+        }
+    } else if (projectExtension === '.sh' || projectExtension === '.bat') {
+        // Custom build script — execute in its own directory
+        if (options.action === 'clean') {
+            throw new Error('Custom build scripts do not support generic clean');
+        }
+        const scriptDir = path.dirname(options.project);
+        const scriptName = path.basename(options.project);
+        const args = options.buildArgs ? ` ${options.buildArgs}` : '';
+        if (projectExtension === '.bat') {
+            commands.push(`cd "${scriptDir}" && call "${scriptName}"${args}`);
+        } else {
+            commands.push(`cd "${scriptDir}" && sh "${scriptName}"${args}`);
         }
     } else {
         const makefileDir = path.dirname(options.project);
