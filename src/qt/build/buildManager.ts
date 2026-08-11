@@ -177,7 +177,9 @@ function _rccNeedsRebuild(): boolean {
     if (!rccPath) { return false; }
     const targets = scanRccTargets(rccPath);
     if (targets.length === 0) { return false; }
-    const needs = rccNeedsRebuild(targets);
+    const mfInfo = _resolveMakefileInfo();
+    const outputDir = mfInfo ? path.dirname(mfInfo.exePath) : null;
+    const needs = rccNeedsRebuild(targets, outputDir);
     if (needs) { logger.info('RCC 资源有变更，需要重编'); }
     return needs;
 }

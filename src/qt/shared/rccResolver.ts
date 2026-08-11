@@ -89,8 +89,9 @@ export function scanRccTargets(rccProjectPath: string): RccTarget[] {
 /**
  * 检查是否有 rcc target 需要重新编译
  * 比较 .rcc 输出文件和 .qrc 及其引用资源的 mtime
+ * 如果提供了 outputDir，还会检查输出目录中的 .rcc 拷贝是否过期
  */
-export function rccNeedsRebuild(targets: RccTarget[]): boolean {
+export function rccNeedsRebuild(targets: RccTarget[], outputDir?: string | null): boolean {
     for (const target of targets) {
         const rccFile = path.join(target.dir, `${target.name}.rcc`);
         const qrcFile = path.join(target.dir, `${target.name}.qrc`);
@@ -100,6 +101,14 @@ export function rccNeedsRebuild(targets: RccTarget[]): boolean {
         const rccMtime = fs.statSync(rccFile).mtimeMs;
 
         if (fs.statSync(qrcFile).mtimeMs > rccMtime) { return true; }
+
+        // 检查输出目录的 .rcc 拷贝是否过期
+        if (outputDir) {
+            const outputRcc = path.join(outputDir, `${target.name}.rcc`);
+            if (!fs.existsSync(outputRcc) || fs.statSync(outputRcc).mtimeMs < rccMtime) {
+                return true;
+            }
+        }
 
         try {
             const qrcContent = fs.readFileSync(qrcFile, 'utf-8');

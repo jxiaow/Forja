@@ -116,9 +116,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             const rccPath = resolveRccProjectPath(options.rccProjectPath || '', workspace);
             if (rccPath) {
                 const targets = scanRccTargets(rccPath);
-                if (targets.length > 0 && rccNeedsRebuild(targets)) {
-                    let outputDir: string | null = null;
-                    if (runtimeTarget) { outputDir = path.dirname(runtimeTarget.exePath); }
+                let outputDir: string | null = null;
+                if (runtimeTarget) { outputDir = path.dirname(runtimeTarget.exePath); }
+                if (targets.length > 0 && rccNeedsRebuild(targets, outputDir)) {
                     rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
                     result.diagnostics.push({ level: 'info', message: 'RCC 资源有变更，已插入 rcc 编译命令' });
                 }
@@ -164,12 +164,12 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         const rccPath = resolveRccProjectPath(options.rccProjectPath || '', workspace);
         if (rccPath) {
             const targets = scanRccTargets(rccPath);
-            if (targets.length > 0 && rccNeedsRebuild(targets)) {
-                let outputDir: string | null = null;
-                if (project) {
-                    const rt = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
-                    if (rt) { outputDir = path.dirname(rt.exePath); }
-                }
+            let outputDir: string | null = null;
+            if (project) {
+                const rt = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
+                if (rt) { outputDir = path.dirname(rt.exePath); }
+            }
+            if (targets.length > 0 && rccNeedsRebuild(targets, outputDir)) {
                 rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
                 result.diagnostics.push({ level: 'info', message: 'RCC 资源有变更，已插入 rcc 编译命令' });
             }
