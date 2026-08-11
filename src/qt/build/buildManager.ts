@@ -147,6 +147,18 @@ export async function build(): Promise<vscode.TaskExecution> {
     if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
     if (!await _ensureMakefileFresh(cfg)) { return Promise.reject(new Error('需要先运行 QMake')); }
+
+    // 检查 rcc 是否需要重新编译
+    if (_rccNeedsRebuild()) {
+        try {
+            await _awaitRcc();
+        } catch (e) {
+            setState('isBuilding', false);
+            setState('buildAction', null);
+            throw e;
+        }
+    }
+
     const { commands, matcher } = builder.buildCommands(cfg);
     return runTask(`Build ${cfg.mode}`, commands, matcher);
 }
@@ -170,6 +182,20 @@ function _rccNeedsRebuild(): boolean {
     return needs;
 }
 
+async function _awaitRcc(): Promise<void> {
+    logger.info('RCC 资源有变更，先执行 rcc 编译');
+    const rccExecution = await rcc();
+    await new Promise<void>((resolve, reject) => {
+        const d = vscode.tasks.onDidEndTaskProcess(e => {
+            if (e.execution === rccExecution) {
+                d.dispose();
+                if (e.exitCode === 0) { resolve(); }
+                else { reject(new Error('RCC 编译失败')); }
+            }
+        });
+    });
+}
+
 export async function run(): Promise<void> {
     if (!_ensureEnvReady()) { return; }
     const cfg = getBuildConfig();
@@ -180,19 +206,8 @@ export async function run(): Promise<void> {
 
     // 检查 rcc 是否需要重新编译
     if (_rccNeedsRebuild()) {
-        logger.info('RCC 资源有变更，先执行 rcc 编译');
         try {
-            const rccExecution = await rcc();
-            // 等待 rcc 任务完成
-            await new Promise<void>((resolve, reject) => {
-                const d = vscode.tasks.onDidEndTaskProcess(e => {
-                    if (e.execution === rccExecution) {
-                        d.dispose();
-                        if (e.exitCode === 0) { resolve(); }
-                        else { reject(new Error('RCC 编译失败')); }
-                    }
-                });
-            });
+            await _awaitRcc();
         } catch (e) {
             setState('isBuilding', false);
             setState('buildAction', null);

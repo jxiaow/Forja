@@ -15,6 +15,7 @@ import { scanProFiles } from '../../qt/shared/projectScanner';
 import { scanCppProjects } from '../../core/cppProjectScanner';
 import { detectProjectType } from '../../core/projectTypeDetector';
 import { detectEnv } from '../../qt/env/envDetector';
+import { scanRccCandidates } from '../../qt/shared/rccResolver';
 import { setSilent } from '../../core/loggerBase';
 import { confirm, prompt, choose, chooseRequired } from './prompt';
 import { getProjectGroup } from './projectGrouping';
@@ -224,12 +225,15 @@ async function handleModifyTarget(workroot: string, config: WorkspaceConfig, opt
     }
 
     // Re-detect toolchain and reconfigure
-    const updatedResult = await configureTargetFields(selected, options);
+    const updatedResult = await configureTargetFields(selected, options, workroot);
     if (!updatedResult.ok) {
         return { ok: false, action: 'init', workroot, diagnostics: updatedResult.diagnostics };
     }
 
     config.targets[updatedResult.target.id] = updatedResult.target;
+    if (updatedResult.rccProjectPath !== undefined) {
+        config.qtModulePrefs.rccProjectPath = updatedResult.rccProjectPath;
+    }
     try { saveWorkspaceConfig(config); } catch (e) {
         return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }] };
     }
@@ -439,6 +443,28 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
     }
 
     return candidates;
+}
+
+export async function promptRccProjectPath(workroot: string, interactive: boolean, answersRccPath: string | undefined, current?: string): Promise<string | undefined> {
+    if (answersRccPath !== undefined) {
+        return answersRccPath || undefined;
+    }
+    if (!interactive) return undefined;
+
+    const candidates = scanRccCandidates(workroot);
+    const skipLabel = current ? `${T('init.rccSkip')} (${current})` : T('init.rccSkip');
+    const items = [
+        ...candidates.map(c => ({ value: c, label: c })),
+        { value: '__manual__', label: T('init.rccManual') },
+        { value: '__skip__', label: skipLabel },
+    ];
+    const chosen = await choose(T('init.rccProject'), items, item => item.label);
+    if (!chosen || chosen.value === '__skip__') return undefined;
+    if (chosen.value === '__manual__') {
+        const input = await prompt(T('init.rccProject'), current);
+        return input?.trim() || undefined;
+    }
+    return chosen.value;
 }
 
 async function configureNewTarget(workroot: string, config: WorkspaceConfig, options: InitOptions, existingCandidates?: ProjectCandidate[]): Promise<InitResult> {
@@ -666,6 +692,13 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
 
     config.targets[id] = target;
     config.activeTarget = id;
+
+    // RCC project path (Qt projects only)
+    if (selectedProject.kind === 'qt') {
+        const rccPath = await promptRccProjectPath(workroot, options.interactive, options.answers?.rccProjectPath);
+        if (rccPath !== undefined) { config.qtModulePrefs.rccProjectPath = rccPath; }
+    }
+
     try { saveWorkspaceConfig(config); } catch (e) {
         return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }] };
     }
@@ -673,7 +706,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
     return { ok: true, action: 'init', target };
 }
 
-async function configureTargetFields(target: TargetProfile, options: InitOptions): Promise<{ ok: true; target: TargetProfile } | { ok: false; diagnostics: Diagnostic[] }> {
+async function configureTargetFields(target: TargetProfile, options: InitOptions, workroot?: string): Promise<{ ok: true; target: TargetProfile; rccProjectPath?: string } | { ok: false; diagnostics: Diagnostic[] }> {
     setSilent(true);
     let env;
     try { env = await detectEnv(); } finally { setSilent(false); }
@@ -754,5 +787,11 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
     const basename = path.basename(target.project, path.extname(target.project));
     updated.name = `${basename} ${updated.mode} ${updated.arch}`;
 
-    return { ok: true, target: updated };
+    // RCC project path (Qt projects only)
+    let rccProjectPath: string | undefined;
+    if (target.kind === 'qt' && workroot) {
+        rccProjectPath = await promptRccProjectPath(workroot, options.interactive, options.answers?.rccProjectPath);
+    }
+
+    return { ok: true, target: updated, rccProjectPath };
 }

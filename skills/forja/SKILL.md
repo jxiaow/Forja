@@ -40,6 +40,8 @@ description: Operate C++ workspaces through the Forja CLI, including initializat
   `logFile`。
 - `.pro` 是 Qt/qmake 目标；`build qmake`、`build rcc` 和普通 `run` 仅用于此类目标。
   `.sln`、Makefile 和 CMake 是 C++ 目标，只使用 `build` 或 `build fresh`。
+- Qt 目标的 `build` 和 `run` 都会自动检查 RCC 资源是否过期，若过期则在构建前自动编译
+  rcc（无需手动 `build rcc`）。RCC 项目路径在 `init` 或 `use target` 时配置。
 
 ## 标准流程
 
@@ -67,7 +69,8 @@ forja stop --json
 | 查看目标、就绪状态和下一步 | `forja status --json` |
 | 初始化工作根目录 | `forja init [--workroot <path>] --json` |
 | 列出目标或环境 | `forja list targets [--all] --json` / `forja list env --json` |
-| 保存目标和工具链 | `forja use target --project <path-or-id> [--answers <file>] --json` |
+| 保存目标和工具链 | `forja use target --project <path-or-id> [--answers <file>] [--rcc-project-path <path>] --json` |
+| 单独设置 RCC 路径 | `forja use target --rcc-project-path <path> --json` |
 | 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] --json` |
 | 后台运行当前 Qt 目标 | `forja run --detach [--plan] --json` |
 | 运行自定义命令 | `forja run custom <name> --json` |

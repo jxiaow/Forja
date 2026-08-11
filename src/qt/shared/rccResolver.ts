@@ -28,6 +28,37 @@ export function resolveRccProjectPath(configuredPath: string, workspace: string)
 }
 
 /**
+ * 扫描 workroot 下最多 3 层目录（workroot 本身 + 2 层子目录），找名为 XYRcc 且含 .qrc 的目录
+ */
+export function scanRccCandidates(workroot: string): string[] {
+    const candidates: string[] = [];
+    const check = (dir: string) => {
+        if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return;
+        const targets = scanRccTargets(dir);
+        if (targets.length > 0) { candidates.push(dir); }
+    };
+    // Level 0: workroot itself
+    check(path.join(workroot, 'XYRcc'));
+    // Level 1: direct subdirectories
+    try {
+        for (const entry of fs.readdirSync(workroot, { withFileTypes: true })) {
+            if (entry.isDirectory() && entry.name !== 'XYRcc') {
+                check(path.join(workroot, entry.name, 'XYRcc'));
+                // Level 2: one more level deep
+                try {
+                    for (const sub of fs.readdirSync(path.join(workroot, entry.name), { withFileTypes: true })) {
+                        if (sub.isDirectory()) {
+                            check(path.join(workroot, entry.name, sub.name, 'XYRcc'));
+                        }
+                    }
+                } catch { /* permission error, skip */ }
+            }
+        }
+    } catch { /* permission error, skip */ }
+    return candidates;
+}
+
+/**
  * 递归扫描 RCC 项目目录，找到所有含 <name>.qrc 的子目录
  */
 export function scanRccTargets(rccProjectPath: string): RccTarget[] {

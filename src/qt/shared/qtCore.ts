@@ -111,10 +111,24 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 }
             }
             const runtimeTarget = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
+            // 检查 rcc 是否需要重编，需要则在 build 前插入 rcc 命令
+            let rccCmds: string[] = [];
+            const rccPath = resolveRccProjectPath(options.rccProjectPath || '', workspace);
+            if (rccPath) {
+                const targets = scanRccTargets(rccPath);
+                if (targets.length > 0 && rccNeedsRebuild(targets)) {
+                    let outputDir: string | null = null;
+                    if (runtimeTarget) { outputDir = path.dirname(runtimeTarget.exePath); }
+                    rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
+                    result.diagnostics.push({ level: 'info', message: 'RCC 资源有变更，已插入 rcc 编译命令' });
+                }
+            }
+
             // Deduplicate env init when combining qmake + build
-            if (qmakeCmds.length > 0) {
-                const initLen = shellBuilder.initCommands(buildConfig).length;
-                commands = [...qmakeCmds, ...buildCmds.slice(initLen)];
+            // Only dedup when no rcc commands are inserted between them (rcc may change cwd)
+            const dedupedBuildCmds = (qmakeCmds.length > 0 && rccCmds.length === 0) ? buildCmds.slice(shellBuilder.initCommands(buildConfig).length) : buildCmds;
+            if (qmakeCmds.length > 0 || rccCmds.length > 0) {
+                commands = [...qmakeCmds, ...rccCmds, ...dedupedBuildCmds];
             } else {
                 commands = buildCmds;
             }
