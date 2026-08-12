@@ -19,6 +19,7 @@ export interface CliOptions {
     qmakeArgs?: string | null;
     jomPath?: string | null;
     rccProjectPath?: string | null;
+    jobs?: number;
     detach?: boolean;
     saveLocal: boolean;
     json: boolean;

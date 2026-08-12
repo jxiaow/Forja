@@ -80,7 +80,8 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         vsDevShell,
         target,
         qmakeArgs,
-        jomPath
+        jomPath,
+        jobs: options.jobs,
     });
     const resolvedProject = project
         ? path.join(buildConfig.projectDir, buildConfig.proFile)
@@ -111,7 +112,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 }
             }
             const runtimeTarget = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
-            // 检查 rcc 是否需要重编，需要则在 build 前插入 rcc 命令
+            // rcc 在 build 之后编译 — pro 构建步骤会拷贝 rcc，必须在拷贝后再编译
             let rccCmds: string[] = [];
             const rccPath = resolveRccProjectPath(options.rccProjectPath || '', workspace);
             if (rccPath) {
@@ -124,11 +125,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 }
             }
 
-            // Deduplicate env init when combining qmake + build
-            // Only dedup when no rcc commands are inserted between them (rcc may change cwd)
-            const dedupedBuildCmds = (qmakeCmds.length > 0 && rccCmds.length === 0) ? buildCmds.slice(shellBuilder.initCommands(buildConfig).length) : buildCmds;
+            const dedupedBuildCmds = qmakeCmds.length > 0 ? buildCmds.slice(shellBuilder.initCommands(buildConfig).length) : buildCmds;
             if (qmakeCmds.length > 0 || rccCmds.length > 0) {
-                commands = [...qmakeCmds, ...rccCmds, ...dedupedBuildCmds];
+                commands = [...qmakeCmds, ...dedupedBuildCmds, ...rccCmds];
             } else {
                 commands = buildCmds;
             }
@@ -159,32 +158,30 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             }
         }
 
-        // 检查 rcc 是否需要重编，需要则在 build 前插入 rcc 命令
-        let rccCmds: string[] = [];
-        const rccPath = resolveRccProjectPath(options.rccProjectPath || '', workspace);
-        if (rccPath) {
-            const targets = scanRccTargets(rccPath);
-            let outputDir: string | null = null;
-            if (project) {
-                const rt = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
-                if (rt) { outputDir = path.dirname(rt.exePath); }
-            }
-            if (targets.length > 0 && rccNeedsRebuild(targets, outputDir)) {
-                rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
-                result.diagnostics.push({ level: 'info', message: 'RCC 资源有变更，已插入 rcc 编译命令' });
-            }
-        }
-
         // Append run command (launch executable) for both dry-run and execute
         if (project) {
             const runCmd = buildRunCommand(resolvedProject!, mode, arch, qtPath);
             // Deduplicate env init when combining qmake + build
-            // Only dedup when no rcc commands are inserted between them (rcc may change cwd)
             const initLen = shellBuilder.initCommands(buildConfig).length;
-            const dedupedBuildCmds = (qmakeCmds.length > 0 && rccCmds.length === 0) ? buildCmds.slice(initLen) : buildCmds;
+            const dedupedBuildCmds = qmakeCmds.length > 0 ? buildCmds.slice(initLen) : buildCmds;
+
+            // rcc 在 build 之后、启动之前编译 — pro 构建步骤会拷贝 rcc，必须在拷贝后再编译
+            let rccCmds: string[] = [];
+            const rccPath = resolveRccProjectPath(options.rccProjectPath || '', workspace);
+            if (rccPath) {
+                const targets = scanRccTargets(rccPath);
+                let outputDir: string | null = null;
+                const rt = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
+                if (rt) { outputDir = path.dirname(rt.exePath); }
+                if (targets.length > 0 && rccNeedsRebuild(targets, outputDir)) {
+                    rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
+                    result.diagnostics.push({ level: 'info', message: 'RCC 资源有变更，已插入 rcc 编译命令' });
+                }
+            }
+
             if (runCmd) {
                 const runtimeTarget = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
-                commands = [...qmakeCmds, ...rccCmds, ...dedupedBuildCmds, runCmd];
+                commands = [...qmakeCmds, ...dedupedBuildCmds, ...rccCmds, runCmd];
                 result.executablePath = runtimeTarget?.exePath;
             } else {
                 // Makefile not yet generated or mismatched — return build commands with hint to run status

@@ -23,7 +23,8 @@ description: Operate C++ workspaces through the Forja CLI, including initializat
 - 构建、运行、清理、选择目标或同步前先执行 `forja status --json`，不要猜测项目路径、
   mode、arch 或工具链。
 - 多个项目、工具链或服务器存在歧义时让用户选择，不要静默选择第一个结果。
-- 在当前目录外操作时传 `--workspace <path>`；仅需稳定诊断语言时传 `--lang zh|en`。
+- 不要主动加 `--workspace`，项目已初始化时直接操作当前目录；仅用户明确要求时传
+  `--workspace <path>`。仅需稳定诊断语言时传 `--lang zh|en`。
 - Forja 已覆盖的操作不要自行拼接 qmake、make、MSBuild、SSH 或 SCP 命令。
 
 ## 执行规则
@@ -40,8 +41,10 @@ description: Operate C++ workspaces through the Forja CLI, including initializat
   `logFile`。
 - `.pro` 是 Qt/qmake 目标；`build qmake`、`build rcc` 和普通 `run` 仅用于此类目标。
   `.sln`、Makefile 和 CMake 是 C++ 目标，只使用 `build` 或 `build fresh`。
-- Qt 目标的 `build` 和 `run` 都会自动检查 RCC 资源是否过期，若过期则在构建前自动编译
+- Qt 目标的 `build` 和 `run` 都会自动检查 RCC 资源是否过期，若过期则在构建后自动编译
   rcc（无需手动 `build rcc`）。RCC 项目路径在 `init` 或 `use target` 时配置。
+- 构建失败并报告编译错误时，**禁止**自行修改代码修复。必须先分析错误原因并提出
+  修复方案，等用户确认后才能执行修改。
 
 ## 标准流程
 
@@ -71,7 +74,7 @@ forja stop --json
 | 列出目标或环境 | `forja list targets [--all] --json` / `forja list env --json` |
 | 保存目标和工具链 | `forja use target --project <path-or-id> [--answers <file>] [--rcc-project-path <path>] --json` |
 | 单独设置 RCC 路径 | `forja use target --rcc-project-path <path> --json` |
-| 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] --json` |
+| 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] [--jobs <n>] --json` |
 | 后台运行当前 Qt 目标 | `forja run --detach [--plan] --json` |
 | 运行自定义命令 | `forja run custom <name> --json` |
 | 打开 Qt Designer | `forja run designer <ui-file> --json` |

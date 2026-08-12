@@ -886,12 +886,12 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
 async function handleBuild(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
     const buildUnknown = findUnknownFlags(
         argv,
-        new Set(['--plan', '--project', '--build-args']),
-        new Set(['--project', '--build-args']),
+        new Set(['--plan', '--project', '--build-args', '--jobs']),
+        new Set(['--project', '--build-args', '--jobs']),
         { allowOptionLikeValues: new Set(['--build-args']) },
     );
     if (buildUnknown.length > 0) {
-        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: unknownFlagsMessage(buildUnknown, new Set(['--plan','--project','--build-args'])) }], nextAction: 'forja build' }, wantsJson);
+        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: unknownFlagsMessage(buildUnknown, new Set(['--plan','--project','--build-args','--jobs'])) }], nextAction: 'forja build' }, wantsJson);
         process.exitCode = 1;
         return;
     }
@@ -924,11 +924,20 @@ async function handleBuild(argv: string[], workroot: string, wantsJson: boolean,
         return;
     }
 
+    const jobsRaw = extractFlag(argv, '--jobs');
+    const jobs = jobsRaw ? parseInt(jobsRaw, 10) : undefined;
+    if (jobsRaw && (isNaN(jobs!) || jobs! < 1)) {
+        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: '--jobs requires a positive integer' }], nextAction: 'forja build' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
     const result = await runBuild(workroot, buildAction, {
         plan: hasFlag(argv, '--plan'),
         json: wantsJson,
         project: extractFlag(argv, '--project'),
         buildArgs: extractFlag(argv, '--build-args', { allowOptionLikeValue: true }),
+        jobs,
     });
     outputBuildResult(result, wantsJson);
 }

@@ -148,19 +148,25 @@ export async function build(): Promise<vscode.TaskExecution> {
     const cfg = getBuildConfig();
     if (!await _ensureMakefileFresh(cfg)) { return Promise.reject(new Error('需要先运行 QMake')); }
 
-    // 检查 rcc 是否需要重新编译
-    if (_rccNeedsRebuild()) {
-        try {
-            await _awaitRcc();
-        } catch (e) {
-            setState('isBuilding', false);
-            setState('buildAction', null);
-            throw e;
-        }
-    }
-
+    // rcc 在 build 之后编译 — pro 构建步骤会拷贝 rcc，必须在拷贝后再编译
     const { commands, matcher } = builder.buildCommands(cfg);
-    return runTask(`Build ${cfg.mode}`, commands, matcher);
+    const execution = await runTask(`Build ${cfg.mode}`, commands, matcher);
+
+    // 监听 build 任务完成，成功后编译 rcc
+    const disposable = vscode.tasks.onDidEndTaskProcess(e => {
+        if (e.execution === execution && e.exitCode === 0) {
+            disposable.dispose();
+            if (_rccNeedsRebuild()) {
+                void _awaitRcc().catch(err => {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    logger.error(`RCC 编译失败: ${msg}`);
+                    vscode.window.showWarningMessage(`RCC 编译失败: ${msg}`);
+                });
+            }
+        }
+    });
+
+    return execution;
 }
 
 export function clean(): Thenable<vscode.TaskExecution> {
@@ -206,16 +212,7 @@ export async function run(): Promise<void> {
     setState('buildAction', 'run');
     setState('isRunning', false);
 
-    // 检查 rcc 是否需要重新编译
-    if (_rccNeedsRebuild()) {
-        try {
-            await _awaitRcc();
-        } catch (e) {
-            setState('isBuilding', false);
-            setState('buildAction', null);
-            throw e;
-        }
-    }
+    // rcc 在 build 之后、启动之前编译 — pro 构建步骤会拷贝 rcc，必须在拷贝后再编译
 
     const mfInfo = _resolveMakefileInfo();
     if (!mfInfo) {
@@ -266,71 +263,83 @@ export async function run(): Promise<void> {
                 return;
             }
 
-            const runCmds: string[] = [];
-            if (!isWin) {
-                const libPaths = parseLibPaths(cfg.projectDir);
-                if (libPaths.length > 0) {
-                    const joined = libPaths.join(':');
-                    runCmds.push(`export LD_LIBRARY_PATH="${joined}:$LD_LIBRARY_PATH"`);
-                    logger.info(`Run env: LD_LIBRARY_PATH += ${joined}`);
-                }
-            }
-            runCmds.push(`"${mfInfo.exePath}"`);
-            const runTaskObj = new vscode.Task(
-                { type: 'shell' },
-                _getTaskFolder(), `Run ${cfg.mode}`, TASK_SOURCE_QT,
-                builder.makeExec(runCmds), []
-            );
-            // 编译成功，Run task 清屏再启动
-            runTaskObj.presentationOptions = {
-                reveal: vscode.TaskRevealKind.Always,
-                panel: vscode.TaskPanelKind.Shared,
-                echo: false,
-                focus: false,
-                showReuseMessage: false,
-                clear: true
-            };
-
-            // 先注册 Run task 结束监听，再执行（避免竞态漏掉事件）
-            // 清理上一次的 disposable（如果还在）
-            _runEndDisposable?.dispose();
-            const runWorkspace = resolveProjectRoot();
-            const previousPids = findExecutablePids(mfInfo.exePath);
-            let runTaskEnded = false;
-            clearRunState(runWorkspace);
-            _runEndDisposable = vscode.tasks.onDidEndTask(e => {
-                if (e.execution.task.name === `Run ${cfg.mode}` && e.execution.task.source === TASK_SOURCE_QT) {
-                    runTaskEnded = true;
-                    _runEndDisposable?.dispose();
-                    _runEndDisposable = undefined;
-                    clearRunState(runWorkspace);
-                    setState('isRunning', false);
-                }
-            });
-
+            // Build 成功，在启动程序前编译 rcc（pro 构建步骤会拷贝 rcc，必须在拷贝后再编译）
             void (async (): Promise<void> => {
-                try {
-                    await vscode.tasks.executeTask(runTaskObj);
-                    if (runTaskEnded) { return; }
-                    setState('isRunning', true);
-                    const pid = await waitForNewExecutablePid(mfInfo.exePath, previousPids);
-                    if (runTaskEnded) { return; }
-                    if (pid) {
-                        writeRunState(runWorkspace, {
-                            pid,
-                            exePath: mfInfo.exePath,
-                            executablePath: mfInfo.exePath,
-                            logFile: runLogPath(runWorkspace),
-                            startedAt: new Date().toISOString()
-                        });
+                if (_rccNeedsRebuild()) {
+                    try {
+                        await _awaitRcc();
+                    } catch (e) {
+                        reject(e instanceof Error ? e : new Error('RCC 编译失败'));
+                        return;
                     }
-                } catch (error) {
-                    logger.error(`启动运行任务失败: ${error instanceof Error ? error.message : String(error)}`);
-                    setState('isRunning', false);
                 }
-            })();
 
-            resolve();
+                const runCmds: string[] = [];
+                if (!isWin) {
+                    const libPaths = parseLibPaths(cfg.projectDir);
+                    if (libPaths.length > 0) {
+                        const joined = libPaths.join(':');
+                        runCmds.push(`export LD_LIBRARY_PATH="${joined}:$LD_LIBRARY_PATH"`);
+                        logger.info(`Run env: LD_LIBRARY_PATH += ${joined}`);
+                    }
+                }
+                runCmds.push(`"${mfInfo.exePath}"`);
+                const runTaskObj = new vscode.Task(
+                    { type: 'shell' },
+                    _getTaskFolder(), `Run ${cfg.mode}`, TASK_SOURCE_QT,
+                    builder.makeExec(runCmds), []
+                );
+                // 编译成功，Run task 清屏再启动
+                runTaskObj.presentationOptions = {
+                    reveal: vscode.TaskRevealKind.Always,
+                    panel: vscode.TaskPanelKind.Shared,
+                    echo: false,
+                    focus: false,
+                    showReuseMessage: false,
+                    clear: true
+                };
+
+                // 先注册 Run task 结束监听，再执行（避免竞态漏掉事件）
+                // 清理上一次的 disposable（如果还在）
+                _runEndDisposable?.dispose();
+                const runWorkspace = resolveProjectRoot();
+                const previousPids = findExecutablePids(mfInfo.exePath);
+                let runTaskEnded = false;
+                clearRunState(runWorkspace);
+                _runEndDisposable = vscode.tasks.onDidEndTask(e => {
+                    if (e.execution.task.name === `Run ${cfg.mode}` && e.execution.task.source === TASK_SOURCE_QT) {
+                        runTaskEnded = true;
+                        _runEndDisposable?.dispose();
+                        _runEndDisposable = undefined;
+                        clearRunState(runWorkspace);
+                        setState('isRunning', false);
+                    }
+                });
+
+                void (async (): Promise<void> => {
+                    try {
+                        await vscode.tasks.executeTask(runTaskObj);
+                        if (runTaskEnded) { return; }
+                        setState('isRunning', true);
+                        const pid = await waitForNewExecutablePid(mfInfo.exePath, previousPids);
+                        if (runTaskEnded) { return; }
+                        if (pid) {
+                            writeRunState(runWorkspace, {
+                                pid,
+                                exePath: mfInfo.exePath,
+                                executablePath: mfInfo.exePath,
+                                logFile: runLogPath(runWorkspace),
+                                startedAt: new Date().toISOString()
+                            });
+                        }
+                    } catch (error) {
+                        logger.error(`启动运行任务失败: ${error instanceof Error ? error.message : String(error)}`);
+                        setState('isRunning', false);
+                    }
+                })();
+
+                resolve();
+            })();
         };
 
         // onDidEndTaskProcess gives us the exit code — preferred signal

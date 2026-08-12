@@ -15,7 +15,7 @@ export interface PlatformConfig {
     qmakeExtraArgs(cfg: BuildConfig): string;
     qmakeMatcher: string | string[];
 
-    buildCommand: string;
+    buildCommand(cfg: BuildConfig): string;
     buildMatcher: string | string[];
 
     cleanCommand: string;

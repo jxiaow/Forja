@@ -15,6 +15,7 @@ export interface CppPlanOptions {
     arch: 'x86' | 'x64';
     vsDevCmdPath?: string;
     buildArgs?: string;
+    jobs?: number;
 }
 
 /**
@@ -85,7 +86,7 @@ export function buildCommand(options: CppPlanOptions): string[] {
         const config = options.mode === 'release' ? 'Release' : 'Debug';
         // Resolve actual platform from .sln file
         const platform = resolveSolutionPlatform(options.project, config, options.arch);
-        commands.push(`msbuild "${options.project}" /t:${msbuildAction} /p:Configuration=${config} /p:Platform=${platform} /m`);
+        commands.push(`msbuild "${options.project}" /t:${msbuildAction} /p:Configuration=${config} /p:Platform=${platform}${options.jobs ? ` /m:${options.jobs}` : ' /m'}`);
     } else if (path.basename(options.project).toLowerCase() === 'cmakelists.txt') {
         const projectDir = path.dirname(options.project);
         const buildDir = path.join(projectDir, 'build');
@@ -97,7 +98,7 @@ export function buildCommand(options: CppPlanOptions): string[] {
         } else {
             const configFlag = options.mode === 'release' ? '-DCMAKE_BUILD_TYPE=Release' : '-DCMAKE_BUILD_TYPE=Debug';
             commands.push(`cmake -B "${buildDir}" -S "${projectDir}" ${configFlag}`);
-            const parallelFlag = '--parallel';
+            const parallelFlag = options.jobs ? `--parallel ${options.jobs}` : '--parallel';
             const buildAction = options.action === 'rebuild' ? '--clean-first' : '';
             commands.push(`cmake --build "${buildDir}" ${buildAction} ${parallelFlag}`.trim());
         }
@@ -119,7 +120,8 @@ export function buildCommand(options: CppPlanOptions): string[] {
         const target = options.action === 'clean' ? 'clean'
             : options.action === 'rebuild' ? 'clean all'
             : '';
-        commands.push(`make -C "${makefileDir}" ${target} -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)`.trim());
+        const jobsFlag = options.jobs ? `-j${options.jobs}` : '-j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)';
+        commands.push(`make -C "${makefileDir}" ${target} ${jobsFlag}`.trim());
     }
     return commands;
 }

@@ -41,7 +41,9 @@ export const winConfig: PlatformConfig = {
     qmakeExtraArgs(cfg: BuildConfig): string { return `CONFIG+=${cfg.arch}`; },
     qmakeMatcher: '$msCompile',
 
-    buildCommand: 'jom',
+    buildCommand(cfg: BuildConfig): string {
+        return cfg.jobs ? `jom -j${cfg.jobs}` : 'jom';
+    },
     buildMatcher: '$msCompile',
 
     cleanCommand: 'jom clean',

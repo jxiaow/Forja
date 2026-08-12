@@ -10,6 +10,7 @@ export interface BuildConfig {
     target: string;   // 可选 TARGET 覆盖，空字符串表示不覆盖
     qmakeArgs?: string; // 追加到 qmake 命令末尾的自定义参数
     jomPath: string;       // jom.exe 完整路径，空字符串表示依赖 PATH
+    jobs?: number;         // 并行编译数，未设置时使用构建工具默认值
 }
 
 export interface ShellCommandLine {
@@ -71,7 +72,7 @@ export function createShellPlanBuilder(config: PlatformConfig): ShellPlanBuilder
 
         buildCommands(cfg: BuildConfig): CommandPlan {
             return {
-                commands: assembleCommands(cfg, [config.buildCommand]),
+                commands: assembleCommands(cfg, [config.buildCommand(cfg)]),
                 matcher: config.buildMatcher
             };
         },

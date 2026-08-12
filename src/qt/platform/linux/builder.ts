@@ -23,7 +23,11 @@ export const linuxConfig: PlatformConfig = {
     qmakeExtraArgs(): string { return ''; },
     qmakeMatcher: '$gcc',
 
-    buildCommand: 'make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)',
+    buildCommand(cfg: BuildConfig): string {
+        return cfg.jobs
+            ? `make -j${cfg.jobs}`
+            : 'make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)';
+    },
     buildMatcher: '$gcc',
 
     cleanCommand: 'make clean',

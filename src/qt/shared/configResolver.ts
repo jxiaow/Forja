@@ -16,6 +16,7 @@ export interface ConfigInputs {
     target: string;
     qmakeArgs?: string;
     jomPath?: string;
+    jobs?: number;
 }
 
 /**
@@ -43,7 +44,8 @@ export function resolveBuildConfig(inputs: ConfigInputs): BuildConfig {
         mode: inputs.mode,
         target: inputs.target,
         qmakeArgs: inputs.qmakeArgs || '',
-        jomPath: inputs.jomPath || ''
+        jomPath: inputs.jomPath || '',
+        jobs: inputs.jobs,
     };
 }
 
@@ -61,7 +63,7 @@ export function mergeConfigInputs(...sources: Partial<ConfigInputs>[]): ConfigIn
         vsDevShell: '',
         target: '',
         qmakeArgs: '',
-        jomPath: ''
+        jomPath: '',
     };
 
     for (const source of sources) {
@@ -74,6 +76,7 @@ export function mergeConfigInputs(...sources: Partial<ConfigInputs>[]): ConfigIn
         if (source.target) { result.target = source.target; }
         if (source.qmakeArgs) { result.qmakeArgs = source.qmakeArgs; }
         if (source.jomPath) { result.jomPath = source.jomPath; }
+        if (source.jobs) { result.jobs = source.jobs; }
     }
 
     return result;
