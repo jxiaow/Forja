@@ -74,7 +74,7 @@ forja stop --json
 | 列出目标或环境 | `forja list targets [--all] --json` / `forja list env --json` |
 | 保存目标和工具链 | `forja use target --project <path-or-id> [--answers <file>] [--rcc-project-path <path>] --json` |
 | 单独设置 RCC 路径 | `forja use target --rcc-project-path <path> --json` |
-| 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] [--jobs <n>] --json` |
+| 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] [--jobs <n>] [--build-args <args>] --json` |
 | 后台运行当前 Qt 目标 | `forja run --detach [--plan] --json` |
 | 运行自定义命令 | `forja run custom <name> --json` |
 | 打开 Qt Designer | `forja run designer <ui-file> --json` |

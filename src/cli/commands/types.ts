@@ -527,6 +527,8 @@ Target 选项:
 Options:
   --plan                  Dry run, show commands without executing
   --project <path>        Build a specific project file (.pro/.sln/Makefile/CMakeLists.txt)
+  --jobs <N>              Parallel build jobs (e.g. -jN / jom /m:N)
+  --build-args <args>     Extra arguments appended to the build command
   --json                  Output as JSON
   --lang <locale>         Language: zh or en
   --workspace <path>      Workspace directory (default: current directory)`,
@@ -539,6 +541,8 @@ Options:
 选项:
   --plan                  预演模式，只显示命令不执行
   --project <路径>        构建指定项目文件（.pro/.sln/Makefile/CMakeLists.txt）
+  --jobs <N>              并行编译数（如 -jN / jom /m:N）
+  --build-args <参数>     追加到构建命令的额外参数
   --json                  JSON 格式输出
   --lang <locale>         语言: zh 或 en
   --workspace <路径>      工作区目录（默认当前目录）`,
