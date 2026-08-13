@@ -41,6 +41,9 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
     const candidate = resolvedTarget.value;
     const kind = candidate.kind;
     const reuseActiveTarget = !options.reset && ctx.existingTarget?.project === candidate.project;
+    const buildScript = options.buildScript !== undefined
+        ? options.buildScript || undefined
+        : (reuseActiveTarget ? ctx.existingTarget?.buildScript : undefined);
 
     // ── Resolve qmake TARGET (only for .pro files) ──
     let qmakeTarget: string | undefined;
@@ -101,6 +104,7 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
             vsInstall: vsInstall.value,
             jomPath: jomPath.value,
             qmakeTarget,
+            buildScript,
         },
         diagnostics,
     };

@@ -17,7 +17,7 @@ export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
     const arch = (config.arch || (process.platform === 'win32' ? 'x86' : 'x64')) as 'x86' | 'x64';
     const id = generateTargetId(config.kind, config.project, mode, arch, new Set());
     const basename = config.project.split('/').pop()?.replace(/\.\w+$/, '') || config.project;
-    return {
+    const profile: TargetProfile = {
         id,
         name: `${basename} ${mode} ${arch}`,
         kind: config.kind,
@@ -33,6 +33,8 @@ export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
             qmakeTarget: config.qmakeTarget,
         },
     };
+    if (config.buildScript) profile.buildScript = config.buildScript;
+    return profile;
 }
 
 /**
@@ -80,6 +82,7 @@ export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; 
                 qmakeTarget: config.qmakeTarget,
             },
         };
+        if (config.buildScript) profile.buildScript = config.buildScript;
 
         wsConfig.targets[id] = profile;
         wsConfig.activeTarget = id;
@@ -94,6 +97,7 @@ export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; 
         if (config.mode && config.mode !== oldProfile?.mode) changed.push('mode');
         if (config.arch && config.arch !== oldProfile?.arch) changed.push('arch');
         if (config.qmakeTarget && config.qmakeTarget !== oldProfile?.toolchain.qmakeTarget) changed.push('qmakeTarget');
+        if (config.buildScript !== oldProfile?.buildScript) changed.push('buildScript');
 
         return { ok: true, changed, targetId: id };
     } catch (e) {

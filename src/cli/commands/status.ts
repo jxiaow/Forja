@@ -30,6 +30,7 @@ export interface StatusResult extends ForjaJsonResult {
     remote?: RemoteStatusSummary;
     sync?: SyncStatusSummary;
     runtime?: RuntimeState;
+    rccProjectPath?: string;
     nextAction?: string;
     choices?: Array<{ label: string; command: string; description: string }>;
 }
@@ -262,6 +263,11 @@ export function runStatus(workspace: string): StatusResult {
         diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
         activeTarget: targetForOutput,
     };
+
+    // RCC project path — only relevant for Qt targets
+    if (activeTarget?.kind === 'qt' && wsConfig?.qtModulePrefs.rccProjectPath) {
+        result.rccProjectPath = wsConfig.qtModulePrefs.rccProjectPath;
+    }
 
     // Remote summary
 
@@ -520,6 +526,11 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         }
         if (t.toolchain.jomPath) { tcParts.push(buildToolLabel(t.toolchain.jomPath)); }
         if (tcParts.length > 0) { lines.push(`${indent}${T('toolchainLabel')}: ${tcParts.join(', ')}`); }
+    }
+
+    // ── RCC ──
+    if (result.rccProjectPath) {
+        lines.push(`${indent}RCC: ${result.rccProjectPath}`);
     }
 
     // ── Remote ──

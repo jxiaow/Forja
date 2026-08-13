@@ -527,6 +527,8 @@ Target 选项:
 Options:
   --plan                  Dry run, show commands without executing
   --project <path>        Build a specific project file (.pro/.sln/Makefile/CMakeLists.txt)
+  --jobs <N>              Parallel build jobs (e.g. -jN / jom /m:N)
+  --build-args <args>     Extra arguments appended to the build command
   --json                  Output as JSON
   --lang <locale>         Language: zh or en
   --workspace <path>      Workspace directory (default: current directory)`,
@@ -539,6 +541,8 @@ Options:
 选项:
   --plan                  预演模式，只显示命令不执行
   --project <路径>        构建指定项目文件（.pro/.sln/Makefile/CMakeLists.txt）
+  --jobs <N>              并行编译数（如 -jN / jom /m:N）
+  --build-args <参数>     追加到构建命令的额外参数
   --json                  JSON 格式输出
   --lang <locale>         语言: zh 或 en
   --workspace <路径>      工作区目录（默认当前目录）`,
@@ -589,6 +593,9 @@ Options:
     'init.selectArch':                   { en: 'Select target architecture', zh: '选择目标架构' },
     'init.selectQt':                     { en: 'Select Qt installation',   zh: '选择 Qt 安装' },
     'init.selectVs':                     { en: 'Select Visual Studio',      zh: '选择 Visual Studio' },
+    'init.rccProject':                   { en: 'RCC project path (optional)', zh: 'RCC 项目路径（可选）' },
+    'init.rccSkip':                      { en: 'Skip',                       zh: '跳过' },
+    'init.rccManual':                    { en: 'Enter path manually...',     zh: '手动输入路径...' },
     'init.qmakeTarget':                  { en: 'QMake TARGET override',     zh: 'QMake TARGET 覆盖' },
     'init.qmakeTargetHint':              { en: 'Enter to skip',             zh: '回车跳过' },
     'init.default':                      { en: 'default',                   zh: '默认' },
@@ -621,6 +628,8 @@ Options:
     'init.noProjectsFound':             { en: 'No projects found in work root',       zh: '工作根目录下未找到项目' },
     'init.selectProjectGroup':          { en: 'Select a project group',               zh: '选择项目分组' },
     'init.selectProject':               { en: 'Select a project',                     zh: '选择项目' },
+    'init.manualProjectPath':           { en: 'Enter project path manually...',        zh: '手动输入项目路径...' },
+    'init.enterProjectPath':            { en: 'Enter project file path',               zh: '输入项目文件路径' },
     'init.noTargetsToModify':           { en: 'No targets to modify',                 zh: '没有可修改的目标' },
     'init.answersMissingProject':       { en: 'Answers file missing required "project" field', zh: '答案文件缺少必需的 "project" 字段' },
     'init.targetNotFound':              { en: 'Target not found',                       zh: '目标未找到' },
@@ -745,6 +754,8 @@ Options:
     'use.useLocalOrRemote':              { en: 'Use local',                           zh: '请使用 local' },
     'use.execution':                     { en: 'Execution',                           zh: '执行位置' },
     'use.noChanges':                     { en: 'No changes — values already match',  zh: '无变更——当前值已匹配' },
+    'use.buildScriptCppOnly':            { en: 'Build scripts are only supported for C++ targets', zh: '构建脚本仅支持 C++ 目标' },
+    'use.buildScriptUnsupportedExtension': { en: 'Build script must use a .sh or .bat extension', zh: '构建脚本必须使用 .sh 或 .bat 扩展名' },
     // build/run/clean/stop shared diagnostics
     'cmd.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
     'cmd.projectNotFound':               { en: 'Project file not found',             zh: '项目文件未找到' },

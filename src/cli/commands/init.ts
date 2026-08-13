@@ -15,6 +15,7 @@ import { scanProFiles } from '../../qt/shared/projectScanner';
 import { scanCppProjects } from '../../core/cppProjectScanner';
 import { detectProjectType } from '../../core/projectTypeDetector';
 import { detectEnv } from '../../qt/env/envDetector';
+import { scanRccCandidates } from '../../qt/shared/rccResolver';
 import { setSilent } from '../../core/loggerBase';
 import { confirm, prompt, choose, chooseRequired } from './prompt';
 import { getProjectGroup } from './projectGrouping';
@@ -224,12 +225,15 @@ async function handleModifyTarget(workroot: string, config: WorkspaceConfig, opt
     }
 
     // Re-detect toolchain and reconfigure
-    const updatedResult = await configureTargetFields(selected, options);
+    const updatedResult = await configureTargetFields(selected, options, workroot);
     if (!updatedResult.ok) {
         return { ok: false, action: 'init', workroot, diagnostics: updatedResult.diagnostics };
     }
 
     config.targets[updatedResult.target.id] = updatedResult.target;
+    if (updatedResult.rccProjectPath !== undefined) {
+        config.qtModulePrefs.rccProjectPath = updatedResult.rccProjectPath;
+    }
     try { saveWorkspaceConfig(config); } catch (e) {
         return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }] };
     }
@@ -353,12 +357,6 @@ async function handleNewWorkroot(workroot: string, options: InitOptions): Promis
     }
 
     const candidates = await scanProjects(workroot);
-    if (candidates.length === 0) {
-        return {
-            ok: false, action: 'init', workroot,
-            diagnostics: [{ level: 'error', message: T('init.noProjectsFound') }],
-        };
-    }
 
     console.log(`  ${T('init.foundProjects')}: ${candidates.length}`);
 
@@ -447,27 +445,93 @@ async function scanProjects(workroot: string): Promise<ProjectCandidate[]> {
     return candidates;
 }
 
+export async function promptRccProjectPath(workroot: string, interactive: boolean, answersRccPath: string | undefined, current?: string): Promise<string | undefined> {
+    if (answersRccPath !== undefined) {
+        return answersRccPath || undefined;
+    }
+    if (!interactive) return undefined;
+
+    const candidates = scanRccCandidates(workroot);
+    const skipLabel = current ? `${T('init.rccSkip')} (${current})` : T('init.rccSkip');
+    const items = [
+        ...candidates.map(c => ({ value: c, label: c })),
+        { value: '__manual__', label: T('init.rccManual') },
+        { value: '__skip__', label: skipLabel },
+    ];
+    const chosen = await choose(T('init.rccProject'), items, item => item.label);
+    if (!chosen || chosen.value === '__skip__') return undefined;
+    if (chosen.value === '__manual__') {
+        const input = await prompt(T('init.rccProject'), current);
+        return input?.trim() || undefined;
+    }
+    return chosen.value;
+}
+
 async function configureNewTarget(workroot: string, config: WorkspaceConfig, options: InitOptions, existingCandidates?: ProjectCandidate[]): Promise<InitResult> {
     const candidates = existingCandidates || await scanProjects(workroot);
-    if (candidates.length === 0) {
-        return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.noProjectsFound') }] };
-    }
 
     // Select project
     let selectedProject: ProjectCandidate;
     if (options.answers?.project) {
-        const match = candidates.find(c => c.project === options.answers!.project || c.label === options.answers!.project);
-        if (!match) {
-            return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('init.projectNotFound')}: ${options.answers.project}` }] };
+        // Check if the project path is a build script (.sh/.bat) — create synthetic candidate
+        const projExt = path.extname(options.answers.project).toLowerCase();
+        if (projExt === '.sh' || projExt === '.bat') {
+            const scriptPath = options.answers.project;
+            const absoluteScript = path.isAbsolute(scriptPath) ? scriptPath : path.join(workroot, scriptPath);
+            if (!fs.existsSync(absoluteScript)) {
+                return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: `${T('init.projectNotFound')}: ${scriptPath}` }] };
+            }
+            selectedProject = {
+                kind: 'cpp',
+                project: scriptPath,
+                label: `${path.basename(scriptPath, projExt)} (${scriptPath})`,
+            };
+        } else {
+            const match = candidates.find(c => c.project === options.answers!.project || c.label === options.answers!.project);
+            if (!match) {
+                return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('init.projectNotFound')}: ${options.answers.project}` }] };
+            }
+            selectedProject = match;
         }
-        selectedProject = match;
     } else if (options.interactive) {
-        const groups = groupProjectCandidates(candidates);
-        const selectedGroup = await chooseRequired(T('init.selectProjectGroup'), groups, group => `${group.name} (${group.candidates.length})`);
-        const chosen = await chooseRequired(T('init.selectProject'), selectedGroup.candidates, c => c.label);
-        selectedProject = chosen;
+        const MANUAL_INPUT = '__manual_input__' as const;
+        interface PickerItem { project: string; label: string; kind: 'qt' | 'cpp'; __manual?: boolean }
+        let groupCandidates: ProjectCandidate[] = [];
+        if (candidates.length > 0) {
+            const groups = groupProjectCandidates(candidates);
+            const selectedGroup = await chooseRequired(T('init.selectProjectGroup'), groups, group => `${group.name} (${group.candidates.length})`);
+            groupCandidates = selectedGroup.candidates;
+        }
+        const items: PickerItem[] = [
+            ...groupCandidates,
+            { project: MANUAL_INPUT, label: T('init.manualProjectPath'), kind: 'cpp' as const, __manual: true },
+        ];
+        const chosen = await chooseRequired(T('init.selectProject'), items, c => c.label);
+        if (chosen.__manual) {
+            const manualPath = await prompt(T('init.enterProjectPath'));
+            if (!manualPath) {
+                return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.projectNotFound') }] };
+            }
+            const absolutePath = path.isAbsolute(manualPath) ? manualPath : path.join(workroot, manualPath);
+            if (!fs.existsSync(absolutePath)) {
+                return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: `${T('init.projectNotFound')}: ${manualPath}` }] };
+            }
+            const ext = path.extname(manualPath).toLowerCase();
+            const typeInfo = detectProjectType(absolutePath);
+            selectedProject = {
+                kind: typeInfo.usesQt ? 'qt' : 'cpp',
+                project: manualPath,
+                label: `${path.basename(manualPath, ext)} (${manualPath})`,
+            };
+        } else {
+            selectedProject = chosen;
+        }
     } else {
-        return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: T('init.answersMissingProject') }] };
+        return {
+            ok: false,
+            action: 'init',
+            diagnostics: [{ level: 'error', message: candidates.length === 0 ? T('init.noProjectsFound') : T('init.answersMissingProject') }],
+        };
     }
 
     if (options.interactive) {
@@ -628,6 +692,13 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
 
     config.targets[id] = target;
     config.activeTarget = id;
+
+    // RCC project path (Qt projects only)
+    if (selectedProject.kind === 'qt') {
+        const rccPath = await promptRccProjectPath(workroot, options.interactive, options.answers?.rccProjectPath);
+        if (rccPath !== undefined) { config.qtModulePrefs.rccProjectPath = rccPath; }
+    }
+
     try { saveWorkspaceConfig(config); } catch (e) {
         return { ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }] };
     }
@@ -635,7 +706,7 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
     return { ok: true, action: 'init', target };
 }
 
-async function configureTargetFields(target: TargetProfile, options: InitOptions): Promise<{ ok: true; target: TargetProfile } | { ok: false; diagnostics: Diagnostic[] }> {
+async function configureTargetFields(target: TargetProfile, options: InitOptions, workroot?: string): Promise<{ ok: true; target: TargetProfile; rccProjectPath?: string } | { ok: false; diagnostics: Diagnostic[] }> {
     setSilent(true);
     let env;
     try { env = await detectEnv(); } finally { setSilent(false); }
@@ -716,5 +787,11 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
     const basename = path.basename(target.project, path.extname(target.project));
     updated.name = `${basename} ${updated.mode} ${updated.arch}`;
 
-    return { ok: true, target: updated };
+    // RCC project path (Qt projects only)
+    let rccProjectPath: string | undefined;
+    if (target.kind === 'qt' && workroot) {
+        rccProjectPath = await promptRccProjectPath(workroot, options.interactive, options.answers?.rccProjectPath);
+    }
+
+    return { ok: true, target: updated, rccProjectPath };
 }

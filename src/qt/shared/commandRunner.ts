@@ -602,9 +602,30 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
 
     // Normal mode: execute all commands together
     const commandLine = commandParts.join(' && ');
-    const executed = options?.streaming
-        ? await executeStreaming(commandLine, result.workspace, result.action === 'run' ? result.executablePath : undefined, suppressed)
-        : await execute(commandLine, result.workspace, suppressed);
+
+    // Windows cmd.exe has a ~8191 char command line limit.
+    // When RCC targets are many, the joined commands can exceed this.
+    // Fall back to writing a .bat file and executing it directly.
+    let batFile: string | undefined;
+    let effectiveCmd = commandLine;
+    if (process.platform === 'win32' && commandLine.length > 7000) {
+        ensureLocalStateDir(result.workspace);
+        batFile = path.join(logsDir(result.workspace), `${result.action}-${Date.now()}.bat`);
+        const cwd = resolveProjectCwd(result);
+        fs.writeFileSync(batFile, `@echo off\r\ncd /d "${cwd}"\r\n${commandLine}\r\n`, 'utf8');
+        effectiveCmd = batFile;
+    }
+
+    let executed: { exitCode: number; stdout: string; stderr: string };
+    try {
+        executed = options?.streaming
+            ? await executeStreaming(effectiveCmd, result.workspace, result.action === 'run' ? result.executablePath : undefined, suppressed)
+            : await execute(effectiveCmd, result.workspace, suppressed);
+    } finally {
+        if (batFile) {
+            try { fs.unlinkSync(batFile); } catch { /* cleanup best-effort */ }
+        }
+    }
     const durationMs = Date.now() - started;
     ensureLocalStateDir(result.workspace);
     const filePath = logFileFor(result.workspace, result.action);

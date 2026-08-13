@@ -56,6 +56,7 @@ export interface ResolveOptions {
     vsInstall?: string;
     jomPath?: string;
     qmakeTarget?: string;
+    buildScript?: string;
     mode?: string;
     arch?: string;
     answers?: Record<string, string>;
@@ -74,6 +75,7 @@ export interface ResolvedConfig {
     vsVersion?: string;
     jomPath?: string;
     qmakeTarget?: string;
+    buildScript?: string;
 }
 
 // ── Result ──
@@ -85,7 +87,7 @@ export interface UseTargetResult extends ForjaJsonResult {
     questions?: Question[];
     config?: {
         qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qtVersion?: string; vsVersion?: string; qmakeTarget?: string };
-        cpp?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string };
+        cpp?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string; buildScript?: string };
     };
     changed?: string[];
 }

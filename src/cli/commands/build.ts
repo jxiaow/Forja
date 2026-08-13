@@ -28,9 +28,9 @@ export interface BuildResult extends ForjaJsonResult {
     logFile?: string;
 }
 
-function buildQtCliOptions(workspace: string, target: ActiveTarget, action: BuildAction, plan: boolean, qmakeArgs?: string, rccProjectPath?: string): CliOptions {
+function buildQtCliOptions(workspace: string, target: ActiveTarget, opts: { action: BuildAction; plan?: boolean; qmakeArgs?: string; rccProjectPath?: string; jobs?: number }): CliOptions {
     let qtAction: CliOptions['action'];
-    switch (action) {
+    switch (opts.action) {
         case 'qmake': qtAction = 'qmake'; break;
         case 'rcc': qtAction = 'rcc'; break;
         default: qtAction = 'build'; break;
@@ -38,7 +38,7 @@ function buildQtCliOptions(workspace: string, target: ActiveTarget, action: Buil
     const vsDevShell = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
     return {
         action: qtAction,
-        executionMode: plan ? 'dryRun' : 'execute',
+        executionMode: opts.plan ? 'dryRun' : 'execute',
         workspace,
         project: target.project,
         mode: target.mode,
@@ -46,16 +46,17 @@ function buildQtCliOptions(workspace: string, target: ActiveTarget, action: Buil
         qtPath: target.toolchain.qtPath || null,
         vsDevShell: vsDevShell,
         target: target.toolchain.qmakeTarget || null,
-        qmakeArgs: qmakeArgs || null,
+        qmakeArgs: opts.qmakeArgs || null,
         jomPath: target.toolchain.jomPath || null,
-        rccProjectPath: rccProjectPath || null,
+        rccProjectPath: opts.rccProjectPath || null,
+        jobs: opts.jobs,
         detach: false,
         saveLocal: false,
         json: false,
     };
 }
 
-export async function runBuild(workspace: string, buildAction: BuildAction, options: { plan?: boolean; json?: boolean; project?: string } = {}): Promise<BuildResult> {
+export async function runBuild(workspace: string, buildAction: BuildAction, options: { plan?: boolean; json?: boolean; project?: string; buildArgs?: string; jobs?: number } = {}): Promise<BuildResult> {
     const wantsJson = options.json ?? false;
     let targetResult: ReturnType<typeof requireActiveTarget>;
 
@@ -66,7 +67,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         const basename = path.basename(projectPath);
         let kind: 'qt' | 'cpp';
         if (ext === '.pro') { kind = 'qt'; }
-        else if (ext === '.sln' || basename.toLowerCase() === 'makefile' || basename.toLowerCase() === 'cmakelists.txt') { kind = 'cpp'; }
+        else if (ext === '.sln' || basename.toLowerCase() === 'makefile' || basename.toLowerCase() === 'cmakelists.txt' || ext === '.sh' || ext === '.bat') { kind = 'cpp'; }
         else {
             return {
                 ok: false, action: 'build', buildAction, workspace,
@@ -89,9 +90,6 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             : projectPath;
         const wsConfigEarly = earlyWorkroot ? loadWorkspaceConfig(earlyWorkroot) : null;
         const allTargets = wsConfigEarly ? Object.values(wsConfigEarly.targets) : [];
-        const savedProfile = allTargets.find(t => t.kind === kind && t.id === wsConfigEarly?.activeTarget)
-            || allTargets.find(t => t.kind === kind)
-            || null;
         const fallbackMode = 'debug' as const;
         const fallbackArch = (process.platform === 'win32' ? 'x86' : 'x64') as 'x86' | 'x64';
         const projectBasename = path.basename(projectPath, path.extname(projectPath));
@@ -99,7 +97,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         const sameKindTarget = allTargets.find(t => t.kind === kind);
         const fallbackToolchain = sameKindTarget ? { ...sameKindTarget.toolchain } : {};
         targetResult = {
-            target: savedProfile || {
+            target: {
                 id: `${kind}-${projectBasename}-${fallbackMode}-${fallbackArch}`,
                 name: projectBasename,
                 kind,
@@ -169,13 +167,19 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         try {
             const cppAction = buildAction === 'fresh' ? 'rebuild' : 'build';
             const vsDevCmdPath = target.toolchain.vsInstall ? resolveVsDevCmdPath(target.toolchain.vsInstall) : null;
+            // Use buildScript as the build entry point when set, otherwise use project
+            const buildProject = target.buildScript
+                ? (path.isAbsolute(target.buildScript) ? target.buildScript : path.join(workroot || workspace, target.buildScript))
+                : (path.isAbsolute(target.project) ? target.project : path.join(workroot || workspace, target.project));
             const plan = createCppPlan({
                 action: cppAction as 'build' | 'rebuild' | 'clean',
                 workspace,
-                project: path.isAbsolute(target.project) ? target.project : path.join(workroot || workspace, target.project),
+                project: buildProject,
                 mode: target.mode,
                 arch: target.arch,
                 vsDevCmdPath: vsDevCmdPath || undefined,
+                buildArgs: options.buildArgs,
+                jobs: options.jobs,
             });
 
             if (options.plan) {
@@ -239,12 +243,12 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     const wsConfig = workroot ? loadWorkspaceConfig(workroot) : null;
     const qmakeArgs = wsConfig?.qtModulePrefs.qmakeArgs || undefined;
     const rccProjectPath = wsConfig?.qtModulePrefs.rccProjectPath || undefined;
-    const cliOptions = buildQtCliOptions(workspace, target, buildAction, options.plan ?? false, qmakeArgs, rccProjectPath);
+    const cliOptions = buildQtCliOptions(workspace, target, { action: buildAction, plan: options.plan, qmakeArgs, rccProjectPath, jobs: options.jobs });
 
     try {
         // fresh = clean first, then build
         if (buildAction === 'fresh' && !options.plan) {
-            const cleanOpts = buildQtCliOptions(workspace, target, 'default', false, qmakeArgs, rccProjectPath);
+            const cleanOpts = buildQtCliOptions(workspace, target, { action: 'default', qmakeArgs, rccProjectPath });
             cleanOpts.action = 'clean';
             const cleanPlan = await createActionPlan(cleanOpts);
             if (cleanPlan.ok && cleanPlan.commands.length > 0) {
@@ -280,7 +284,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
 
         if (options.plan) {
             if (buildAction === 'fresh') {
-                const cleanOpts = buildQtCliOptions(workspace, target, 'default', true, qmakeArgs, rccProjectPath);
+                const cleanOpts = buildQtCliOptions(workspace, target, { action: 'default', plan: true, qmakeArgs, rccProjectPath });
                 cleanOpts.action = 'clean';
                 const cleanPlan = await createActionPlan(cleanOpts);
                 const combinedCommands = [...(cleanPlan.ok ? cleanPlan.commands : []), ...planned.commands];

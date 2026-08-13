@@ -38,6 +38,50 @@ npm run compile
 npm link          # 全局注册 forja 命令
 ```
 
+## AI Agent Skill 安装
+
+先确认 `forja` 已安装并位于 `PATH`：
+
+```bash
+forja --version
+```
+
+Forja skill 位于源码仓库的 `skills/forja/`；正式或开发发布包中位于
+`dist/forja-<version>/cli/skills/forja/`。把**整个 `forja` 目录**复制到 AI 工具配置的
+skills 根目录，不要只复制 `SKILL.md`：
+
+```text
+<agent-skills-dir>/
+└── forja/
+    ├── SKILL.md
+    └── references/
+        ├── interactive-selection.md
+        └── remote-operations.md
+```
+
+兼容 `SKILL.md` / Agent Skills 的工具可直接使用完整的 `forja` 目录；目标目录以对应工具的配置为准。
+POSIX shell 示例：
+
+```bash
+AGENT_SKILLS_DIR="/path/to/your/agent/skills"
+mkdir -p "$AGENT_SKILLS_DIR/forja"
+cp -R ./skills/forja/. "$AGENT_SKILLS_DIR/forja/"
+```
+
+PowerShell 示例：
+
+```powershell
+$agentSkillsDir = "C:\path\to\your\agent\skills"
+$dest = Join-Path $agentSkillsDir "forja"
+New-Item -ItemType Directory -Force $dest | Out-Null
+Copy-Item ".\skills\forja\*" $dest -Recurse -Force
+```
+
+Codex 的个人 skill 根目录是 `$CODEX_HOME/skills`，未设置 `CODEX_HOME` 时默认为
+`~/.codex/skills`。安装到 `~/.codex/skills/forja/` 后，在下一轮对话中使用 `$forja`，
+或直接请求构建、运行、清理、诊断和同步受支持的 C++/Qt 工作区。其他工具安装后按其
+要求重新加载 skills 或重启会话。
+
 ## 快速上手
 
 **三步开始：**
@@ -53,7 +97,7 @@ forja use target --project app.pro   # 选择项目
 
 # 3. 构建运行
 forja build
-forja run
+forja run  # 仅 Qt/qmake 目标
 ```
 
 **每条命令都支持 `--json` 输出结构化结果，适合脚本和 AI 调用：**
@@ -81,7 +125,7 @@ forja run                                     # 运行
 forja init                                    # 检测 VS/MSBuild
 forja use target --project MyProject.sln      # 选择 .sln 文件
 forja build
-forja run --detach                            # 后台运行
+# C++ 目标当前只支持构建；普通 run 仅用于 Qt/qmake 目标
 ```
 
 ### 场景 3：远程同步与部署
@@ -129,7 +173,7 @@ VSCode 扩展和 CLI 共享同一套新配置存储（`~/.forja/workspaces/<hash
 | 选项目 | 配置面板 → 项目 | `forja use target --project` |
 | 切 mode/arch | 状态栏下拉 / 配置面板 | `forja use target --mode` |
 | 构建 | `forja.build` 命令 | `forja build` |
-| 运行 | `forja.run` 命令 | `forja run` |
+| 运行（仅 Qt/qmake） | `forja.run` 命令 | `forja run` |
 | 远程部署 | — | `forja remote bootstrap` |
 
 ## 命令速查
@@ -142,7 +186,7 @@ VSCode 扩展和 CLI 共享同一套新配置存储（`~/.forja/workspaces/<hash
 | `use` | 写入配置 | `forja use target --project`、`forja use target --mode release` |
 | `server` | 管理服务器 | `forja server add`、`forja server remove` |
 | `build` | 编译 | `forja build`、`forja build fresh`、`forja build qmake` |
-| `run` | 运行 | `forja run`、`forja run --detach` |
+| `run` | 运行 Qt/qmake 目标 | `forja run`、`forja run --detach` |
 | `stop` | 停止进程 | `forja stop` |
 | `clean` | 清理产物 | `forja clean` |
 | `sync` | 文件同步 | `forja sync`、`forja sync --dry-run` |
@@ -241,11 +285,13 @@ forja build fresh           # 清理后重新编译
 forja build qmake           # 仅运行 qmake
 forja build rcc             # 编译 .qrc 资源文件
 forja build --plan          # 仅显示编译计划
+forja build --jobs 8        # 8 路并行编译
+forja build --build-args "VERBOSE=1"  # 传递额外参数给构建命令
 ```
 
 ### `forja run`
 
-先杀掉已运行的程序，再编译并启动程序。
+仅用于 Qt/qmake 目标：先杀掉已运行的程序，再编译并启动程序。
 
 ```bash
 forja run                   # 前台运行

@@ -1,6 +1,6 @@
 {
   "source": "src/qt/platform/win/desktopLauncher.cpp",
-  "sourceSha256": "3c96dd1efd846b3a5cef3c3358dc0dfc1707714d49e47fa8586cbe4ca71cfa4b",
-  "binarySha256": "02bdb2878bc0e00afd14c3c437c98a57f54df41fa0094813ed42caa79e298fd1",
+  "sourceSha256": "07d54340b6c8765fd87b089a935f41671a4982c5bf9807730d10d242bb5eeaa9",
+  "binarySha256": "3f85121e1f92e6c54cd026b36765a0bab0722be341672681063656b83a555a58",
   "compiler": "g++"
 }

@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export interface ProjectTypeInfo {
-    buildSystem: 'qmake' | 'cmake' | 'msbuild' | 'make';
+    buildSystem: 'qmake' | 'cmake' | 'msbuild' | 'make' | 'script';
     usesQt: boolean;
 }
 
@@ -35,6 +35,11 @@ export function detectProjectType(projectPath: string): ProjectTypeInfo {
     // Makefile - check for Qt references
     if (fileName === 'makefile' || fileName === 'gnumakefile') {
         return detectMakeProjectType(projectPath);
+    }
+
+    // Build scripts (.sh / .bat) — custom build entry points
+    if (ext === '.sh' || ext === '.bat') {
+        return { buildSystem: 'script', usesQt: false };
     }
 
     // Default fallback

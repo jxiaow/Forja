@@ -45,6 +45,7 @@ export function buildConfigSummary(config: ResolvedConfig, toolchain: ToolchainI
             mode: config.mode,
             arch: config.arch,
             vsInstall: config.vsInstall,
+            buildScript: config.buildScript,
         },
     };
 }
@@ -72,6 +73,7 @@ export function buildSuccessResult(config: ResolvedConfig, toolchain: ToolchainI
             jomPath: config.jomPath,
             qmakeTarget: config.qmakeTarget,
         },
+        buildScript: config.buildScript,
     };
 
     const diagnostics: Diagnostic[] = [];

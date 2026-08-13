@@ -5,10 +5,12 @@
 import { ForjaJsonResult, ActiveTarget, Locale, T, Question } from './types';
 import { getActiveTarget } from './activeTarget';
 import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } from '../../core/workspaceStore';
+import { promptRccProjectPath } from './init';
 import {
     runUseTarget as runUseTargetNew,
     runUpdateModeArch,
     runUpdateToolchain,
+    runUpdateBuildScript,
     formatUseTargetText,
 } from './useTarget';
 import type { UseTargetResult } from './useTarget';
@@ -53,6 +55,7 @@ export function formatUseText(result: UseResult, _locale: Locale): string {
             if (t.toolchain.jomPath) lines.push(`  ${T('init.currentJom')}: ${t.toolchain.jomPath}`);
             lines.push(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         }
+        if (result.rccProjectPath) { lines.push(`  RCC: ${result.rccProjectPath}`); }
         if (result.nextAction) { lines.push(T('next')); lines.push(`  ${result.nextAction}`); }
         return lines.join('\n');
     }
@@ -71,6 +74,7 @@ export interface UseResult extends ForjaJsonResult {
     activeTarget?: ActiveTarget;
     config?: ConfigSummary;
     changed?: string[];
+    rccProjectPath?: string;
 }
 
 // ── runUseTarget — dispatches to new module ──
@@ -84,6 +88,8 @@ export interface UseTargetArgs {
     vsInstall?: string;
     jomPath?: string;
     qmakeTarget?: string;
+    buildScript?: string;
+    rccProjectPath?: string;
     reset?: boolean;
     interactive?: boolean;
     json?: boolean;
@@ -161,7 +167,41 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
             vsInstall: args.vsInstall,
             jomPath: args.jomPath,
             qmakeTarget: args.qmakeTarget,
+            buildScript: args.buildScript,
         });
+    }
+    // --build-script without --project: update active target's build script
+    else if (args.buildScript !== undefined) {
+        result = await runUpdateBuildScript(workspace, {
+            buildScript: args.buildScript,
+        });
+    }
+    // --rcc-project-path without --project: update RCC path only
+    else if (args.rccProjectPath !== undefined) {
+        const workroot = resolveWorkroot(workspace);
+        if (!workroot) {
+            result = {
+                ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+                diagnostics: [{ level: 'error', message: T('notInitialized') }],
+                nextAction: 'forja init',
+            };
+        } else {
+            const config = loadWorkspaceConfig(workroot);
+            config.qtModulePrefs.rccProjectPath = args.rccProjectPath || '';
+            try {
+                saveWorkspaceConfig(config);
+                result = {
+                    ok: true, action: 'use', useScope: 'target', workspace, changed: ['qt.rccProjectPath'],
+                    nextAction: 'forja build',
+                };
+            } catch (e) {
+                result = {
+                    ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+                    diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
+                    nextAction: 'forja status',
+                };
+            }
+        }
     }
     // If --mode or --arch without --project, update current target
     else if (args.mode || args.arch) {
@@ -220,6 +260,41 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
         }
     }
 
+    // RCC project path update (flag or interactive prompt)
+    // Only runs after --project flow (standalone --rcc-project-path is handled by its own branch above)
+    // Interactive prompt only when no specific flag was given (avoid prompting after --mode/--build-script etc.)
+    const hasSpecificFlag = args.mode || args.arch || args.qtPath || args.vsInstall || args.jomPath || args.qmakeTarget || args.buildScript !== undefined;
+    if (result?.ok && args.project) {
+        const workroot = resolveWorkroot(workspace);
+        if (workroot) {
+            let rccPath: string | undefined | null = null; // null = no change
+
+            if (args.rccProjectPath !== undefined) {
+                // Explicit flag
+                rccPath = args.rccProjectPath || '';
+            } else if (args.interactive && !args.json && !hasSpecificFlag) {
+                const activeTarget = getActiveTarget(workspace);
+                if (activeTarget?.kind === 'qt') {
+                    const config = loadWorkspaceConfig(workroot);
+                    const current = config.qtModulePrefs.rccProjectPath || '';
+                    rccPath = await promptRccProjectPath(workroot, true, undefined, current) ?? null;
+                }
+            }
+
+            if (rccPath !== null) {
+                const config = loadWorkspaceConfig(workroot);
+                config.qtModulePrefs.rccProjectPath = rccPath;
+                try {
+                    saveWorkspaceConfig(config);
+                    result.changed = [...(result.changed || []), 'qt.rccProjectPath'];
+                } catch (e) {
+                    result.diagnostics = result.diagnostics || [];
+                    result.diagnostics.push({ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` });
+                }
+            }
+        }
+    }
+
     return result;
 }
 
@@ -235,9 +310,21 @@ export function runUseShow(workspace: string): UseResult {
         };
     }
 
-    return {
+    const result: UseResult = {
         ok: true, action: 'use', useScope: 'show', changed: [],
         activeTarget: target,
         nextAction: 'forja status',
     };
+
+    if (target.kind === 'qt') {
+        const workroot = resolveWorkroot(workspace);
+        if (workroot) {
+            const wsConfig = loadWorkspaceConfig(workroot);
+            if (wsConfig.qtModulePrefs.rccProjectPath) {
+                result.rccProjectPath = wsConfig.qtModulePrefs.rccProjectPath;
+            }
+        }
+    }
+
+    return result;
 }
