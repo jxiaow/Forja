@@ -1,6 +1,6 @@
 ---
 name: forja
-description: Operate C++ workspaces through the Forja CLI, including initialization, diagnosis, target and toolchain selection, build, run, clean, remote server management, and file synchronization. Use whenever the user mentions Forja or forja, or asks Codex to perform these actions for Qt qmake (.pro), Visual Studio (.sln), Makefile, or CMake projects, including uninitialized workspaces.
+description: Operate C++ workspaces through the Forja CLI, including initialization, target and toolchain selection, build, run, clean, remote server management, and file synchronization. Use whenever the user mentions Forja or forja, or asks Codex to perform these actions for Qt qmake (.pro), Visual Studio (.sln), Makefile, or CMake projects, including uninitialized workspaces.
 ---
 
 # Forja CLI
@@ -70,14 +70,19 @@ forja stop --json
 | 需求 | 命令 |
 | --- | --- |
 | 查看目标、就绪状态和下一步 | `forja status --json` |
-| 初始化工作根目录 | `forja init [--workroot <path>] --json` |
+| 初始化工作根目录 | `forja init [--workroot <path>] [--answers <file>] --json` |
 | 列出目标或环境 | `forja list targets [--all] --json` / `forja list env --json` |
 | 保存目标和工具链 | `forja use target --project <path-or-id> [--answers <file>] [--rcc-project-path <path>] --json` |
 | 单独设置 RCC 路径 | `forja use target --rcc-project-path <path> --json` |
 | 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] [--jobs <n>] [--build-args <args>] --json` |
 | 后台运行当前 Qt 目标 | `forja run --detach [--plan] --json` |
+| 调试运行当前 Qt 目标 | `forja run --debug --json` |
 | 运行自定义命令 | `forja run custom <name> --json` |
 | 打开 Qt Designer | `forja run designer <ui-file> --json` |
 | 停止当前运行目标 | `forja stop --json` |
 | 清理当前目标 | `forja clean [--plan] --json` |
-| 管理远程与同步 | `forja server ...` / `forja remote ...` / `forja sync ...` |
+| 配置远程环境 | `forja remote setup --server <name> --remote-path <path> --json` |
+| 部署远端 CLI | `forja remote bootstrap [--force] --json` |
+| 管理服务器 | `forja server ...` |
+| 同步文件 | `forja sync [--dry-run] [--yes] [--file <path>] --json` |
+| 管理同步忽略规则 | `forja sync ignore [add\|rm] <pattern> [--add\|--rm] --json` |
