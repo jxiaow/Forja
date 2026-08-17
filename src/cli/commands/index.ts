@@ -588,11 +588,33 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 process.exitCode = 1;
                 return;
             }
-            // No subcommand — show current config
-            const showUnknown = findUnknownFlags(argv, new Set<string>(), new Set<string>());
+            // No subcommand — handle global flags or show current config
+            const globalKnown = new Set(['--jobs']);
+            const globalWithVal = new Set(['--jobs']);
+            const showUnknown = findUnknownFlags(argv, globalKnown, globalWithVal, {
+                allowEmptyValues: new Set(['--jobs']),
+            });
             if (showUnknown.length > 0) {
-                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(showUnknown, new Set()) }], nextAction: 'forja use' }, wantsJson);
+                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(showUnknown, globalKnown) }], nextAction: 'forja use' }, wantsJson);
                 process.exitCode = 1;
+                return;
+            }
+            // --jobs: persist global parallel build setting
+            const jobsRaw = extractFlag(argv, '--jobs', { allowEmpty: true });
+            if (jobsRaw !== undefined) {
+                if (jobsRaw === '') {
+                    saveGlobalConfig({ jobs: undefined });
+                    outputResult({ ok: true, action: 'use', useScope: 'global', changed: ['jobs'], nextAction: 'forja build' }, wantsJson, (r) => T('use.jobsCleared'));
+                    return;
+                }
+                const jobsNum = parseInt(jobsRaw, 10);
+                if (isNaN(jobsNum) || jobsNum < 1) {
+                    outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: T('use.jobsRequiresPositive') }], nextAction: 'forja use --jobs <N>' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                saveGlobalConfig({ jobs: jobsNum });
+                outputResult({ ok: true, action: 'use', useScope: 'global', changed: ['jobs'], jobs: jobsNum, nextAction: 'forja build' }, wantsJson, (r) => T('use.jobsSet', [String(jobsNum)]));
                 return;
             }
             const result = runUseShow(workroot);
@@ -925,11 +947,16 @@ async function handleBuild(argv: string[], workroot: string, wantsJson: boolean,
     }
 
     const jobsRaw = extractFlag(argv, '--jobs');
-    const jobs = jobsRaw ? parseInt(jobsRaw, 10) : undefined;
-    if (jobsRaw && (isNaN(jobs!) || jobs! < 1)) {
-        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: '--jobs requires a positive integer' }], nextAction: 'forja build' }, wantsJson);
-        process.exitCode = 1;
-        return;
+    let jobs: number | undefined;
+    if (jobsRaw) {
+        jobs = parseInt(jobsRaw, 10);
+        if (isNaN(jobs) || jobs < 1) {
+            outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: '--jobs requires a positive integer' }], nextAction: 'forja build' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+    } else {
+        jobs = loadGlobalConfig().jobs;
     }
 
     const result = await runBuild(workroot, buildAction, {

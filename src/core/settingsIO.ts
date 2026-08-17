@@ -169,9 +169,10 @@ export function projectsDir(): string {
 
 export interface GlobalConfig {
     lang: string;
+    jobs?: number;
 }
 
-const DEFAULT_GLOBAL_CONFIG: GlobalConfig = { lang: '' };
+const DEFAULT_GLOBAL_CONFIG: GlobalConfig = { lang: '', jobs: undefined };
 
 export function globalConfigPath(): string {
     return path.join(forjaConfigDir(), 'config.json');
@@ -182,7 +183,8 @@ export function loadGlobalConfig(): GlobalConfig {
     try {
         if (fs.existsSync(filePath)) {
             const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            return { lang: typeof raw.lang === 'string' ? raw.lang : '' };
+            const jobs = typeof raw.jobs === 'number' && raw.jobs > 0 && Number.isInteger(raw.jobs) ? raw.jobs : undefined;
+            return { lang: typeof raw.lang === 'string' ? raw.lang : '', jobs };
         }
     } catch {
         // ignore

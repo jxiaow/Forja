@@ -473,6 +473,7 @@ Options:
     },
     'help.use': {
         en: `Usage: forja use target [options] [--json]
+       forja use --jobs <N>          Set global parallel build jobs (persisted)
 
 Target options:
   --project <path>        Select target by project path or label
@@ -487,6 +488,7 @@ Target options:
     --add <codes>               Add to list
     --rm <codes>                Remove from list`,
         zh: `用法: forja use target [选项] [--json]
+       forja use --jobs <N>          设置全局并行编译数（持久化）
 
 Target 选项:
   --project <路径>        按项目路径或标签选择目标
@@ -527,7 +529,7 @@ Target 选项:
 Options:
   --plan                  Dry run, show commands without executing
   --project <path>        Build a specific project file (.pro/.sln/Makefile/CMakeLists.txt)
-  --jobs <N>              Parallel build jobs (e.g. -jN / jom /m:N)
+  --jobs <N>              Parallel build jobs (e.g. -jN / jom /m:N; omit to use saved default)
   --build-args <args>     Extra arguments appended to the build command
   --json                  Output as JSON
   --lang <locale>         Language: zh or en
@@ -541,7 +543,7 @@ Options:
 选项:
   --plan                  预演模式，只显示命令不执行
   --project <路径>        构建指定项目文件（.pro/.sln/Makefile/CMakeLists.txt）
-  --jobs <N>              并行编译数（如 -jN / jom /m:N）
+  --jobs <N>              并行编译数（如 -jN / jom /m:N；不指定则使用已保存的默认值）
   --build-args <参数>     追加到构建命令的额外参数
   --json                  JSON 格式输出
   --lang <locale>         语言: zh 或 en
@@ -756,6 +758,10 @@ Options:
     'use.noChanges':                     { en: 'No changes — values already match',  zh: '无变更——当前值已匹配' },
     'use.buildScriptCppOnly':            { en: 'Build scripts are only supported for C++ targets', zh: '构建脚本仅支持 C++ 目标' },
     'use.buildScriptUnsupportedExtension': { en: 'Build script must use a .sh or .bat extension', zh: '构建脚本必须使用 .sh 或 .bat 扩展名' },
+    'use.jobsSet':                       { en: 'Global build jobs set to {0}',       zh: '全局并行编译数已设为 {0}' },
+    'use.jobsCleared':                   { en: 'Global build jobs cleared — using tool default', zh: '全局并行编译数已清除——使用工具默认值' },
+    'use.jobsRequiresPositive':          { en: '--jobs requires a positive integer',  zh: '--jobs 需要正整数' },
+    'use.globalJobs':                    { en: 'Build jobs',                          zh: '并行编译数' },
     // build/run/clean/stop shared diagnostics
     'cmd.cannotDetermineKind':           { en: 'Cannot determine project kind from', zh: '无法从以下路径确定项目类型' },
     'cmd.projectNotFound':               { en: 'Project file not found',             zh: '项目文件未找到' },
@@ -794,7 +800,7 @@ Options:
   forja sync ignore                                 List ignore patterns
   forja sync ignore --add <pattern>                 Add an ignore pattern
   forja sync ignore --rm <pattern>                  Remove an ignore pattern
-  forja sync --file <path>                          Sync specific file (repeatable)
+  forja sync --file <path-or-glob>                  Sync specific file or glob (repeatable)
 
 Options:
   --json                                  JSON output`,
@@ -807,7 +813,7 @@ Options:
   forja sync ignore                                 列出忽略规则
   forja sync ignore --add <pattern>                 添加忽略规则
   forja sync ignore --rm <pattern>                  移除忽略规则
-  forja sync --file <路径>                          同步指定文件（可重复）
+  forja sync --file <路径或通配符>                  同步指定文件或通配符（可重复）
 
 选项:
   --json                                  JSON 格式输出`,

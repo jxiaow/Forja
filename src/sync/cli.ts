@@ -9,7 +9,7 @@ import { readProjectSyncConfig, writeProjectSyncConfig, resolveServerSelector, r
 import { loadRemoteSettings, saveRemoteSettings } from '../core/settingsIO';
 import { deleteRemoteFile, ensureRemoteDir, scpUpload } from '../core/sshTransport';
 import { resolveGitRoots } from '../core/gitRepoResolver';
-import { resolveRequestedFilesForGitRoot } from '../core/syncFileSelection';
+import { resolveRequestedFilesForGitRoot, resolveRequestedFilesForGitRootDetailed } from '../core/syncFileSelection';
 import { getGitChangedEntries, GitChangedFile, isIgnored } from '../core/gitChangedFiles';
 import { T } from '../cli/commands/types';
 
@@ -141,13 +141,26 @@ async function classifyAllGitRoots(
         gitRoots, requestedFilesNotFound: false,
     };
 
+    let anyUnmatchedGlob = false;
+
     for (const gitRoot of gitRoots) {
         const { dir: gitDir, name: gitName } = gitRoot;
         const repoRemotePath = remotePath.replace(/\/$/, '') + '/' + gitName;
         const syncTarget: SyncTargetContext = { serverId: server.id, serverName: server.name, remotePath: repoRemotePath };
 
+        let resolvedFiles: string[];
+        if (fileFilters.length > 0) {
+            const detailed = resolveRequestedFilesForGitRootDetailed(gitDir, workspaceRoot, fileFilters);
+            resolvedFiles = detailed.files;
+            if (detailed.hasUnmatchedGlob) {
+                anyUnmatchedGlob = true;
+            }
+        } else {
+            resolvedFiles = [];
+        }
+
         const changedEntries: GitChangedFile[] = fileFilters.length > 0
-            ? resolveRequestedFilesForGitRoot(gitDir, workspaceRoot, fileFilters).map(file => {
+            ? resolvedFiles.map(file => {
                 const fullPath = path.join(gitDir, file);
                 const exists = fs.existsSync(fullPath);
                 return { path: file, kind: exists ? 'upload' as const : 'delete' as const, status: exists ? '??' : 'D' };
@@ -187,7 +200,7 @@ async function classifyAllGitRoots(
     if (fileFilters.length > 0) {
         const allResolved = new Set<string>([...result.pending, ...result.deleted,
             ...result.skipped.filter(s => result.skippedDetails.find(d => d.file === s)?.reason !== 'ignored')]);
-        if (allResolved.size === 0) {
+        if (allResolved.size === 0 || anyUnmatchedGlob) {
             result.requestedFilesNotFound = true;
         }
     }
@@ -381,6 +394,10 @@ export async function planSyncCli(workspaceRoot: string, fileFilters: string[] =
 
 export function resetSyncCli(workspaceRoot: string): { ok: boolean; diagnostics: { level: 'info' | 'warning' | 'error'; message: string }[]; nextAction?: string } {
     clearSyncState(workspaceRoot);
+    const gitRoots = resolveGitRoots(workspaceRoot);
+    for (const gitRoot of gitRoots) {
+        clearSyncState(gitRoot.dir);
+    }
     return {
         ok: true,
         diagnostics: [{ level: 'info', message: T('sync.resetDone') }],

@@ -22,6 +22,9 @@ description: Operate C++ workspaces through the Forja CLI, including initializat
   `nextAction(s)`；信息不足时重新执行 `forja status --json`。
 - 构建、运行、清理、选择目标或同步前先执行 `forja status --json`，不要猜测项目路径、
   mode、arch 或工具链。
+- `forja build` 不传 `--jobs` 时自动使用全局配置中的并行数（通过 `forja use --jobs <N>`
+  设置）。如果用户经常需要指定 `--jobs`，建议其执行一次 `forja use --jobs <N> --json`
+  持久化。
 - 多个项目、工具链或服务器存在歧义时让用户选择，不要静默选择第一个结果。
 - 不要主动加 `--workspace`，项目已初始化时直接操作当前目录；仅用户明确要求时传
   `--workspace <path>`。仅需稳定诊断语言时传 `--lang zh|en`。
@@ -74,6 +77,7 @@ forja stop --json
 | 列出目标或环境 | `forja list targets [--all] --json` / `forja list env --json` |
 | 保存目标和工具链 | `forja use target --project <path-or-id> [--answers <file>] [--rcc-project-path <path>] --json` |
 | 单独设置 RCC 路径 | `forja use target --rcc-project-path <path> --json` |
+| 设置全局并行编译数 | `forja use --jobs <n> --json` |
 | 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] [--jobs <n>] [--build-args <args>] --json` |
 | 后台运行当前 Qt 目标 | `forja run --detach [--plan] --json` |
 | 调试运行当前 Qt 目标 | `forja run --debug --json` |

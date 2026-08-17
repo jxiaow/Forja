@@ -118,7 +118,7 @@ forja <subcommand> [action] [options]
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | 位置参数 | `status` \| `reset` \| `ignore` | 同步动作 |
-| `--file <path>` | path（可重复） | 指定文件 |
+| `--file <path-or-glob>` | path（可重复） | 指定文件或通配符（`*` 不跨目录，`**` 递归） |
 | `--dry-run` | boolean | 预览同步文件，不执行上传或删除 |
 | `--add` / `--rm` | string | 仅用于 `sync ignore` 管理忽略规则 |
 

@@ -5,6 +5,7 @@
 import { ForjaJsonResult, ActiveTarget, Locale, T, Question } from './types';
 import { getActiveTarget } from './activeTarget';
 import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } from '../../core/workspaceStore';
+import { loadGlobalConfig } from '../../core/settingsIO';
 import { promptRccProjectPath } from './init';
 import {
     runUseTarget as runUseTargetNew,
@@ -56,6 +57,7 @@ export function formatUseText(result: UseResult, _locale: Locale): string {
             lines.push(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         }
         if (result.rccProjectPath) { lines.push(`  RCC: ${result.rccProjectPath}`); }
+        if (result.jobs !== undefined) { lines.push(`  ${T('use.globalJobs')}: ${result.jobs}`); }
         if (result.nextAction) { lines.push(T('next')); lines.push(`  ${result.nextAction}`); }
         return lines.join('\n');
     }
@@ -75,6 +77,7 @@ export interface UseResult extends ForjaJsonResult {
     config?: ConfigSummary;
     changed?: string[];
     rccProjectPath?: string;
+    jobs?: number;
 }
 
 // ── runUseTarget — dispatches to new module ──
@@ -302,10 +305,12 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
 
 export function runUseShow(workspace: string): UseResult {
     const target = getActiveTarget(workspace);
+    const globalJobs = loadGlobalConfig().jobs;
     if (!target) {
         return {
             ok: true, action: 'use', useScope: 'show', changed: [],
             diagnostics: [{ level: 'info', message: T('use.noActiveTargetSelected') }],
+            jobs: globalJobs,
             nextAction: 'forja use target',
         };
     }
@@ -313,6 +318,7 @@ export function runUseShow(workspace: string): UseResult {
     const result: UseResult = {
         ok: true, action: 'use', useScope: 'show', changed: [],
         activeTarget: target,
+        jobs: globalJobs,
         nextAction: 'forja status',
     };
 
