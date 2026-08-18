@@ -51,6 +51,12 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
         qmakeTarget = await resolveQmakeTarget(ctx, candidate.project, options, reuseActiveTarget);
     }
 
+    // ── Resolve executable name (post-build rename) ──
+    let executableName: string | undefined;
+    if (kind === 'qt') {
+        executableName = await resolveExecutableName(ctx, options, reuseActiveTarget);
+    }
+
     // ── Resolve build variant ──
     const mode = await resolveMode(ctx, options, reuseActiveTarget);
     const arch = await resolveArch(ctx, options, reuseActiveTarget);
@@ -104,6 +110,7 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
             vsInstall: vsInstall.value,
             jomPath: jomPath.value,
             qmakeTarget,
+            executableName,
             buildScript,
         },
         diagnostics,
@@ -194,6 +201,23 @@ async function resolveQmakeTarget(ctx: DetectContext, proProject: string, option
     }
 
     if (options.answers?.qmakeTarget) return options.answers.qmakeTarget;
+    return undefined;
+}
+
+async function resolveExecutableName(ctx: DetectContext, options: ResolveOptions, reuseActiveTarget: boolean): Promise<string | undefined> {
+    if (options.executableName) return options.executableName;
+    if (reuseActiveTarget && ctx.existingTarget?.toolchain?.executableName) return ctx.existingTarget.toolchain.executableName;
+    if (options.interactive) {
+        const answer = await prompt(`${T('init.executableName')} (${T('init.executableNameHint')})`);
+        if (answer) {
+            console.log(`  ✓ ${answer}`);
+            return answer;
+        }
+        console.log(`  – ${T('init.skipSelection')}`);
+        return undefined;
+    }
+
+    if (options.answers?.executableName) return options.answers.executableName;
     return undefined;
 }
 

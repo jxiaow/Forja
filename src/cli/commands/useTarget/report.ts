@@ -35,6 +35,7 @@ export function buildConfigSummary(config: ResolvedConfig, toolchain: ToolchainI
                 qtVersion: toolchain.qtVersion,
                 vsVersion: toolchain.vsVersion,
                 qmakeTarget: config.qmakeTarget,
+                executableName: config.executableName,
             },
         };
     }
@@ -72,6 +73,7 @@ export function buildSuccessResult(config: ResolvedConfig, toolchain: ToolchainI
             vsVersion: config.vsVersion,
             jomPath: config.jomPath,
             qmakeTarget: config.qmakeTarget,
+            executableName: config.executableName,
         },
         buildScript: config.buildScript,
     };
@@ -135,6 +137,7 @@ export function formatUseTargetText(result: UseTargetResult): string {
         }
         lines.push(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         if (t.toolchain.qmakeTarget) { lines.push(`  ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}`); }
+        if (t.toolchain.executableName) { lines.push(`  ${T('init.executableName')}: ${t.toolchain.executableName}`); }
     }
 
     if (result.changed && result.changed.length > 0) {

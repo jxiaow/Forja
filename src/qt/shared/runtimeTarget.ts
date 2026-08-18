@@ -1,6 +1,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+/**
+ * 根据平台计算重命名后的可执行文件完整路径。
+ * Windows 上自动处理 .exe 后缀。
+ */
+export function resolveDesiredExePath(exeDir: string, executableName: string): string {
+    const isWin = process.platform === 'win32';
+    const desiredName = isWin ? executableName.replace(/\.exe$/i, '') + '.exe' : executableName;
+    return path.join(exeDir, desiredName);
+}
+
 export interface RuntimeTargetInfo {
     target: string;
     destDir: string;
@@ -90,11 +100,7 @@ export function validateMakefile(projectDir: string, config: { mode: string; arc
         const proBasename = path.basename(config.proFile);
         if (!cmd.includes(proBasename)) { mismatch.push('project'); }
     }
-    // target 覆盖
-    if (config.target) {
-        if (!cmd.includes(`TARGET=${config.target}`)) { mismatch.push('target'); }
-    }
-    // 未指定 target 时不检查 — Makefile 中的 TARGET= 来自 .pro 文件，不是用户覆盖
+    // target 覆盖已改为构建后重命名，不再校验 Makefile 中的 TARGET
     if (config.qmakeArgs && !cmd.includes(config.qmakeArgs)) {
         mismatch.push('qmakeArgs');
     }

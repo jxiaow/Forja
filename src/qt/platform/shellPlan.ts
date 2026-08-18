@@ -11,6 +11,7 @@ export interface BuildConfig {
     qmakeArgs?: string; // 追加到 qmake 命令末尾的自定义参数
     jomPath: string;       // jom.exe 完整路径，空字符串表示依赖 PATH
     jobs?: number;         // 并行编译数，未设置时使用构建工具默认值
+    executableName?: string; // 构建后重命名可执行文件（.pro 条件 TARGET 的替代方案）
 }
 
 export interface ShellCommandLine {
@@ -59,11 +60,10 @@ export function createShellPlanBuilder(config: PlatformConfig): ShellPlanBuilder
                 ? ['CONFIG+=debug', 'CONFIG+=console']
                 : ['CONFIG+=release', 'CONFIG+=console'];
             const extra = config.qmakeExtraArgs(cfg);
-            const targetArg = cfg.target ? ` "TARGET=${cfg.target}"` : '';
             const customArgs = cfg.qmakeArgs?.trim();
             const configArgs = [...modeConfigs, ...extraConfigs].join(' ');
             const qmakeBin = cfg.qtPath ? `"${cfg.qtPath.replace(/\\/g, '/')}/bin/${config.qmakeBin}"` : 'qmake';
-            const qmakeCmd = `${qmakeBin} ${cfg.proFile} -spec ${config.qmakeSpec} ${configArgs}${extra ? ' ' + extra : ''}${targetArg}${customArgs ? ' ' + customArgs : ''}`;
+            const qmakeCmd = `${qmakeBin} ${cfg.proFile} -spec ${config.qmakeSpec} ${configArgs}${extra ? ' ' + extra : ''}${customArgs ? ' ' + customArgs : ''}`;
             return {
                 commands: assembleCommands(cfg, [qmakeCmd]),
                 matcher: config.qmakeMatcher

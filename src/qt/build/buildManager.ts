@@ -10,7 +10,7 @@ import { getMakefileInfo, parseLibPaths } from '../project/projectManager';
 import { createLogger } from '../../vscode/logger';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from '../shared/rccResolver';
-import { validateMakefile } from '../shared/runtimeTarget';
+import { validateMakefile, resolveRuntimeTarget, resolveDesiredExePath } from '../shared/runtimeTarget';
 import { clearRunState, findExecutablePids, runLogPath, waitForNewExecutablePid, writeRunState } from '../shared/localState';
 import { TASK_SOURCE_QT } from '../constants';
 
@@ -152,16 +152,23 @@ export async function build(): Promise<vscode.TaskExecution> {
     const { commands, matcher } = builder.buildCommands(cfg);
     const execution = await runTask(`Build ${cfg.mode}`, commands, matcher);
 
-    // 监听 build 任务完成，成功后编译 rcc
+    // 监听 build 任务完成，成功后执行重命名（如需要）再编译 rcc
     const disposable = vscode.tasks.onDidEndTaskProcess(e => {
         if (e.execution === execution && e.exitCode === 0) {
             disposable.dispose();
-            if (_rccNeedsRebuild()) {
-                void _awaitRcc().catch(err => {
+            // 构建后重命名
+            const renameCmd = _renameExecutableIfNeeded(cfg);
+            if (renameCmd) {
+                logger.info(`重命名可执行文件: ${renameCmd}`);
+                void _runRenameCommand(renameCmd).then(() => {
+                    if (_rccNeedsRebuild()) { void _awaitRcc().catch(_handleRccError); }
+                }).catch(err => {
                     const msg = err instanceof Error ? err.message : String(err);
-                    logger.error(`RCC 编译失败: ${msg}`);
-                    vscode.window.showWarningMessage(`RCC 编译失败: ${msg}`);
+                    logger.error(`重命名失败: ${msg}`);
+                    vscode.window.showWarningMessage(`重命名失败: ${msg}`);
                 });
+            } else if (_rccNeedsRebuild()) {
+                void _awaitRcc().catch(_handleRccError);
             }
         }
     });
@@ -202,6 +209,44 @@ async function _awaitRcc(): Promise<void> {
             }
         });
     });
+}
+
+/**
+ * 构建后重命名可执行文件（如果配置了 executableName）。
+ * 返回重命名命令字符串，null 表示无需重命名。
+ */
+function _renameExecutableIfNeeded(cfg: ReturnType<typeof getBuildConfig>): string | null {
+    if (!cfg.executableName || !cfg.projectDir) { return null; }
+    const rt = resolveRuntimeTarget(cfg.projectDir, cfg.mode, cfg.arch);
+    if (!rt) { return null; }
+    const isWin = process.platform === 'win32';
+    const actualBase = rt.target;
+    const desiredBase = isWin ? cfg.executableName.replace(/\.exe$/i, '') : cfg.executableName;
+    if (actualBase === desiredBase) { return null; }
+    const exePath = rt.exePath;
+    const desiredPath = resolveDesiredExePath(path.dirname(exePath), cfg.executableName);
+    if (isWin) {
+        return `(if exist "${exePath}" ren "${exePath}" "${desiredBase}.exe")`;
+    } else {
+        return `mv -f "${exePath}" "${desiredPath}"`;
+    }
+}
+
+/** 执行重命名命令 */
+async function _runRenameCommand(cmd: string): Promise<void> {
+    const { exec } = await import('child_process');
+    await new Promise<void>((resolve, reject) => {
+        exec(cmd, (error) => {
+            if (error) { reject(error); } else { resolve(); }
+        });
+    });
+}
+
+/** RCC 错误处理 */
+function _handleRccError(err: unknown): void {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error(`RCC 编译失败: ${msg}`);
+    vscode.window.showWarningMessage(`RCC 编译失败: ${msg}`);
 }
 
 export async function run(): Promise<void> {
@@ -263,8 +308,26 @@ export async function run(): Promise<void> {
                 return;
             }
 
-            // Build 成功，在启动程序前编译 rcc（pro 构建步骤会拷贝 rcc，必须在拷贝后再编译）
+            // Build 成功，先重命名再编译 rcc、启动程序
             void (async (): Promise<void> => {
+                // 构建后重命名（与 build() 一致）
+                let launchExePath = mfInfo.exePath;
+                const renameCmd = _renameExecutableIfNeeded(cfg);
+                if (renameCmd) {
+                    try {
+                        logger.info(`重命名可执行文件: ${renameCmd}`);
+                        await _runRenameCommand(renameCmd);
+                        const rt = resolveRuntimeTarget(cfg.projectDir!, cfg.mode, cfg.arch);
+                        if (rt && cfg.executableName) {
+                            launchExePath = resolveDesiredExePath(path.dirname(rt.exePath), cfg.executableName);
+                        }
+                    } catch (err) {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        logger.error(`重命名失败: ${msg}`);
+                        vscode.window.showWarningMessage(`重命名失败: ${msg}`);
+                    }
+                }
+
                 if (_rccNeedsRebuild()) {
                     try {
                         await _awaitRcc();
@@ -283,7 +346,7 @@ export async function run(): Promise<void> {
                         logger.info(`Run env: LD_LIBRARY_PATH += ${joined}`);
                     }
                 }
-                runCmds.push(`"${mfInfo.exePath}"`);
+                runCmds.push(`"${launchExePath}"`);
                 const runTaskObj = new vscode.Task(
                     { type: 'shell' },
                     _getTaskFolder(), `Run ${cfg.mode}`, TASK_SOURCE_QT,
@@ -303,7 +366,7 @@ export async function run(): Promise<void> {
                 // 清理上一次的 disposable（如果还在）
                 _runEndDisposable?.dispose();
                 const runWorkspace = resolveProjectRoot();
-                const previousPids = findExecutablePids(mfInfo.exePath);
+                const previousPids = findExecutablePids(launchExePath);
                 let runTaskEnded = false;
                 clearRunState(runWorkspace);
                 _runEndDisposable = vscode.tasks.onDidEndTask(e => {
@@ -321,13 +384,13 @@ export async function run(): Promise<void> {
                         await vscode.tasks.executeTask(runTaskObj);
                         if (runTaskEnded) { return; }
                         setState('isRunning', true);
-                        const pid = await waitForNewExecutablePid(mfInfo.exePath, previousPids);
+                        const pid = await waitForNewExecutablePid(launchExePath, previousPids);
                         if (runTaskEnded) { return; }
                         if (pid) {
                             writeRunState(runWorkspace, {
                                 pid,
-                                exePath: mfInfo.exePath,
-                                executablePath: mfInfo.exePath,
+                                exePath: launchExePath,
+                                executablePath: launchExePath,
                                 logFile: runLogPath(runWorkspace),
                                 startedAt: new Date().toISOString()
                             });

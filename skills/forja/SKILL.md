@@ -29,6 +29,8 @@ description: Operate C++ workspaces through the Forja CLI, including initializat
 - 不要主动加 `--workspace`，项目已初始化时直接操作当前目录；仅用户明确要求时传
   `--workspace <path>`。仅需稳定诊断语言时传 `--lang zh|en`。
 - Forja 已覆盖的操作不要自行拼接 qmake、make、MSBuild、SSH 或 SCP 命令。
+- Qt 项目的可执行文件名由 `.pro` 文件的 TARGET 决定。如需自定义，使用
+  `forja use target --executable-name <name>` 在构建后重命名，不要修改 `.pro` 文件。
 
 ## 执行规则
 
@@ -75,8 +77,9 @@ forja stop --json
 | 查看目标、就绪状态和下一步 | `forja status --json` |
 | 初始化工作根目录 | `forja init [--workroot <path>] [--answers <file>] --json` |
 | 列出目标或环境 | `forja list targets [--all] --json` / `forja list env --json` |
-| 保存目标和工具链 | `forja use target --project <path-or-id> [--answers <file>] [--rcc-project-path <path>] --json` |
+| 保存目标和工具链 | `forja use target --project <path-or-id> [--answers <file>] [--rcc-project-path <path>] [--executable-name <name>] --json` |
 | 单独设置 RCC 路径 | `forja use target --rcc-project-path <path> --json` |
+| 设置可执行文件名 | `forja use target --executable-name <name> --json`（构建后重命名，不修改 .pro） |
 | 设置全局并行编译数 | `forja use --jobs <n> --json` |
 | 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] [--jobs <n>] [--build-args <args>] --json` |
 | 后台运行当前 Qt 目标 | `forja run --detach [--plan] --json` |

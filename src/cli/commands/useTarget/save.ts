@@ -31,6 +31,7 @@ export function buildTargetProfile(config: ResolvedConfig): TargetProfile {
             vsVersion: config.vsVersion,
             jomPath: config.jomPath,
             qmakeTarget: config.qmakeTarget,
+            executableName: config.executableName,
         },
     };
     if (config.buildScript) profile.buildScript = config.buildScript;
@@ -80,6 +81,7 @@ export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; 
                 vsVersion: config.vsVersion,
                 jomPath: config.jomPath,
                 qmakeTarget: config.qmakeTarget,
+                executableName: config.executableName,
             },
         };
         if (config.buildScript) profile.buildScript = config.buildScript;
@@ -97,6 +99,7 @@ export function saveAll(workspace: string, config: ResolvedConfig): { ok: true; 
         if (config.mode && config.mode !== oldProfile?.mode) changed.push('mode');
         if (config.arch && config.arch !== oldProfile?.arch) changed.push('arch');
         if (config.qmakeTarget && config.qmakeTarget !== oldProfile?.toolchain.qmakeTarget) changed.push('qmakeTarget');
+        if (config.executableName && config.executableName !== oldProfile?.toolchain.executableName) changed.push('executableName');
         if (config.buildScript !== oldProfile?.buildScript) changed.push('buildScript');
 
         return { ok: true, changed, targetId: id };

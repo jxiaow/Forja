@@ -50,6 +50,7 @@ export interface UseTargetEntryOptions {
     vsInstall?: string;
     jomPath?: string;
     qmakeTarget?: string;
+    executableName?: string;
     buildScript?: string;
     mode?: string;
     arch?: string;
@@ -83,7 +84,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
 
     if (options.project && !options.answers && !options.mode && !options.arch
         && !options.qtPath && !options.vsInstall && !options.jomPath && !options.qmakeTarget
-        && options.buildScript === undefined) {
+        && options.executableName === undefined && options.buildScript === undefined) {
         const workroot = resolveWorkroot(workspace);
         if (workroot) {
             const workspaceConfig = loadWorkspaceConfig(workroot);
@@ -138,6 +139,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
         vsInstall: options.vsInstall,
         jomPath: options.jomPath,
         qmakeTarget: options.qmakeTarget,
+        executableName: options.executableName,
         buildScript: options.buildScript,
         mode: options.mode,
         arch: options.arch,
@@ -284,6 +286,7 @@ export async function runUpdateToolchain(workspace: string, args: {
     vsInstall?: string;
     jomPath?: string;
     qmakeTarget?: string;
+    executableName?: string;
 }): Promise<UseTargetResult> {
     const { getActiveTarget, setActiveTarget } = await import('../activeTarget');
     const currentTarget = getActiveTarget(workspace);
@@ -328,6 +331,15 @@ export async function runUpdateToolchain(workspace: string, args: {
     if (args.qmakeTarget && args.qmakeTarget !== currentTarget.toolchain.qmakeTarget) {
         updated.toolchain.qmakeTarget = args.qmakeTarget;
         changed.push('qmakeTarget');
+    }
+    if (args.executableName !== undefined && args.executableName !== currentTarget.toolchain.executableName) {
+        updated.toolchain.executableName = args.executableName || undefined;
+        changed.push('executableName');
+        // executableName 取代 qmakeTarget，清除旧字段
+        if (updated.toolchain.qmakeTarget) {
+            updated.toolchain.qmakeTarget = undefined;
+            changed.push('qmakeTarget');
+        }
     }
 
     if (changed.length > 0) {

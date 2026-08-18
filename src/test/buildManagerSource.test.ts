@@ -41,7 +41,7 @@ test('vscode qt stop is unified via runStop (not buildManager)', () => {
 test('vscode Qt run writes the same PID state consumed by forja stop', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'build', 'buildManager.ts'), 'utf8');
 
-    assert.match(source, /waitForNewExecutablePid\(mfInfo\.exePath, previousPids\)/);
+    assert.match(source, /waitForNewExecutablePid\(launchExePath, previousPids\)/);
     assert.match(source, /writeRunState\(runWorkspace/);
     assert.match(source, /clearRunState\(runWorkspace\)/);
     assert.match(source, /setState\('isRunning', true\);\s+const pid = await waitForNewExecutablePid/);

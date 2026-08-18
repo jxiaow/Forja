@@ -43,7 +43,6 @@ out/remote/core/remoteShellFallback.js
 out/remote/core/repoPath.js
 out/remote/core/repoStrategy.js
 out/remote/core/restore.js
-out/remote/core/stagedWorkspace.js
 out/remote/core/status.js
 out/remote/core/transfer.js
 out/remote/core/workspaceLink.js

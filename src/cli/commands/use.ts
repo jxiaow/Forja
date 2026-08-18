@@ -91,6 +91,7 @@ export interface UseTargetArgs {
     vsInstall?: string;
     jomPath?: string;
     qmakeTarget?: string;
+    executableName?: string;
     buildScript?: string;
     rccProjectPath?: string;
     reset?: boolean;
@@ -170,6 +171,7 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
             vsInstall: args.vsInstall,
             jomPath: args.jomPath,
             qmakeTarget: args.qmakeTarget,
+            executableName: args.executableName,
             buildScript: args.buildScript,
         });
     }
@@ -213,13 +215,14 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
             arch: args.arch,
         });
     }
-    // Toolchain-only update: --qt / --vs / --jom / --qmake-target without --project
-    else if (args.qtPath || args.vsInstall || args.jomPath || args.qmakeTarget) {
+    // Toolchain-only update: --qt / --vs / --jom / --qmake-target / --executable-name without --project
+    else if (args.qtPath || args.vsInstall || args.jomPath || args.qmakeTarget || args.executableName !== undefined) {
         result = await runUpdateToolchain(workspace, {
             qtPath: args.qtPath,
             vsInstall: args.vsInstall,
             jomPath: args.jomPath,
             qmakeTarget: args.qmakeTarget,
+            executableName: args.executableName,
         });
     }
     // No flags: interactive picker if saved targets exist, otherwise full flow
@@ -266,7 +269,7 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
     // RCC project path update (flag or interactive prompt)
     // Only runs after --project flow (standalone --rcc-project-path is handled by its own branch above)
     // Interactive prompt only when no specific flag was given (avoid prompting after --mode/--build-script etc.)
-    const hasSpecificFlag = args.mode || args.arch || args.qtPath || args.vsInstall || args.jomPath || args.qmakeTarget || args.buildScript !== undefined;
+    const hasSpecificFlag = args.mode || args.arch || args.qtPath || args.vsInstall || args.jomPath || args.qmakeTarget || args.executableName !== undefined || args.buildScript !== undefined;
     if (result?.ok && args.project) {
         const workroot = resolveWorkroot(workspace);
         if (workroot) {

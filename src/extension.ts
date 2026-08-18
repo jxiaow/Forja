@@ -6,7 +6,7 @@ import { getWorkspaceRoot, getManualProPath } from './qt/services/configService'
 import { createStatusBar } from './ui/statusBar';
 import { registerPriWatcher } from './qt/project/priWatcher';
 import { ConfigNavTreeProvider } from './ui/configPanel/configNavTree';
-import { selectProject, parseProFile } from './qt/project/projectManager';
+import { parseProFile } from './qt/project/projectManager';
 import { registerDebugSessionWatcher } from './qt/build/debugger';
 import { generateCppProperties } from './qt/build/configGenerator';
 import { createLogger, initLogger } from './vscode/logger';
@@ -137,7 +137,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         project = info;
         logger.info(`启动恢复手动项目: ${manualProPath}`);
     } else {
-        project = await selectProject(context);
+        // 没有固定项目时，用统一分组选择器
+        const { scanAllProjects, groupProjectsByTopDir } = await import('./core/unifiedProjectScanner');
+        const workspace = getWorkspaceRoot();
+        if (workspace) {
+            const allProjects = scanAllProjects({ workspace });
+            const groups = groupProjectsByTopDir(allProjects, workspace);
+            const totalProjects = allProjects.length;
+
+            if (totalProjects === 1) {
+                // 只有一个项目，自动选择
+                const p = allProjects[0];
+                if (p.kind === 'qt' && p.qtInfo) {
+                    project = p.qtInfo;
+                    logger.info(`自动选择唯一项目: ${p.name}`);
+                }
+            } else if (totalProjects > 1) {
+                // 多个项目，弹窗让用户选择
+                logger.info(`检测到 ${totalProjects} 个项目，弹出选择器`);
+                const selected = await showUnifiedProjectPickerAtStartup(groups, workspace);
+                if (selected && selected.kind === 'qt' && selected.qtInfo) {
+                    project = selected.qtInfo;
+                }
+            }
+        }
     }
     setState('currentProject', project);
 
@@ -177,4 +200,51 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {
     // 资源清理由 context.subscriptions 自动处理
+}
+
+/**
+ * 启动时的统一项目选择器 — 两步 QuickPick（目录分组 → 具体项目）
+ */
+async function showUnifiedProjectPickerAtStartup(
+    groups: import('./core/types').ProjectGroup[],
+    workspace: string
+): Promise<import('./core/types').UnifiedProject | null> {
+    const vscode = require('vscode');
+
+    // 第一步：选择目录分组
+    type GroupItem = vscode.QuickPickItem & { group?: import('./core/types').ProjectGroup };
+    const groupItems: GroupItem[] = groups.map(g => ({
+        label: `$(folder) ${g.label}`,
+        description: `${g.projects.length} 个项目`,
+        group: g,
+    }));
+
+    let selectedGroup: import('./core/types').ProjectGroup;
+    if (groups.length === 1) {
+        selectedGroup = groups[0];
+    } else {
+        const pickedGroup = await vscode.window.showQuickPick(groupItems, {
+            placeHolder: '选择项目目录',
+        });
+        if (!pickedGroup?.group) { return null; }
+        selectedGroup = pickedGroup.group;
+    }
+
+    // 第二步：选择具体项目
+    type ProjectItem = vscode.QuickPickItem & { project?: import('./core/types').UnifiedProject };
+    const projectItems: ProjectItem[] = selectedGroup.projects.map(p => {
+        const kindLabel = p.kind === 'qt' ? '[Qt]' : '[C++]';
+        const typeSuffix = p.cppType ? ` (${p.cppType})` : '';
+        return {
+            label: `${kindLabel} ${p.name}${typeSuffix}`,
+            description: p.kind === 'qt' ? p.qtInfo?.target : undefined,
+            project: p,
+        };
+    });
+
+    const pickedProject = await vscode.window.showQuickPick(projectItems, {
+        placeHolder: `选择项目 — ${selectedGroup.label}`,
+    });
+
+    return pickedProject?.project || null;
 }

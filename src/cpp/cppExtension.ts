@@ -122,25 +122,15 @@ export async function activateCpp(context: vscode.ExtensionContext): Promise<voi
         if (sm.currentProject) {
             const exists = projects.find(p => p.path === sm.currentProject?.path);
             if (!exists) {
-                log(`持久化的项目不存在: ${sm.currentProject.path}，重新选择...`);
+                log(`持久化的项目不存在: ${sm.currentProject.path}，清除选择`);
                 sm.currentProject = null;
                 await sm.persistToConfig();
-                sm.currentProject = await ps.resolveCurrentProject(projects);
-                if (sm.currentProject) {
-                    await sm.persistToConfig();
-                }
             } else {
                 log(`已恢复项目: ${sm.currentProject.name}`);
             }
         } else {
-            log('无持久化项目，尝试自动选择...');
-            sm.currentProject = await ps.resolveCurrentProject(projects);
-            if (sm.currentProject) {
-                log(`自动选择项目: ${sm.currentProject.name}`);
-                await sm.persistToConfig();
-            } else {
-                log('未选择任何项目');
-            }
+            log('无持久化项目，启动时不自动选择');
+            // 启动时不弹窗，让用户通过状态栏的统一选择器选择
         }
     }
 

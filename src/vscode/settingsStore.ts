@@ -71,6 +71,7 @@ function _buildQtSettings(config: WorkspaceConfig, target: TargetProfile | null)
         jomPath: qtTarget?.toolchain.jomPath ?? d.jomPath,
         pinnedProject,
         target: qtTarget?.toolchain.qmakeTarget ?? d.target,
+        executableName: qtTarget?.toolchain.executableName ?? qtTarget?.toolchain.qmakeTarget ?? d.executableName,
         qmakeArgs: prefs.qmakeArgs,
         cStandard: prefs.cStandard,
         cppStandard: prefs.cppStandard,

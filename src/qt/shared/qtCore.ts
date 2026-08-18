@@ -6,9 +6,29 @@ import { winConfig } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
 import { resolveBuildConfig } from './configResolver';
 import { buildRunCommand } from './commandRunner';
-import { resolveRuntimeTarget, validateMakefile } from './runtimeTarget';
+import { resolveRuntimeTarget, validateMakefile, resolveDesiredExePath } from './runtimeTarget';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from './rccResolver';
 import { getDefaultArch } from '../platform/requirements';
+
+/**
+ * 生成构建后可执行文件重命名命令。
+ * 如果 executableName 已设置且与实际产物名不同，返回重命名命令；否则返回空数组。
+ */
+function buildRenameCommands(runtimeTarget: { target: string; exePath: string } | null, executableName: string | undefined): string[] {
+    if (!executableName || !runtimeTarget) { return []; }
+    const isWin = process.platform === 'win32';
+    const actualBase = runtimeTarget.target;
+    const desiredBase = isWin ? executableName.replace(/\.exe$/i, '') : executableName;
+    if (actualBase === desiredBase) { return []; }
+    const exePath = runtimeTarget.exePath;
+    const dir = path.dirname(exePath);
+    if (isWin) {
+        return [`(if exist "${exePath}" ren "${exePath}" "${desiredBase}.exe")`];
+    } else {
+        const newPath = path.join(dir, desiredBase);
+        return [`mv -f "${exePath}" "${newPath}"`];
+    }
+}
 
 function emptyResult(options: CliOptions, workspace: string): CliResult {
     return {
@@ -66,6 +86,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const qtPath = options.qtPath || '';
     const vsDevShell = options.vsDevShell || '';
     const target = options.target || '';
+    const executableName = options.executableName || undefined;
     const qmakeArgs = options.qmakeArgs || '';
     const jomPath = options.jomPath || '';
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
@@ -82,6 +103,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
         qmakeArgs,
         jomPath,
         jobs: options.jobs,
+        executableName,
     });
     const resolvedProject = project
         ? path.join(buildConfig.projectDir, buildConfig.proFile)
@@ -112,6 +134,10 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 }
             }
             const runtimeTarget = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
+            const renameCmds = buildRenameCommands(runtimeTarget, buildConfig.executableName);
+            if (renameCmds.length > 0) {
+                result.diagnostics.push({ level: 'info', message: `构建后重命名可执行文件: → ${buildConfig.executableName}` });
+            }
             // rcc 在 build 之后编译 — pro 构建步骤会拷贝 rcc，必须在拷贝后再编译
             let rccCmds: string[] = [];
             const rccPath = resolveRccProjectPath(options.rccProjectPath || '', workspace);
@@ -126,12 +152,17 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             }
 
             const dedupedBuildCmds = qmakeCmds.length > 0 ? buildCmds.slice(shellBuilder.initCommands(buildConfig).length) : buildCmds;
-            if (qmakeCmds.length > 0 || rccCmds.length > 0) {
-                commands = [...qmakeCmds, ...dedupedBuildCmds, ...rccCmds];
+            const hasExtra = qmakeCmds.length > 0 || rccCmds.length > 0 || renameCmds.length > 0;
+            if (hasExtra) {
+                commands = [...qmakeCmds, ...dedupedBuildCmds, ...renameCmds, ...rccCmds];
             } else {
                 commands = buildCmds;
             }
-            if (runtimeTarget) { result.executablePath = runtimeTarget.exePath; }
+            if (runtimeTarget && renameCmds.length > 0 && buildConfig.executableName) {
+                result.executablePath = resolveDesiredExePath(path.dirname(runtimeTarget.exePath), buildConfig.executableName);
+            } else if (runtimeTarget) {
+                result.executablePath = runtimeTarget.exePath;
+            }
         } else {
             commands = buildCmds;
         }
@@ -165,14 +196,19 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             const initLen = shellBuilder.initCommands(buildConfig).length;
             const dedupedBuildCmds = qmakeCmds.length > 0 ? buildCmds.slice(initLen) : buildCmds;
 
+            const runtimeTarget = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
+            const renameCmds = buildRenameCommands(runtimeTarget, buildConfig.executableName);
+            if (renameCmds.length > 0) {
+                result.diagnostics.push({ level: 'info', message: `构建后重命名可执行文件: → ${buildConfig.executableName}` });
+            }
+
             // rcc 在 build 之后、启动之前编译 — pro 构建步骤会拷贝 rcc，必须在拷贝后再编译
             let rccCmds: string[] = [];
             const rccPath = resolveRccProjectPath(options.rccProjectPath || '', workspace);
             if (rccPath) {
                 const targets = scanRccTargets(rccPath);
                 let outputDir: string | null = null;
-                const rt = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
-                if (rt) { outputDir = path.dirname(rt.exePath); }
+                if (runtimeTarget) { outputDir = path.dirname(runtimeTarget.exePath); }
                 if (targets.length > 0 && rccNeedsRebuild(targets, outputDir)) {
                     rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
                     result.diagnostics.push({ level: 'info', message: 'RCC 资源有变更，已插入 rcc 编译命令' });
@@ -180,9 +216,12 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             }
 
             if (runCmd) {
-                const runtimeTarget = resolveRuntimeTarget(buildConfig.projectDir, mode, arch);
-                commands = [...qmakeCmds, ...dedupedBuildCmds, ...rccCmds, runCmd];
-                result.executablePath = runtimeTarget?.exePath;
+                commands = [...qmakeCmds, ...dedupedBuildCmds, ...renameCmds, ...rccCmds, runCmd];
+                if (runtimeTarget && renameCmds.length > 0 && buildConfig.executableName) {
+                    result.executablePath = resolveDesiredExePath(path.dirname(runtimeTarget.exePath), buildConfig.executableName);
+                } else {
+                    result.executablePath = runtimeTarget?.exePath;
+                }
             } else {
                 // Makefile not yet generated or mismatched — return build commands with hint to run status
                 const fallbackCmds = [...qmakeCmds, ...dedupedBuildCmds];

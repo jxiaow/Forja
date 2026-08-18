@@ -12,6 +12,32 @@ export interface ProjectInfo {
     defines: string[];      // DEFINES
 }
 
+/** 统一项目类型 — Qt 和 C++ 项目共用 */
+export interface UnifiedProject {
+    /** 显示名称 */
+    name: string;
+    /** 项目文件路径（.pro / .sln / Makefile / CMakeLists.txt） */
+    path: string;
+    /** 项目目录 */
+    projectDir: string;
+    /** 自动推导的项目类型 */
+    kind: 'qt' | 'cpp';
+    /** C++ 项目子类型 */
+    cppType?: 'sln' | 'makefile' | 'cmake';
+    /** Qt 项目详细信息（懒加载） */
+    qtInfo?: ProjectInfo;
+}
+
+/** 项目分组 — 按顶层目录聚合 */
+export interface ProjectGroup {
+    /** 目录名（如 "xyplat/"） */
+    label: string;
+    /** 相对于 workspace 的路径 */
+    relativePath: string;
+    /** 该目录下的项目列表 */
+    projects: UnifiedProject[];
+}
+
 export interface VSInfo {
     version: string;
     edition: string;

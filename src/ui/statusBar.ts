@@ -260,14 +260,9 @@ export async function showActions(): Promise<void> {
         label: `$(terminal) ${cmd.name}`, description: '', action: `qt:custom:${i}`
     }));
 
-    // 项目选择 + 模块切换（合并为一个分组）
-    const projectItems: Item[] = _activeModule === 'qt'
-        ? [{ label: '$(list-tree) 选择 Qt 项目...', description: '', action: 'qt:selectProject' }]
-        : [{ label: '$(list-tree) 选择 C++ 项目...', description: '', action: 'cpp:selectProject' }];
-
-    const moduleItems: Item[] = [
-        { label: '$(folder) 切换到 Qt 模块',  description: _activeModule === 'qt' ? '当前' : '', action: 'switch:qt' },
-        { label: '$(folder) 切换到 C++ 模块', description: _activeModule === 'cpp' ? '当前' : '', action: 'switch:cpp' }
+    // 项目选择（统一 Qt + C++）
+    const projectItems: Item[] = [
+        { label: '$(list-tree) 选择项目...', description: '', action: 'selectProject' }
     ];
 
     const currentName = _activeModule === 'qt'
@@ -284,8 +279,7 @@ export async function showActions(): Promise<void> {
         ...buildItems,
         ...(customItems.length > 0 ? [sep('自定义'), ...customItems] : []),
         sep('项目'),
-        ...projectItems,
-        ...moduleItems
+        ...projectItems
     ];
 
     const moduleLabel = _activeModule === 'qt' ? 'Qt' : 'C++';
@@ -329,18 +323,94 @@ export async function showActions(): Promise<void> {
         const idx = parseInt(selected.action.split(':')[2], 10);
         const cmd = customCmds[idx];
         if (cmd) { vscode.commands.executeCommand('forja.run', cmd.name, cmd.command); }
-    } else if (selected.action === 'qt:selectProject') {
-        vscode.commands.executeCommand('forja._selectTarget', 'qt');
     }
-    else if (selected.action === 'cpp:selectProject') {
-        vscode.commands.executeCommand('forja._selectTarget', 'cpp');
+    else if (selected.action === 'selectProject') {
+        showUnifiedProjectPicker();
     }
-    else if (selected.action === 'switch:qt') {
-        if (_syncActiveTarget('qt')) { setActiveModule('qt'); }
-        else { vscode.commands.executeCommand('forja.list'); }
+}
+
+/**
+ * 两步 QuickPick：先选目录分组，再选具体项目。
+ * 选中后自动切换 activeModule 并更新状态。
+ */
+export async function showUnifiedProjectPicker(): Promise<void> {
+    const workspace = getWorkspaceRoot();
+    if (!workspace) {
+        vscode.window.showErrorMessage('请先打开工作区');
+        return;
     }
-    else if (selected.action === 'switch:cpp') {
-        if (_syncActiveTarget('cpp')) { setActiveModule('cpp'); }
-        else { vscode.commands.executeCommand('forja.list'); }
+
+    const { scanAllProjects, groupProjectsByTopDir } = await import('../core/unifiedProjectScanner');
+    const allProjects = scanAllProjects({ workspace });
+
+    if (allProjects.length === 0) {
+        vscode.window.showWarningMessage('未找到任何项目（.pro / .sln / Makefile / CMakeLists.txt）');
+        return;
     }
+
+    const groups = groupProjectsByTopDir(allProjects, workspace);
+
+    // 第一步：选择目录分组
+    type GroupItem = vscode.QuickPickItem & { group?: typeof groups[0] };
+    const groupItems: GroupItem[] = groups.map(g => ({
+        label: `$(folder) ${g.label}`,
+        description: `${g.projects.length} 个项目`,
+        group: g,
+    }));
+
+    // 如果只有一个分组，直接跳到项目选择
+    let selectedGroup: typeof groups[0];
+    if (groups.length === 1) {
+        selectedGroup = groups[0];
+    } else {
+        const pickedGroup = await vscode.window.showQuickPick(groupItems, {
+            placeHolder: '选择项目目录',
+        });
+        if (!pickedGroup?.group) { return; }
+        selectedGroup = pickedGroup.group;
+    }
+
+    // 第二步：选择具体项目
+    type ProjectItem = vscode.QuickPickItem & { project?: typeof allProjects[0] };
+    const projectItems: ProjectItem[] = selectedGroup.projects.map(p => {
+        const kindLabel = p.kind === 'qt' ? '[Qt]' : '[C++]';
+        const typeSuffix = p.cppType ? ` (${p.cppType})` : '';
+        return {
+            label: `${kindLabel} ${p.name}${typeSuffix}`,
+            description: p.kind === 'qt' ? p.qtInfo?.target : undefined,
+            project: p,
+        };
+    });
+
+    const pickedProject = await vscode.window.showQuickPick(projectItems, {
+        placeHolder: `选择项目 — ${selectedGroup.label}`,
+    });
+
+    if (!pickedProject?.project) { return; }
+
+    const project = pickedProject.project;
+
+    // 自动切换 activeModule
+    setActiveModule(project.kind);
+
+    if (project.kind === 'qt') {
+        // Qt: 更新 qtState
+        const { setState } = await import('../vscode/qtState');
+        const { parseProFile } = await import('../qt/project/projectManager');
+        const info = parseProFile(project.path);
+        if (info) {
+            info.projectDir = project.projectDir;
+            setState('currentProject', info);
+        }
+        // 同步到 workspaceStore
+        _syncActiveTarget('qt');
+    } else {
+        // C++: 更新 cppModule 状态
+        const { setCppState } = await import('./statusBar');
+        setCppState({ projectName: project.name });
+        // 同步到 workspaceStore
+        _syncActiveTarget('cpp');
+    }
+
+    _updateDisplay();
 }

@@ -94,7 +94,9 @@ export async function handleMessage(
             break;
         }
         case 'selectProject': {
-            await vscode.commands.executeCommand('forja.list');
+            // 使用统一项目选择器（分组显示）
+            const { showUnifiedProjectPicker } = await import('../statusBar');
+            await showUnifiedProjectPicker();
             break;
         }
         case 'saveVsPath': {
@@ -567,7 +569,9 @@ export async function handleMessage(
             break;
         }
         case 'selectCppProject': {
-            await vscode.commands.executeCommand('forja.list');
+            // 使用统一项目选择器（分组显示）
+            const { showUnifiedProjectPicker } = await import('../statusBar');
+            await showUnifiedProjectPicker();
             break;
         }
     }

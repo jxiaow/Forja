@@ -16,6 +16,7 @@ export interface CliOptions {
     qtPath: string | null;
     vsDevShell: string | null;
     target: string | null;
+    executableName?: string | null;
     qmakeArgs?: string | null;
     jomPath?: string | null;
     rccProjectPath?: string | null;

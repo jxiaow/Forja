@@ -20,6 +20,7 @@ export interface ToolchainConfig {
     vsInstall?: string;
     jomPath?: string;
     qmakeTarget?: string;
+    executableName?: string;
     vsVersion?: string;
 }
 

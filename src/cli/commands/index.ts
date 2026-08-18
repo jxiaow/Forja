@@ -535,10 +535,10 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 outputResult(result, wantsJson, (r) => formatUseText(r, locale));
                 return;
             }
-            const targetKnown = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target', '--reset', '--build-script', '--rcc-project-path']);
-            const targetWithVal = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target', '--build-script', '--rcc-project-path']);
+            const targetKnown = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target', '--executable-name', '--reset', '--build-script', '--rcc-project-path']);
+            const targetWithVal = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--qmake-target', '--executable-name', '--build-script', '--rcc-project-path']);
             const targetUnknown = findUnknownFlags(argv, targetKnown, targetWithVal, {
-                allowEmptyValues: new Set(['--build-script']),
+                allowEmptyValues: new Set(['--build-script', '--executable-name']),
             });
             if (targetUnknown.length > 0) {
                 outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(targetUnknown, targetKnown) }], nextAction: 'forja use target' }, wantsJson);
@@ -563,6 +563,7 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 vsInstall: extractFlag(argv, '--vs'),
                 jomPath: extractFlag(argv, '--jom'),
                 qmakeTarget: extractFlag(argv, '--qmake-target'),
+                executableName: extractFlag(argv, '--executable-name', { allowEmpty: true }),
                 buildScript: extractFlag(argv, '--build-script', { allowEmpty: true }),
                 rccProjectPath: extractFlag(argv, '--rcc-project-path'),
                 reset: hasFlag(argv, '--reset'),

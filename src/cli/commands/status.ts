@@ -492,6 +492,7 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         lines.push(`${indent}${T('target')}: ${t.project}`);
         lines.push(`${indent}${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         if (t.toolchain.qmakeTarget) { lines.push(`${indent}${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}`); }
+        if (t.toolchain.executableName) { lines.push(`${indent}${T('init.executableName')}: ${t.toolchain.executableName}`); }
     }
 
     // ── Readiness sub-list ──

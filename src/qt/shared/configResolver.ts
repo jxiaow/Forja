@@ -17,6 +17,7 @@ export interface ConfigInputs {
     qmakeArgs?: string;
     jomPath?: string;
     jobs?: number;
+    executableName?: string;
 }
 
 /**
@@ -46,6 +47,7 @@ export function resolveBuildConfig(inputs: ConfigInputs): BuildConfig {
         qmakeArgs: inputs.qmakeArgs || '',
         jomPath: inputs.jomPath || '',
         jobs: inputs.jobs,
+        executableName: inputs.executableName,
     };
 }
 
@@ -77,6 +79,7 @@ export function mergeConfigInputs(...sources: Partial<ConfigInputs>[]): ConfigIn
         if (source.qmakeArgs) { result.qmakeArgs = source.qmakeArgs; }
         if (source.jomPath) { result.jomPath = source.jomPath; }
         if (source.jobs) { result.jobs = source.jobs; }
+        if (source.executableName) { result.executableName = source.executableName; }
     }
 
     return result;

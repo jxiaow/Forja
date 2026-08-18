@@ -37,10 +37,10 @@ test('shell plan builder appends custom qmake arguments', () => {
         qmakeArgs: 'DEFINES+=FEATURE_X CONFIG+=qml_debug'
     });
 
-    assert.match(
-        plan.commands.at(-1) || '',
-        /"TARGET=DemoApp" DEFINES\+=FEATURE_X CONFIG\+=qml_debug$/
-    );
+    // target 已改为构建后重命名，不再注入 qmake 命令
+    const lastCmd = plan.commands.at(-1) || '';
+    assert.match(lastCmd, /DEFINES\+=FEATURE_X CONFIG\+=qml_debug$/);
+    assert.ok(!lastCmd.includes('TARGET='), 'qmake command should not contain TARGET=');
 });
 
 test('linux shell plan exposes Qt lib path for Qt helper binaries', () => {

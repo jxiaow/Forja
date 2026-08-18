@@ -46,6 +46,7 @@ function buildQtCliOptions(workspace: string, target: ActiveTarget, opts: { acti
         qtPath: target.toolchain.qtPath || null,
         vsDevShell: vsDevShell,
         target: target.toolchain.qmakeTarget || null,
+        executableName: target.toolchain.executableName || null,
         qmakeArgs: opts.qmakeArgs || null,
         jomPath: target.toolchain.jomPath || null,
         rccProjectPath: opts.rccProjectPath || null,
@@ -132,6 +133,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         console.log(`  ${T('target')}: ${target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
         if (target.toolchain.qmakeTarget) { console.log(`  ${T('init.qmakeTarget')}: ${target.toolchain.qmakeTarget}`); }
+        if (target.toolchain.executableName) { console.log(`  ${T('init.executableName')}: ${target.toolchain.executableName}`); }
         console.log();
     }
 
@@ -364,7 +366,8 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
         console.log(`${T('build')} ${status}`);
         if (result.activeTarget) {
             const t = result.activeTarget;
-            const qt = t.toolchain.qmakeTarget ? ` · ${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}` : '';
+            const exeName = t.toolchain.executableName || t.toolchain.qmakeTarget;
+            const qt = exeName ? ` · ${T('init.executableName')}: ${exeName}` : '';
             console.log(`${T('target')}: ${t.project} · ${t.mode}/${t.arch}${qt}`);
         }
         if (result.durationMs) {

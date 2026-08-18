@@ -484,6 +484,7 @@ Target options:
   --vs <path>             Set Visual Studio installation path
   --jom <path>            Set jom installation path
   --qmake-target <name>   Set qmake TARGET override
+  --executable-name <name> Rename executable after build (overrides .pro TARGET)
   suppress-warnings [codes]     Manage suppressed warnings (no args = show)
     --add <codes>               Add to list
     --rm <codes>                Remove from list`,
@@ -499,6 +500,7 @@ Target 选项:
   --vs <路径>             设置 Visual Studio 安装路径
   --jom <路径>            设置 jom 安装路径
   --qmake-target <名称>   设置 qmake TARGET 覆盖值
+  --executable-name <名称> 构建后重命名可执行文件（覆盖 .pro 的 TARGET）
   suppress-warnings [代码]      管理被过滤的构建警告（无参数=查看）
     --add <代码>                追加到列表
     --rm <代码>                 从列表删除`,
@@ -600,6 +602,8 @@ Options:
     'init.rccManual':                    { en: 'Enter path manually...',     zh: '手动输入路径...' },
     'init.qmakeTarget':                  { en: 'QMake TARGET override',     zh: 'QMake TARGET 覆盖' },
     'init.qmakeTargetHint':              { en: 'Enter to skip',             zh: '回车跳过' },
+    'init.executableName':               { en: 'Executable name',           zh: '可执行文件名' },
+    'init.executableNameHint':           { en: 'rename after build; Enter to skip', zh: '构建后重命名；回车跳过' },
     'init.default':                      { en: 'default',                   zh: '默认' },
     'init.usingDefault':                 { en: 'using default',             zh: '使用默认值' },
     'init.currentQt':                    { en: 'Current Qt',                zh: '当前 Qt' },

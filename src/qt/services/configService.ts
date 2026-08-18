@@ -57,6 +57,10 @@ export function getTarget(): string {
     return getQtSetting('target');
 }
 
+export function getExecutableName(): string {
+    return getQtSetting('executableName');
+}
+
 export function getQmakeArgs(): string {
     return getQtSetting('qmakeArgs');
 }
@@ -123,7 +127,8 @@ export function getBuildConfig(): BuildConfig {
             vsDevShell: getVsDevShellPath(),
             jomPath: getJomPath(),
             target: getTarget(),
-            qmakeArgs: getQmakeArgs()
+            qmakeArgs: getQmakeArgs(),
+            executableName: getExecutableName()
         }
     );
 
