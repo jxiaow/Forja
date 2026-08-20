@@ -26,6 +26,7 @@ description: Operate C++ workspaces through the Forja CLI, including initializat
   设置）。如果用户经常需要指定 `--jobs`，建议其执行一次 `forja use --jobs <N> --json`
   持久化。
 - 多个项目、工具链或服务器存在歧义时让用户选择，不要静默选择第一个结果。
+  只有一个候选时直接选定，不要求用户确认（`workroot` 除外）。
 - 不要主动加 `--workspace`，项目已初始化时直接操作当前目录；仅用户明确要求时传
   `--workspace <path>`。仅需稳定诊断语言时传 `--lang zh|en`。
 - Forja 已覆盖的操作不要自行拼接 qmake、make、MSBuild、SSH 或 SCP 命令。
