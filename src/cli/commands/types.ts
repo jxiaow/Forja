@@ -742,6 +742,7 @@ Options:
     'use.failedToSaveExecMode':          { en: 'Failed to save execution mode',     zh: '保存执行模式失败' },
     'use.noActiveTargetSelected':        { en: 'No active target selected',         zh: '未选择活动目标' },
     'use.selectTarget':                  { en: 'Select a target',                    zh: '选择目标' },
+    'use.selectSavedTarget':             { en: 'Select saved target',                zh: '选择已保存的目标' },
     'use.addNewTarget':                  { en: '+ Add new target',                   zh: '+ 添加新目标' },
     'use.confirmChangeTarget':           { en: 'Change target?',                    zh: '是否更换目标？' },
     'use.multipleTargetsFound':          { en: 'Multiple targets found',            zh: '找到多个匹配目标' },

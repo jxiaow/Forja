@@ -114,6 +114,38 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
                     nextAction: 'forja status',
                 };
             }
+            if (matchingTargets.length > 1) {
+                const activeMatch = matchingTargets.find(t => t.id === workspaceConfig.activeTarget);
+                let selected: typeof matchingTargets[0] | undefined;
+                if (activeMatch) {
+                    selected = activeMatch;
+                } else if (options.interactive) {
+                    const { chooseRequired } = await import('../prompt');
+                    selected = await chooseRequired(
+                        T('use.selectSavedTarget'),
+                        matchingTargets,
+                        t => `${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}`,
+                    );
+                    console.log(`  ✓ ${selected.id}`);
+                }
+                if (selected) {
+                    workspaceConfig.activeTarget = selected.id;
+                    try {
+                        saveWorkspaceConfig(workspaceConfig);
+                    } catch (e) {
+                        return {
+                            ok: false, action: 'use', useScope: 'target', changed: [],
+                            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
+                            nextAction: 'forja status',
+                        };
+                    }
+                    return {
+                        ok: true, action: 'use', useScope: 'target', workspace,
+                        activeTarget: selected, changed: ['activeTarget'],
+                        nextAction: 'forja status',
+                    };
+                }
+            }
         }
     }
 
