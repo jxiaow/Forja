@@ -20,8 +20,9 @@ description: Operate C++ workspaces through the Forja CLI, including initializat
   `nextActions`、`activeTarget` 及命令专属结果字段。
 - `ok: false` 始终表示失败，即使响应包含计划或部分诊断。优先遵循可执行的
   `nextAction(s)`；信息不足时重新执行 `forja status --json`。
-- 构建、运行、清理、选择目标或同步前先执行 `forja status --json`，不要猜测项目路径、
-  mode、arch 或工具链。
+- **不要每次都跑 `forja status`。** 仅在以下情况调用：会话中首次操作且无目标信息、
+  用户切换了 target、或命令返回意外错误需要重新确认状态。`use target`、`build`、`run`
+  等命令的 JSON 结果已包含 `activeTarget`，可直接用于后续调用，无需重复查询。
 - `forja build` 不传 `--jobs` 时自动使用全局配置中的并行数（通过 `forja use --jobs <N>`
   设置）。如果用户经常需要指定 `--jobs`，建议其执行一次 `forja use --jobs <N> --json`
   持久化。
@@ -37,9 +38,10 @@ description: Operate C++ workspaces through the Forja CLI, including initializat
 
 - 用户要求预览或目标工作区尚不熟悉时，对 build、普通 Qt run、clean 使用
   `--plan --json`。
-- `build` 默认前台执行，并且 Forja build 没有 `--detach` 参数。用户明确要求后台构建时，
-  只能使用当前执行器明确支持的后台能力；不得拼出 `forja build --detach`，也不得在前台
-  超时后重新发起第二次构建。只有执行器能接管同一仍在运行的进程时才接管并回显任务 ID。
+- **`build` 必须用后台执行**：`forja build` 可能耗时数分钟，前台调用会超时。使用执行器的
+  后台能力（如 `is_background: true`）启动，然后用 `monitor` 或等效机制监控输出。构建完成后
+  读取 `forja status --json` 或日志文件获取结果。**禁止**前台等待构建完成。**禁止**拼出
+  `forja build --detach`（Forja build 无此参数）。不得在超时后重新发起第二次构建。
 - 启动当前 Qt 目标（普通 `forja run`）时，默认执行 `forja run --detach --json`；仅用户
   明确要求前台运行时使用 `forja run --json`。`run custom` 和 `run designer` 不追加
   `--detach`。

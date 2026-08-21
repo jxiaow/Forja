@@ -48,9 +48,38 @@ function decodeWinOutput(buffer: Buffer): string {
     }
 }
 
-function execute(commandLine: string, cwd: string, suppressedWarnings?: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+/**
+ * Extract `set "PATH=...;%PATH%"` commands and return a modified env object.
+ * On Windows, %PATH% expansion inside cmd.exe inflates the effective command
+ * line length far beyond the JS string length, hitting the ~8191 char limit.
+ * Moving PATH into the child process env eliminates this inflation entirely.
+ */
+function extractPathEnv(commands: string[]): { filtered: string[]; env?: NodeJS.ProcessEnv } {
+    if (process.platform !== 'win32') {
+        return { filtered: commands };
+    }
+    const pathValues: string[] = [];
+    const filtered = commands.filter(cmd => {
+        const m = cmd.match(/^set\s+"PATH=(.+);%PATH%"$/);
+        if (m) {
+            pathValues.push(m[1]);
+            return false;
+        }
+        return true;
+    });
+    if (pathValues.length === 0) {
+        return { filtered };
+    }
+    const currentPath = process.env.PATH || '';
+    return {
+        filtered,
+        env: { ...process.env, PATH: [...pathValues, currentPath].join(';') }
+    };
+}
+
+function execute(commandLine: string, cwd: string, suppressedWarnings?: string[], env?: NodeJS.ProcessEnv): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' }, (error, stdout, stderr) => {
+        cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer', env }, (error, stdout, stderr) => {
             let exitCode = 0;
             if (error) {
                 const execError = error as cp.ExecException;
@@ -72,9 +101,9 @@ function execute(commandLine: string, cwd: string, suppressedWarnings?: string[]
 /**
  * Streaming execute: uses cp.exec but pipes stdout/stderr to the current process in real-time.
  */
-function executeStreaming(commandLine: string, cwd: string, executablePath?: string, suppressedWarnings?: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+function executeStreaming(commandLine: string, cwd: string, executablePath?: string, suppressedWarnings?: string[], env?: NodeJS.ProcessEnv): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
-        const child = cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' });
+        const child = cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer', env });
 
         let stdout = '';
         let stderr = '';
@@ -321,9 +350,11 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
 
         // Execute build commands
         const buildLine = buildCommands.join(' && ');
+        const { filtered: buildExecCmds, env: buildPathEnv } = extractPathEnv(buildCommands);
+        const buildExecLine = buildExecCmds.join(' && ');
         const buildResult = options.streaming
-            ? await executeStreaming(buildLine, result.workspace, undefined, suppressed)
-            : await execute(buildLine, result.workspace, suppressed);
+            ? await executeStreaming(buildExecLine, result.workspace, undefined, suppressed, buildPathEnv)
+            : await execute(buildExecLine, result.workspace, suppressed, buildPathEnv);
 
         // Write build log (both on success and failure)
         ensureLocalStateDir(result.workspace);
@@ -451,9 +482,11 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         const buildCommands = commandParts.slice(0, -1);
         const runCommand = commandParts[commandParts.length - 1];
         const buildLine = buildCommands.join(' && ');
+        const { filtered: buildExecCmds, env: buildPathEnv } = extractPathEnv(buildCommands);
+        const buildExecLine = buildExecCmds.join(' && ');
         const buildResult = options?.streaming
-            ? await executeStreaming(buildLine, result.workspace, undefined, suppressed)
-            : await execute(buildLine, result.workspace, suppressed);
+            ? await executeStreaming(buildExecLine, result.workspace, undefined, suppressed, buildPathEnv)
+            : await execute(buildExecLine, result.workspace, suppressed, buildPathEnv);
         const buildOutput = buildResult.stdout + '\n' + buildResult.stderr;
         const ws = summarizeWarnings(buildOutput);
 
@@ -601,26 +634,32 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
     }
 
     // Normal mode: execute all commands together
+    // Extract PATH env setup from commands on Windows — %PATH% expansion inside
+    // cmd.exe inflates the effective line length far beyond the JS string length,
+    // hitting the ~8191 char limit.  Moving PATH into the child process env
+    // eliminates this inflation entirely.
+    const { filtered: execCommands, env: pathEnv } = extractPathEnv(commandParts);
     const commandLine = commandParts.join(' && ');
+    const execCommandLine = execCommands.join(' && ');
 
     // Windows cmd.exe has a ~8191 char command line limit.
     // When RCC targets are many, the joined commands can exceed this.
     // Fall back to writing a .bat file and executing it directly.
     let batFile: string | undefined;
-    let effectiveCmd = commandLine;
-    if (process.platform === 'win32' && commandLine.length > 7000) {
+    let effectiveCmd = execCommandLine;
+    if (process.platform === 'win32' && execCommandLine.length > 7000) {
         ensureLocalStateDir(result.workspace);
         batFile = path.join(logsDir(result.workspace), `${result.action}-${Date.now()}.bat`);
         const cwd = resolveProjectCwd(result);
-        fs.writeFileSync(batFile, `@echo off\r\ncd /d "${cwd}"\r\n${commandLine}\r\n`, 'utf8');
+        fs.writeFileSync(batFile, `@echo off\r\ncd /d "${cwd}"\r\n${execCommandLine}\r\n`, 'utf8');
         effectiveCmd = batFile;
     }
 
     let executed: { exitCode: number; stdout: string; stderr: string };
     try {
         executed = options?.streaming
-            ? await executeStreaming(effectiveCmd, result.workspace, result.action === 'run' ? result.executablePath : undefined, suppressed)
-            : await execute(effectiveCmd, result.workspace, suppressed);
+            ? await executeStreaming(effectiveCmd, result.workspace, result.action === 'run' ? result.executablePath : undefined, suppressed, pathEnv)
+            : await execute(effectiveCmd, result.workspace, suppressed, pathEnv);
     } finally {
         if (batFile) {
             try { fs.unlinkSync(batFile); } catch { /* cleanup best-effort */ }
