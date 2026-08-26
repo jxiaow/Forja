@@ -11,7 +11,7 @@ import {
 import { getActiveTarget } from './activeTarget';
 import { collectTargetCandidates } from './candidates';
 import {
-    loadSyncSettings, loadRemoteSettings,
+    loadSyncSettings, loadRemoteSettings, loadGlobalConfig,
     getCorruptedConfigs, clearCorruptedConfigs,
     RemoteSettings, CorruptedConfig,
 } from '../../core/settingsIO';
@@ -31,6 +31,7 @@ export interface StatusResult extends ForjaJsonResult {
     sync?: SyncStatusSummary;
     runtime?: RuntimeState;
     rccProjectPath?: string;
+    globalJobs?: number;
     nextAction?: string;
     choices?: Array<{ label: string; command: string; description: string }>;
 }
@@ -269,6 +270,10 @@ export function runStatus(workspace: string): StatusResult {
         result.rccProjectPath = wsConfig.qtModulePrefs.rccProjectPath;
     }
 
+    // Global build jobs
+    const globalJobs = loadGlobalConfig().jobs;
+    if (globalJobs !== undefined) { result.globalJobs = globalJobs; }
+
     // Remote summary
 
     // Sync summary
@@ -493,6 +498,13 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         lines.push(`${indent}${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         if (t.toolchain.qmakeTarget) { lines.push(`${indent}${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}`); }
         if (t.toolchain.executableName) { lines.push(`${indent}${T('init.executableName')}: ${t.toolchain.executableName}`); }
+    }
+
+    // ── Global jobs ──
+    if (result.globalJobs !== undefined) {
+        lines.push(`${indent}${T('sts.globalJobs')}: ${result.globalJobs}`);
+    } else {
+        lines.push(`${indent}${T('sts.globalJobs')}: ${T('sts.globalJobsNotSet')}`);
     }
 
     // ── Readiness sub-list ──

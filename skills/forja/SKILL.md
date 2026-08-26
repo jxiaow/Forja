@@ -23,9 +23,8 @@ description: Operate C++ workspaces through the Forja CLI, including initializat
 - **不要每次都跑 `forja status`。** 仅在以下情况调用：会话中首次操作且无目标信息、
   用户切换了 target、或命令返回意外错误需要重新确认状态。`use target`、`build`、`run`
   等命令的 JSON 结果已包含 `activeTarget`，可直接用于后续调用，无需重复查询。
-- `forja build` 不传 `--jobs` 时自动使用全局配置中的并行数（通过 `forja use --jobs <N>`
-  设置）。如果用户经常需要指定 `--jobs`，建议其执行一次 `forja use --jobs <N> --json`
-  持久化。
+- `forja build` 不传 `--jobs` 时使用全局配置的并行数。检查 `forja status --json` 返回的
+  `globalJobs` 字段——未设置时提醒用户默认占满全部核心，建议 `forja use --jobs <N> --json` 设置持久值。
 - 多个项目、工具链或服务器存在歧义时让用户选择，不要静默选择第一个结果。
   只有一个候选时直接选定，不要求用户确认（`workroot` 除外）。
 - 不要主动加 `--workspace`，项目已初始化时直接操作当前目录；仅用户明确要求时传
@@ -38,10 +37,9 @@ description: Operate C++ workspaces through the Forja CLI, including initializat
 
 - 用户要求预览或目标工作区尚不熟悉时，对 build、普通 Qt run、clean 使用
   `--plan --json`。
-- **`build` 必须用后台执行**：`forja build` 可能耗时数分钟，前台调用会超时。使用执行器的
-  后台能力（如 `is_background: true`）启动，然后用 `monitor` 或等效机制监控输出。构建完成后
-  读取 `forja status --json` 或日志文件获取结果。**禁止**前台等待构建完成。**禁止**拼出
-  `forja build --detach`（Forja build 无此参数）。不得在超时后重新发起第二次构建。
+- **`build` 必须用后台执行**：`forja build` 可能耗时数分钟，前台调用会超时。使用 `is_background: true`
+  启动，等待完成通知，**不要轮询状态文件或输出文件**。收到通知后读取 `forja status --json`
+  获取结果。**禁止**前台等待。**禁止** `forja build --detach`。不得在超时后重新发起第二次构建。
 - 启动当前 Qt 目标（普通 `forja run`）时，默认执行 `forja run --detach --json`；仅用户
   明确要求前台运行时使用 `forja run --json`。`run custom` 和 `run designer` 不追加
   `--detach`。

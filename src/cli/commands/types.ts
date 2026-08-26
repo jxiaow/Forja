@@ -719,6 +719,8 @@ Options:
     'sts.projectFileMissing':           { en: 'Project file does not exist',        zh: '项目文件不存在' },
     'sts.failedToReadRunState':         { en: 'Failed to read run state',           zh: '读取运行状态失败' },
     'sts.forjaStatus':                  { en: 'Forja status',                       zh: 'Forja 状态' },
+    'sts.globalJobs':                   { en: 'Build jobs',                         zh: '并行编译数' },
+    'sts.globalJobsNotSet':             { en: 'not set (using all cores)',          zh: '未设置（使用全部核心）' },
     'sts.makefileMismatch':             { en: 'Makefile does not match current config', zh: 'Makefile 与当前配置不匹配' },
     'sts.makefileMismatchHint':         { en: 'Re-run qmake to regenerate Makefile', zh: '重新运行 qmake 以重新生成 Makefile' },
     'sts.makefileConfigMismatchHint':   { en: 'Change mode/arch to match Makefile, or re-run qmake', zh: '修改 mode/arch 以匹配 Makefile，或重新运行 qmake' },
