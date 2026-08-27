@@ -139,7 +139,7 @@ export function buildCommand(options: CppPlanOptions): string[] {
             commands.push(`cd "${scriptDir}" && call "${scriptName}"${args}`);
         } else {
             const interpreter = resolveShellInterpreter(options.project);
-            commands.push(`cd "${scriptDir}" && ${interpreter} "${scriptName}"${args}`);
+            commands.push(`cd "${scriptDir}" && tr -d '\\r' < "${scriptName}" | ${interpreter} -s${args}`);
         }
     } else {
         const makefileDir = path.dirname(options.project);

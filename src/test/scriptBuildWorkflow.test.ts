@@ -230,8 +230,8 @@ test('planner respects bash shebang instead of hardcoded sh', () => {
         arch: 'x64',
     });
 
-    assert.match(commands[0], /\/bin\/bash "build_incremental\.sh"/);
-    assert.doesNotMatch(commands[0], /\bsh "build_incremental\.sh"/);
+    assert.match(commands[0], /tr -d '\\r' < "build_incremental\.sh" \| \/bin\/bash -s/);
+    assert.doesNotMatch(commands[0], /\bsh -s/);
 });
 
 test('planner resolves env-based shebang (#!/usr/bin/env bash)', () => {
@@ -246,8 +246,8 @@ test('planner resolves env-based shebang (#!/usr/bin/env bash)', () => {
         arch: 'x64',
     });
 
-    assert.match(commands[0], /bash "build_env\.sh"/);
-    assert.doesNotMatch(commands[0], /\bsh "build_env\.sh"/);
+    assert.match(commands[0], /tr -d '\\r' < "build_env\.sh" \| bash -s/);
+    assert.doesNotMatch(commands[0], /\bsh -s/);
 });
 
 test('planner falls back to sh when script has no shebang', () => {
@@ -262,7 +262,7 @@ test('planner falls back to sh when script has no shebang', () => {
         arch: 'x64',
     });
 
-    assert.match(commands[0], /\bsh "build_plain\.sh"/);
+    assert.match(commands[0], /tr -d '\\r' < "build_plain\.sh" \| sh -s/);
 });
 
 test('build-script update rejects Qt targets and unsupported extensions', async () => {
