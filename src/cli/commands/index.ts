@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import { ForjaJsonResult } from './types';
 import { runStatus, formatStatusText } from './status';
 import { runList, ListCategory, EnvSubCategory, formatListText } from './list';
-import { runUseTarget, runUseShow, runSuppressWarnings, formatUseText } from './use';
+import { runUseTarget, runUseShow, runSuppressWarnings, runRemoveTarget, formatUseText } from './use';
 import { runRemoteShow, runRemoteSetup, formatRemoteText, RemoteResult } from './remote';
 import { runServerAdd, runServerUpdate, runServerRemove, formatServerText } from './server';
 import { runBuild, BuildAction, outputBuildResult } from './build';
@@ -21,7 +21,7 @@ import { resolveLocale, Locale, T, setGlobalLocale, diag } from './types';
 import { loadGlobalConfig, saveGlobalConfig, loadRemoteSettings } from '../../core/settingsIO';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
-import { resolveWorkroot } from '../../core/workspaceStore';
+import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 import { ClassifiedChanges } from '../../sync/cli';
 import { runRemoteCli } from '../../remote/cli';
 
@@ -532,6 +532,62 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 const codes = argv.slice(3).filter(a => !a.startsWith('--'));
                 const result = runSuppressWarnings(workroot, codes, add, rm);
                 outputResult(result, wantsJson, (r) => formatUseText(r, locale));
+                return;
+            }
+            if (argv[2] === 'remove') {
+                const rmKnown = new Set(['--force']);
+                const rmUnknown = findUnknownFlags(argv.slice(2), rmKnown, new Set<string>());
+                if (rmUnknown.length > 0) {
+                    outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(rmUnknown, rmKnown) }], nextAction: 'forja use target remove' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                const wsConfig = loadWorkspaceConfig(workroot);
+                const savedTargets = Object.values(wsConfig.targets);
+                if (savedTargets.length === 0) {
+                    outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'error', message: T('use.noTargetsToRemove') }], nextAction: 'forja init' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                let targetId = argv[3] && !argv[3].startsWith('--') ? argv[3] : '';
+                if (!targetId) {
+                    if (!wantsJson) {
+                        const { chooseRequired } = await import('./prompt');
+                        const chosen = await chooseRequired(
+                            T('use.selectTarget'),
+                            savedTargets,
+                            t => `${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}`,
+                        );
+                        if (!chosen) {
+                            outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'info', message: T('cancelled') }] }, wantsJson);
+                            return;
+                        }
+                        targetId = chosen.id;
+                    } else {
+                        outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'error', message: `${T('use.targetNotFound')}: forja use target remove <id>` }], nextAction: 'forja list targets --json' }, wantsJson);
+                        process.exitCode = 1;
+                        return;
+                    }
+                }
+                if (!wsConfig.targets[targetId]) {
+                    outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'error', message: T('use.targetNotFound', [targetId]) }], nextAction: 'forja list targets' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                const forceFlag = hasFlag(argv, '--force');
+                if (!wantsJson && !forceFlag) {
+                    const yes = await confirm(T('confirmRemoveTarget', [targetId]), false);
+                    if (!yes) {
+                        outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'info', message: T('cancelled') }] }, wantsJson);
+                        return;
+                    }
+                } else if (wantsJson && !forceFlag) {
+                    outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'error', message: T('destructiveRequiresForce') }], nextAction: `forja use target remove ${targetId} --force` }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                const removeResult = runRemoveTarget(workroot, targetId);
+                outputResult(removeResult, wantsJson, (r) => formatUseText(r, locale));
                 return;
             }
             const targetKnown = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--executable-name', '--reset', '--build-script', '--rcc-project-path']);

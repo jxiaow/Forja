@@ -8,6 +8,7 @@ import { T, Diagnostic } from '../types';
 import {
     loadWorkspaceConfig,
     normalizePath,
+    removeTarget,
     resolveWorkroot,
     saveWorkspaceConfig,
     type TargetProfile,
@@ -422,5 +423,22 @@ export async function runUpdateBuildScript(workspace: string, args: {
         workspace, activeTarget: updated,
         changed: ['buildScript'],
         nextAction: 'forja build',
+    };
+}
+
+export function runRemoveTarget(workroot: string, targetId: string): UseTargetResult {
+    try {
+        removeTarget(workroot, targetId);
+    } catch (e) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace: workroot, changed: [],
+            diagnostics: [{ level: 'error', message: e instanceof Error ? e.message : String(e) }],
+            nextAction: 'forja list targets',
+        };
+    }
+    return {
+        ok: true, action: 'use', useScope: 'target', workspace: workroot, changed: ['targets'],
+        diagnostics: [{ level: 'info', message: T('use.targetRemoved', [targetId]) }],
+        nextAction: 'forja list targets',
     };
 }

@@ -8,7 +8,7 @@ import type { ForjaJsonResult } from './types';
 import {
     resolveWorkroot, isWorkrootRegistered, registerWorkroot, unregisterWorkroot,
     loadWorkspaceConfig, saveWorkspaceConfig, createEmptyWorkspaceConfig,
-    generateTargetId,
+    generateTargetId, removeTarget,
     type WorkspaceConfig, type TargetProfile,
 } from '../../core/workspaceStore';
 import { scanProFiles } from '../../qt/shared/projectScanner';
@@ -165,6 +165,7 @@ async function handleExistingWorkroot(workroot: string, options: InitOptions): P
     const action = await choose(T('init.selectAction'), [
         { value: 'add', label: T('init.addAction') },
         { value: 'modify', label: T('init.modifyAction') },
+        { value: 'remove', label: T('init.removeAction') },
         { value: 'exit', label: T('init.exitAction') },
     ], item => item.label);
 
@@ -174,6 +175,10 @@ async function handleExistingWorkroot(workroot: string, options: InitOptions): P
 
     if (action.value === 'modify') {
         return handleModifyTarget(workroot, config, options);
+    }
+
+    if (action.value === 'remove') {
+        return handleRemoveTarget(workroot, config, options);
     }
 
     // Add new target
@@ -242,6 +247,53 @@ async function handleModifyTarget(workroot: string, config: WorkspaceConfig, opt
         ok: true, action: 'init', workroot,
         target: updatedResult.target,
         nextAction: 'forja status',
+    };
+}
+
+async function handleRemoveTarget(workroot: string, config: WorkspaceConfig, options: InitOptions): Promise<InitResult> {
+    const targets = Object.values(config.targets);
+    if (targets.length === 0) {
+        return {
+            ok: false, action: 'init', workroot,
+            diagnostics: [{ level: 'error', message: T('use.noTargetsToRemove') }],
+            nextAction: 'forja init',
+        };
+    }
+
+    let selected: TargetProfile;
+    if (options.answers?.target) {
+        const match = targets.find(t => t.id === options.answers!.target || t.name === options.answers!.target);
+        if (!match) {
+            return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: T('use.targetNotFound', [options.answers.target]) }] };
+        }
+        selected = match;
+    } else if (options.interactive) {
+        const chosen = await chooseRequired(T('use.selectTarget'), targets, t => `${t.name} [${t.kind}] ${t.project}`);
+        if (!chosen) {
+            return { ok: true, action: 'init', workroot, diagnostics: [{ level: 'info', message: T('cancelled') }] };
+        }
+        selected = chosen;
+    } else {
+        return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: T('init.answersMissingTarget') }] };
+    }
+
+    if (options.interactive) {
+        const yes = await confirm(T('confirmRemoveTarget', [selected.id]), false);
+        if (!yes) {
+            return { ok: true, action: 'init', workroot, diagnostics: [{ level: 'info', message: T('cancelled') }] };
+        }
+    }
+
+    try {
+        removeTarget(workroot, selected.id);
+    } catch (e) {
+        return { ok: false, action: 'init', workroot, diagnostics: [{ level: 'error', message: e instanceof Error ? e.message : String(e) }] };
+    }
+
+    return {
+        ok: true, action: 'init', workroot,
+        diagnostics: [{ level: 'info', message: T('use.targetRemoved', [selected.id]) }],
+        nextAction: 'forja list targets',
     };
 }
 

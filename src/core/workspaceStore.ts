@@ -362,6 +362,20 @@ export function findTargetByProject(
     )) ?? null;
 }
 
+/** Remove a target by ID. Clears activeTarget if it pointed to the removed target. */
+export function removeTarget(workroot: string, targetId: string): { removed: string } {
+    const config = loadWorkspaceConfig(workroot);
+    if (!config.targets[targetId]) {
+        throw new Error(`Target '${targetId}' not found`);
+    }
+    delete config.targets[targetId];
+    if (config.activeTarget === targetId) {
+        config.activeTarget = null;
+    }
+    saveWorkspaceConfig(config);
+    return { removed: targetId };
+}
+
 export function createEmptyWorkspaceConfig(workroot: string): WorkspaceConfig {
     return {
         workroot: normalizePath(workroot),

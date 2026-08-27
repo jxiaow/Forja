@@ -12,6 +12,7 @@ import {
     createEmptyWorkspaceConfig,
     loadWorkspaceConfig,
     registerWorkroot,
+    removeTarget,
     saveWorkspaceConfig,
     unregisterWorkroot,
     type TargetProfile,
@@ -217,6 +218,53 @@ test('planner matches script extensions case-insensitively', () => {
     assert.doesNotMatch(commands[0], /make -C/);
 });
 
+test('planner respects bash shebang instead of hardcoded sh', () => {
+    const bashScript = path.join(TEST_DIR, 'build_incremental.sh');
+    fs.writeFileSync(bashScript, '#!/bin/bash\n[[ -f config ]] && source config\n');
+
+    const commands = buildCommand({
+        action: 'build',
+        workspace: TEST_DIR,
+        project: bashScript,
+        mode: 'debug',
+        arch: 'x64',
+    });
+
+    assert.match(commands[0], /\/bin\/bash "build_incremental\.sh"/);
+    assert.doesNotMatch(commands[0], /\bsh "build_incremental\.sh"/);
+});
+
+test('planner resolves env-based shebang (#!/usr/bin/env bash)', () => {
+    const envScript = path.join(TEST_DIR, 'build_env.sh');
+    fs.writeFileSync(envScript, '#!/usr/bin/env bash\necho hello\n');
+
+    const commands = buildCommand({
+        action: 'build',
+        workspace: TEST_DIR,
+        project: envScript,
+        mode: 'release',
+        arch: 'x64',
+    });
+
+    assert.match(commands[0], /bash "build_env\.sh"/);
+    assert.doesNotMatch(commands[0], /\bsh "build_env\.sh"/);
+});
+
+test('planner falls back to sh when script has no shebang', () => {
+    const noShebangScript = path.join(TEST_DIR, 'build_plain.sh');
+    fs.writeFileSync(noShebangScript, 'echo hello\n');
+
+    const commands = buildCommand({
+        action: 'build',
+        workspace: TEST_DIR,
+        project: noShebangScript,
+        mode: 'debug',
+        arch: 'x64',
+    });
+
+    assert.match(commands[0], /\bsh "build_plain\.sh"/);
+});
+
 test('build-script update rejects Qt targets and unsupported extensions', async () => {
     const qtWorkspace = createWorkspace('reject-qt-script');
     fs.writeFileSync(path.join(qtWorkspace, 'app.pro'), 'TEMPLATE = app\n');
@@ -256,4 +304,112 @@ test('build-script update rejects Qt targets and unsupported extensions', async 
         unregisterWorkroot(qtWorkspace);
         unregisterWorkroot(cppWorkspace);
     }
+});
+
+// ── removeTarget ──
+
+test('removeTarget deletes the target from config', () => {
+    const workspace = createWorkspace('remove-basic');
+    fs.writeFileSync(path.join(workspace, 'app.pro'), 'TEMPLATE = app\n');
+    saveActiveTarget(workspace, {
+        id: 'qt-app-debug-x64',
+        name: 'app',
+        kind: 'qt',
+        project: 'app.pro',
+        mode: 'debug',
+        arch: 'x64',
+        toolchain: {},
+    });
+
+    const result = removeTarget(workspace, 'qt-app-debug-x64');
+    assert.equal(result.removed, 'qt-app-debug-x64');
+
+    const config = loadWorkspaceConfig(workspace);
+    assert.equal(config.targets['qt-app-debug-x64'], undefined);
+    assert.equal(Object.keys(config.targets).length, 0);
+    unregisterWorkroot(workspace);
+});
+
+test('removeTarget clears activeTarget when removing the active target', () => {
+    const workspace = createWorkspace('remove-active');
+    fs.writeFileSync(path.join(workspace, 'app.pro'), 'TEMPLATE = app\n');
+    saveActiveTarget(workspace, {
+        id: 'qt-app-debug-x64',
+        name: 'app',
+        kind: 'qt',
+        project: 'app.pro',
+        mode: 'debug',
+        arch: 'x64',
+        toolchain: {},
+    });
+
+    const configBefore = loadWorkspaceConfig(workspace);
+    assert.equal(configBefore.activeTarget, 'qt-app-debug-x64');
+
+    removeTarget(workspace, 'qt-app-debug-x64');
+
+    const config = loadWorkspaceConfig(workspace);
+    assert.equal(config.activeTarget, null);
+    unregisterWorkroot(workspace);
+});
+
+test('removeTarget throws for non-existent target', () => {
+    const workspace = createWorkspace('remove-missing');
+    registerWorkroot(workspace);
+    const config = createEmptyWorkspaceConfig(workspace);
+    saveWorkspaceConfig(config);
+
+    assert.throws(() => removeTarget(workspace, 'nonexistent'), /not found/);
+    unregisterWorkroot(workspace);
+});
+
+test('CLI use target remove --force deletes target in JSON mode', () => {
+    const workspace = createWorkspace('remove-cli');
+    fs.writeFileSync(path.join(workspace, 'CMakeLists.txt'), 'cmake_minimum_required(VERSION 3.14)\n');
+    saveActiveTarget(workspace, {
+        id: 'cpp-app-debug-x64',
+        name: 'app',
+        kind: 'cpp',
+        project: 'CMakeLists.txt',
+        mode: 'debug',
+        arch: 'x64',
+        toolchain: {},
+    });
+
+    const cli = runCli(workspace, ['use', 'target', 'remove', 'cpp-app-debug-x64', '--force', '--json']);
+    const result = JSON.parse(cli.stdout);
+
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.equal(result.ok, true);
+
+    const config = loadWorkspaceConfig(workspace);
+    assert.equal(config.targets['cpp-app-debug-x64'], undefined);
+    assert.equal(config.activeTarget, null);
+    unregisterWorkroot(workspace);
+});
+
+test('CLI use target remove without --force fails in JSON mode', () => {
+    const workspace = createWorkspace('remove-no-force');
+    fs.writeFileSync(path.join(workspace, 'CMakeLists.txt'), 'cmake_minimum_required(VERSION 3.14)\n');
+    saveActiveTarget(workspace, {
+        id: 'cpp-app-debug-x64',
+        name: 'app',
+        kind: 'cpp',
+        project: 'CMakeLists.txt',
+        mode: 'debug',
+        arch: 'x64',
+        toolchain: {},
+    });
+
+    const cli = runCli(workspace, ['use', 'target', 'remove', 'cpp-app-debug-x64', '--json']);
+    const result = JSON.parse(cli.stdout);
+
+    assert.equal(cli.status, 1);
+    assert.equal(result.ok, false);
+    assert.match(result.diagnostics[0].message, /--force/);
+
+    // Target should still exist
+    const config = loadWorkspaceConfig(workspace);
+    assert.notEqual(config.targets['cpp-app-debug-x64'], undefined);
+    unregisterWorkroot(workspace);
 });

@@ -623,6 +623,7 @@ Options:
     'init.selectAction':                { en: 'What would you like to do?',           zh: '你想做什么？' },
     'init.addAction':                   { en: 'Add a new target',                     zh: '添加新目标' },
     'init.modifyAction':                { en: 'Modify an existing target',            zh: '修改现有目标' },
+    'init.removeAction':                { en: 'Remove a target',                      zh: '删除目标' },
     'init.exitAction':                  { en: 'Exit',                                 zh: '退出' },
     'init.newWorkroot':                 { en: 'Initializing new workspace',           zh: '初始化新工作区' },
     'init.confirmWorkroot':             { en: 'Use this directory as work root?',      zh: '使用此目录作为工作根目录？' },
@@ -856,6 +857,10 @@ Options:
     // Confirmation prompts
     'confirmRemoteReset':                { en: 'Remote reset: {0}. Continue?',        zh: '远程重置：{0}。继续？' },
     'confirmRemoveServer':               { en: "Remove server '{0}'?",                zh: "删除服务器 '{0}'？" },
+    'confirmRemoveTarget':               { en: "Remove target '{0}'?",                zh: "删除目标 '{0}'？" },
+    'use.targetRemoved':                 { en: "Target '{0}' removed",                zh: "目标 '{0}' 已删除" },
+    'use.noTargetsToRemove':             { en: 'No saved targets to remove',          zh: '没有可删除的已保存目标' },
+    'use.targetNotFound':                { en: "Target '{0}' not found",              zh: "目标 '{0}' 未找到" },
 
     // Flag validation errors
     'langRequiresValue':                 { en: '--lang requires a value. Usage: forja <command> --lang zh|en', zh: '--lang 需要参数。用法：forja <command> --lang zh|en' },

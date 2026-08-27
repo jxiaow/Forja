@@ -12,12 +12,13 @@ import {
     runUpdateModeArch,
     runUpdateToolchain,
     runUpdateBuildScript,
+    runRemoveTarget,
     formatUseTargetText,
 } from './useTarget';
 import type { UseTargetResult } from './useTarget';
 
 // Re-export for index.ts
-export { formatUseTargetText } from './useTarget';
+export { formatUseTargetText, runRemoveTarget } from './useTarget';
 export type { UseTargetResult } from './useTarget';
 
 // ── Config summary ──

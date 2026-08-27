@@ -67,6 +67,31 @@ function resolveSolutionPlatform(projectPath: string, configuration: string, arc
 }
 
 /**
+ * Read the shebang line of a shell script to determine the interpreter.
+ * Returns the interpreter command (e.g. "/bin/bash", "bash") or "sh" as fallback.
+ */
+function resolveShellInterpreter(scriptPath: string): string {
+    try {
+        const fd = fs.openSync(scriptPath, 'r');
+        try {
+            const buf = Buffer.alloc(256);
+            fs.readSync(fd, buf, 0, 256, 0);
+            const firstLine = buf.toString('utf8').split('\n')[0].trim();
+            if (firstLine.startsWith('#!')) {
+                const parts = firstLine.slice(2).trim().split(/\s+/);
+                if (path.basename(parts[0]) === 'env') {
+                    return parts[1] || 'sh';
+                }
+                return parts[0];
+            }
+        } finally {
+            fs.closeSync(fd);
+        }
+    } catch { /* ignore */ }
+    return 'sh';
+}
+
+/**
  * Build shell commands for C++ project (MSBuild on Windows, make on POSIX).
  * Single source of truth for C++ build command assembly.
  */
@@ -113,7 +138,8 @@ export function buildCommand(options: CppPlanOptions): string[] {
         if (projectExtension === '.bat') {
             commands.push(`cd "${scriptDir}" && call "${scriptName}"${args}`);
         } else {
-            commands.push(`cd "${scriptDir}" && sh "${scriptName}"${args}`);
+            const interpreter = resolveShellInterpreter(options.project);
+            commands.push(`cd "${scriptDir}" && ${interpreter} "${scriptName}"${args}`);
         }
     } else {
         const makefileDir = path.dirname(options.project);
