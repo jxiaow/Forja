@@ -277,7 +277,7 @@ export function outputCleanResult(result: CleanResult, wantsJson: boolean): void
         if (result.activeTarget) {
             const t = result.activeTarget;
             console.log(T('execLocal'));
-            console.log(`  ${T('target')}: ${t.project}`);
+            console.log(`  ${T('target')}: ${t.buildScript || t.project}`);
             console.log(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         }
         const status = result.ok ? T('cleanSucceeded') : T('cleanFailed');

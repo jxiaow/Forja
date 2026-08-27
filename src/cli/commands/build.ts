@@ -130,7 +130,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
     // Print build header before execution (text mode only)
     if (!wantsJson && !options.plan) {
         console.log(T('execLocal'));
-        console.log(`  ${T('target')}: ${target.project}`);
+        console.log(`  ${T('target')}: ${target.buildScript || target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
         if (target.toolchain.executableName) { console.log(`  ${T('init.executableName')}: ${target.toolchain.executableName}`); }
         console.log();
@@ -367,7 +367,7 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
             const t = result.activeTarget;
             const exeName = t.toolchain.executableName;
             const qt = exeName ? ` · ${T('init.executableName')}: ${exeName}` : '';
-            console.log(`${T('target')}: ${t.project} · ${t.mode}/${t.arch}${qt}`);
+            console.log(`${T('target')}: ${t.buildScript || t.project} · ${t.mode}/${t.arch}${qt}`);
         }
         if (result.durationMs) {
             console.log(`${T('duration')}: ${result.durationMs}ms`);

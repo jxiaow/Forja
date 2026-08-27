@@ -83,7 +83,7 @@ export async function runRun(workspace: string, options: {
     // Print run header before execution (text mode only)
     if (!options.json && !options.plan) {
         console.log(T('execLocal'));
-        console.log(`  ${T('target')}: ${target.project}`);
+        console.log(`  ${T('target')}: ${target.buildScript || target.project}`);
         console.log(`  ${T('setupSummaryModeArch')}: ${target.mode} | ${target.arch}`);
         if (target.toolchain.executableName) { console.log(`  ${T('init.executableName')}: ${target.toolchain.executableName}`); }
         console.log();
@@ -386,7 +386,7 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
             const t = result.activeTarget;
             const exeName = t.toolchain.executableName;
             const qt = exeName ? ` · ${T('init.executableName')}: ${exeName}` : '';
-            console.log(`${T('target')}: ${t.project} · ${t.mode}/${t.arch}${qt}`);
+            console.log(`${T('target')}: ${t.buildScript || t.project} · ${t.mode}/${t.arch}${qt}`);
         }
         if (result.runtime?.pid) {
             console.log(`${T('pidLabel')}: ${result.runtime.pid}`);

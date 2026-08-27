@@ -186,7 +186,7 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
         if (result.activeTarget) {
             const t = result.activeTarget;
             console.log(T('execLocal'));
-            console.log(`  ${T('target')}: ${t.project}`);
+            console.log(`  ${T('target')}: ${t.buildScript || t.project}`);
             console.log(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         }
         if (result.state === 'stopped') {

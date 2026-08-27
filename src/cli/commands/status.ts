@@ -494,7 +494,8 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
     }
     if (result.activeTarget) {
         const t = result.activeTarget;
-        lines.push(`${indent}${T('target')}: ${t.project}`);
+        const targetDisplay = t.buildScript || t.project;
+        lines.push(`${indent}${T('target')}: ${targetDisplay}`);
         lines.push(`${indent}${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         if (t.toolchain.executableName) { lines.push(`${indent}${T('init.executableName')}: ${t.toolchain.executableName}`); }
     }

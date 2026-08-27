@@ -51,7 +51,7 @@ export function formatUseText(result: UseResult, _locale: Locale): string {
         lines.push(T('setupTitle'));
         if (result.activeTarget) {
             const t = result.activeTarget;
-            lines.push(`  ${T('target')}: ${t.project}`);
+            lines.push(`  ${T('target')}: ${t.buildScript || t.project}`);
             if (t.toolchain.qtPath) lines.push(`  ${T('setupSummaryQt')}: ${t.toolchain.qtPath}`);
             if (t.toolchain.vsInstall) lines.push(`  ${T('setupSummaryVs')}: ${t.toolchain.vsInstall}`);
             if (t.toolchain.jomPath) lines.push(`  ${T('init.currentJom')}: ${t.toolchain.jomPath}`);

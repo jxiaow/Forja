@@ -25,6 +25,7 @@ export interface SavedTargetInfo {
     name: string;
     kind: 'qt' | 'cpp';
     project: string;
+    buildScript?: string;
     mode: string;
     arch: string;
     active: boolean;
@@ -78,7 +79,8 @@ export function formatListText(result: ListResult, _locale: Locale): string {
                     const t = saved[i];
                     const marker = t.active ? '* ' : '  ';
                     const displayName = displayNames[i];
-                    lines.push(`  ${marker}${displayName.padEnd(maxLen)}  ${variants[i].padEnd(maxVariantLen)}  —  ${t.project}`);
+                    const projectDisplay = t.buildScript || t.project;
+                    lines.push(`  ${marker}${displayName.padEnd(maxLen)}  ${variants[i].padEnd(maxVariantLen)}  —  ${projectDisplay}`);
                 }
                 if (hasDiscovered) { lines.push(''); }
             }
@@ -266,6 +268,7 @@ function listTargets(workspace: string, savedOnly?: boolean): ListResult {
                 name: profile.name,
                 kind: profile.kind,
                 project: profile.project,
+                buildScript: profile.buildScript,
                 mode: profile.mode,
                 arch: profile.arch,
                 active: id === wsConfig.activeTarget,

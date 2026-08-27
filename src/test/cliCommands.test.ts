@@ -17,6 +17,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { formatListText } from '../cli/commands/list';
 import { formatStatusText, StatusResult } from '../cli/commands/status';
+import { formatUseTargetText } from '../cli/commands/useTarget/report';
 import { setGlobalLocale } from '../cli/commands/types';
 import { runRemoteSetup } from '../cli/commands/remote';
 import { getServerById } from '../core/serverStore';
@@ -550,6 +551,70 @@ test('list targets text distinguishes saved mode and arch variants', () => {
 
     assert.match(text, /app\s+debug\|x64\s+—\s+app\.pro/);
     assert.match(text, /app\s+release\|x64\s+—\s+app\.pro/);
+});
+
+test('list targets text shows buildScript when set', () => {
+    setGlobalLocale('en');
+    const text = formatListText({
+        ok: true,
+        action: 'list',
+        category: 'targets',
+        savedTargets: [
+            { id: 'cpp-app-debug-x64', name: 'app debug x64', kind: 'cpp', project: 'CMakeLists.txt', buildScript: 'build.sh', mode: 'debug', arch: 'x64', active: true },
+        ],
+    }, 'en');
+
+    assert.match(text, /—\s+build\.sh/);
+    assert.doesNotMatch(text, /—\s+CMakeLists\.txt/);
+});
+
+test('status target line shows buildScript when set', () => {
+    setGlobalLocale('en');
+    const base: StatusResult = {
+        ok: true,
+        action: 'status',
+        workspace: '/workspace/app',
+        activeTarget: {
+            id: 'cpp-app-debug-x64',
+            name: 'cpp-app',
+            kind: 'cpp',
+            project: 'app.sln',
+            buildScript: 'build_all.sh',
+            mode: 'debug',
+            arch: 'x64',
+            toolchain: {},
+        },
+        readiness: { target: 'ready', toolchain: 'ready' },
+        diagnostics: [],
+    };
+
+    const text = formatStatusText(base, 'en');
+    assert.match(text, /target:.*build_all\.sh/i);
+    assert.doesNotMatch(text, /target:.*app\.sln/i);
+});
+
+test('formatUseTargetText shows buildScript when set', () => {
+    setGlobalLocale('en');
+    const text = formatUseTargetText({
+        ok: true,
+        action: 'use',
+        useScope: 'target',
+        workspace: '/workspace/app',
+        activeTarget: {
+            id: 'cpp-app-debug-x64',
+            name: 'cpp-app',
+            kind: 'cpp',
+            project: 'CMakeLists.txt',
+            buildScript: 'build.sh',
+            mode: 'debug',
+            arch: 'x64',
+            toolchain: {},
+        },
+        changed: [],
+    });
+
+    assert.match(text, /target:.*build\.sh/i);
+    assert.doesNotMatch(text, /target:.*CMakeLists\.txt/i);
 });
 
 test('list env 显示工具链信息', () => {

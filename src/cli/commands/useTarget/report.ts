@@ -121,7 +121,8 @@ export function formatUseTargetText(result: UseTargetResult): string {
 
     const t = result.activeTarget;
     if (t) {
-        lines.push(`  ${T('target')}: ${t.project}`);
+        const targetDisplay = t.buildScript || t.project;
+        lines.push(`  ${T('target')}: ${targetDisplay}`);
         if (t.toolchain.qtPath) {
             const ver = result.config?.qt?.qtVersion ? ` (${result.config.qt.qtVersion})` : '';
             lines.push(`  ${T('setupSummaryQt')}${ver}: ${t.toolchain.qtPath}`);
