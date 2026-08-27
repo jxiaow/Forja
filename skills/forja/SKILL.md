@@ -78,9 +78,10 @@ forja stop --json
 | 查看目标、就绪状态和下一步 | `forja status --json` |
 | 初始化工作根目录 | `forja init [--workroot <path>] [--answers <file>] --json` |
 | 列出目标或环境 | `forja list targets [--all] --json` / `forja list env --json` |
-| 保存目标和工具链 | `forja use target --project <path-or-id> [--answers <file>] [--rcc-project-path <path>] [--executable-name <name>] --json` |
+| 保存目标和工具链 | `forja use target --project <path-or-id> [--answers <file>] [--rcc-project-path <path>] [--executable-name <name>] [--build-script <path>] --json` |
 | 单独设置 RCC 路径 | `forja use target --rcc-project-path <path> --json` |
 | 设置可执行文件名 | `forja use target --executable-name <name> --json`（构建后重命名，不修改 .pro） |
+| 设置自定义构建脚本 | `forja use target --build-script <path> --json`（.sh/.bat，仅 C++ 目标） |
 | 设置全局并行编译数 | `forja use --jobs <n> --json` |
 | 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] [--jobs <n>] [--build-args <args>] --json` |
 | 后台运行当前 Qt 目标 | `forja run --detach [--plan] --json` |
