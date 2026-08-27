@@ -15,7 +15,7 @@ function createTemplateData(): TemplateData {
         cStandard: 'c11',
         cppStandard: 'c++17',
         scanExcludeDirs: '',
-        target: '',
+        executableName: '',
         qmakeArgs: '',
         isWin: true,
         autoDevShell: '',
@@ -142,7 +142,7 @@ test('config panel routes message handler failures through logger', () => {
 test('config panel project name prefers qmake target override', () => {
     const html = getHtml({
         ...createTemplateData(),
-        target: 'OverrideApp',
+        executableName: 'OverrideApp',
         project: {
             proPath: 'C:\\workspace\\demo\\demo.pro',
             proFile: 'demo.pro',

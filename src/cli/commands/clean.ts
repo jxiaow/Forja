@@ -76,7 +76,7 @@ function buildCleanQtCliOptions(workspace: string, target: ActiveTarget, plan: b
         arch: target.arch,
         qtPath: target.toolchain.qtPath || null,
         vsDevShell: vsDevShell,
-        target: target.toolchain.qmakeTarget || null,
+        target: target.toolchain.executableName || null,
         qmakeArgs: qmakeArgs || null,
         jomPath: target.toolchain.jomPath || null,
         rccProjectPath: rccProjectPath || null,

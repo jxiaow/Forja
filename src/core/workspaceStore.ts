@@ -19,7 +19,6 @@ export interface ToolchainConfig {
     qtVersion?: string;
     vsInstall?: string;
     jomPath?: string;
-    qmakeTarget?: string;
     executableName?: string;
     vsVersion?: string;
 }
@@ -193,7 +192,6 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
                 if (typeof rawToolchain.qtVersion === 'string') toolchain.qtVersion = rawToolchain.qtVersion;
                 if (typeof rawToolchain.vsInstall === 'string') toolchain.vsInstall = rawToolchain.vsInstall;
                 if (typeof rawToolchain.jomPath === 'string') toolchain.jomPath = rawToolchain.jomPath;
-                if (typeof rawToolchain.qmakeTarget === 'string') toolchain.qmakeTarget = rawToolchain.qmakeTarget;
                 if (typeof rawToolchain.vsVersion === 'string') toolchain.vsVersion = rawToolchain.vsVersion;
                 const target: TargetProfile = {
                     id: typeof obj.id === 'string' ? obj.id : id,

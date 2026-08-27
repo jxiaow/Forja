@@ -15,7 +15,7 @@ function createTemplateData(): TemplateData {
         cStandard: 'c11',
         cppStandard: 'c++17',
         scanExcludeDirs: '',
-        target: '',
+        executableName: '',
         isWin: true,
         autoDevShell: '',
         autoQtPath: '',

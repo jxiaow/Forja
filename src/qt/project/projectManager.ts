@@ -4,7 +4,7 @@ import * as path from 'path';
 import { createLogger } from '../../vscode/logger';
 import { decodePinnedProject, encodePinnedProject } from './pinnedProject';
 import { getEffectiveProjectName, getProjectSelectionLabel } from './projectDisplay';
-import { getTarget } from '../services/configService';
+import { getExecutableName } from '../services/configService';
 import { getState, setState } from '../../vscode/qtState';
 import { getQtSetting, setQtSetting } from '../../vscode/settingsStore';
 import { setProjectRoot } from '../../vscode/workspaceResolver';
@@ -202,7 +202,7 @@ export async function selectProject(context: vscode.ExtensionContext, forceSelec
 
     const selected = await vscode.window.showQuickPick(
         allProFiles.map(f => f.label),
-        { placeHolder: `切换项目 · 当前 ${getEffectiveProjectName(getState().currentProject, getTarget(), '未选择项目')}` }
+        { placeHolder: `切换项目 · 当前 ${getEffectiveProjectName(getState().currentProject, getExecutableName(), '未选择项目')}` }
     );
 
     if (selected) {

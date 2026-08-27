@@ -34,7 +34,6 @@ export interface DetectContext {
         jomPath: string;
         mode: string;
         arch: string;
-        target: string;
     };
     existingCpp: {
         pinnedProject: string | null;
@@ -55,7 +54,6 @@ export interface ResolveOptions {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
-    qmakeTarget?: string;
     executableName?: string;
     buildScript?: string;
     mode?: string;
@@ -75,7 +73,6 @@ export interface ResolvedConfig {
     vsInstall?: string;
     vsVersion?: string;
     jomPath?: string;
-    qmakeTarget?: string;
     executableName?: string;
     buildScript?: string;
 }
@@ -88,7 +85,7 @@ export interface UseTargetResult extends ForjaJsonResult {
     status?: 'needs-input';
     questions?: Question[];
     config?: {
-        qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qtVersion?: string; vsVersion?: string; qmakeTarget?: string; executableName?: string };
+        qt?: { configured: boolean; project?: string; mode?: string; arch?: string; qtPath?: string; vsInstall?: string; qtVersion?: string; vsVersion?: string; executableName?: string };
         cpp?: { configured: boolean; project?: string; mode?: string; arch?: string; vsInstall?: string; buildScript?: string };
     };
     changed?: string[];

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { detectEnv } from '../../qt/env/envDetector';
 import { generateCppProperties, generateCppPropertiesFromSln, updateCppPropertiesStandard } from '../../qt/build/configGenerator';
 import { getState, setState } from '../../vscode/qtState';
-import { updateConfig, getTarget, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
+import { updateConfig, getExecutableName, getWorkspaceRoot, getQtPath, getVsDevShellPath } from '../../qt/services/configService';
 import { createLogger } from '../../vscode/logger';
 import { getEffectiveProjectName } from '../../qt/project/projectDisplay';
 import { updateProjectSyncField, addServer, removeServer, updateServer, readServers, updateRemoteSelectedServer, updateRemotePath } from '../../core/serverStore';
@@ -163,9 +163,9 @@ export async function handleMessage(
             await updateConfig('scanExcludeDirs', msg.dirs || []);
             break;
         }
-        case 'saveQmakeTarget': {
-            logger.info(`保存 QMake TARGET: "${msg.value}"`);
-            await updateConfig('target', String(msg.value || ''));
+        case 'saveExecutableName': {
+            logger.info(`保存可执行文件名: "${msg.value}"`);
+            await updateConfig('executableName', String(msg.value || ''));
             break;
         }
         case 'saveQmakeArgs': {
@@ -247,7 +247,7 @@ export async function handleMessage(
                 // Qt 项目：从 .pro / Makefile 生成
                 const project = getState().currentProject;
                 if (project) {
-                    logger.info(`项目: ${getEffectiveProjectName(project, getTarget(), project.proFile)}`);
+                    logger.info(`项目: ${getEffectiveProjectName(project, getExecutableName(), project.proFile)}`);
                     generateCppProperties(project);
                 } else {
                     logger.warn('无项目，无法生成 IntelliSense');

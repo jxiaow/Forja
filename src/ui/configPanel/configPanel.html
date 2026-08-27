@@ -788,7 +788,7 @@ function saveTarget() {
   if (savedValue === lastSavedTarget) { return; }
   lastSavedTarget = savedValue;
   input.dataset.savedTarget = savedValue;
-  vscode.postMessage({ command: 'saveQmakeTarget', value: savedValue });
+  vscode.postMessage({ command: 'saveExecutableName', value: savedValue });
 }
 function saveQmakeArgs() {
   const val = document.getElementById('qmakeArgs').value.trim();

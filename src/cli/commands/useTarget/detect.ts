@@ -37,7 +37,6 @@ export async function detectContext(workspace: string): Promise<DetectContext> {
             jomPath: profile?.toolchain.jomPath || '',
             mode: profile?.mode || '',
             arch: profile?.arch || '',
-            target: profile?.toolchain.qmakeTarget || '',
         },
         existingCpp: {
             pinnedProject: profile && profile.kind === 'cpp' ? profile.project : null,

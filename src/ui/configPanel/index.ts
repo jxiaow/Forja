@@ -4,7 +4,7 @@ import { getHtml, TemplateData } from './template';
 import { handleMessage } from './messageHandler';
 import { detectEnv } from '../../qt/env/envDetector';
 import { getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-         getScanExcludeDirs, getPinnedProject, getTarget, getQmakeArgs, getManualProPath, getDesignerPath, getQtSourcePath,
+         getScanExcludeDirs, getPinnedProject, getExecutableName, getQmakeArgs, getManualProPath, getDesignerPath, getQtSourcePath,
          getFileSyncPromptEnabled, getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot } from '../../qt/services/configService';
 import { getQtSetting, getCppSetting } from '../../vscode/settingsStore';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
@@ -113,7 +113,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
         const state = getState();
         const env = state.envInfo;
         const project = state.currentProject;
-        logger.info(`项目: ${getEffectiveProjectName(project, getTarget(), '无')}`);
+        logger.info(`项目: ${getEffectiveProjectName(project, getExecutableName(), '无')}`);
         const data: TemplateData = {
             env,
             project,
@@ -124,7 +124,7 @@ export class ConfigPanel implements vscode.WebviewViewProvider {
             cStandard: getCStandard(),
             cppStandard: getCppStandard(),
             scanExcludeDirs: getScanExcludeDirs().join(', '),
-            target: getTarget(),
+            executableName: getExecutableName(),
             qmakeArgs: getQmakeArgs(),
             isWin: process.platform === 'win32',
             autoDevShell: env?.vs?.devShellPath || '',

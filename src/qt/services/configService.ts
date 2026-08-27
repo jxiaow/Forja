@@ -53,10 +53,6 @@ export function getScanExcludeDirs(): string[] {
     return getQtSetting('scanExcludeDirs');
 }
 
-export function getTarget(): string {
-    return getQtSetting('target');
-}
-
 export function getExecutableName(): string {
     return getQtSetting('executableName');
 }
@@ -126,7 +122,7 @@ export function getBuildConfig(): BuildConfig {
             qtPath: getQtPath(),
             vsDevShell: getVsDevShellPath(),
             jomPath: getJomPath(),
-            target: getTarget(),
+            target: getExecutableName(),
             qmakeArgs: getQmakeArgs(),
             executableName: getExecutableName()
         }

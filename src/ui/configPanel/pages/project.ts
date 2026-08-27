@@ -34,8 +34,8 @@ export function buildProjectPage(data: TemplateData): string {
 
 function buildQtSection(data: TemplateData): string {
     const pn = getEffectiveProjectName(
-        data.project, data.target, data.pinnedProject || '未选择');
-    const et = data.target || data.project?.target || '';
+        data.project, data.executableName, data.pinnedProject || '未选择');
+    const et = data.executableName || data.project?.target || '';
     const open = data.qtActive ? ' open' : '';
     const summary = data.qtActive ? 'Qt 项目' : 'Qt 项目 <span class="section-badge">未检测到</span>';
 
@@ -72,7 +72,7 @@ function buildQtSection(data: TemplateData): string {
     h += '<div class="cid">覆盖 .pro 中的 TARGET，留空使用默认值</div></div>';
     h += `<div class="cic"><input id="target" value="${esc(et)}"`;
     h += ' placeholder="留空使用默认"';
-    h += " onblur=\"vscode.postMessage({command:'saveQmakeTarget',";
+    h += " onblur=\"vscode.postMessage({command:'saveExecutableName',";
     h += "value:this.value.trim()})\"/></div></div>";
     h += '<div class="ci"><div class="cii"><div class="cil">QMake 参数</div>';
     h += '<div class="cid">追加到 qmake 命令末尾，留空不追加</div></div>';

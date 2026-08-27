@@ -130,7 +130,7 @@ forja status                # 查看配置就绪状态和下一步操作
 | `arch` | 目标架构：x86 / x64 |
 | `pinnedProject` | 当前固定的项目文件 |
 | `designerPath` | Qt Designer 路径 |
-| `qmakeTarget` | 覆盖 QMake TARGET |
+| `executableName` | 构建后重命名可执行文件 |
 
 ## 环境要求
 

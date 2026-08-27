@@ -15,7 +15,7 @@ export interface TemplateData {
     cStandard: string;
     cppStandard: string;
     scanExcludeDirs: string;
-    target: string;
+    executableName: string;
     qmakeArgs?: string;
     isWin: boolean;
     autoDevShell: string;
@@ -75,11 +75,11 @@ function _escapeHtml(value: string): string {
 
 export function getHtml(data: TemplateData): string {
     const { env, project, vsDevShellPath, pinnedProject, cStandard, cppStandard,
-            scanExcludeDirs, target, isWin, autoDevShell, autoQtPath, qtPath } = data;
+            scanExcludeDirs, executableName, isWin, autoDevShell, autoQtPath, qtPath } = data;
 
-    const projectName = getEffectiveProjectName(project, target, pinnedProject || '未选择');
+    const projectName = getEffectiveProjectName(project, executableName, pinnedProject || '未选择');
     const defaultTarget = project?.target || '';
-    const effectiveTarget = target || defaultTarget;
+    const effectiveTarget = executableName || defaultTarget;
     const effectiveDevShell = vsDevShellPath || autoDevShell;
     const devShellSource = vsDevShellPath ? '手动配置' : (autoDevShell ? '自动检测' : '未配置');
     const effectiveQtPath = qtPath || autoQtPath;
@@ -133,7 +133,7 @@ export function getHtml(data: TemplateData): string {
         scanExcludeDirs: jsLiteral(scanExcludeDirs),
         effectiveTarget: _escapeHtml(effectiveTarget),
         defaultTarget: _escapeHtml(defaultTarget),
-        savedTarget: _escapeHtml(target),
+        savedTarget: _escapeHtml(executableName),
         qmakeArgs: _escapeHtml(data.qmakeArgs || ''),
         dotVsBlockClass: effectiveDevShell ? 'dot-ok' : 'dot-warn',
         vsBadgeClass: effectiveDevShell ? 'badge-ok' : 'badge-warn',

@@ -162,7 +162,7 @@ export function runStatus(workspace: string): StatusResult {
                     arch: activeTarget.arch,
                     qtPath: activeTarget.toolchain.qtPath || '',
                     proFile: activeTarget.project,
-                    target: activeTarget.toolchain.qmakeTarget || '',
+                    target: activeTarget.toolchain.executableName || '',
                     qmakeArgs: wsConfig?.qtModulePrefs.qmakeArgs,
                 });
                 if (mfValidation.exists && !mfValidation.matches && mfValidation.mismatch) {
@@ -496,7 +496,6 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         const t = result.activeTarget;
         lines.push(`${indent}${T('target')}: ${t.project}`);
         lines.push(`${indent}${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
-        if (t.toolchain.qmakeTarget) { lines.push(`${indent}${T('init.qmakeTarget')}: ${t.toolchain.qmakeTarget}`); }
         if (t.toolchain.executableName) { lines.push(`${indent}${T('init.executableName')}: ${t.toolchain.executableName}`); }
     }
 

@@ -7,7 +7,7 @@
 import * as vscode from 'vscode';
 import { getState, setState, onStateChange, BuildMode, Arch } from '../vscode/qtState';
 import { onSettingsChange } from '../vscode/settingsStore';
-import { getTarget, getCustomCommands, getWorkspaceRoot } from '../qt/services/configService';
+import { getExecutableName, getCustomCommands, getWorkspaceRoot } from '../qt/services/configService';
 import { getEffectiveProjectName } from '../qt/project/projectDisplay';
 import { getModeDisplayLabel } from './statusBarLabels';
 
@@ -115,7 +115,7 @@ function _updateDisplay(): void {
 
 function _updateQtDisplay(): void {
     const state = getState();
-    const projectName = getEffectiveProjectName(state.currentProject, getTarget(), '未选择项目');
+    const projectName = getEffectiveProjectName(state.currentProject, getExecutableName(), '未选择项目');
     const modeLabel = getModeDisplayLabel(state.mode, state.arch, process.platform === 'win32');
     _projectModeItem.text = `$(tools) [Qt] ${projectName} · ${modeLabel}`;
     _projectModeItem.tooltip = 'Forja Qt 模式 — 点击切换模块/模式/项目';
@@ -266,7 +266,7 @@ export async function showActions(): Promise<void> {
     ];
 
     const currentName = _activeModule === 'qt'
-        ? getEffectiveProjectName(state.currentProject, getTarget(), '未选择项目')
+        ? getEffectiveProjectName(state.currentProject, getExecutableName(), '未选择项目')
         : (_cppProjectName || 'No Project');
     const currentMode = _activeModule === 'qt'
         ? getModeDisplayLabel(state.mode, state.arch, isWin)

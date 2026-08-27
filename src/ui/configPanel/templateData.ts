@@ -7,7 +7,7 @@ import { getState } from '../../vscode/qtState';
 import { TemplateData } from './template';
 import {
     getVsDevShellPath, getQtPath, getCStandard, getCppStandard,
-    getScanExcludeDirs, getPinnedProject, getTarget, getQmakeArgs, getManualProPath,
+    getScanExcludeDirs, getPinnedProject, getExecutableName, getQmakeArgs, getManualProPath,
     getDesignerPath, getQtSourcePath, getFileSyncPromptEnabled,
     getQmakeReminderEnabled, getRccProjectPath, getWorkspaceRoot
 } from '../../qt/services/configService';
@@ -59,7 +59,7 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         cStandard: getCStandard(),
         cppStandard: getCppStandard(),
         scanExcludeDirs: getScanExcludeDirs().join(', '),
-        target: getTarget(),
+        executableName: getExecutableName(),
         qmakeArgs: getQmakeArgs(),
         isWin: process.platform === 'win32',
         autoDevShell: env?.vs?.devShellPath || '',

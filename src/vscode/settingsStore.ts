@@ -70,8 +70,7 @@ function _buildQtSettings(config: WorkspaceConfig, target: TargetProfile | null)
         qtVersion: qtTarget?.toolchain.qtVersion ?? d.qtVersion,
         jomPath: qtTarget?.toolchain.jomPath ?? d.jomPath,
         pinnedProject,
-        target: qtTarget?.toolchain.qmakeTarget ?? d.target,
-        executableName: qtTarget?.toolchain.executableName ?? qtTarget?.toolchain.qmakeTarget ?? d.executableName,
+        executableName: qtTarget?.toolchain.executableName ?? d.executableName,
         qmakeArgs: prefs.qmakeArgs,
         cStandard: prefs.cStandard,
         cppStandard: prefs.cppStandard,
@@ -184,9 +183,6 @@ function _saveQtToStore(key: QtKey, value: QtSettings[QtKey]): void {
             break;
         case 'jomPath':
             target.toolchain.jomPath = value as string;
-            break;
-        case 'target':
-            target.toolchain.qmakeTarget = value as string;
             break;
         case 'pinnedProject': {
             const pp = value as QtSettings['pinnedProject'];

@@ -49,7 +49,6 @@ export interface UseTargetEntryOptions {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
-    qmakeTarget?: string;
     executableName?: string;
     buildScript?: string;
     mode?: string;
@@ -83,7 +82,7 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
     }
 
     if (options.project && !options.answers && !options.mode && !options.arch
-        && !options.qtPath && !options.vsInstall && !options.jomPath && !options.qmakeTarget
+        && !options.qtPath && !options.vsInstall && !options.jomPath
         && options.executableName === undefined && options.buildScript === undefined) {
         const workroot = resolveWorkroot(workspace);
         if (workroot) {
@@ -170,7 +169,6 @@ export async function runUseTarget(workspace: string, options: UseTargetEntryOpt
         qtPath: options.qtPath,
         vsInstall: options.vsInstall,
         jomPath: options.jomPath,
-        qmakeTarget: options.qmakeTarget,
         executableName: options.executableName,
         buildScript: options.buildScript,
         mode: options.mode,
@@ -317,7 +315,6 @@ export async function runUpdateToolchain(workspace: string, args: {
     qtPath?: string;
     vsInstall?: string;
     jomPath?: string;
-    qmakeTarget?: string;
     executableName?: string;
 }): Promise<UseTargetResult> {
     const { getActiveTarget, setActiveTarget } = await import('../activeTarget');
@@ -360,18 +357,9 @@ export async function runUpdateToolchain(workspace: string, args: {
         updated.toolchain.jomPath = args.jomPath;
         changed.push('jomPath');
     }
-    if (args.qmakeTarget && args.qmakeTarget !== currentTarget.toolchain.qmakeTarget) {
-        updated.toolchain.qmakeTarget = args.qmakeTarget;
-        changed.push('qmakeTarget');
-    }
     if (args.executableName !== undefined && args.executableName !== currentTarget.toolchain.executableName) {
         updated.toolchain.executableName = args.executableName || undefined;
         changed.push('executableName');
-        // executableName 取代 qmakeTarget，清除旧字段
-        if (updated.toolchain.qmakeTarget) {
-            updated.toolchain.qmakeTarget = undefined;
-            changed.push('qmakeTarget');
-        }
     }
 
     if (changed.length > 0) {

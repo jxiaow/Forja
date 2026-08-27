@@ -23,7 +23,6 @@ export interface QtSettings {
     qtVersion: string;
     jomPath: string;
     pinnedProject: { root: string; relative: string } | null;
-    target: string;
     executableName: string;
     qmakeArgs: string;
     cStandard: string;
@@ -110,7 +109,6 @@ export const DEFAULT_QT: Readonly<QtSettings> = {
     qtVersion: '',
     jomPath: '',
     pinnedProject: null,
-    target: '',
     executableName: '',
     qmakeArgs: '',
     cStandard: 'c11',

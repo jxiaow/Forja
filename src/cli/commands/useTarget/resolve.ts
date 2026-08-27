@@ -8,7 +8,6 @@ import * as os from 'os';
 import * as fs from 'fs';
 import { T, Question } from '../types';
 import { chooseRequired, prompt, confirm } from '../prompt';
-import { parseProFile } from '../../../qt/shared/projectScanner';
 import type { DetectContext, ResolveOptions, ResolvedConfig } from './types';
 
 export async function resolveAll(ctx: DetectContext, options: ResolveOptions): Promise<{
@@ -44,12 +43,6 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
     const buildScript = options.buildScript !== undefined
         ? options.buildScript || undefined
         : (reuseActiveTarget ? ctx.existingTarget?.buildScript : undefined);
-
-    // ── Resolve qmake TARGET (only for .pro files) ──
-    let qmakeTarget: string | undefined;
-    if (kind === 'qt' && candidate.project.endsWith('.pro')) {
-        qmakeTarget = await resolveQmakeTarget(ctx, candidate.project, options, reuseActiveTarget);
-    }
 
     // ── Resolve executable name (post-build rename) ──
     let executableName: string | undefined;
@@ -109,7 +102,6 @@ export async function resolveAll(ctx: DetectContext, options: ResolveOptions): P
             qtVersion,
             vsInstall: vsInstall.value,
             jomPath: jomPath.value,
-            qmakeTarget,
             executableName,
             buildScript,
         },
@@ -181,27 +173,6 @@ async function resolveTarget(ctx: DetectContext, options: ResolveOptions, needTa
     }
 
     return { value: undefined };
-}
-
-async function resolveQmakeTarget(ctx: DetectContext, proProject: string, options: ResolveOptions, reuseActiveTarget: boolean): Promise<string | undefined> {
-    if (options.qmakeTarget) return options.qmakeTarget;
-    if (reuseActiveTarget && ctx.existingQt.target) return ctx.existingQt.target;
-
-    if (options.interactive) {
-        const proPath = path.join(ctx.workspace, proProject);
-        const proInfo = fs.existsSync(proPath) ? parseProFile(proPath) : null;
-        const defaultTarget = proInfo?.target || '';
-        const answer = await prompt(`${T('init.qmakeTarget')} (${T('init.qmakeTargetHint')}: ${defaultTarget})`);
-        if (answer) {
-            console.log(`  ✓ ${answer}`);
-            return answer;
-        }
-        console.log(`  – ${T('init.skipSelection')}`);
-        return undefined;
-    }
-
-    if (options.answers?.qmakeTarget) return options.answers.qmakeTarget;
-    return undefined;
 }
 
 async function resolveExecutableName(ctx: DetectContext, options: ResolveOptions, reuseActiveTarget: boolean): Promise<string | undefined> {
