@@ -182,7 +182,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
         const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false, suppressedWarnings });
         const durationMs = Date.now() - started;
 
-        const ok = executed.exitCode === 0;
+        const ok = executed.ok;
         const changed = ok ? [path.relative(workspace, buildDir) || '.'] : undefined;
         return {
             ok,

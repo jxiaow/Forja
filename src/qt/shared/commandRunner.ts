@@ -362,8 +362,10 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         fs.writeFileSync(buildLogFilePath, [`$ ${buildLine}`, '', buildResult.stdout, buildResult.stderr].join('\n'), 'utf8');
         const combinedOutput = buildResult.stdout + '\n' + buildResult.stderr;
         const ws = summarizeWarnings(combinedOutput);
+        const buildErrors = extractErrors(combinedOutput);
+        const buildFailed = buildResult.exitCode !== 0 || buildErrors.length > 0;
 
-        if (buildResult.exitCode !== 0) {
+        if (buildFailed) {
             const durationMs = Date.now() - started;
             return {
                 ...result,
@@ -372,7 +374,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 durationMs,
                 stdout: buildResult.stdout,
                 stderr: buildResult.stderr,
-                errors: extractErrors(combinedOutput),
+                errors: buildErrors,
                 warningSummary: ws.total > 0 ? ws : undefined,
                 logFile: buildLogFilePath,
                 buildLogFile: buildLogFilePath,
@@ -489,11 +491,13 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             : await execute(buildExecLine, result.workspace, suppressed, buildPathEnv);
         const buildOutput = buildResult.stdout + '\n' + buildResult.stderr;
         const ws = summarizeWarnings(buildOutput);
+        const buildErrors = extractErrors(buildOutput);
+        const buildFailed = buildResult.exitCode !== 0 || buildErrors.length > 0;
 
         ensureLocalStateDir(result.workspace);
         const filePath = logFileFor(result.workspace, result.action);
 
-        if (buildResult.exitCode !== 0) {
+        if (buildFailed) {
             const durationMs = Date.now() - started;
             fs.writeFileSync(filePath, [`$ ${buildLine}`, '', buildResult.stdout, buildResult.stderr].join('\n'), 'utf8');
             return {
@@ -503,7 +507,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 durationMs,
                 stdout: buildResult.stdout,
                 stderr: buildResult.stderr,
-                errors: extractErrors(buildOutput),
+                errors: buildErrors,
                 warningSummary: ws.total > 0 ? ws : undefined,
                 logFile: filePath,
                 commands: commandParts,
@@ -675,32 +679,32 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         executed.stderr
     ].join('\n'), 'utf8');
 
-    const errors = executed.exitCode !== 0
-        ? extractErrors(executed.stdout + '\n' + executed.stderr)
-        : [];
+    const combinedOutput = executed.stdout + '\n' + executed.stderr;
+    const errors = extractErrors(combinedOutput);
+    const buildOk = executed.exitCode === 0 && errors.length === 0;
 
-    const warningSummary = executed.exitCode !== 0
-        ? summarizeWarnings(executed.stdout + '\n' + executed.stderr)
-        : undefined;
+    const warningSummary = summarizeWarnings(combinedOutput);
 
     return {
         ...result,
-        ok: executed.exitCode === 0,
+        ok: buildOk,
         exitCode: executed.exitCode,
         durationMs,
         stdout: executed.stdout,
         stderr: executed.stderr,
         errors,
-        warningSummary: warningSummary && warningSummary.total > 0 ? warningSummary : undefined,
+        warningSummary: warningSummary.total > 0 ? warningSummary : undefined,
         logFile: filePath,
         commands: commandParts,
-        diagnostics: executed.exitCode === 0
+        diagnostics: buildOk
             ? result.diagnostics
             : [
                 ...result.diagnostics,
                 {
                     level: 'error',
-                    message: '命令执行失败'
+                    message: executed.exitCode !== 0
+                        ? '命令执行失败'
+                        : '命令执行成功但输出中包含编译错误'
                 }
             ]
     };

@@ -211,7 +211,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             const executed = await runCliResult(plan, { streaming: !wantsJson, detach: false, suppressedWarnings });
             const durationMs = Date.now() - started;
 
-            const ok = executed.exitCode === 0;
+            const ok = executed.ok;
             return {
                 ok,
                 action: 'build',

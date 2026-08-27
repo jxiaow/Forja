@@ -262,3 +262,56 @@ test('runCliResult detach run returns target process pid', async (t) => {
         try { process.kill(result.pid, 'SIGTERM'); } catch { /* already exited */ }
     }
 });
+
+test('runCliResult detects compilation errors even when exit code is 0', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-runner-'));
+    _tmpDirs.push(workspace);
+    const result = await runCliResult({
+        ok: true,
+        action: 'build',
+        mode: 'execute',
+        workspace,
+        project: path.join(workspace, 'build.sh'),
+        commands: ['node -e "console.error(\'src/main.cpp:42:10: fatal error: missing.h: No such file or directory\'); process.exit(0)"'],
+        shellCommand: '',
+        exitCode: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+        errors: [],
+        logFile: null,
+        diagnostics: [],
+        resolved: null
+    });
+
+    assert.equal(result.ok, false, 'build should fail when output contains error patterns');
+    assert.equal(result.exitCode, 0, 'exit code should remain 0 (actual process exit code)');
+    assert.equal(result.errors!.length > 0, true, 'errors should be extracted from output');
+    assert.match(result.errors![0], /fatal error/);
+});
+
+test('runCliResult reports success when exit code is 0 and no error patterns', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-runner-'));
+    _tmpDirs.push(workspace);
+    const result = await runCliResult({
+        ok: true,
+        action: 'build',
+        mode: 'execute',
+        workspace,
+        project: path.join(workspace, 'build.sh'),
+        commands: ['node -e "console.log(\'build succeeded\'); process.exit(0)"'],
+        shellCommand: '',
+        exitCode: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+        errors: [],
+        logFile: null,
+        diagnostics: [],
+        resolved: null
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.errors === undefined || result.errors.length === 0, true);
+});
