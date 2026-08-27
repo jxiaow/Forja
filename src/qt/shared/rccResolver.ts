@@ -15,8 +15,20 @@ export interface RccTarget {
  */
 export function resolveRccProjectPath(configuredPath: string, workspace: string): string | null {
     // 配置优先
-    if (configuredPath && fs.existsSync(configuredPath)) {
-        return configuredPath;
+    if (configuredPath) {
+        // 绝对路径直接检查
+        if (path.isAbsolute(configuredPath)) {
+            if (fs.existsSync(configuredPath)) { return configuredPath; }
+        } else {
+            // 相对路径：先尝试相对于 workspace 解析
+            const resolvedFromWorkspace = path.join(workspace, configuredPath);
+            if (fs.existsSync(resolvedFromWorkspace)) { return resolvedFromWorkspace; }
+            // 再尝试相对于 workspace 的父目录（workroot）解析
+            const resolvedFromParent = path.join(path.dirname(workspace), configuredPath);
+            if (fs.existsSync(resolvedFromParent)) { return resolvedFromParent; }
+            // 最后尝试原始路径（兼容旧行为）
+            if (fs.existsSync(configuredPath)) { return configuredPath; }
+        }
     }
     // 自动扫描
     const candidate = path.join(workspace, 'XYRcc');
