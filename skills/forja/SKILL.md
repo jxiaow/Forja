@@ -83,8 +83,10 @@ forja stop --json
 | 设置可执行文件名 | `forja use target --executable-name <name> --json`（构建后重命名，不修改 .pro） |
 | 设置自定义构建脚本 | `forja use target --build-script <path> --json`（.sh/.bat，仅 C++ 目标） |
 | 删除已保存目标 | `forja use target remove [<id>] [--force] --json`（交互模式选择目标并确认） |
+| 管理 qmake 参数 | `forja use target qmake-args [--add <args> \| --rm <args>] --json`（持久化，自动去重） |
+| 管理抑制警告 | `forja use target suppress-warnings [--add <codes> \| --rm <codes>] --json` |
 | 设置全局并行编译数 | `forja use --jobs <n> --json` |
-| 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] [--jobs <n>] [--build-args <args>] --json` |
+| 构建当前目标 | `forja build [fresh\|qmake\|rcc] [--plan] [--jobs <n>] --json` |
 | 后台运行当前 Qt 目标 | `forja run --detach [--plan] --json` |
 | 调试运行当前 Qt 目标 | `forja run --debug --json` |
 | 运行自定义命令 | `forja run custom <name> --json` |
