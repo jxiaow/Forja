@@ -190,21 +190,6 @@ test('script-only workspace reaches the interactive manual path picker', async (
     }
 });
 
-test('CLI accepts long-option text as the build-args value', () => {
-    const workspace = createWorkspace('long-build-args');
-    fs.writeFileSync(path.join(workspace, 'build.sh'), '#!/bin/sh\n');
-
-    const cli = runCli(workspace, [
-        'build', '--plan', '--project', 'build.sh', '--build-args', '--target release', '--json',
-    ]);
-    const result = JSON.parse(cli.stdout);
-    const command = result.plan?.commands?.join(' ') || '';
-
-    assert.equal(cli.status, 0, cli.stderr);
-    assert.equal(result.ok, true);
-    assert.match(command, /--target release/);
-});
-
 test('planner matches script extensions case-insensitively', () => {
     const commands = buildCommand({
         action: 'build',

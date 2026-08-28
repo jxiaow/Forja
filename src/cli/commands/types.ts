@@ -487,7 +487,10 @@ Target options:
   --build-script <path>   Set custom build script (.sh/.bat, C++ targets only)
   suppress-warnings [codes]     Manage suppressed warnings (no args = show)
     --add <codes>               Add to list
-    --rm <codes>                Remove from list`,
+    --rm <codes>                Remove from list
+  qmake-args [args]             Manage persistent qmake arguments (no args = show)
+    --add <args>                Add args (auto-dedup)
+    --rm <args>                 Remove args`,
         zh: `用法: forja use target [选项] [--json]
        forja use --jobs <N>          设置全局并行编译数（持久化）
 
@@ -503,7 +506,10 @@ Target 选项:
   --build-script <路径>   设置自定义构建脚本（.sh/.bat，仅 C++ 目标）
   suppress-warnings [代码]      管理被过滤的构建警告（无参数=查看）
     --add <代码>                追加到列表
-    --rm <代码>                 从列表删除`,
+    --rm <代码>                 从列表删除
+  qmake-args [参数]             管理持久化 qmake 参数（无参数=查看）
+    --add <参数>                添加参数（自动去重）
+    --rm <参数>                 删除参数`,
     },
     'help.remote': {
         en: `Usage: forja remote [action] [options] [--json]
@@ -532,7 +538,6 @@ Options:
   --plan                  Dry run, show commands without executing
   --project <path>        Build a specific project file (.pro/.sln/Makefile/CMakeLists.txt)
   --jobs <N>              Parallel build jobs (e.g. -jN / jom /m:N; omit to use saved default)
-  --build-args <args>     Extra arguments appended to the build command
   --json                  Output as JSON
   --lang <locale>         Language: zh or en
   --workspace <path>      Workspace directory (default: current directory)`,
@@ -546,7 +551,6 @@ Options:
   --plan                  预演模式，只显示命令不执行
   --project <路径>        构建指定项目文件（.pro/.sln/Makefile/CMakeLists.txt）
   --jobs <N>              并行编译数（如 -jN / jom /m:N；不指定则使用已保存的默认值）
-  --build-args <参数>     追加到构建命令的额外参数
   --json                  JSON 格式输出
   --lang <locale>         语言: zh 或 en
   --workspace <路径>      工作区目录（默认当前目录）`,
@@ -751,6 +755,9 @@ Options:
     'use.toolchainNotConfigured':        { en: 'Toolchain not configured for this target', zh: '此目标未配置工具链' },
     'use.toolchainIncomplete':           { en: 'Toolchain is incomplete — some required paths are missing', zh: '工具链不完整——部分必需路径缺失' },
     'use.suppressWarningsRequiresFlag':  { en: 'Specify --add or --rm to modify the suppress-warnings list', zh: '请指定 --add 或 --rm 来修改抑制警告列表' },
+    'use.qmakeArgsRequiresFlag':         { en: 'Specify --add or --rm to modify qmake args', zh: '请指定 --add 或 --rm 来修改 qmake 参数' },
+    'use.qmakeArgsConflictFlags':        { en: 'Cannot use --add and --rm together',          zh: '不能同时使用 --add 和 --rm' },
+    'use.qmakeArgsMissingValues':        { en: 'No values provided for --add/--rm',           zh: '未提供 --add/--rm 的参数值' },
     'use.serverNotFound':                { en: 'Server not found',                  zh: '服务器未找到' },
     'use.ambiguousServerName':           { en: 'Ambiguous server name',              zh: '服务器名称不明确' },
     'use.useServerIdInstead':            { en: 'Use server ID instead',              zh: '请改用服务器 ID' },
@@ -893,6 +900,11 @@ Options:
     // Suppress warnings
     'use.suppressedWarningsList':        { en: 'Suppressed warnings: {0}',             zh: '已抑制警告：{0}' },
     'use.noSuppressedWarnings':          { en: 'No suppressed warnings',               zh: '无已抑制警告' },
+
+    // Qmake args
+    'use.qmakeArgsLabel':                { en: 'Qmake args',                         zh: 'Qmake 参数' },
+    'use.qmakeArgsList':                 { en: 'Qmake args: {0}',                      zh: 'Qmake 参数：{0}' },
+    'use.noQmakeArgs':                   { en: 'No qmake args configured',              zh: '未配置 qmake 参数' },
 };
 
 // Global locale state

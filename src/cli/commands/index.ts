@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import { ForjaJsonResult } from './types';
 import { runStatus, formatStatusText } from './status';
 import { runList, ListCategory, EnvSubCategory, formatListText } from './list';
-import { runUseTarget, runUseShow, runSuppressWarnings, runRemoveTarget, formatUseText } from './use';
+import { runUseTarget, runUseShow, runSuppressWarnings, runQmakeArgs, runRemoveTarget, formatUseText } from './use';
 import { runRemoteShow, runRemoteSetup, formatRemoteText, RemoteResult } from './remote';
 import { runServerAdd, runServerUpdate, runServerRemove, formatServerText } from './server';
 import { runBuild, BuildAction, outputBuildResult } from './build';
@@ -534,6 +534,21 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 outputResult(result, wantsJson, (r) => formatUseText(r, locale));
                 return;
             }
+            if (argv[2] === 'qmake-args') {
+                const qaKnown = new Set(['--add', '--rm']);
+                const qaUnknown = findUnknownFlags(argv.slice(2), qaKnown, new Set<string>());
+                if (qaUnknown.length > 0) {
+                    outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(qaUnknown, qaKnown) }], nextAction: 'forja use target qmake-args' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                const add = hasFlag(argv, '--add');
+                const rm = hasFlag(argv, '--rm');
+                const qaArgs = argv.slice(3).filter(a => !a.startsWith('--'));
+                const result = runQmakeArgs(workroot, qaArgs, add, rm);
+                outputResult(result, wantsJson, (r) => formatUseText(r, locale));
+                return;
+            }
             if (argv[2] === 'remove') {
                 const rmKnown = new Set(['--force']);
                 const rmUnknown = findUnknownFlags(argv.slice(2), rmKnown, new Set<string>());
@@ -963,12 +978,11 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
 async function handleBuild(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
     const buildUnknown = findUnknownFlags(
         argv,
-        new Set(['--plan', '--project', '--build-args', '--jobs']),
-        new Set(['--project', '--build-args', '--jobs']),
-        { allowOptionLikeValues: new Set(['--build-args']) },
+        new Set(['--plan', '--project', '--jobs']),
+        new Set(['--project', '--jobs']),
     );
     if (buildUnknown.length > 0) {
-        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: unknownFlagsMessage(buildUnknown, new Set(['--plan','--project','--build-args','--jobs'])) }], nextAction: 'forja build' }, wantsJson);
+        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: unknownFlagsMessage(buildUnknown, new Set(['--plan','--project','--jobs'])) }], nextAction: 'forja build' }, wantsJson);
         process.exitCode = 1;
         return;
     }
@@ -1018,7 +1032,6 @@ async function handleBuild(argv: string[], workroot: string, wantsJson: boolean,
         plan: hasFlag(argv, '--plan'),
         json: wantsJson,
         project: extractFlag(argv, '--project'),
-        buildArgs: extractFlag(argv, '--build-args', { allowOptionLikeValue: true }),
         jobs,
     });
     outputBuildResult(result, wantsJson);

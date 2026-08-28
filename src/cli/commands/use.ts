@@ -58,6 +58,7 @@ export function formatUseText(result: UseResult, _locale: Locale): string {
             lines.push(`  ${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         }
         if (result.rccProjectPath) { lines.push(`  RCC: ${result.rccProjectPath}`); }
+        if (result.qmakeArgs) { lines.push(`  ${T('use.qmakeArgsLabel')}: ${result.qmakeArgs}`); }
         if (result.jobs !== undefined) { lines.push(`  ${T('use.globalJobs')}: ${result.jobs}`); }
         if (result.nextAction) { lines.push(T('next')); lines.push(`  ${result.nextAction}`); }
         return lines.join('\n');
@@ -78,6 +79,7 @@ export interface UseResult extends ForjaJsonResult {
     config?: ConfigSummary;
     changed?: string[];
     rccProjectPath?: string;
+    qmakeArgs?: string;
     jobs?: number;
 }
 
@@ -149,6 +151,72 @@ export function runSuppressWarnings(workspace: string, codes: string[], add: boo
     }
     return {
         ok: true, action: 'use', useScope: 'target', workspace, changed: ['qt.suppressedWarnings'],
+        nextAction: 'forja build',
+    };
+}
+
+export function runQmakeArgs(workspace: string, args: string[], add: boolean, rm: boolean): UseResult {
+    const workroot = resolveWorkroot(workspace);
+    if (!workroot) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: T('notInitialized') }],
+            nextAction: 'forja init',
+        };
+    }
+
+    if (add && rm) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: T('use.qmakeArgsConflictFlags') }],
+            nextAction: 'forja use target qmake-args',
+        };
+    }
+
+    if ((add || rm) && args.length === 0) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: T('use.qmakeArgsMissingValues') }],
+            nextAction: 'forja use target qmake-args --add <args>',
+        };
+    }
+
+    const config = loadWorkspaceConfig(workroot);
+    const current = (config.qtModulePrefs.qmakeArgs || '').trim();
+    const currentTokens = current ? current.split(/\s+/) : [];
+
+    if (!add && !rm) {
+        return {
+            ok: true, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: currentTokens.length > 0
+                ? [{ level: 'info', message: T('use.qmakeArgsList', [currentTokens.join(' ')]) }]
+                : [{ level: 'info', message: T('use.noQmakeArgs') }],
+            nextAction: 'forja use target qmake-args --add <args>',
+        };
+    }
+
+    let updated: string[];
+    if (add) {
+        const set = new Set(currentTokens);
+        for (const a of args) set.add(a);
+        updated = [...set];
+    } else {
+        const toRemove = new Set(args);
+        updated = currentTokens.filter(t => !toRemove.has(t));
+    }
+
+    config.qtModulePrefs.qmakeArgs = updated.join(' ');
+    try {
+        saveWorkspaceConfig(config);
+    } catch (e) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
+            nextAction: 'forja status',
+        };
+    }
+    return {
+        ok: true, action: 'use', useScope: 'target', workspace, changed: ['qt.qmakeArgs'],
         nextAction: 'forja build',
     };
 }
@@ -329,6 +397,9 @@ export function runUseShow(workspace: string): UseResult {
             const wsConfig = loadWorkspaceConfig(workroot);
             if (wsConfig.qtModulePrefs.rccProjectPath) {
                 result.rccProjectPath = wsConfig.qtModulePrefs.rccProjectPath;
+            }
+            if (wsConfig.qtModulePrefs.qmakeArgs) {
+                result.qmakeArgs = wsConfig.qtModulePrefs.qmakeArgs;
             }
         }
     }

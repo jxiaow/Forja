@@ -286,7 +286,6 @@ forja build qmake           # 仅运行 qmake
 forja build rcc             # 编译 .qrc 资源文件
 forja build --plan          # 仅显示编译计划
 forja build --jobs 8        # 8 路并行编译
-forja build --build-args "VERBOSE=1"  # 传递额外参数给构建命令
 ```
 
 ### `forja run`

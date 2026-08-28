@@ -57,7 +57,7 @@ function buildQtCliOptions(workspace: string, target: ActiveTarget, opts: { acti
     };
 }
 
-export async function runBuild(workspace: string, buildAction: BuildAction, options: { plan?: boolean; json?: boolean; project?: string; buildArgs?: string; jobs?: number } = {}): Promise<BuildResult> {
+export async function runBuild(workspace: string, buildAction: BuildAction, options: { plan?: boolean; json?: boolean; project?: string; jobs?: number } = {}): Promise<BuildResult> {
     const wantsJson = options.json ?? false;
     let targetResult: ReturnType<typeof requireActiveTarget>;
 
@@ -179,7 +179,6 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 mode: target.mode,
                 arch: target.arch,
                 vsDevCmdPath: vsDevCmdPath || undefined,
-                buildArgs: options.buildArgs,
                 jobs: options.jobs,
             });
 

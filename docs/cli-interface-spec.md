@@ -92,7 +92,6 @@ forja <subcommand> [action] [options]
 | `--plan` | boolean | 只输出计划 |
 | `--project <path>` | path | 直接指定项目 |
 | `--jobs <N>` | number | 并行编译数 |
-| `--build-args <args>` | string | 追加到构建命令的额外参数 |
 
 ### `forja run`
 
