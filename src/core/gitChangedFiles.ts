@@ -73,18 +73,46 @@ export async function getGitChangedFiles(workspaceRoot: string): Promise<string[
 
 /**
  * Check if a relative path matches any ignore pattern.
- * Patterns match against individual path segments.
+ * Single-segment patterns (no path separator) match against individual path segments.
+ * Multi-segment patterns (containing / or \) match against the full normalized path.
  */
 export function isIgnored(relativePath: string, ignoreList: string[]): boolean {
-    const parts = relativePath.split(/[\\/]/);
-    for (const pattern of ignoreList) {
-        const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
-        const wildcardRegex = pattern.includes('*')
-            ? new RegExp('^' + escapedPattern.replace(/\*/g, '.*') + '$')
-            : null;
-        for (const part of parts) {
-            if (part === pattern) { return true; }
-            if (wildcardRegex?.test(part)) { return true; }
+    const normalizedPath = relativePath.replace(/\\/g, '/');
+    const parts = normalizedPath.split('/');
+    for (const rawPattern of ignoreList) {
+        const pattern = rawPattern.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+        if (!pattern) { continue; }
+
+        if (pattern.includes('/')) {
+            if (pattern.includes('*')) {
+                if (pattern.endsWith('/*')) {
+                    const prefix = pattern.slice(0, -1);
+                    if (normalizedPath === prefix.slice(0, -1)) { return true; }
+                    if (normalizedPath.startsWith(prefix)) { return true; }
+                    if (normalizedPath.includes('/' + prefix)) { return true; }
+                } else {
+                    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+                    const regex = escaped.replace(/\*/g, '[^/]*');
+                    if (new RegExp('^' + regex + '$').test(normalizedPath)) { return true; }
+                    if (new RegExp('^' + regex + '/').test(normalizedPath)) { return true; }
+                    if (new RegExp('/' + regex + '$').test(normalizedPath)) { return true; }
+                    if (new RegExp('/' + regex + '/').test(normalizedPath)) { return true; }
+                }
+            } else {
+                if (normalizedPath === pattern) { return true; }
+                if (normalizedPath.startsWith(pattern + '/')) { return true; }
+                if (normalizedPath.includes('/' + pattern + '/')) { return true; }
+                if (normalizedPath.endsWith('/' + pattern)) { return true; }
+            }
+        } else {
+            const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+            const wildcardRegex = pattern.includes('*')
+                ? new RegExp('^' + escapedPattern.replace(/\*/g, '.*') + '$')
+                : null;
+            for (const part of parts) {
+                if (part === pattern) { return true; }
+                if (wildcardRegex?.test(part)) { return true; }
+            }
         }
     }
     return false;

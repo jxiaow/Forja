@@ -171,8 +171,9 @@ async function classifyAllGitRoots(
 
         const uploadCandidates: string[] = [];
         const deleteCandidates: string[] = [];
+        const isExplicitFile = fileFilters.length > 0;
         for (const change of changedEntries) {
-            if (isIgnored(change.path, ignore)) {
+            if (!isExplicitFile && isIgnored(change.path, ignore)) {
                 const file = `${gitName}/${change.path}`;
                 result.skipped.push(file);
                 result.skippedDetails.push({ file, reason: 'ignored' });

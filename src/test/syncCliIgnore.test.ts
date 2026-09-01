@@ -43,3 +43,39 @@ test('isIgnored handles Windows backslash paths', () => {
 test('isIgnored handles multiple patterns', () => {
     assert.equal(isIgnored('node_modules/pkg/index.js', ['build', 'node_modules', '.git']), true);
 });
+
+test('isIgnored matches multi-segment pattern with trailing slash', () => {
+    assert.equal(isIgnored('qt_client/.qwen/tmp/file.txt', ['qt_client/.qwen/']), true);
+});
+
+test('isIgnored matches multi-segment pattern without trailing slash', () => {
+    assert.equal(isIgnored('qt_client/.qwen/tmp/file.txt', ['qt_client/.qwen']), true);
+});
+
+test('isIgnored multi-segment pattern matches exact path', () => {
+    assert.equal(isIgnored('qt_client/.qwen', ['qt_client/.qwen']), true);
+});
+
+test('isIgnored multi-segment glob matches within directory', () => {
+    assert.equal(isIgnored('qt_client/.qwen/tmp/file.txt', ['qt_client/.qwen/*']), true);
+});
+
+test('isIgnored multi-segment glob matches everything under directory', () => {
+    assert.equal(isIgnored('qt_client/.qwen/a/b/file.txt', ['qt_client/.qwen/*']), true);
+});
+
+test('isIgnored multi-segment mid-path glob does not match across segments', () => {
+    assert.equal(isIgnored('qt_client/.qwen/a/b/file.txt', ['qt_client/.qwen/*/file.txt']), false);
+});
+
+test('isIgnored multi-segment mid-path glob matches single segment', () => {
+    assert.equal(isIgnored('qt_client/.qwen/a/file.txt', ['qt_client/.qwen/*/file.txt']), true);
+});
+
+test('isIgnored multi-segment pattern does not match partial prefix', () => {
+    assert.equal(isIgnored('qt_client/.qwen2/file.txt', ['qt_client/.qwen']), false);
+});
+
+test('isIgnored multi-segment pattern with Windows backslash', () => {
+    assert.equal(isIgnored('qt_client\\.qwen\\tmp\\file.txt', ['qt_client/.qwen']), true);
+});

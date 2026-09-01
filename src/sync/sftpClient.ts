@@ -38,8 +38,9 @@ export async function syncChangedFiles(resolved: ResolvedSyncConfig, workspaceRo
 
     const uploadCandidates: string[] = [];
     const deleteCandidates: string[] = [];
+    const isExplicitFile = fileFilters.length > 0;
     for (const change of changedEntries) {
-        if (isIgnored(change.path, ignore)) { result.skipped.push(change.path); }
+        if (!isExplicitFile && isIgnored(change.path, ignore)) { result.skipped.push(change.path); }
         else if (change.kind === 'delete') { deleteCandidates.push(change.path); }
         else { uploadCandidates.push(change.path); }
     }

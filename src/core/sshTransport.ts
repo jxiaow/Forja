@@ -165,7 +165,7 @@ export async function ensureRemoteDir(server: ServerConfig, remoteDir: string, p
 
     const askpass = createAskpassEnv(server.authMode === 'password' ? password : null);
 
-    const timeoutMs = 5000;
+    const timeoutMs = 15000;
     const result = await runCancellableProcess('ssh', args, askpass, token, timeoutMs);
     if (result.timedOut) {
         throw createTimeoutError('创建远程目录', timeoutMs);
