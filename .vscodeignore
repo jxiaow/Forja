@@ -17,6 +17,7 @@ docs/**
 .qtpilot/**
 .compilot/**
 .qwen/**
+.codegraph/**
 **/tsconfig.json
 **/.eslintrc.json
 eslint.config.mjs

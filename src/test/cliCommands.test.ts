@@ -19,8 +19,9 @@ import { formatListText } from '../cli/commands/list';
 import { formatStatusText, StatusResult } from '../cli/commands/status';
 import { formatUseTargetText } from '../cli/commands/useTarget/report';
 import { setGlobalLocale } from '../cli/commands/types';
-import { runRemoteSetup } from '../cli/commands/remote';
+import { runRemoteSetup, runRemoteOn, runRemoteOff } from '../cli/commands/remote';
 import { getServerById } from '../core/serverStore';
+import { loadRemoteSettings } from '../core/settingsIO';
 
 // ── 测试环境 ──
 const TEST_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'forja-deep-test-'));
@@ -400,6 +401,26 @@ test('remote setup rejects a blank remote path', () => {
     assert.match(r.diagnostics?.[0]?.message ?? '', /path is required/i);
 });
 
+test('remote on/off toggles remoteMode and persists', () => {
+    const onResult = runRemoteOn(TEST_DIR);
+    assert.equal(onResult.ok, true);
+    const settings = loadRemoteSettings(TEST_DIR);
+    assert.equal(settings.remoteMode, true);
+
+    const offResult = runRemoteOff(TEST_DIR);
+    assert.equal(offResult.ok, true);
+    const settings2 = loadRemoteSettings(TEST_DIR);
+    assert.equal(settings2.remoteMode, false);
+});
+
+test('remote on is idempotent when already on', () => {
+    runRemoteOn(TEST_DIR);
+    const r = runRemoteOn(TEST_DIR);
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.changed, []);
+    runRemoteOff(TEST_DIR);
+});
+
 test('status 工具链摘要按实际可执行文件区分 make 和 jom', () => {
     setGlobalLocale('zh');
     const base: StatusResult = {
@@ -424,8 +445,9 @@ test('status 工具链摘要按实际可执行文件区分 make 和 jom', () => 
     };
 
     const makeText = formatStatusText(base, 'zh');
-    assert.match(makeText, /工具链: .*make/);
-    assert.doesNotMatch(makeText, /工具链: .*jom/);
+    assert.match(makeText, /✓ 工具链/);
+    assert.match(makeText, /^\s+make/m);
+    assert.doesNotMatch(makeText, /^\s+jom/m);
 
     const jomText = formatStatusText({
         ...base,
@@ -434,32 +456,32 @@ test('status 工具链摘要按实际可执行文件区分 make 和 jom', () => 
             toolchain: { ...base.activeTarget!.toolchain, jomPath: 'C:\\Qt\\Tools\\jom\\jom.exe' },
         },
     }, 'zh');
-    assert.match(jomText, /工具链: .*jom/);
+    assert.match(jomText, /^\s+jom/m);
 });
 
 test('remote bootstrap is routed to the existing bootstrap workflow', () => {
     const workspace = fs.mkdtempSync(path.join(require('os').tmpdir(), 'forja-bootstrap-no-server-'));
     try {
-        const text = run('remote bootstrap', workspace);
+        const text = run('remote bootstrap --lang en', workspace);
         assert.equal(text.code, 1);
         assert.deepEqual(text.out.trimEnd().split(/\r?\n/), [
             'Error',
-            '  error: No server selected',
+            '  Error: No servers configured',
             '',
             'Next',
-            '  forja remote setup --server <name> --remote-path <path>',
+            '  forja server add --name <name> --host <host> --username <user>',
         ]);
 
         const r = json('remote bootstrap', workspace);
         assert.ok(r);
-        assert.equal(r.action, 'bootstrap');
+        assert.equal(r.action, 'remote');
         assert.equal(r.ok, false);
-        assert.equal(r.nextAction, 'forja remote setup --server <name> --remote-path <path>');
+        assert.equal(r.nextAction, 'forja server add --name <name> --host <host> --username <user> --json');
         assert.doesNotMatch(r.diagnostics?.[0]?.message ?? '', /unknown remote|未知 remote/i);
 
         const forced = json('remote bootstrap --force', workspace);
         assert.ok(forced);
-        assert.equal(forced.action, 'bootstrap');
+        assert.equal(forced.action, 'remote');
         assert.equal(forced.ok, false);
         assert.doesNotMatch(forced.diagnostics?.[0]?.message ?? '', /--force.*只能用于/i);
     } finally {

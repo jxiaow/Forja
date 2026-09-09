@@ -8,26 +8,32 @@ import { ForjaJsonResult } from './types';
 import { runStatus, formatStatusText } from './status';
 import { runList, ListCategory, EnvSubCategory, formatListText } from './list';
 import { runUseTarget, runUseShow, runSuppressWarnings, runQmakeArgs, runRemoveTarget, formatUseText } from './use';
-import { runRemoteShow, runRemoteSetup, formatRemoteText, RemoteResult } from './remote';
+import { runRemoteOn, runRemoteOff, runRemoteCheck, formatRemoteText, formatRemoteCheckText, RemoteResult, resolveServer } from './remote';
 import { runServerAdd, runServerUpdate, runServerRemove, formatServerText } from './server';
 import { runBuild, BuildAction, outputBuildResult } from './build';
 import { runRun, outputRunResult } from './run';
 import { runStop, outputStopResult } from './stop';
 import { runClean, outputCleanResult } from './clean';
-import { runSyncPlan, runSyncExecute, runSyncReset, runSyncStatus, runSyncIgnoreList, runSyncIgnoreAdd, runSyncIgnoreRm, formatSyncText, SyncResult, interactiveRemoteSetup } from './sync';
+import { runSyncPlan, runSyncExecute, runSyncReset, runSyncStatus, runSyncIgnoreList, runSyncIgnoreAdd, runSyncIgnoreRm, formatSyncText, SyncResult } from './sync';
+import { runDeploy, runDeployConfig, formatDeployText, formatDeployConfigText, DeployResult } from './deploy';
 import { runInit, formatInitText } from './init';
 import { confirm } from './prompt';
 import { resolveLocale, Locale, T, setGlobalLocale, diag } from './types';
 import { loadGlobalConfig, saveGlobalConfig, loadRemoteSettings } from '../../core/settingsIO';
 import { readServers, readProjectSyncConfig } from '../../core/serverStore';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
-import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
+import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget } from '../../core/workspaceStore';
 import { ClassifiedChanges } from '../../sync/cli';
 import { runRemoteCli } from '../../remote/cli';
+import { executeRemotePlan, RemotePlanResult } from '../../remote/core/plan';
+import { executeRemoteBridge } from '../../remote/core/bridge';
+import { createSshRunner } from '../../remote/core/shell';
+import { scpDownload } from '../../core/sshTransport';
+import { getServerById } from '../../core/serverStore';
 
-type Command = 'status' | 'list' | 'use' | 'remote' | 'server' | 'build' | 'run' | 'stop' | 'clean' | 'sync' | 'init';
+type Command = 'status' | 'list' | 'use' | 'remote' | 'server' | 'build' | 'run' | 'stop' | 'clean' | 'sync' | 'deploy' | 'init';
 
-const COMMANDS: Command[] = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'sync', 'init'];
+const COMMANDS: Command[] = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'sync', 'deploy', 'init'];
 
 export function isCommand(cmd: string): cmd is Command {
     return COMMANDS.includes(cmd as Command);
@@ -47,6 +53,7 @@ function getCommandHelp(cmd: string): string {
         stop: T('help.stop'),
         clean: T('help.clean'),
         sync: T('help.sync.actual'),
+        deploy: T('help.deploy'),
         init: T('help.init'),
     };
     return map[cmd] || '';
@@ -135,10 +142,12 @@ export async function runCli(argv: string[]): Promise<void> {
             return handleClean(argv, workroot, wantsJson, locale);
         case 'sync':
             return handleSync(argv, workroot, wantsJson, locale);
+        case 'deploy':
+            return handleDeploy(argv, workroot, wantsJson, locale);
         case 'init':
             return handleInit(argv, cwd, wantsJson, locale);
         default: {
-            const KNOWN_COMMANDS = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'sync', 'init'];
+            const KNOWN_COMMANDS = ['status', 'list', 'use', 'remote', 'server', 'build', 'run', 'stop', 'clean', 'sync', 'deploy', 'init'];
             const suggestion = suggestCorrection(command, KNOWN_COMMANDS);
             const msg = suggestion
                 ? `${T('idx.unknownCommand')}: ${command}. ${T('idx.didYouMean')}: forja ${suggestion}?`
@@ -167,7 +176,7 @@ function extractWorkspace(argv: string[]): { cwd: string; error?: string } {
     return { cwd: process.cwd() };
 }
 
-function extractFlag(argv: string[], flag: string, options: { allowEmpty?: boolean; allowOptionLikeValue?: boolean } = {}): string | undefined {
+export function extractFlag(argv: string[], flag: string, options: { allowEmpty?: boolean; allowOptionLikeValue?: boolean } = {}): string | undefined {
     const idx = argv.indexOf(flag);
     if (idx < 0 || idx + 1 >= argv.length) return undefined;
     const value = argv[idx + 1];
@@ -218,7 +227,7 @@ const KEYWORD_SUGGESTIONS: Record<string, Record<string, { hint: string; params:
         'arch':      { hint: 'forja use target', params: ['--arch <x86|x64>', '--mode <debug|release>', '--project <path>'],                         next: 'forja use target --arch <x86|x64>' },
         'project':   { hint: 'forja use target', params: ['--project <path>', '--mode <debug|release>', '--arch <x86|x64>'],                         next: 'forja use target --project <path>' },
         'qt-path':   { hint: 'forja use target', params: ['--qt <path>'],                                                                       next: 'forja use target --qt <path>' },
-        'server':    { hint: 'forja remote setup', params: ['--server <name>', '--remote-path <path>'],                                               next: 'forja remote setup --server <name> --remote-path <path>' },
+        'server':    { hint: 'forja sync', params: ['--server <name>', '--remote-path <path>'],                                               next: 'forja sync --server <name> --remote-path <path>' },
         'lang':      { hint: 'forja init --lang',   params: ['<zh|en>'],                                                                             next: 'forja init --lang <zh|en>' },
         'remote':    { hint: 'forja remote bootstrap', params: [],                                                                                   next: 'forja remote bootstrap' },
         'sync':      { hint: 'forja sync',       params: ['--server <name>', '--remote-path <path>'],                                                next: 'forja sync' },
@@ -285,7 +294,7 @@ function extractAllFlags(argv: string[], flag: string): string[] {
     return values;
 }
 
-function outputResult<T extends ForjaJsonResult>(result: T, wantsJson: boolean, textFormatter?: (r: T) => string): void {
+export function outputResult<T extends ForjaJsonResult>(result: T, wantsJson: boolean, textFormatter?: (r: T) => string): void {
     // JSON callers must receive a directly reusable JSON continuation command.
     if (wantsJson && result.nextAction && !/\s--json(?:\s|$)/.test(result.nextAction)) {
         result = { ...result, nextAction: `${result.nextAction} --json` };
@@ -328,17 +337,255 @@ function outputResult<T extends ForjaJsonResult>(result: T, wantsJson: boolean, 
     if (!result.ok) { process.exitCode = 1; }
 }
 
+// ── Remote mode routing helper ──
+
+function isRemoteMode(workroot: string): boolean {
+    return loadRemoteSettings(workroot).remoteMode === true;
+}
+
+function resolveRemoteTargetKind(workroot: string): 'qt' | 'cpp' | null {
+    const config = loadWorkspaceConfig(workroot);
+    if (!config) { return null; }
+    const target = getActiveTarget(config);
+    return target ? target.kind : null;
+}
+
+// Direct bridge to remote — no prepare pipeline (baseline/lock/branchSync)
+async function executeRemoteBridgeAction(workroot: string, action: string, extraArgs: string[], wantsJson: boolean): Promise<{ ok: boolean } | null> {
+    const remoteSettings = loadRemoteSettings(workroot);
+    const serverId = remoteSettings.selectedServer;
+    const server = serverId ? getServerById(serverId) : null;
+    const remotePath = serverId ? remoteSettings.remotePaths[serverId] : undefined;
+
+    if (!server || !remotePath) {
+        outputResult({ ok: false, action, diagnostics: [{ level: 'error', message: serverId ? T('remotePathNotConfigured') : T('remoteNoServerConfigured') }], nextAction: 'forja sync' }, wantsJson);
+        process.exitCode = 1;
+        return null;
+    }
+
+    const password = server.password || process.env.FORJA_SSH_PASSWORD || null;
+    const runner = createSshRunner(server, password);
+    const bridge = await executeRemoteBridge({
+        target: resolveRemoteTargetKind(workroot) || 'qt',
+        action: action as any,
+        args: extraArgs,
+        json: wantsJson,
+        stream: !wantsJson,
+        remotePath,
+        runner,
+        remoteForjaBin: remoteSettings.remoteForjaBin || undefined,
+    });
+
+    if (wantsJson) {
+        console.log(bridge.result ? JSON.stringify(bridge.result, null, 2) : JSON.stringify({ ok: bridge.ok, diagnostics: bridge.diagnostics }, null, 2));
+    } else if (!bridge.ok) {
+        for (const d of bridge.diagnostics) { console.error(`  ${d.level}: ${d.message}`); }
+    }
+    if (!bridge.ok) { process.exitCode = 1; }
+    return { ok: bridge.ok };
+}
+
+async function tryRemoteAction(workroot: string, action: 'build' | 'rebuild' | 'clean' | 'qmake' | 'run' | 'stop' | 'status', wantsJson: boolean, args?: string[]): Promise<RemotePlanResult | null | undefined> {
+    if (!isRemoteMode(workroot)) { return undefined; }
+    const kind = resolveRemoteTargetKind(workroot);
+    if (!kind) {
+        outputResult({ ok: false, action, diagnostics: [{ level: 'error', message: T('notInitialized') }] }, wantsJson);
+        process.exitCode = 1;
+        return null;
+    }
+    const result = await executeRemotePlan({
+        workspace: workroot,
+        target: kind,
+        action,
+        args,
+        json: wantsJson,
+        stream: true,
+    });
+    outputRemotePlanResult(result, action, wantsJson);
+    return result;
+}
+
+function outputRemotePlanResult(result: RemotePlanResult, action: string, wantsJson: boolean): void {
+    if (wantsJson) {
+        console.log(JSON.stringify(result, null, 2));
+    } else {
+        const lines: string[] = [];
+        for (const stage of result.stages) {
+            const icon = stage.ok ? '✓' : '✗';
+            lines.push(`  ${icon} ${stage.stage}: ${stage.message}`);
+        }
+        for (const d of result.diagnostics) {
+            lines.push(`  [${d.level}] ${d.message}`);
+        }
+        if (result.stdout) { lines.push(result.stdout); }
+        if (!result.ok && result.nextAction) {
+            const nextAction = wantsJson ? result.nextAction : result.nextAction.replace(/\s+--json/g, '');
+            lines.push(T('next'), `  ${nextAction}`);
+        }
+        if (lines.length > 0) { console.log(lines.join('\n')); }
+    }
+    if (!result.ok) { process.exitCode = 1; }
+}
+
+async function downloadArtifacts(workroot: string, argv: string[], wantsJson: boolean): Promise<void> {
+    const remoteSettings = loadRemoteSettings(workroot);
+    const serverId = remoteSettings.selectedServer;
+    if (!serverId) { return; }
+    const server = getServerById(serverId);
+    if (!server) { return; }
+    const remotePath = remoteSettings.remotePaths[serverId];
+    if (!remotePath) { return; }
+
+    // Collect artifact paths: --artifact flags first, then deploy config
+    const artifacts: string[] = [];
+    for (let i = 0; i < argv.length; i++) {
+        if (argv[i] === '--artifact' && argv[i + 1]) { artifacts.push(argv[++i]); }
+    }
+    if (artifacts.length === 0 && remoteSettings.transfer) {
+        artifacts.push(...remoteSettings.transfer.artifacts);
+    }
+    if (artifacts.length === 0) {
+        if (!wantsJson) { console.log(T('deployNoArtifacts')); }
+        return;
+    }
+
+    const password = server.password || process.env.FORJA_SSH_PASSWORD || null;
+    const downloaded: string[] = [];
+    for (const artifact of artifacts) {
+        const remoteFile = remotePath.replace(/\/+$/, '') + '/' + artifact;
+        const localFile = path.basename(artifact);
+        try {
+            await scpDownload(server, remoteFile, localFile, password, undefined, true);
+            downloaded.push(localFile);
+            if (!wantsJson) { console.log(`  ✓ ${artifact} → ${localFile}`); }
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (!wantsJson) { console.log(`  ✗ ${artifact}: ${msg}`); }
+            process.exitCode = 1;
+        }
+    }
+    if (!wantsJson && downloaded.length > 0) {
+        console.log(T('deployDownloadDone', [String(downloaded.length)]));
+    }
+}
+
 // ── Status ──
 
-function handleStatus(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): void {
+async function handleStatus(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
     const statusUnknown = findUnknownFlags(argv, new Set(), new Set());
     if (statusUnknown.length > 0) {
         outputResult({ ok: false, action: 'status', diagnostics: [{ level: 'error', message: unknownFlagsMessage(statusUnknown, new Set()) }], nextAction: 'forja status' }, wantsJson);
         process.exitCode = 1;
         return;
     }
+
+    // Remote mode: directly fetch remote status via bridge (no prepare pipeline)
+    if (isRemoteMode(workroot)) {
+        const remoteSettings = loadRemoteSettings(workroot);
+        const serverId = remoteSettings.selectedServer;
+        const server = serverId ? getServerById(serverId) : null;
+        const remotePath = serverId ? remoteSettings.remotePaths[serverId] : undefined;
+
+        if (!server || !remotePath) {
+            outputResult({
+                ok: false, action: 'status',
+                diagnostics: [{ level: 'error', message: serverId ? T('remotePathNotConfigured') : T('remoteNoServerConfigured') }],
+                nextAction: 'forja sync',
+            }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+
+        const password = server.password || process.env.FORJA_SSH_PASSWORD || null;
+        const runner = createSshRunner(server, password);
+        const bridge = await executeRemoteBridge({
+            target: resolveRemoteTargetKind(workroot) || 'qt',
+            action: 'status',
+            args: [],
+            json: true,
+            remotePath,
+            runner,
+            remoteForjaBin: remoteSettings.remoteForjaBin || undefined,
+        });
+
+        if (wantsJson) {
+            const jsonOut = bridge.result ? { ...(bridge.result as object), remoteMode: server.name } : { ok: bridge.ok, diagnostics: bridge.diagnostics };
+            console.log(JSON.stringify(jsonOut, null, 2));
+        } else if (bridge.result) {
+            const statusResult = { ...(bridge.result as any), remoteMode: server.name };
+            if (statusResult.nextAction) {
+                statusResult.nextAction = statusResult.nextAction.replace(/\s+--json/g, '');
+            }
+            console.log(formatStatusText(statusResult, locale));
+        } else {
+            for (const d of bridge.diagnostics) { console.error(`  ${d.level}: ${d.message}`); }
+        }
+        if (!bridge.ok) { process.exitCode = 1; }
+        return;
+    }
+
     const result = runStatus(workroot);
     outputResult(result, wantsJson, (r) => formatStatusText(r, locale));
+}
+
+// ── Deploy ──
+
+async function handleDeploy(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+
+    if (subCmd === 'config') {
+        const server = extractFlag(argv, '--server');
+        const deployPath = extractFlag(argv, '--deploy-path');
+        const artifacts: string[] = [];
+        for (let i = 0; i < argv.length; i++) {
+            if (argv[i] === '--artifact' && argv[i + 1] && !argv[i + 1].startsWith('--')) {
+                artifacts.push(argv[++i]);
+            }
+        }
+        const result = runDeployConfig(workroot, { server, deployPath, artifacts });
+        const fmt = (r: DeployResult) => formatDeployConfigText(r, locale);
+        outputResult(result, wantsJson, fmt);
+        if (!result.ok) { process.exitCode = 1; }
+        return;
+    }
+
+    if (subCmd !== '') {
+        const DEPLOY_SUBCOMMANDS = ['config'];
+        const hint = suggestCorrection(subCmd, DEPLOY_SUBCOMMANDS);
+        const msg = hint
+            ? `${T('idx.unknownRemoteSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: forja deploy ${hint}?`
+            : `${T('idx.unknownRemoteSubcommand')}: ${subCmd}`;
+        outputResult({ ok: false, action: 'deploy', deployAction: 'deploy', diagnostics: [{ level: 'error', message: msg }] }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    const deployUnknown = findUnknownFlags(argv, new Set(['--artifact']), new Set(['--artifact']));
+    if (deployUnknown.length > 0) {
+        outputResult({ ok: false, action: 'deploy', deployAction: 'deploy', diagnostics: [{ level: 'error', message: unknownFlagsMessage(deployUnknown, new Set(['--artifact'])) }], nextAction: 'forja deploy' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    const artifactFlags: string[] = [];
+    for (let i = 0; i < argv.length; i++) {
+        if (argv[i] === '--artifact' && argv[i + 1] && !argv[i + 1].startsWith('--')) {
+            artifactFlags.push(argv[++i]);
+        }
+    }
+
+    // Remote mode — bridge deploy to remote
+    if (isRemoteMode(workroot)) {
+        const extraArgs: string[] = [];
+        for (const a of artifactFlags) { extraArgs.push('--artifact', a); }
+        await executeRemoteBridgeAction(workroot, 'deploy', extraArgs, wantsJson);
+        return;
+    }
+
+    const result = await runDeploy(workroot, { artifactFlags, json: wantsJson });
+    const fmt = (r: DeployResult) => formatDeployText(r, locale);
+    outputResult(result, wantsJson, fmt);
+    if (!result.ok) { process.exitCode = 1; }
 }
 
 // ── Init ──
@@ -361,6 +608,14 @@ async function handleInit(argv: string[], workroot: string, wantsJson: boolean, 
     if (langFlag && langFlag !== 'zh' && langFlag !== 'en') {
         outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('use.invalidLanguage')}: ${langFlag}. ${T('use.useZhOrEn')}` }] }, wantsJson);
         process.exitCode = 1;
+        return;
+    }
+
+    // Remote mode — bridge init to remote
+    if (isRemoteMode(workroot)) {
+        const extraArgs: string[] = [];
+        if (langFlag) { extraArgs.push('--lang', langFlag); }
+        await executeRemoteBridgeAction(workroot, 'init', extraArgs, wantsJson);
         return;
     }
 
@@ -452,6 +707,13 @@ async function handleList(argv: string[], workroot: string, wantsJson: boolean, 
         return;
     }
 
+    // Remote mode — bridge list to remote
+    if (isRemoteMode(workroot)) {
+        const extraArgs = [categoryArg, ...argv.filter(a => a.startsWith('--'))];
+        await executeRemoteBridgeAction(workroot, 'list', extraArgs, wantsJson);
+        return;
+    }
+
     const category = categoryArg as ListCategory;
 
     // Build known flags set based on category
@@ -515,6 +777,13 @@ async function handleList(argv: string[], workroot: string, wantsJson: boolean, 
 
 async function handleUse(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
     const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+
+    // Remote mode — bridge use to remote
+    if (isRemoteMode(workroot) && subCmd) {
+        const extraArgs = argv.slice(1);
+        await executeRemoteBridgeAction(workroot, 'use', extraArgs, wantsJson);
+        return;
+    }
 
     // Per-subcommand flag validation
     switch (subCmd) {
@@ -697,7 +966,7 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
 
 async function handleRemote(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
     const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
-    const remoteKnown = new Set(['--server', '--remote-path', ...((subCmd === 'bootstrap' || subCmd === 'setup') ? ['--force'] : [])]);
+    const remoteKnown = new Set(['--server', '--remote-path', ...(subCmd === 'bootstrap' ? ['--force'] : [])]);
     const remoteWithVal = new Set(['--server', '--remote-path']);
     const remoteUnknown = findUnknownFlags(argv, remoteKnown, remoteWithVal);
     if (remoteUnknown.length > 0) {
@@ -708,59 +977,61 @@ async function handleRemote(argv: string[], workroot: string, wantsJson: boolean
 
     const fmt = (r: RemoteResult) => formatRemoteText(r, locale);
     switch (subCmd) {
-        case 'bootstrap': {
-            await runRemoteCli(['bootstrap', '--workspace', workroot, ...(hasFlag(argv, '--force') ? ['--force'] : []), ...(wantsJson ? ['--json'] : [])]);
+        case 'on': {
+            const result = runRemoteOn(workroot);
+            outputResult(result, wantsJson, fmt);
             return;
         }
-        case 'setup': {
-            const server = extractFlag(argv, '--server');
-            const remotePath = extractFlag(argv, '--remote-path');
-            if (wantsJson && (!server || !remotePath)) {
-                outputResult({ ok: false, action: 'remote', remoteAction: 'setup', changed: [], diagnostics: [{ level: 'error', message: 'remote setup --json requires --server and --remote-path.' }], nextAction: 'forja remote setup --server <name> --remote-path <path>' }, true);
-                process.exitCode = 1;
-                return;
-            }
-            if (server || remotePath) {
-                if (!server || !remotePath) {
-                    outputResult({ ok: false, action: 'remote', remoteAction: 'setup', changed: [], diagnostics: [{ level: 'error', message: 'remote setup requires both --server and --remote-path.' }], nextAction: 'forja remote setup --server <name> --remote-path <path>' }, wantsJson);
-                    process.exitCode = 1;
-                    return;
-                }
-                const result = runRemoteSetup(workroot, { server, remotePath });
-                if (!result.ok) { outputResult(result, wantsJson, fmt); process.exitCode = 1; return; }
+        case 'off': {
+            const result = runRemoteOff(workroot);
+            outputResult(result, wantsJson, fmt);
+            return;
+        }
+        case 'check': {
+            const result = await runRemoteCheck(workroot);
+            if (wantsJson) {
+                console.log(JSON.stringify(result, null, 2));
             } else {
-                const result = await interactiveRemoteSetup(workroot);
-                if (!result.ok) { outputResult({ ok: false, action: 'remote', remoteAction: 'setup', changed: [], diagnostics: [{ level: 'error', message: result.error || T('syncCancelled') }] }, false); process.exitCode = 1; return; }
+                console.log(formatRemoteCheckText(result, locale));
             }
-            await runRemoteCli(['bootstrap', '--workspace', workroot, ...(hasFlag(argv, '--force') ? ['--force'] : []), ...(wantsJson ? ['--json'] : [])]);
+            if (!result.ok) { process.exitCode = 1; }
+            return;
+        }
+        case 'bootstrap': {
+            const server = await resolveServer(argv, workroot, wantsJson);
+            if (!server) { process.exitCode = 1; return; }
+            await runRemoteCli(['bootstrap', '--workspace', workroot, '--server', server.name, ...(hasFlag(argv, '--force') ? ['--force'] : []), ...(wantsJson ? ['--json'] : [])]);
             return;
         }
         default: {
             if (subCmd !== '') {
-                const REMOTE_SUBCOMMANDS = ['setup', 'bootstrap'];
+                const REMOTE_SUBCOMMANDS = ['on', 'off', 'check', 'bootstrap'];
                 const hint = suggestCorrection(subCmd, REMOTE_SUBCOMMANDS);
                 const msg = hint
-                    ? `${T('idx.unknownRemoteSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: ${hint}?`
+                    ? `${T('idx.unknownRemoteSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: forja remote ${hint}?`
                     : `${T('idx.unknownRemoteSubcommand')}: ${subCmd}`;
                 outputResult({ ok: false, action: 'remote', remoteAction: 'show', changed: [], diagnostics: [{ level: 'error', message: msg }], nextAction: hint ? `forja remote ${hint}` : 'forja remote' }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
-            // No subcommand: show current remote config
-            // --server is only meaningful for set/restore/reset, reject in show mode
+            // No subcommand: show remote mode status
             const serverFlag = extractFlag(argv, '--server');
             const remotePathFlag = extractFlag(argv, '--remote-path');
             if (serverFlag || remotePathFlag) {
-                outputResult({
-                    ok: false, action: 'remote', remoteAction: 'show', changed: [],
-                    diagnostics: [{ level: 'error', message: T('remote.showNoFlags') }],
-                    nextAction: 'forja remote setup --server <name> --remote-path <path>',
-                }, wantsJson);
+                outputResult({ ok: false, action: 'remote', remoteAction: 'show', changed: [], diagnostics: [{ level: 'error', message: T('remote.showNoFlags') }], nextAction: 'forja sync' }, wantsJson);
                 process.exitCode = 1;
                 return;
             }
-            const result = runRemoteShow(workroot);
-            outputResult(result, wantsJson, fmt);
+            const remote = loadRemoteSettings(workroot);
+            const modeText = remote.remoteMode ? T('remoteModeRemote') : T('remoteModeLocal');
+            const serverId = remote.selectedServer;
+            const server = serverId ? getServerById(serverId) : null;
+            const serverLabel = server ? `${server.name} (${server.host})` : (serverId || T('remoteNoServerConfigured'));
+            if (wantsJson) {
+                console.log(JSON.stringify({ ok: true, action: 'remote', remoteAction: 'show', remote: { remoteMode: remote.remoteMode, server: remote.selectedServer, remotePath: remote.remotePaths[remote.selectedServer] } }, null, 2));
+            } else {
+                console.log(`${T('remoteModeLabel')}: ${modeText} (${serverLabel})`);
+            }
             return;
         }
     }
@@ -978,11 +1249,11 @@ async function handleServer(argv: string[], workroot: string, wantsJson: boolean
 async function handleBuild(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
     const buildUnknown = findUnknownFlags(
         argv,
-        new Set(['--plan', '--project', '--jobs']),
-        new Set(['--project', '--jobs']),
+        new Set(['--plan', '--project', '--jobs', '--download', '--artifact']),
+        new Set(['--project', '--jobs', '--artifact']),
     );
     if (buildUnknown.length > 0) {
-        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: unknownFlagsMessage(buildUnknown, new Set(['--plan','--project','--jobs'])) }], nextAction: 'forja build' }, wantsJson);
+        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: unknownFlagsMessage(buildUnknown, new Set(['--plan','--project','--jobs','--download','--artifact'])) }], nextAction: 'forja build' }, wantsJson);
         process.exitCode = 1;
         return;
     }
@@ -1026,6 +1297,24 @@ async function handleBuild(argv: string[], workroot: string, wantsJson: boolean,
         }
     } else {
         jobs = loadGlobalConfig().jobs;
+    }
+
+    // Remote mode routing — directly bridge to remote (no prepare pipeline)
+    if (isRemoteMode(workroot)) {
+        const remoteActionMap: Record<string, 'build' | 'rebuild' | 'qmake'> = { default: 'build', fresh: 'rebuild', qmake: 'qmake' };
+        const remoteAction = remoteActionMap[buildAction];
+        if (remoteAction) {
+            const extraArgs: string[] = [];
+            const activeProject = extractFlag(argv, '--project');
+            if (activeProject) { extraArgs.push('--project', activeProject); }
+            if (jobs !== undefined) { extraArgs.push('--jobs', String(jobs)); }
+
+            const result = await executeRemoteBridgeAction(workroot, remoteAction, extraArgs, wantsJson);
+            if (result?.ok && hasFlag(argv, '--download')) {
+                await downloadArtifacts(workroot, argv, wantsJson);
+            }
+            return;
+        }
     }
 
     const result = await runBuild(workroot, buildAction, {
@@ -1100,6 +1389,12 @@ async function handleRun(argv: string[], workroot: string, wantsJson: boolean, _
         return;
     }
 
+    // Remote mode routing — directly bridge (no prepare pipeline)
+    if (isRemoteMode(workroot)) {
+        await executeRemoteBridgeAction(workroot, 'run', [], wantsJson);
+        return;
+    }
+
     const result = await runRun(workroot, {
         detach: hasFlag(argv, '--detach'),
         debug: hasFlag(argv, '--debug'),
@@ -1124,6 +1419,11 @@ async function handleStop(argv: string[], workroot: string, wantsJson: boolean, 
         process.exitCode = 1;
         return;
     }
+    // Remote mode routing — directly bridge (no prepare pipeline)
+    if (isRemoteMode(workroot)) {
+        await executeRemoteBridgeAction(workroot, 'stop', [], wantsJson);
+        return;
+    }
     const result = await runStop(workroot, { json: wantsJson });
     outputStopResult(result, wantsJson);
 }
@@ -1141,6 +1441,13 @@ async function handleClean(argv: string[], workroot: string, wantsJson: boolean,
     if (cleanPosArg) {
         outputResult({ ok: false, action: 'clean', diagnostics: [{ level: 'error', message: `${T('idx.unexpectedArgument')}: ${cleanPosArg}` }], nextAction: 'forja clean' }, wantsJson);
         process.exitCode = 1;
+        return;
+    }
+    // Remote mode routing — directly bridge (no prepare pipeline)
+    if (isRemoteMode(workroot)) {
+        const extraArgs: string[] = [];
+        if (hasFlag(argv, '--plan')) { extraArgs.push('--plan'); }
+        await executeRemoteBridgeAction(workroot, 'clean', extraArgs, wantsJson);
         return;
     }
     const result = await runClean(workroot, { plan: hasFlag(argv, '--plan'), json: wantsJson });
@@ -1295,13 +1602,12 @@ async function handleSync(argv: string[], workroot: string, wantsJson: boolean, 
                 diagnostics: [{ level: 'error', message: T('sync.notConfigured') }],
                 choices: [
                     { label: 'forja sync', command: 'forja sync', description: T('syncInteractiveSetup') },
-                    { label: 'forja remote setup', command: 'forja remote setup', description: T('statusSetupRemote') },
                 ],
             }, wantsJson);
             process.exitCode = 1;
             return;
         } else {
-            outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: T('sync.notConfigured') }], nextAction: 'forja remote setup' }, false);
+            outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: T('sync.notConfigured') }], nextAction: 'forja sync' }, false);
             process.exitCode = 1;
             return;
         }

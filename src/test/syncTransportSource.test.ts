@@ -38,6 +38,13 @@ test('shared scp upload has a timeout guard', () => {
     assert.match(source, /runCancellableProcess\('scp', args, askpass, token, DEFAULT_SCP_UPLOAD_TIMEOUT_MS\)/);
 });
 
+test('shared scp download has a timeout guard', () => {
+    const source = fs.readFileSync(path.join(repoRoot, 'src', 'core', 'sshTransport.ts'), 'utf-8');
+
+    assert.match(source, /DEFAULT_SCP_DOWNLOAD_TIMEOUT_MS/);
+    assert.match(source, /export async function scpDownload/);
+});
+
 test('shared ssh transport supports remote file deletion', () => {
     const source = fs.readFileSync(path.join(repoRoot, 'src', 'core', 'sshTransport.ts'), 'utf-8');
 

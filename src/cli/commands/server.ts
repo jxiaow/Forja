@@ -183,7 +183,7 @@ export function runServerAdd(args: ServerAddArgs): ServerResult {
             server: toServerDetail(created),
             changed: [`servers.${created.id}`],
             diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
-            nextAction: `forja remote setup --server ${created.id} --remote-path <path>`,
+            nextAction: `forja sync --server ${created.id} --remote-path <path>`,
         };
     } catch (e) {
         return {

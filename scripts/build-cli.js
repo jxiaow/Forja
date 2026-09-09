@@ -51,14 +51,27 @@ const dirs = [
     'cpp/shared'
 ];
 
-// Only bootstrap support is shipped for remote operations. Sync owns file transfer.
+// Remote modules needed for deploy (full remote build pipeline) and bootstrap.
 const remoteFiles = [
     'remote/cli/index.js',
+    'remote/core/baseline.js',
     'remote/core/bootstrap.js',
+    'remote/core/branchSync.js',
+    'remote/core/bridge.js',
+    'remote/core/bundleBaseline.js',
     'remote/core/config.js',
+    'remote/core/lock.js',
+    'remote/core/overlayRestore.js',
+    'remote/core/overlaySync.js',
+    'remote/core/pipeline.js',
+    'remote/core/plan.js',
+    'remote/core/remoteShellFallback.js',
+    'remote/core/repoPath.js',
+    'remote/core/repoStrategy.js',
     'remote/core/shell.js',
     'remote/core/stagedWorkspace.js',
-    'remote/core/types.js'
+    'remote/core/types.js',
+    'remote/core/workspaceLink.js'
 ];
 
 // Individual files from sync/ needed by CLI (only pure Node files)

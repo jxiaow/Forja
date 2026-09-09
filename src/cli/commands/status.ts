@@ -32,6 +32,7 @@ export interface StatusResult extends ForjaJsonResult {
     runtime?: RuntimeState;
     rccProjectPath?: string;
     globalJobs?: number;
+    remoteMode?: string;
     nextAction?: string;
     choices?: Array<{ label: string; command: string; description: string }>;
 }
@@ -226,7 +227,7 @@ export function runStatus(workspace: string): StatusResult {
                 level: 'error',
                 message: T('sts.syncServerNotFound', [remoteConfig.selectedServer]),
                 hint: T('serverDeleted'),
-                fix: 'forja remote setup',
+                fix: 'forja sync',
                 params: { server: remoteConfig.selectedServer },
             });
         } else {
@@ -236,7 +237,7 @@ export function runStatus(workspace: string): StatusResult {
                 diagnostics.push({
                     level: 'error',
                     message: `${T('remotePathNotConfigured')}: ${remoteConfig.selectedServer}`,
-                    fix: 'forja remote setup',
+                    fix: 'forja sync',
                     params: { server: remoteConfig.selectedServer },
                 });
             } else {
@@ -484,11 +485,17 @@ function assessOk(readiness: Readiness, activeTarget?: TargetProfile | null): bo
 export function formatStatusText(result: StatusResult, locale: Locale): string {
     const lines: string[] = [];
     const indent = '  ';
+    const sub = '    ';
+    const r = result.readiness;
 
     // ── Title ──
     lines.push(T('sts.forjaStatus'));
+    if (result.remoteMode) {
+        lines.push(`${indent}${T('remoteModeLabel')}: ${T('remoteModeRemote')} (${result.remoteMode})`);
+    }
+    lines.push('');
 
-    // ── Config section ──
+    // ── Workspace config ──
     if (result.workspace) {
         lines.push(`${indent}${T('workspace')}: ${result.workspace}`);
     }
@@ -499,84 +506,77 @@ export function formatStatusText(result: StatusResult, locale: Locale): string {
         lines.push(`${indent}${T('setupSummaryModeArch')}: ${t.mode} | ${t.arch}`);
         if (t.toolchain.executableName) { lines.push(`${indent}${T('init.executableName')}: ${t.toolchain.executableName}`); }
     }
-
-    // ── Global jobs ──
     if (result.globalJobs !== undefined) {
         lines.push(`${indent}${T('sts.globalJobs')}: ${result.globalJobs}`);
     } else {
         lines.push(`${indent}${T('sts.globalJobs')}: ${T('sts.globalJobsNotSet')}`);
     }
 
-    // ── Readiness sub-list ──
-    const r = result.readiness;
-    const readinessEntries: Array<{ label: string; state: ReadinessState }> = [];
-    if (r.target) { readinessEntries.push({ label: T('readinessTarget'), state: r.target }); }
-    if (r.toolchain) { readinessEntries.push({ label: T('readinessToolchain'), state: r.toolchain }); }
-    if (r.sync) { readinessEntries.push({ label: T('readinessSync'), state: r.sync }); }
-    if (r.remote) { readinessEntries.push({ label: T('readinessRemote'), state: r.remote }); }
-    if (r.runtime) { readinessEntries.push({ label: T('readinessRuntime'), state: r.runtime }); }
-
-    if (readinessEntries.length > 0) {
-        lines.push(`${indent}${T('readiness')}`);
-        for (const entry of readinessEntries) {
-            const sym = readinessSymbol(entry.state);
-            const text = readinessText(entry.state, locale);
-            lines.push(`${indent}  ${sym} ${entry.label}:  ${text}`);
-        }
-    }
-
-    // ── Toolchain ──
+    // ── Toolchain section ──
     if (result.activeTarget) {
         const t = result.activeTarget;
-        const tcParts: string[] = [];
+        const tcLines: string[] = [];
         if (t.toolchain.qtPath) {
             const ver = t.toolchain.qtVersion ? `${t.toolchain.qtVersion} ` : '';
-            tcParts.push(`Qt ${ver}(${shortPath(t.toolchain.qtPath)})`);
+            tcLines.push(`Qt ${ver}(${shortPath(t.toolchain.qtPath)})`);
         }
         if (t.toolchain.vsInstall) {
             const ver = t.toolchain.vsVersion ? `${t.toolchain.vsVersion} ` : '';
-            tcParts.push(`VS ${ver}(${shortPath(t.toolchain.vsInstall)})`);
+            tcLines.push(`VS ${ver}(${shortPath(t.toolchain.vsInstall)})`);
         }
-        if (t.toolchain.jomPath) { tcParts.push(buildToolLabel(t.toolchain.jomPath)); }
-        if (tcParts.length > 0) { lines.push(`${indent}${T('toolchainLabel')}: ${tcParts.join(', ')}`); }
+        if (t.toolchain.jomPath) { tcLines.push(buildToolLabel(t.toolchain.jomPath)); }
+        if (result.rccProjectPath) { tcLines.push(`RCC: ${result.rccProjectPath}`); }
+
+        if (tcLines.length > 0) {
+            const sym = readinessSymbol(r.toolchain || 'unknown');
+            lines.push('');
+            lines.push(`${indent}${sym} ${T('readinessToolchain')}`);
+            for (const l of tcLines) { lines.push(`${sub}${l}`); }
+        }
     }
 
-    // ── RCC ──
-    if (result.rccProjectPath) {
-        lines.push(`${indent}RCC: ${result.rccProjectPath}`);
-    }
-
-    // ── Remote ──
-    if (result.remote) {
-        const rem = result.remote;
-        const remParts: string[] = [];
-        if (rem.server) { remParts.push(`${rem.server.name} (${rem.server.host})`); }
-        if (rem.remoteForjaBin) { remParts.push(`${T('forjaBin')}: ${rem.remoteForjaBin}`); }
-        if (remParts.length > 0) { lines.push(`${indent}${T('remoteLabel')}: ${remParts.join(', ')}`); }
-        if (rem.workspaceMode) { lines.push(`${indent}${T('workspaceMode')}: ${rem.workspaceMode}`); }
-    }
-
-    // ── Sync ──
-    if (result.sync) {
+    // ── Sync section ──
+    if (result.sync?.enabled) {
+        const sym = readinessSymbol(r.sync || 'unknown');
+        lines.push('');
+        lines.push(`${indent}${sym} ${T('readinessSync')}`);
         const s = result.sync;
-        if (s.enabled) {
-            if (s.server) {
-                lines.push(`${indent}${T('syncLabel')}: ${T('enabledStatus')} → ${s.server.username}@${s.server.host}:${s.server.port} → ${s.remotePath || ''} (${s.server.authMode})`);
-            } else {
-                lines.push(`${indent}${T('syncLabel')}: ${T('enabledStatus')} (${T('sts.syncServerMissing')})`);
-            }
+        if (s.server) {
+            lines.push(`${sub}${s.server.username}@${s.server.host}:${s.server.port}`);
+            lines.push(`${sub}${s.remotePath || ''} (${s.server.authMode})`);
+        } else {
+            lines.push(`${sub}${T('sts.syncServerMissing')}`);
         }
     }
 
-    // ── Runtime (only show when running — readiness section covers the not-running case) ──
-    if (result.runtime?.running) {
-        lines.push(`${indent}${T('runtimeLabel')}: ${T('running')} (${T('pid')}: ${result.runtime.pid})`);
-        if (result.runtime.executablePath) { lines.push(`${indent}  ${T('executable')}: ${result.runtime.executablePath}`); }
-        if (result.runtime.logFile) { lines.push(`${indent}  ${T('log')}: ${result.runtime.logFile}`); }
+    // ── Remote / Runtime — skip in remote mode (already on the remote) ──
+    if (!result.remoteMode) {
+        const remoteState = r.remote;
+
+        // ── Remote section ──
+        if (result.remote) {
+            const sym = readinessSymbol(remoteState || 'unknown');
+            lines.push('');
+            lines.push(`${indent}${sym} ${T('readinessRemote')}`);
+            const rem = result.remote;
+            if (rem.server) { lines.push(`${sub}${rem.server.name} (${rem.server.host})`); }
+            if (rem.remoteForjaBin) { lines.push(`${sub}${T('forjaBin')}: ${rem.remoteForjaBin}`); }
+            if (rem.workspaceMode) { lines.push(`${sub}${T('workspaceMode')}: ${rem.workspaceMode}`); }
+        }
+
+        // ── Runtime (only when running) ──
+        if (result.runtime?.running) {
+            const sym = readinessSymbol(r.runtime || 'unknown');
+            lines.push('');
+            lines.push(`${indent}${sym} ${T('readinessRuntime')}`);
+            lines.push(`${sub}${T('running')} (${T('pid')}: ${result.runtime.pid})`);
+            if (result.runtime.executablePath) { lines.push(`${sub}${T('executable')}: ${result.runtime.executablePath}`); }
+            if (result.runtime.logFile) { lines.push(`${sub}${T('log')}: ${result.runtime.logFile}`); }
+        }
     }
 
-    // ── Diagnostics (warnings/errors) ──
-    if (result.diagnostics) {
+    // ── Diagnostics ──
+    if (result.diagnostics?.length) {
         lines.push('');
         for (const d of result.diagnostics) {
             lines.push(`${indent}${T(d.level)}: ${d.message}`);

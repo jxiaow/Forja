@@ -1,6 +1,6 @@
 # Forja
 
-C++ 项目构建管理工具，同时提供 VSCode 扩展和 CLI。支持 Qt (qmake)、Visual Studio (.sln)、Makefile 和 CMake 项目。本地构建/运行，远程文件同步。
+C++ 项目构建管理工具，同时提供 VSCode 扩展和 CLI。支持 Qt (qmake)、Visual Studio (.sln)、Makefile 和 CMake 项目。本地构建/运行，远端当前仅支持工作区同步和 CLI 部署。
 
 ## 支持的项目类型
 

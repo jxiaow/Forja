@@ -119,12 +119,13 @@ function packCompiledPackage(packageRoot: string, version: string): BootstrapArt
                 return firstSegment !== 'test' && !source.endsWith('.map');
             }
         });
+        const srcPkg = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as { engines?: { node?: string } };
         fs.writeFileSync(path.join(stagingRoot, 'package.json'), JSON.stringify({
             name: 'forja',
             version,
             bin: { forja: './out/cli/index.js' },
             files: ['out/**', 'package.json'],
-            engines: { node: '>=18.0.0' }
+            ...(srcPkg.engines?.node ? { engines: { node: srcPkg.engines.node } } : {}),
         }, null, 2) + '\n');
         return packPackage(stagingRoot, version);
     } finally {
@@ -136,8 +137,11 @@ function packPackage(packageRoot: string, version: string): BootstrapArtifactRes
     const outDir = path.join(os.tmpdir(), 'forja-bootstrap-artifacts', version);
     fs.mkdirSync(outDir, { recursive: true });
     try {
+        // Use execSync with command string instead of execFileSync — Node.js v24 on Windows
+        // throws EINVAL when execFileSync is used with .cmd files.
         const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-        const stdout = cp.execFileSync(npm, ['pack', packageRoot, '--pack-destination', outDir, '--json'], { encoding: 'utf8' });
+        const cmd = `${npm} pack "${packageRoot}" --pack-destination "${outDir}" --json`;
+        const stdout = cp.execSync(cmd, { encoding: 'utf8' });
         const parsed = JSON.parse(stdout) as Array<{ filename?: string }>;
         const filename = parsed[0]?.filename || `forja-${version}.tgz`;
         const artifactPath = path.join(outDir, filename);

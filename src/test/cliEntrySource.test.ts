@@ -23,7 +23,7 @@ test('cli interface spec lists only implemented subcommands as available', () =>
 
 test('cli user guide documents remote commands as implemented', () => {
     const guide = fs.readFileSync(path.join(process.cwd(), 'docs', 'README-cli.md'), 'utf8');
-    assert.match(guide, /forja remote setup/);
+    assert.match(guide, /forja remote (setup|on)/);
     assert.doesNotMatch(guide, /\uFFFD/);
 });
 
@@ -40,10 +40,10 @@ test('unified CLI exposes the existing remote bootstrap workflow', () => {
     assert.match(source, /case 'bootstrap':[\s\S]*runRemoteCli\(\['bootstrap', '--workspace', workroot/);
 });
 
-test('remote CLI surface keeps only setup and bootstrap', () => {
+test('remote CLI surface keeps only on, off, check, and bootstrap', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'index.ts'), 'utf8');
 
-    assert.match(source, /REMOTE_SUBCOMMANDS = \['setup', 'bootstrap'\]/);
+    assert.match(source, /REMOTE_SUBCOMMANDS = \['on', 'off', 'check', 'bootstrap'\]/);
     assert.doesNotMatch(source, /subCmd === 'restore'|subCmd === 'reset'/);
 });
 
@@ -139,7 +139,7 @@ test('sync help and docs describe sync command', () => {
 
     // sync is a top-level command in the command reference table
     assert.match(skill, /forja sync --dry-run/);
-    assert.match(guide, /forja remote setup/);
+    assert.match(guide, /forja remote (setup|on)/);
 });
 
 test('sync help and docs describe server management commands', () => {
@@ -162,5 +162,5 @@ test('forja skill uses unified command structure', () => {
     // Check that sync is documented as a top-level command
     assert.match(skill, /forja sync --dry-run/);
     assert.match(skill, /## 命令速查/);
-    assert.match(skill, /forja remote setup/);
+    assert.match(skill, /forja remote (setup|on)/);
 });

@@ -165,7 +165,7 @@ export async function runSyncPlan(workspace: string, fileFilters: string[] = [])
             server: plan.server,
             remotePath: plan.remotePath,
             diagnostics: plan.ok ? undefined : plan.failed.map(f => diag('error', `${T('sync.planFailed')}: ${f.error}`)),
-            nextAction: plan.ok ? 'forja sync' : (plan.nextAction || 'forja remote setup'),
+            nextAction: plan.ok ? 'forja sync' : (plan.nextAction || 'forja sync'),
         };
     } catch (e) {
         return syncCatchResult('plan', workspace, e);
@@ -188,7 +188,7 @@ export async function runSyncExecute(workspace: string, fileFilters: string[] = 
             skippedDetails: result.skippedDetails?.length ? result.skippedDetails : undefined,
             failed: result.failed?.length ? result.failed : undefined,
             diagnostics: result.ok ? undefined : (result.failed?.length ? result.failed.map(f => diag('error', `${T('sync.syncFailed')}: ${f.error}`)) : [diag('error', T('sync.syncFailed'))]),
-            nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja remote setup'),
+            nextAction: result.ok ? 'forja status' : (result.nextAction || 'forja sync'),
         };
     } catch (e) {
         return syncCatchResult('run', workspace, e);
@@ -346,7 +346,7 @@ function syncCatchResult(syncAction: SyncAction, workspace: string, e: unknown):
     return {
         ok: false, action: 'sync', syncAction, workspace,
         diagnostics: [diag('error', `${T('sync.remoteBlocked')}: ${message}`)],
-        nextAction: 'forja remote setup',
+        nextAction: 'forja sync',
     };
 }
 

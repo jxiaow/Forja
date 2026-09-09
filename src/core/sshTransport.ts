@@ -33,6 +33,7 @@ interface ProcessResult {
 }
 
 const DEFAULT_SCP_UPLOAD_TIMEOUT_MS = 120000;
+const DEFAULT_SCP_DOWNLOAD_TIMEOUT_MS = 300000;
 const DEFAULT_REMOTE_DELETE_TIMEOUT_MS = 10000;
 
 function createCancellationError(): SyncTransportError {
@@ -115,9 +116,10 @@ function runCancellableProcess(command: string, args: string[], askpass: ReturnT
     });
 }
 
-/** SCP 上传单个文件。 */
-export async function scpUpload(server: ServerConfig, localFile: string, remoteFile: string, password: string | null, token?: CancellationTokenLike): Promise<void> {
+/** SCP 上传文件或目录。recursive=true 时加 -r 标志。 */
+export async function scpUpload(server: ServerConfig, localFile: string, remoteFile: string, password: string | null, token?: CancellationTokenLike, recursive: boolean = false): Promise<void> {
     const baseArgs = buildScpArgs(server);
+    if (recursive) { baseArgs.push('-r'); }
     // SCP 远程路径不经过本地 shell，不要加 shell 引号——引号会被远端当作文件名的一部分
     const dest = `${sshTarget(server)}:${remoteFile}`;
     const args = [...baseArgs, localFile, dest];
@@ -138,6 +140,32 @@ export async function scpUpload(server: ServerConfig, localFile: string, remoteF
     }
     if (processResult.code !== 0) {
         throw new Error(`scp 失败 (code=${processResult.code}): ${processResult.stderr.trim()}`);
+    }
+}
+
+/** SCP 下载远程文件或目录到本地。recursive=true 时加 -r 标志。 */
+export async function scpDownload(server: ServerConfig, remotePath: string, localPath: string, password: string | null, token?: CancellationTokenLike, recursive: boolean = false): Promise<void> {
+    const baseArgs = buildScpArgs(server);
+    if (recursive) { baseArgs.push('-r'); }
+    const src = `${sshTarget(server)}:${remotePath}`;
+    const args = [...baseArgs, src, localPath];
+
+    const askpass = createAskpassEnv(server.authMode === 'password' ? password : null);
+
+    let processResult: ProcessResult;
+    try {
+        processResult = await runCancellableProcess('scp', args, askpass, token, DEFAULT_SCP_DOWNLOAD_TIMEOUT_MS);
+    } catch (e) {
+        if (isCancellationError(e)) { throw e; }
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(`scp download 启动失败: ${msg}`);
+    }
+
+    if (processResult.timedOut) {
+        throw createTimeoutError('下载文件', DEFAULT_SCP_DOWNLOAD_TIMEOUT_MS);
+    }
+    if (processResult.code !== 0) {
+        throw new Error(`scp download 失败 (code=${processResult.code}): ${processResult.stderr.trim()}`);
     }
 }
 

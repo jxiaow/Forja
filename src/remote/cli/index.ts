@@ -2,21 +2,40 @@ import * as path from 'path';
 import { findBootstrapArtifact, findPackageRoot, executeRemoteBootstrap } from '../core/bootstrap';
 import { resolveRemoteServer } from '../core/config';
 import { createScpUploader, createSshRunner } from '../core/shell';
+import { resolveServerSelector, ServerConfig } from '../../core/serverStore';
 
 interface BootstrapOptions {
     workspace: string;
     json: boolean;
     force: boolean;
+    serverName?: string;
 }
 
 /** Internal bridge used by the unified CLI for `forja remote bootstrap`. */
 export async function runRemoteCli(argv: string[]): Promise<void> {
     const options = parseBootstrapArgs(argv);
-    const resolved = resolveRemoteServer(options.workspace);
-    if (!resolved.server) {
-        process.exitCode = 1;
-        writeOutput({ ok: false, action: 'bootstrap', mode: 'remote', diagnostics: resolved.diagnostics, nextAction: resolved.nextAction }, options.json);
-        return;
+
+    // Resolve server: --server flag takes priority, then fall back to sync config
+    let server: ServerConfig | null = null;
+    if (options.serverName) {
+        const result = resolveServerSelector(options.serverName);
+        server = result.server;
+        if (!server) {
+            process.exitCode = 1;
+            const msg = result.ambiguous
+                ? `Ambiguous server name: ${options.serverName}`
+                : `Server not found: ${options.serverName}`;
+            writeOutput({ ok: false, action: 'bootstrap', mode: 'remote', diagnostics: [{ level: 'error', message: msg }], nextAction: 'forja server' }, options.json);
+            return;
+        }
+    } else {
+        const resolved = resolveRemoteServer(options.workspace);
+        if (!resolved.server) {
+            process.exitCode = 1;
+            writeOutput({ ok: false, action: 'bootstrap', mode: 'remote', diagnostics: resolved.diagnostics, nextAction: resolved.nextAction }, options.json);
+            return;
+        }
+        server = resolved.server;
     }
 
     const artifact = findBootstrapArtifact(findPackageRoot(__dirname) || path.resolve(__dirname, '..', '..', '..'));
@@ -26,14 +45,17 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
         return;
     }
 
-    const password = resolved.server.password || process.env.FORJA_SSH_PASSWORD || null;
+    const password = server.password || process.env.FORJA_SSH_PASSWORD || null;
     const result = await executeRemoteBootstrap({
         artifact,
-        runner: createSshRunner(resolved.server, password),
-        uploader: createScpUploader(resolved.server, password),
+        runner: createSshRunner(server, password),
+        uploader: createScpUploader(server, password),
         ignoreEngines: options.force,
     });
     if (!result.ok) { process.exitCode = 1; }
+    // Add server info to result for display
+    (result as any).serverName = options.serverName || server.name;
+    (result as any).host = server.host;
     writeOutput(result, options.json);
 }
 
@@ -48,6 +70,10 @@ function parseBootstrapArgs(argv: string[]): BootstrapOptions {
             const workspace = argv[++index];
             if (!workspace || workspace.startsWith('--')) { throw new Error('--workspace requires a value.'); }
             options.workspace = path.resolve(workspace);
+        } else if (arg === '--server') {
+            const serverName = argv[++index];
+            if (!serverName || serverName.startsWith('--')) { throw new Error('--server requires a value.'); }
+            options.serverName = serverName;
         } else if (arg === '--json') {
             options.json = true;
         } else if (arg === '--force') {
@@ -64,7 +90,7 @@ function writeOutput(result: unknown, json: boolean): void {
         console.log(JSON.stringify(result, null, 2));
         return;
     }
-    const value = result as { ok?: boolean; diagnostics?: Array<{ message: string }>; nextAction?: string };
+    const value = result as { ok?: boolean; action?: string; mode?: string; version?: string; remoteBin?: string; serverName?: string; host?: string; stages?: Array<{ name: string; ok: boolean; message?: string }>; diagnostics?: Array<{ level?: string; message: string }>; nextAction?: string };
     if (value.ok === false) {
         console.log('Error');
         for (const diagnostic of value.diagnostics ?? []) {
@@ -75,10 +101,47 @@ function writeOutput(result: unknown, json: boolean): void {
         }
         return;
     }
+    // Success output
+    if (value.action === 'bootstrap' && value.ok === true) {
+        console.log('Bootstrap 成功');
+        if (value.serverName) {
+            console.log(`  服务器: ${value.serverName} (${value.host})`);
+        }
+        if (value.version) {
+            console.log(`  版本: ${value.version}`);
+        }
+        if (value.remoteBin) {
+            console.log(`  远程路径: ${value.remoteBin}`);
+        }
+        if (value.stages && value.stages.length > 0) {
+            const completed = value.stages.filter(s => s.ok).length;
+            console.log(`  步骤: ${completed}/${value.stages.length} 完成`);
+            // Extract warnings from stage messages
+            for (const stage of value.stages) {
+                if (stage.message && stage.message.includes('WARN')) {
+                    // Extract EBADENGINE warning details
+                    const engineMatch = stage.message.match(/required:.*?node:\s*'([^']+)'.*?current:.*?node:\s*'([^']+)'/s);
+                    if (engineMatch) {
+                        console.log(`  警告: Node.js 版本不匹配 (需要 ${engineMatch[1]}, 当前 ${engineMatch[2]})`);
+                    } else {
+                        // Fallback: show first WARN line
+                        const warnLine = stage.message.split(/\r?\n/).find(l => l.includes('WARN'));
+                        if (warnLine) {
+                            console.log(`  警告: ${warnLine.replace(/npm WARN\s*/, '').substring(0, 80)}`);
+                        }
+                    }
+                }
+            }
+        }
+    }
     for (const diagnostic of value.diagnostics ?? []) {
-        console.log(diagnostic.message);
+        if (diagnostic.level === 'warning') {
+            console.log(`⚠ ${diagnostic.message}`);
+        } else {
+            console.log(diagnostic.message);
+        }
     }
     if (value.nextAction) {
-        console.log(`Next: ${value.nextAction}`);
+        console.log(`\nNext: ${value.nextAction}`);
     }
 }

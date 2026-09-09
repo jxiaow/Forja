@@ -102,7 +102,11 @@ test('remote.ts exports all documented functions', () => {
     const expectedExports = [
         'runRemoteShow',
         'runRemoteSetup',
+        'runRemoteOn',
+        'runRemoteOff',
+        'runRemoteCheck',
         'formatRemoteText',
+        'formatRemoteCheckText',
     ];
     for (const fn of expectedExports) {
         assert.ok(remoteSrc.includes(`export function ${fn}`) || remoteSrc.includes(`export async function ${fn}`),

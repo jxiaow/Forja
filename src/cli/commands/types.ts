@@ -234,6 +234,49 @@ const UI: Record<string, { en: string; zh: string }> = {
     noSyncServer:                  { en: 'No sync server added',         zh: '未添加同步服务器' },
     remotePathNotConfigured:       { en: 'Remote path not configured',   zh: '远程路径未配置' },
     remoteNoServerConfigured:      { en: 'No remote server configured',  zh: '未配置远程服务器' },
+    remoteModeOn:                  { en: 'Remote mode enabled',           zh: '远程模式已开启' },
+    remoteModeAlreadyOn:           { en: 'Remote mode is already enabled', zh: '远程模式已经是开启状态' },
+    remoteModeOff:                 { en: 'Remote mode disabled',          zh: '远程模式已关闭' },
+    remoteModeAlreadyOff:          { en: 'Remote mode is already disabled', zh: '远程模式已经是关闭状态' },
+    remoteModeLabel:               { en: 'Mode',                          zh: '模式' },
+    remoteModeLocal:               { en: 'local',                         zh: '本地' },
+    remoteModeRemote:              { en: 'remote',                        zh: '远程' },
+    remoteCheckLabel:              { en: 'Code consistency check',         zh: '代码一致性检查' },
+    remoteCheckBranch:             { en: 'Branch',                        zh: '分支' },
+    remoteCheckCommit:             { en: 'Commit',                        zh: '提交' },
+    remoteCheckRemote:             { en: 'remote',                        zh: '远程' },
+    remoteCheckNeedsRemoteMode:  { en: 'Remote mode is not enabled',        zh: '远程模式未开启' },
+    remoteCheckDirty:              { en: '(dirty)',                             zh: '(有改动)' },
+    remoteCheckNoRemote:           { en: 'remote not found',                   zh: '远程不存在' },
+    remoteCheckMatched:            { en: 'matched',                            zh: '一致' },
+    remoteCheckCommitMismatch:     { en: 'commit mismatch',                    zh: '提交不一致' },
+    remoteCheckNoRemoteSummary:    { en: 'remote not found',                   zh: '远程不存在' },
+    remoteCheckLocalMissing:      { en: 'local not found',                    zh: '本地不存在' },
+    remoteCheckLocalMissingSummary: { en: 'local not found',                  zh: '本地不存在' },
+    remoteCheckRelation_ahead:    { en: 'remote behind',                     zh: '远程落后' },
+    remoteCheckRelation_behind:   { en: 'remote ahead',                      zh: '远程超前' },
+    remoteCheckRelation_diverged: { en: 'diverged',                          zh: '远程分叉' },
+    'remote.noServers':            { en: 'No servers configured',            zh: '没有可用的服务器' },
+    'remote.selectServer':         { en: 'Please select a server',           zh: '请选择服务器' },
+    'remote.chooseServer':         { en: 'Select target server:',            zh: '选择目标服务器:' },
+    deployNoArtifacts:              { en: 'No artifacts specified. Use --artifact or configure with forja deploy config', zh: '未指定产物。用 --artifact 或 forja deploy config 配置' },
+    deployDownloadDone:             { en: 'Downloaded {0} artifact(s)',       zh: '已下载 {0} 个产物' },
+    deployConfigSaved:              { en: 'Deploy configuration saved',       zh: '部署配置已保存' },
+    deployNotConfigured:            { en: 'Deploy target not configured',     zh: '部署目标未配置' },
+    deployBuilding:                 { en: 'Building on remote...',            zh: '远程构建中...' },
+    deployBuildDone:                { en: '✓ Build complete',                 zh: '✓ 构建完成' },
+    deployBuildFailed:              { en: 'Remote build failed',              zh: '远程构建失败' },
+    deployDownloading:              { en: 'Downloading',                      zh: '下载中' },
+    deployDownloadFailed:           { en: 'Failed to download artifacts',     zh: '下载产物失败' },
+    deploySshFailed:                { en: 'SSH to target failed, falling back to HTTP', zh: 'SSH 连接实体机失败，降级到 HTTP' },
+    deployUploadFailed:             { en: 'Failed to upload artifact',        zh: '上传产物失败' },
+    deployDone:                     { en: '✓ Deploy complete',                zh: '✓ 部署完成' },
+    deployFallback:                 { en: 'Starting fallback HTTP server...', zh: '启动备用 HTTP 服务...' },
+    deployFallbackHint:             { en: 'Download from target machine browser:', zh: '在实体机浏览器中下载:' },
+    deployFallbackPressEnter:       { en: 'Press Enter after download to stop', zh: '下载完成后按 Enter 停止服务' },
+    deployFallbackUrl:              { en: 'Fallback URL',                     zh: '备用下载地址' },
+    deployFallbackFailed:           { en: 'Failed to start HTTP server on build server', zh: '编译服务器上启动 HTTP 服务失败' },
+    'deploy.targetNotFound':        { en: 'Deploy target server not found',   zh: '部署目标服务器未找到' },
     remoteForjaBinDefault:         { en: 'Remote Forja bin not configured, will use npm global prefix', zh: '远程 Forja 二进制未配置，将使用 npm 全局 prefix' },
     qtNotFound:                    { en: 'Qt not found at configured path', zh: '在配置路径未找到 Qt' },
     vsNotFound:                    { en: 'VS dev environment not found', zh: '未找到 VS 开发环境' },
@@ -408,6 +451,7 @@ Commands:
   stop       Stop a running application
   clean      Clean build artifacts
   sync       Sync files with remote server
+  deploy     Build remote and deploy to target machine
 
 Global options:
   --help, -h       Show help
@@ -429,6 +473,7 @@ Global options:
   stop       停止运行中的应用
   clean      清理构建产物
   sync       与远程服务器同步文件
+  deploy     远程构建并部署到实体机
 
 全局选项:
   --help, -h       显示帮助
@@ -514,16 +559,18 @@ Target 选项:
     'help.remote': {
         en: `Usage: forja remote [action] [options] [--json]
 
-  forja remote                                    Show remote configuration
-  forja remote setup [--server <name> --remote-path <path>]
-                                                  Configure sync and bootstrap remote Forja
+  forja remote                                    Show remote mode status
+  forja remote on                                 Enable remote mode (persistent)
+  forja remote off                                Disable remote mode
+  forja remote check                              Check code consistency (branch + commit)
   forja remote bootstrap                         Package and install the current local CLI remotely
 `,
         zh: `用法: forja remote [动作] [选项] [--json]
 
-  forja remote                                    显示远程配置
-  forja remote setup [--server <名称> --remote-path <路径>]
-                                                  配置同步并部署远端 Forja
+  forja remote                                    显示远程模式状态
+  forja remote on                                 开启远程模式（持久化）
+  forja remote off                                关闭远程模式
+  forja remote check                              检查代码一致性（分支 + 提交）
   forja remote bootstrap                         打包当前本地 CLI 并安装到远端
 `,
     },
@@ -685,7 +732,7 @@ Options:
     'idx.unknownServerSubcommand':      { en: 'Unknown server subcommand',          zh: '未知 server 子命令' },
     'idx.unknownRemoteSubcommand':      { en: 'Unknown remote subcommand',          zh: '未知 remote 子命令' },
     'remote.setRequiresFlag':           { en: 'Specify --server and/or --remote-path', zh: '请指定 --server 和/或 --remote-path' },
-    'remote.showNoFlags':               { en: '--server and --remote-path are only valid with `forja remote setup`', zh: '--server 和 --remote-path 仅在 `forja remote setup` 中有效' },
+    'remote.showNoFlags':               { en: '--server and --remote-path are only valid with `forja sync`', zh: '--server 和 --remote-path 仅在 `forja sync` 中有效' },
     'remote.invalidPath':               { en: 'Invalid path (must be relative, no \'..\')', zh: '无效路径（必须是相对路径，不能包含 \'..\'）' },
     'remote.invalidRepoName':           { en: 'Invalid repo name',                        zh: '无效仓库名' },
     'remote.invalidRepoNameChars':      { en: 'Invalid repo name (no \'..\'  / \\ ~ allowed)', zh: '无效仓库名（不能包含 \'..\'  / \\ ~）' },
@@ -730,7 +777,7 @@ Options:
     'sts.targetsFound':                 { en: 'Found {0} Qt and {1} C++ targets, none selected', zh: '找到 {0} 个 Qt 和 {1} 个 C++ 目标，未选择' },
     'sts.syncServerNotFound':           { en: 'Sync server "{0}" does not exist', zh: '同步服务器 "{0}" 不存在' },
     'sts.syncServerMissing':            { en: 'server not found',                  zh: '服务器未找到' },
-    'sts.syncNotEnabled':               { en: 'Sync not configured; use forja remote setup', zh: '同步未配置，请使用 forja remote setup 配置' },
+    'sts.syncNotEnabled':               { en: 'Sync not configured; use forja sync', zh: '同步未配置，请使用 forja sync 配置' },
     // list diagnostics
     'lst.qtPathNotConfigured':          { en: 'Qt path not configured',             zh: 'Qt 路径未配置' },
     'lst.vsInstallNotConfigured':       { en: 'VS install not configured',          zh: 'VS 安装未配置' },
@@ -849,6 +896,28 @@ Options:
   forja server update <id>      更新已有服务器
   forja server remove <id> [--force]
                                 删除服务器（非交互模式需 --force）`,
+    },
+    'help.deploy': {
+        en: `Usage:
+  forja deploy                                  Build on remote, download artifacts, deploy to target
+  forja deploy --artifact <path>                Specify artifact path (repeatable)
+  forja deploy config --server <name>           Configure deploy target server
+  forja deploy config --deploy-path <path>      Configure deploy directory on target
+  forja deploy config --artifact <path>         Configure artifact paths
+
+Options:
+  --artifact <path>                     Artifact path relative to remote workspace
+  --json                                JSON output`,
+        zh: `用法:
+  forja deploy                                  远程构建、下载产物、部署到实体机
+  forja deploy --artifact <path>                指定产物路径（可重复）
+  forja deploy config --server <name>           配置部署目标服务器
+  forja deploy config --deploy-path <path>      配置实体机上的部署目录
+  forja deploy config --artifact <path>         配置产物路径
+
+选项:
+  --artifact <path>                     产物路径（相对于远程工作区）
+  --json                                JSON 格式输出`,
     },
 
     // ── Hardcoded string fixes — i18n keys ──

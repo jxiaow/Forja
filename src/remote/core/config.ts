@@ -40,7 +40,7 @@ export function resolveRemoteConfigFrom(
     if (!remotePath) {
         return blocked(
             `Server ${server.name || server.id}: remotePath not configured`,
-            'forja remote setup --server <name> --remote-path <path>',
+            'forja sync --server <name> --remote-path <path>',
         );
     }
     return {
@@ -100,14 +100,14 @@ function resolveRemoteServerFrom(remote: RemoteSettings, serverOverride?: string
     if (!serverId) {
         return {
             diagnostics: [{ level: 'error', message: 'No server selected' }],
-        nextAction: 'forja remote setup --server <name> --remote-path <path>',
+        nextAction: 'forja sync',
         };
     }
     const server = getServerById(serverId);
     if (!server) {
         return {
             diagnostics: [{ level: 'error', message: `Server not found: ${serverId}` }],
-            nextAction: 'forja remote setup --server <name> --remote-path <path>',
+            nextAction: 'forja sync --server <name> --remote-path <path>',
         };
     }
     return { server, diagnostics: [] };

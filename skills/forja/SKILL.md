@@ -96,5 +96,6 @@ forja stop --json
 | 配置远程环境 | `forja remote setup --server <name> --remote-path <path> --json` |
 | 部署远端 CLI | `forja remote bootstrap [--force] --json` |
 | 管理服务器 | `forja server ...` |
-| 同步文件 | `forja sync [--dry-run] [--yes] [--file <path>] --json` |
+| 同步文件 | `forja sync [--yes] [--file <path>] --json` |
+| 预览同步（不执行） | `forja sync --dry-run --json` |
 | 管理同步忽略规则 | `forja sync ignore [add\|rm] <pattern> [--add\|--rm] --json` |

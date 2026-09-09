@@ -90,6 +90,7 @@ export interface RemoteSettings {
     // Remote execution target (separate from sync)
     selectedServer: string;
     remotePaths: Record<string, string>;
+    remoteMode: boolean;
 }
 
 export interface ForjaSettings {
@@ -144,7 +145,8 @@ export const DEFAULT_REMOTE: Readonly<RemoteSettings> = {
     remoteWorkspace: '',
     repos: [],
     selectedServer: '',
-    remotePaths: {}
+    remotePaths: {},
+    remoteMode: false
 };
 
 export const DEFAULT_SETTINGS: Readonly<ForjaSettings> = {
@@ -495,7 +497,8 @@ function sanitizeRemote(raw: Record<string, unknown>): RemoteSettings {
         selectedServer: isString(raw.selectedServer) ? raw.selectedServer : d.selectedServer,
         remotePaths: (raw.remotePaths && typeof raw.remotePaths === 'object' && !Array.isArray(raw.remotePaths))
             ? sanitizeStringRecord(raw.remotePaths as Record<string, unknown>)
-            : d.remotePaths
+            : d.remotePaths,
+        remoteMode: isBool(raw.remoteMode) ? raw.remoteMode : d.remoteMode
     };
 }
 

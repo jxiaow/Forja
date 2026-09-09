@@ -185,6 +185,32 @@ test('saveRemoteSettings round-trips with loadRemoteSettings', () => {
     assert.deepEqual(loaded.transfer, { deployServer: 'deploy-1', deployPath: '/opt/app', artifacts: ['build/app.exe'] });
 });
 
+test('saveRemoteSettings round-trips remoteMode field', () => {
+    const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'remote'));
+
+    saveRemoteSettings(workspace, { ...DEFAULT_REMOTE, remoteMode: true });
+    const loaded = loadRemoteSettings(workspace);
+    assert.equal(loaded.remoteMode, true);
+
+    saveRemoteSettings(workspace, { ...DEFAULT_REMOTE, remoteMode: false });
+    const loaded2 = loadRemoteSettings(workspace);
+    assert.equal(loaded2.remoteMode, false);
+});
+
+test('loadRemoteSettings defaults remoteMode to false when missing', () => {
+    const workspace = makeWorkspace();
+    const filePath = projectConfigPath(workspace, 'remote');
+    trackFile(filePath);
+
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    fs.writeFileSync(filePath, JSON.stringify({ selectedServer: 'dev' }), 'utf8');
+
+    const loaded = loadRemoteSettings(workspace);
+    assert.equal(loaded.remoteMode, false);
+});
+
 test('loadRemoteSettings warns and returns defaults when file is malformed', () => {
     const workspace = makeWorkspace();
     const filePath = projectConfigPath(workspace, 'remote');
