@@ -10,7 +10,7 @@
 forja <subcommand> [action] [options]
 ```
 
-- 当前公开子命令：`init` | `status` | `list` | `use` | `server` | `remote` | `build` | `run` | `stop` | `clean` | `sync`
+- 当前公开子命令：`init` | `status` | `list` | `use` | `server` | `remote` | `deploy` | `build` | `run` | `stop` | `clean` | `sync`
 - 所有命令加 `--json` 输出结构化 JSON
 - 退出码：`0` 成功，`1` 失败
 - 即使发生异常，`--json` 模式也保证输出合法 JSON
@@ -62,7 +62,8 @@ forja <subcommand> [action] [options]
 
 | 子命令 | 参数 | 说明 |
 |--------|------|------|
-| `target` | `--project`, `--answers`, `--mode`, `--arch`, `--qt`, `--vs`, `--jom` | 选择项目和本地构建配置 |
+| `target` | `--project`, `--answers`, `--mode`, `--arch`, `--qt`, `--vs`, `--jom`, `--executable-name`, `--build-script`, `--rcc-project-path`, `--reset` | 选择项目和本地构建配置 |
+| （全局） | `--jobs <N>` | 设置全局并行编译数 |
 
 选择新项目但缺少 mode 或 Windows arch 时，返回 `status: "needs-input"` 与对应 `questions`，不写入默认值。Linux arch 唯一为 `x64`，因此不返回 arch 问题。
 
@@ -70,11 +71,22 @@ forja <subcommand> [action] [options]
 
 | 子命令 | 参数 | 说明 |
 |--------|------|------|
-| 无 | `--json` | 查看当前远程配置 |
-| `setup` | `--server <id>`, `--remote-path <path>` | 为当前 workroot 选择同步服务器、设置远端路径并启用同步，然后部署远端 CLI |
-| `bootstrap` | `--force` | 单独打包并部署当前本地 CLI 到已配置服务器 |
+| 无 | `--json` | 查看当前远程模式状态 |
+| `on` | 无 | 开启远程模式，后续命令自动 bridge 到远端 |
+| `off` | 无 | 关闭远程模式，恢复本地执行 |
+| `check` | `--json` | 检查各 repo 分支与提交一致性 |
+| `bootstrap` | `--force` | 打包并部署当前本地 CLI 到已配置服务器 |
 
-远程构建、运行、诊断、仓库操作和传输配置当前不属于公开 CLI 契约。
+开启远程模式后，`build`/`run`/`stop`/`clean`/`status`/`deploy`/`use`/`list`/`init` 自动 bridge 到远端执行。`sync` 和 `server` 始终本地。
+
+### `forja deploy`
+
+| 子命令 | 参数 | 说明 |
+|--------|------|------|
+| 无 | `--artifact <path>`（可重复） | 部署当前目标产物到远程 |
+| `config` | `--server <id>`, `--deploy-path <path>`, `--artifact <path>` | 配置部署参数 |
+
+远程模式下自动 bridge 到远端执行。
 
 ### `forja server`
 
@@ -92,6 +104,8 @@ forja <subcommand> [action] [options]
 | `--plan` | boolean | 只输出计划 |
 | `--project <path>` | path | 直接指定项目 |
 | `--jobs <N>` | number | 并行编译数 |
+| `--download` | boolean | 远程构建后下载产物到本地 |
+| `--artifact <path>` | path（可重复） | 指定下载的产物路径 |
 
 ### `forja run`
 
@@ -238,6 +252,14 @@ interface CleanResult extends ForjaJsonResult {
   plan?: CommandPlan;
   durationMs?: number;
   exitCode?: number;
+}
+
+interface DeployResult extends ForjaJsonResult {
+  action: 'deploy';
+  deployAction: string;
+  downloaded?: string[];
+  uploaded?: Array<{ source: string; destination: string }>;
+  fallbackUrl?: string;
 }
 
 interface SyncResult extends ForjaJsonResult {

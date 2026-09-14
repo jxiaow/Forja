@@ -82,6 +82,8 @@ forja use target --arch x64                   # 切换架构
 forja use target --qt /path/to/qt             # 设置 Qt 路径
 forja use target --build-script build.sh      # 设置自定义构建脚本
 forja use target --executable-name myapp      # 设置输出文件名
+forja use target --rcc-project-path res/ui    # 设置 RCC 资源目录
+forja use target --reset                      # 重置目标配置
 
 # 子命令
 forja use target qmake-args                   # 查看 qmake 参数
@@ -104,6 +106,8 @@ forja build rcc                   # 仅编译资源文件（Qt 项目）
 forja build --plan                # 预演模式，只显示命令
 forja build --jobs 8              # 指定并行数
 forja build --project app.pro     # 构建指定项目
+forja build --download            # 远程构建后下载产物到本地
+forja build --artifact lib/libfoo.so  # 指定下载的产物路径（可重复）
 ```
 
 ### `forja run`
@@ -139,10 +143,25 @@ forja server remove <id>
 
 ### `forja remote`
 
+管理远程模式。开启后所有命令自动 bridge 到远程执行。
+
 ```bash
-forja remote                                  # 查看远程配置
-forja remote setup --server dev --remote-path /home/dev/project
+forja remote                                  # 查看远程模式状态
+forja remote on                               # 开启远程模式
+forja remote off                              # 关闭远程模式
+forja remote check                            # 检查各 repo 分支与提交一致性
 forja remote bootstrap                        # 部署 Forja CLI 到远端
+```
+
+### `forja deploy`
+
+部署构建产物到远程服务器或实体机。远程模式下自动 bridge。
+
+```bash
+forja deploy                                  # 部署当前目标产物
+forja deploy --artifact lib/libfoo.so         # 指定产物路径（可重复）
+forja deploy config                           # 配置部署参数
+forja deploy config --server dev --deploy-path /opt/app
 ```
 
 ### `forja sync`
@@ -165,17 +184,22 @@ forja sync ignore --rm "*.tmp"    # 删除忽略规则
 
 | 命令 | 说明 |
 |------|------|
+| `Forja: Status` | 查看状态 |
+| `Forja: Init Workspace` | 初始化工作区 |
+| `Forja: List` | 列出候选项 |
+| `Forja: Use Target` | 选择/切换目标 |
+| `Forja: Remote` | 查看远程模式状态 |
+| `Forja: Open Config Page` | 打开配置面板 |
+| `Forja: Server` | 管理远程服务器 |
 | `Forja: Build` | 编译当前目标 |
 | `Forja: Run` | 编译并运行 |
 | `Forja: Debug` | 编译并调试 |
 | `Forja: Stop` | 停止运行中的程序 |
 | `Forja: Clean` | 清理构建产物 |
 | `Forja: Sync Changes` | 同步变更文件 |
-| `Forja: Status` | 查看状态 |
-| `Forja: Init Workspace` | 初始化工作区 |
-| `Forja: Use Target` | 选择/切换目标 |
-| `Forja: Open Config Page` | 打开配置面板 |
 | `Forja: Open with Qt Designer` | 用 Designer 打开 .ui 文件 |
+| `Forja: 打开远程页` | 打开远程配置页 |
+| `Forja: 测试远程连接` | 测试 SSH 连接 |
 | `Forja Remote: Bootstrap` | 部署 CLI 到远端 |
 
 ## 配置面板

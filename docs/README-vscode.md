@@ -1,6 +1,6 @@
 # Forja — VSCode 扩展
 
-C++ 项目构建扩展，支持 Qt (qmake) 和 C++ (.sln/Makefile) 项目。本地构建、运行和环境管理由扩展与 CLI 共同提供；远端当前仅支持工作区同步和 CLI 部署。
+C++ 项目构建扩展，支持 Qt (qmake) 和 C++ (.sln/Makefile) 项目。本地构建、运行和环境管理由扩展与 CLI 共同提供；开启远程模式后，所有命令自动 bridge 到远端执行。
 
 ## 安装
 
@@ -44,22 +44,23 @@ code --install-extension forja-<version>-dev.<timestamp>.vsix
 
 | 命令 | 说明 |
 |------|------|
-| `forja.build` | 编译当前目标 |
-| `forja.run` | 编译并运行 |
-| `forja.run.detached` | 后台编译并运行 |
-| `forja.stop` | 停止运行中的程序 |
-| `forja.clean` | 清理构建产物 |
-| `forja.sync` | 同步变更文件到服务器 |
-| `forja.config.openPage` | 打开配置面板指定页 |
-| `forja.qt.selectProject` | 选择 .pro 文件 |
-| `forja.qt.qmake` | 生成 Makefile |
-| `forja.qt.rcc` | 编译 .qrc 资源 |
-| `forja.qt.designer` | 用 Qt Designer 打开 .ui |
-| `forja.qt.testConnection` | 测试 SSH 连接 |
-| `forja.build` | 编译项目（Qt/C++ 自动分发） |
-| `forja.run` | 运行项目 |
-| `forja.stop` | 停止运行中的进程 |
-| `forja.clean` | 清理构建产物 |
+| `Forja: Status` | 查看状态 |
+| `Forja: Init Workspace` | 初始化工作区 |
+| `Forja: List` | 列出候选项 |
+| `Forja: Use Target` | 选择/切换目标 |
+| `Forja: Remote` | 查看远程模式状态 |
+| `Forja: Open Config Page` | 打开配置面板 |
+| `Forja: Server` | 管理远程服务器 |
+| `Forja: Build` | 编译当前目标 |
+| `Forja: Run` | 编译并运行 |
+| `Forja: Debug` | 编译并调试 |
+| `Forja: Stop` | 停止运行中的程序 |
+| `Forja: Clean` | 清理构建产物 |
+| `Forja: Sync Changes` | 同步变更文件 |
+| `Forja: Open with Qt Designer` | 用 Qt Designer 打开 .ui 文件 |
+| `Forja: 打开远程页` | 打开远程配置页 |
+| `Forja: 测试远程连接` | 测试 SSH 连接 |
+| `Forja Remote: Bootstrap` | 部署 CLI 到远端 |
 
 ## 配置面板
 
@@ -74,29 +75,32 @@ code --install-extension forja-<version>-dev.<timestamp>.vsix
 
 在配置面板中修改 mode/arch 会同步写入 activeTarget，CLI 的 `forja build` 立即生效。
 
-## 远程同步
+## 远程模式
 
-Forja 当前通过 SSH 同步工作区，并可将当前本地 CLI 部署到远端；远程构建、运行和诊断暂不可用：
+开启远程模式后，所有命令（除 remote 管理和 sync 外）自动 bridge 到远端执行，包括构建、运行、调试、状态查询等。
 
 ```bash
 # 1. 添加服务器（CLI 或配置面板）
 forja server add --name dev --host 192.168.1.10 --username dev
 
-# 2. 为当前 workroot 配置同步服务器与远端路径，并启用同步
-forja remote setup --server dev --remote-path /home/dev/workspace
+# 2. 开启远程模式
+forja remote on
 
-# 3. 部署远端 Forja（setup 已执行；也可单独重试）
+# 3. 部署远端 Forja CLI（可选）
 forja remote bootstrap
+
+# 4. 同步变更文件
+forja sync
 ```
 
-服务器记录由 `forja server` 管理；远端路径和同步开关属于当前 workroot。`remote setup` 会提供该服务器已使用路径的选择或新路径输入。
+服务器记录由 `forja server` 管理；远程模式开关属于当前 workroot。
 
 ## 同步
 
 基于 git diff 增量上传变更文件，适用于本地编辑、远端编译的场景：
 
 1. 使用 Forja: Server 管理服务器记录（一次配置，所有项目共享）
-2. 使用 Forja: Remote 的 Remote Setup 为当前 workroot 选择服务器、远端路径并开启同步
+2. 使用 `forja remote on` 开启远程模式
 3. 点击状态栏「同步」按钮或执行 `forja sync`
 4. 仅上传有变化的文件
 

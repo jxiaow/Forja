@@ -134,8 +134,8 @@ forja build
 # 先配置服务器
 forja server add --name dev --host 192.168.1.10 --username dev
 
-# 配置同步目录
-forja remote setup --server dev --remote-path /home/dev/workspace
+# 开启远程模式
+forja remote on
 
 # 将当前本地 CLI 打包并安装/更新到远端（可选）
 forja remote bootstrap
@@ -143,12 +143,15 @@ forja remote bootstrap
 # 同步变更文件
 forja sync --dry-run
 forja sync
+
+# 远程构建（自动 bridge 到远端执行）
+forja build
 ```
 
 ### 场景 4：文件同步
 
 ```bash
-forja use sync --server dev --remote-path /home/dev/workspace --enable
+forja server add --name dev --host 192.168.1.10 --username dev
 forja sync --dry-run                      # 预览待同步文件
 forja sync                                # 同步变更文件
 ```
@@ -174,7 +177,9 @@ VSCode 扩展和 CLI 共享同一套新配置存储（`~/.forja/workspaces/<hash
 | 切 mode/arch | 状态栏下拉 / 配置面板 | `forja use target --mode` |
 | 构建 | `forja.build` 命令 | `forja build` |
 | 运行（仅 Qt/qmake） | `forja.run` 命令 | `forja run` |
-| 远程部署 | — | `forja remote bootstrap` |
+| 远程模式 | `forja.remote` 命令 | `forja remote on/off` |
+| 远程部署 | `forja.remoteBootstrap` 命令 | `forja remote bootstrap` |
+| 部署产物 | — | `forja deploy` |
 
 ## 命令速查
 
@@ -183,9 +188,11 @@ VSCode 扩展和 CLI 共享同一套新配置存储（`~/.forja/workspaces/<hash
 | `status` | 查看就绪状态 | `forja status` |
 | `init` | 首次初始化 | `forja init` |
 | `list` | 列出候选项 | `forja list targets`、`forja list env` |
-| `use` | 写入配置 | `forja use target --project`、`forja use target --mode release` |
+| `use` | 写入配置 | `forja use target --project`、`forja use target --mode release`、`forja use --jobs 8` |
 | `server` | 管理服务器 | `forja server add`、`forja server remove` |
-| `build` | 编译 | `forja build`、`forja build fresh`、`forja build qmake` |
+| `remote` | 远程模式管理 | `forja remote on`、`forja remote off`、`forja remote check`、`forja remote bootstrap` |
+| `deploy` | 部署产物 | `forja deploy`、`forja deploy config` |
+| `build` | 编译 | `forja build`、`forja build fresh`、`forja build qmake`、`forja build --download` |
 | `run` | 运行 Qt/qmake 目标 | `forja run`、`forja run --detach` |
 | `stop` | 停止进程 | `forja stop` |
 | `clean` | 清理产物 | `forja clean` |
@@ -250,16 +257,14 @@ forja list env --qt --json    # 列出 Qt 环境详情
 forja use target --project app.pro
 forja use target --mode release --arch x64
 
-# 当前支持的远程操作：同步配置与部署
-forja remote
-forja remote setup --server server-1 --remote-path /home/dev/workspace
-forja remote bootstrap
-
 # 配置 Qt/C++ 工具链
 forja use target --qt /path/to/Qt --vs "C:/Program Files/Microsoft Visual Studio/2022/Community" --jom /path/to/jom
 
 # 构建后重命名可执行文件
 forja use target --executable-name MyApp
+
+# 设置全局并行编译数
+forja use --jobs 8
 ```
 
 ### `forja server`
@@ -277,7 +282,7 @@ forja server remove server-1 --json
 
 ### `forja build`
 
-编译当前项目。
+编译当前项目。远程模式下自动 bridge 到远端执行。
 
 ```bash
 forja build                 # 默认编译
@@ -286,6 +291,8 @@ forja build qmake           # 仅运行 qmake
 forja build rcc             # 编译 .qrc 资源文件
 forja build --plan          # 仅显示编译计划
 forja build --jobs 8        # 8 路并行编译
+forja build --download      # 远程构建后下载产物到本地
+forja build --artifact lib/libfoo.so  # 指定下载的产物路径（可重复）
 ```
 
 ### `forja run`
@@ -342,26 +349,45 @@ forja sync --dry-run                    # 预览待同步文件
 
 服务器列表和每台服务器最近使用的远端目录存储在 `~/.forja/servers.json`；当前 workspace 的同步开关、选中服务器、当前路径和忽略列表存储在 `~/.forja/workspaces/<hash>.json`。
 
-## Remote 配置
+## Remote 模式
 
-远程配置仅供同步与 bootstrap 使用。
+远程模式是一个持久化开关。开启后，所有命令（除 remote 管理和 sync 外）自动 bridge 到远程执行。
 
 ```bash
-# 配置同步服务器和目录
-forja remote setup --server server-1 --remote-path /home/dev/workspace
-
-# 将当前本地 CLI 打包并安装/更新到远端
-forja remote bootstrap
-
+forja remote                      # 查看远程模式状态
+forja remote on                   # 开启远程模式
+forja remote off                  # 关闭远程模式
+forja remote check                # 检查各 repo 分支与提交一致性
+forja remote bootstrap            # 部署 Forja CLI 到远端
 ```
 
-bootstrap 复用远端 npm 已配置的全局 prefix，与手动执行 `npm install -g` 的位置一致；安装后通过 `npm prefix -g` 推导并验证真实入口，不依赖 SSH 非交互 shell 的 PATH。
+`forja remote bootstrap` 复用远端 npm 已配置的全局 prefix，与手动执行 `npm install -g` 的位置一致；安装后通过 `npm prefix -g` 推导并验证真实入口，不依赖 SSH 非交互 shell 的 PATH。
 
-当前版本的 repo/build-order/transfer 高级配置尚未纳入公开 CLI 契约，不能在脚本中使用。
+### 远程命令路由
 
-远程 repo/build-order/transfer 的公开参数尚未冻结；在契约冻结前不要依赖这些字段。
+开启远程模式后，以下命令自动 bridge 到远程执行：
 
-如果远端无法安装或执行 forja CLI，staged 模式会对执行类动作尝试 shell fallback：Qt 支持 `qmake/build/clean/run/stop/ps`，C++ 支持 `build/rebuild/clean`。`init/use/status` 等远端持久配置或诊断动作仍依赖远端 forja。
+- `build` / `build fresh` / `build qmake`
+- `run` / `stop` / `clean`
+- `status`
+- `deploy` / `use` / `list` / `init`
+
+始终本地的命令：
+
+- `remote on/off/check/bootstrap`（模式管理本身必须本地）
+- `sync`（本地→远程文件同步）
+- `server`（SSH 服务器配置是本地概念）
+
+## `forja deploy`
+
+部署构建产物到远程服务器或实体机。远程模式下自动 bridge。
+
+```bash
+forja deploy                                  # 部署当前目标产物
+forja deploy --artifact lib/libfoo.so         # 指定产物路径（可重复）
+forja deploy config                           # 配置部署参数
+forja deploy config --server dev --deploy-path /opt/app
+```
 
 ## JSON 输出
 
