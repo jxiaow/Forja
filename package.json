@@ -3,7 +3,7 @@
   "displayName": "Forja",
   "publisher": "forja",
   "description": "Build C++ projects — Qt (qmake) and C++ (.sln/Makefile/CMake) with local execution and remote sync",
-  "version": "0.7.56",
+  "version": "0.7.57",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0",
