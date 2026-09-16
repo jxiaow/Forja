@@ -219,16 +219,23 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     try {
         const planned = await createActionPlan(cliOptions);
         if (!planned.ok) {
+            const isRccMissing = planned.diagnostics.some(d => d.message.includes('XYRcc'));
             const isTargetMissing = planned.diagnostics.some(d => /not found|does not exist|missing/i.test(d.message));
+            let nextAction: string | undefined;
+            if (isRccMissing) {
+                nextAction = workroot ? 'forja use --rcc-project-path' : 'forja init';
+            } else if (isTargetMissing) {
+                nextAction = 'forja list targets';
+            } else {
+                nextAction = stripJsonFlag(planned.nextAction);
+            }
             return {
                 ok: false,
                 action: 'clean',
                 workspace,
                 activeTarget: target,
                 diagnostics: planned.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-                nextAction: isTargetMissing
-                    ? 'forja list targets'
-                    : stripJsonFlag(planned.nextAction),
+                nextAction,
             };
         }
 

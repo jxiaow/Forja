@@ -148,6 +148,10 @@ export async function runRun(workspace: string, options: {
     try {
         const planned = await createActionPlan(cliOptions);
         if (!planned.ok) {
+            let nextAction = stripJsonFlag(planned.nextAction);
+            if (planned.diagnostics.some(d => d.message.includes('XYRcc'))) {
+                nextAction = workroot ? 'forja use --rcc-project-path' : 'forja init';
+            }
             return {
                 ok: false,
                 action: 'run',
@@ -155,7 +159,7 @@ export async function runRun(workspace: string, options: {
                 workspace,
                 activeTarget: target,
                 diagnostics: planned.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
-                nextAction: stripJsonFlag(planned.nextAction),
+                nextAction,
             };
         }
 
