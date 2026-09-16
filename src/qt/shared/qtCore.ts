@@ -244,7 +244,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     } else if (options.action === 'rcc') {
         const rccPath = resolveRccProjectPath(options.rccProjectPath || '', workspace);
         if (!rccPath) {
-            result.diagnostics.push({ level: 'error', message: '未找到 XYRcc 目录。使用 forja use --rcc-project-path <路径> 设置，或运行 forja init 重新配置' });
+            result.diagnostics.push({ level: 'error', message: '未找到 XYRcc 目录。使用 forja use --rcc <路径> 设置，或运行 forja init 重新配置' });
             result.nextAction = 'forja init';
             return result;
         }

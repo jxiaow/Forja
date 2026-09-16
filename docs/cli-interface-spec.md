@@ -62,7 +62,7 @@ forja <subcommand> [action] [options]
 
 | 子命令 | 参数 | 说明 |
 |--------|------|------|
-| `target` | `--project`, `--answers`, `--mode`, `--arch`, `--qt`, `--vs`, `--jom`, `--executable-name`, `--build-script`, `--rcc-project-path`, `--reset` | 选择项目和本地构建配置 |
+| `target` | `--project`, `--answers`, `--mode`, `--arch`, `--qt`, `--vs`, `--jom`, `--executable-name`, `--build-script`, `--rcc`, `--reset` | 选择项目和本地构建配置 |
 | （全局） | `--jobs <N>` | 设置全局并行编译数 |
 
 选择新项目但缺少 mode 或 Windows arch 时，返回 `status: "needs-input"` 与对应 `questions`，不写入默认值。Linux arch 唯一为 `x64`，因此不返回 arch 问题。

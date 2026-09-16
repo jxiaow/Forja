@@ -223,7 +223,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             const isTargetMissing = planned.diagnostics.some(d => /not found|does not exist|missing/i.test(d.message));
             let nextAction: string | undefined;
             if (isRccMissing) {
-                nextAction = workroot ? 'forja use --rcc-project-path' : 'forja init';
+                nextAction = workroot ? 'forja use --rcc' : 'forja init';
             } else if (isTargetMissing) {
                 nextAction = 'forja list targets';
             } else {

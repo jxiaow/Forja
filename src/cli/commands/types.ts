@@ -519,6 +519,7 @@ Options:
     'help.use': {
         en: `Usage: forja use target [options] [--json]
        forja use --jobs <N>          Set global parallel build jobs (persisted)
+       forja use --rcc <path>        Set RCC project path
 
 Target options:
   --project <path>        Select target by project path or label
@@ -528,6 +529,7 @@ Target options:
   --qt <path>             Set Qt installation path
   --vs <path>             Set Visual Studio installation path
   --jom <path>            Set jom installation path
+  --rcc <path>            Set RCC project path
   --executable-name <name> Rename executable after build (overrides .pro TARGET)
   --build-script <path>   Set custom build script (.sh/.bat, C++ targets only)
   suppress-warnings [codes]     Manage suppressed warnings (no args = show)
@@ -538,6 +540,7 @@ Target options:
     --rm <args>                 Remove args`,
         zh: `用法: forja use target [选项] [--json]
        forja use --jobs <N>          设置全局并行编译数（持久化）
+       forja use --rcc <路径>        设置 RCC 项目路径
 
 Target 选项:
   --project <路径>        按项目路径或标签选择目标
@@ -547,6 +550,7 @@ Target 选项:
   --qt <路径>             设置 Qt 安装路径
   --vs <路径>             设置 Visual Studio 安装路径
   --jom <路径>            设置 jom 安装路径
+  --rcc <路径>            设置 RCC 项目路径
   --executable-name <名称> 构建后重命名可执行文件（覆盖 .pro 的 TARGET）
   --build-script <路径>   设置自定义构建脚本（.sh/.bat，仅 C++ 目标）
   suppress-warnings [代码]      管理被过滤的构建警告（无参数=查看）

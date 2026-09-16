@@ -150,7 +150,7 @@ export async function runRun(workspace: string, options: {
         if (!planned.ok) {
             let nextAction = stripJsonFlag(planned.nextAction);
             if (planned.diagnostics.some(d => d.message.includes('XYRcc'))) {
-                nextAction = workroot ? 'forja use --rcc-project-path' : 'forja init';
+                nextAction = workroot ? 'forja use --rcc' : 'forja init';
             }
             return {
                 ok: false,

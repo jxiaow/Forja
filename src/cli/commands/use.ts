@@ -248,7 +248,7 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
             buildScript: args.buildScript,
         });
     }
-    // --rcc-project-path without --project: update RCC path only
+    // --rcc without --project: update RCC path only
     else if (args.rccProjectPath !== undefined) {
         const workroot = resolveWorkroot(workspace);
         if (!workroot) {
@@ -333,7 +333,7 @@ export async function runUseTarget(workspace: string, args: UseTargetArgs): Prom
     }
 
     // RCC project path update (flag or interactive prompt)
-    // Only runs after --project flow (standalone --rcc-project-path is handled by its own branch above)
+    // Only runs after --project flow (standalone --rcc is handled by its own branch above)
     // Interactive prompt only when no specific flag was given (avoid prompting after --mode/--build-script etc.)
     const hasSpecificFlag = args.mode || args.arch || args.qtPath || args.vsInstall || args.jomPath || args.executableName !== undefined || args.buildScript !== undefined;
     if (result?.ok && args.project) {

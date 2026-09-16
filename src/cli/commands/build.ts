@@ -274,7 +274,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             let nextAction = stripJsonFlag(planned.nextAction);
             const isRccMissing = planned.diagnostics.some(d => d.message.includes('XYRcc'));
             if (isRccMissing) {
-                nextAction = workroot ? 'forja use --rcc-project-path' : 'forja init';
+                nextAction = workroot ? 'forja use --rcc' : 'forja init';
             }
             return {
                 ok: false,

@@ -874,8 +874,8 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 outputResult(removeResult, wantsJson, (r) => formatUseText(r, locale));
                 return;
             }
-            const targetKnown = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--executable-name', '--reset', '--build-script', '--rcc-project-path']);
-            const targetWithVal = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--executable-name', '--build-script', '--rcc-project-path']);
+            const targetKnown = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--executable-name', '--reset', '--build-script', '--rcc']);
+            const targetWithVal = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--executable-name', '--build-script', '--rcc']);
             const targetUnknown = findUnknownFlags(argv, targetKnown, targetWithVal, {
                 allowEmptyValues: new Set(['--build-script', '--executable-name']),
             });
@@ -903,7 +903,7 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 jomPath: extractFlag(argv, '--jom'),
                 executableName: extractFlag(argv, '--executable-name', { allowEmpty: true }),
                 buildScript: extractFlag(argv, '--build-script', { allowEmpty: true }),
-                rccProjectPath: extractFlag(argv, '--rcc-project-path'),
+                rccProjectPath: extractFlag(argv, '--rcc'),
                 reset: hasFlag(argv, '--reset'),
                 interactive: !wantsJson,
                 json: wantsJson,
@@ -928,8 +928,8 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 return;
             }
             // No subcommand — handle global flags or show current config
-            const globalKnown = new Set(['--jobs']);
-            const globalWithVal = new Set(['--jobs']);
+            const globalKnown = new Set(['--jobs', '--rcc']);
+            const globalWithVal = new Set(['--jobs', '--rcc']);
             const showUnknown = findUnknownFlags(argv, globalKnown, globalWithVal, {
                 allowEmptyValues: new Set(['--jobs']),
             });
@@ -954,6 +954,17 @@ async function handleUse(argv: string[], workroot: string, wantsJson: boolean, l
                 }
                 saveGlobalConfig({ jobs: jobsNum });
                 outputResult({ ok: true, action: 'use', useScope: 'global', changed: ['jobs'], jobs: jobsNum, nextAction: 'forja build' }, wantsJson, (r) => T('use.jobsSet', [String(jobsNum)]));
+                return;
+            }
+            // --rcc: update RCC project path
+            const rccRaw = extractFlag(argv, '--rcc');
+            if (rccRaw !== undefined) {
+                const useResult = await runUseTarget(workroot, {
+                    rccProjectPath: rccRaw,
+                    interactive: !wantsJson,
+                    json: wantsJson,
+                });
+                outputResult(useResult, wantsJson, (r) => formatUseText(r, locale));
                 return;
             }
             const result = runUseShow(workroot);
