@@ -760,48 +760,93 @@ async function configureNewTarget(workroot: string, config: WorkspaceConfig, opt
 
 async function configureTargetFields(target: TargetProfile, options: InitOptions, workroot?: string): Promise<{ ok: true; target: TargetProfile; rccProjectPath?: string } | { ok: false; diagnostics: Diagnostic[] }> {
     setSilent(true);
-    let env;
+    let env: Awaited<ReturnType<typeof detectEnv>>;
     try { env = await detectEnv(); } finally { setSilent(false); }
 
     const updated = { ...target, toolchain: { ...target.toolchain } };
+
+    // Prompt for a toolchain path when there are multiple candidates OR the
+    // stored path is invalid (e.g. config restored from a backup on another machine).
+    async function pickPath(label: string, candidates: { value: string; label: string }[], current: string | undefined): Promise<string | null> {
+        const currentValid = !!current && fs.existsSync(current);
+        if (!options.interactive || (candidates.length <= 1 && currentValid)) return null;
+        const items = candidates.map(c => ({
+            value: c.value,
+            label: c.value === current ? `${c.label} ${T('currentMarker')}` : c.label,
+        }));
+        if (current && currentValid && !candidates.some(c => c.value === current)) {
+            items.unshift({ value: current, label: `${current} ${T('currentMarker')}` });
+        }
+        const MANUAL = '__manual_qt_vs__';
+        items.push({ value: MANUAL, label: T('init.rccManual') });
+        const chosen = await choose(label, items, i => i.label);
+        if (!chosen) return null;
+        if (chosen.value === MANUAL) {
+            const input = await prompt(label, current);
+            return input?.trim() || null;
+        }
+        return chosen.value;
+    }
+
+    function qtVersionForPath(qtPath: string): string | undefined {
+        const exact = env.qtCandidates.find(q => q.path === qtPath);
+        if (exact) return exact.version;
+        const matches = [...qtPath.matchAll(/(\d+\.\d+\.\d+)/g)];
+        if (matches.length > 0) return matches[matches.length - 1][1];
+        return undefined;
+    }
 
     // Re-detect toolchain — answers take priority, then interactive, then auto-detect
     // In modify mode: only auto-apply single-candidate detection when not previously configured
     if (target.kind === 'qt') {
         if (options.answers?.qtPath) {
             updated.toolchain.qtPath = options.answers.qtPath;
-        } else if (options.interactive && env.qtCandidates.length > 1) {
-            const chosen = await choose(T('init.selectQt'), env.qtCandidates, q => `${q.version} — ${q.path}`);
-            if (chosen) {
-                updated.toolchain.qtPath = chosen.path;
-                updated.toolchain.qtVersion = chosen.version;
+        } else {
+            const picked = await pickPath(
+                T('init.selectQt'),
+                env.qtCandidates.map(q => ({ value: q.path, label: `${q.version} — ${q.path}` })),
+                target.toolchain.qtPath,
+            );
+            if (picked) {
+                updated.toolchain.qtPath = picked;
+                updated.toolchain.qtVersion = qtVersionForPath(picked);
+            } else if (env.qt && !target.toolchain.qtPath) {
+                // Only auto-apply if not previously configured
+                updated.toolchain.qtPath = env.qt.path;
+                updated.toolchain.qtVersion = env.qt.version;
             }
-        } else if (env.qt && !target.toolchain.qtPath) {
-            // Only auto-apply if not previously configured
-            updated.toolchain.qtPath = env.qt.path;
-            updated.toolchain.qtVersion = env.qt.version;
         }
 
         if (options.answers?.vsInstall) {
             updated.toolchain.vsInstall = options.answers.vsInstall;
-        } else if (options.interactive && env.vsCandidates.length > 1) {
-            const chosen = await choose(T('init.selectVs'), env.vsCandidates, v => `${v.version} ${v.edition} — ${v.installPath}`);
-            if (chosen) updated.toolchain.vsInstall = chosen.installPath;
-        } else if (env.vs && !target.toolchain.vsInstall) {
-            // Only auto-apply if not previously configured
-            updated.toolchain.vsInstall = env.vs.installPath;
+        } else {
+            const picked = await pickPath(
+                T('init.selectVs'),
+                env.vsCandidates.map(v => ({ value: v.installPath, label: `${v.version} ${v.edition} — ${v.installPath}` })),
+                target.toolchain.vsInstall,
+            );
+            if (picked) updated.toolchain.vsInstall = picked;
+            else if (env.vs && !target.toolchain.vsInstall) {
+                // Only auto-apply if not previously configured
+                updated.toolchain.vsInstall = env.vs.installPath;
+            }
         }
 
         if (env.jom && !target.toolchain.jomPath) updated.toolchain.jomPath = env.jom;
     } else {
         if (options.answers?.vsInstall) {
             updated.toolchain.vsInstall = options.answers.vsInstall;
-        } else if (options.interactive && env.vsCandidates.length > 1) {
-            const chosen = await choose(T('init.selectVs'), env.vsCandidates, v => `${v.version} ${v.edition} — ${v.installPath}`);
-            if (chosen) updated.toolchain.vsInstall = chosen.installPath;
-        } else if (env.vs && !target.toolchain.vsInstall) {
-            // Only auto-apply if not previously configured
-            updated.toolchain.vsInstall = env.vs.installPath;
+        } else {
+            const picked = await pickPath(
+                T('init.selectVs'),
+                env.vsCandidates.map(v => ({ value: v.installPath, label: `${v.version} ${v.edition} — ${v.installPath}` })),
+                target.toolchain.vsInstall,
+            );
+            if (picked) updated.toolchain.vsInstall = picked;
+            else if (env.vs && !target.toolchain.vsInstall) {
+                // Only auto-apply if not previously configured
+                updated.toolchain.vsInstall = env.vs.installPath;
+            }
         }
     }
 
