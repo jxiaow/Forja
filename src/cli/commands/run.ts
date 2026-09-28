@@ -11,7 +11,7 @@ import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner
 import { createPlatformRunExecutor } from '../../qt/platform/runExecutor';
 import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
 import { CliOptions } from '../../qt/cli/types';
-import { ForjaJsonResult, ActiveTarget, Diagnostic, RuntimeState, diag, T } from './types';
+import { ForjaJsonResult, ActiveTarget, RuntimeState, diag, mapQtDiagnostic, T } from './types';
 import { getActiveTarget } from './activeTarget';
 import { resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
@@ -152,13 +152,16 @@ export async function runRun(workspace: string, options: {
             if (planned.diagnostics.some(d => d.message.includes('XYRcc'))) {
                 nextAction = workroot ? 'forja use --rcc' : 'forja init';
             }
+            if (planned.diagnostics.some(d => d.code === 'qtPathInvalid') && !workroot) {
+                nextAction = 'forja init';
+            }
             return {
                 ok: false,
                 action: 'run',
                 runAction,
                 workspace,
                 activeTarget: target,
-                diagnostics: planned.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
+                diagnostics: planned.diagnostics.map(mapQtDiagnostic),
                 nextAction,
             };
         }

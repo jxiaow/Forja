@@ -89,6 +89,19 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const executableName = options.executableName || undefined;
     const qmakeArgs = options.qmakeArgs || '';
     const jomPath = options.jomPath || '';
+    if (qtPath && options.executionMode === 'execute') {
+        const qmakeBin = path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake');
+        if (!fs.existsSync(qmakeBin)) {
+            result.diagnostics.push({
+                level: 'error',
+                code: 'qtPathInvalid',
+                params: [qtPath, qmakeBin],
+                message: `Qt 路径无效，未找到 ${qmakeBin}。Qt 目录可能已被移动或改名，运行 forja use --qt <新路径> 重新选择 Qt`,
+            });
+            result.nextAction = 'forja use --qt <path>';
+            return result;
+        }
+    }
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
 
     const shellBuilder = createShellPlanBuilder(process.platform === 'win32' ? winConfig : linuxConfig);

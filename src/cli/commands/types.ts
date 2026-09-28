@@ -6,6 +6,7 @@
 // ── ActiveTarget ──
 
 import type { TargetProfile } from '../../core/workspaceStore';
+import type { CliDiagnostic } from '../../core/types';
 
 /** @deprecated Use TargetProfile directly. Kept as alias for backward compat. */
 export type ActiveTarget = TargetProfile;
@@ -24,6 +25,14 @@ export interface Diagnostic {
 
 export function diag(level: DiagnosticLevel, message: string, hint?: string): Diagnostic {
     return { level, message, hint };
+}
+
+/** Localize qt-layer diagnostics that carry a stable code; pass others through. */
+export function mapQtDiagnostic(d: CliDiagnostic): Diagnostic {
+    if (d.code === 'qtPathInvalid') {
+        return { level: 'error', message: T('cmd.qtPathInvalid', d.params), hint: T('cmd.qtPathInvalidHint') };
+    }
+    return diag(d.level, d.message);
 }
 
 // ── Readiness ──
@@ -834,6 +843,8 @@ Options:
     'cmd.rccNotRemote':                  { en: 'RCC is not supported on remote targets', zh: 'RCC 不支持远程目标' },
     'cmd.cppBuildFailed':                { en: 'C++ build failed',                   zh: 'C++ 构建失败' },
     'cmd.qtBuildFailed':                 { en: 'Qt build failed',                    zh: 'Qt 构建失败' },
+    'cmd.qtPathInvalid':                 { en: 'Qt path is invalid, {1} not found. The Qt directory may have been moved or renamed', zh: 'Qt 路径无效，未找到 {1}。Qt 目录可能已被移动或改名' },
+    'cmd.qtPathInvalidHint':             { en: 'Run forja use --qt <new-path> to reselect Qt, or forja init to modify the target', zh: '运行 forja use --qt <新路径> 重新选择 Qt，或 forja init 修改目标' },
     'cmd.cppRunUnsupported':             { en: 'C++ target does not support run. Build first.', zh: 'C++ 目标不支持运行。请先构建。' },
     'cmd.debugVscodeOnly':               { en: 'Debug is only available in VSCode. Use the "Forja: Debug" command from the Command Palette, or click the debug button in the status bar.', zh: '调试仅在 VSCode 中可用。使用命令面板中的 "Forja: Debug" 命令，或点击状态栏中的调试按钮。' },
     'cmd.cppCustomUnsupported':          { en: 'C++ target does not support custom commands', zh: 'C++ 目标不支持自定义命令' },

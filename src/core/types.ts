@@ -69,6 +69,10 @@ export type CliArch = 'x86' | 'x64';
 export interface CliDiagnostic {
     level: 'info' | 'warning' | 'error';
     message: string;
+    /** Stable machine-readable code for callers to localize or branch on. */
+    code?: string;
+    /** Interpolation parameters aligned with the message key (e.g. {0}, {1}). */
+    params?: string[];
 }
 
 export interface CliResolvedConfig {

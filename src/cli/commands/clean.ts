@@ -10,7 +10,7 @@ import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner
 import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
 import { createCppPlan } from '../../cpp/shared/plan';
-import { ForjaJsonResult, ActiveTarget, Diagnostic, diag, T } from './types';
+import { ForjaJsonResult, ActiveTarget, diag, mapQtDiagnostic, T } from './types';
 import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 import { getServerById } from '../../core/serverStore';
@@ -222,7 +222,9 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             const isRccMissing = planned.diagnostics.some(d => d.message.includes('XYRcc'));
             const isTargetMissing = planned.diagnostics.some(d => /not found|does not exist|missing/i.test(d.message));
             let nextAction: string | undefined;
-            if (isRccMissing) {
+            if (planned.diagnostics.some(d => d.code === 'qtPathInvalid')) {
+                nextAction = workroot ? stripJsonFlag(planned.nextAction) : 'forja init';
+            } else if (isRccMissing) {
                 nextAction = workroot ? 'forja use --rcc' : 'forja init';
             } else if (isTargetMissing) {
                 nextAction = 'forja list targets';
@@ -234,7 +236,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
                 action: 'clean',
                 workspace,
                 activeTarget: target,
-                diagnostics: planned.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
+                diagnostics: planned.diagnostics.map(mapQtDiagnostic),
                 nextAction,
             };
         }

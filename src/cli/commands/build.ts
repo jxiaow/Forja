@@ -11,7 +11,7 @@ import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
 import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
 import { createCppPlan } from '../../cpp/shared/plan';
-import { ForjaJsonResult, ActiveTarget, Diagnostic, diag, T } from './types';
+import { ForjaJsonResult, ActiveTarget, diag, mapQtDiagnostic, T } from './types';
 import { resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 
@@ -276,13 +276,16 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             if (isRccMissing) {
                 nextAction = workroot ? 'forja use --rcc' : 'forja init';
             }
+            if (planned.diagnostics.some(d => d.code === 'qtPathInvalid') && !workroot) {
+                nextAction = 'forja init';
+            }
             return {
                 ok: false,
                 action: 'build',
                 buildAction,
                 workspace,
                 activeTarget: target,
-                diagnostics: planned.diagnostics.map(d => diag(d.level as Diagnostic['level'], d.message)),
+                diagnostics: planned.diagnostics.map(mapQtDiagnostic),
                 nextAction,
             };
         }

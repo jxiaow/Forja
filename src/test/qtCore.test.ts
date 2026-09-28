@@ -412,6 +412,32 @@ test('non-existent qtPath still generates commands', async () => {
     assert.ok(result.commands.length > 0);
 });
 
+test('execute mode with invalid qtPath returns structured diagnostic', async () => {
+    const workspace = makeWorkspace();
+
+    const result = await createActionPlan({
+        action: 'build',
+        executionMode: 'execute',
+        workspace,
+        project: path.join(workspace, 'demo.pro'),
+        mode: 'debug',
+        arch: 'x86',
+        qtPath: 'Z:/nonexistent/qt',
+        vsDevShell: 'C:/VS/Launch-VsDevShell.ps1',
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.commands.length, 0);
+    assert.equal(result.nextAction, 'forja use --qt <path>');
+    const d = result.diagnostics.find(item => item.code === 'qtPathInvalid');
+    assert.ok(d, 'expected qtPathInvalid diagnostic');
+    assert.equal(d!.params?.[0], 'Z:/nonexistent/qt');
+    assert.ok(d!.params?.[1]?.endsWith(process.platform === 'win32' ? 'qmake.exe' : 'qmake'));
+});
+
 // ── jomPath pass-through ──
 
 test('jomPath is passed through to resolved config', async () => {
