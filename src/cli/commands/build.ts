@@ -18,7 +18,13 @@ import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore'
 export type BuildAction = 'default' | 'fresh' | 'qmake' | 'rcc';
 
 function isPathUnder(candidate: string, dir: string): boolean {
-    const rel = path.relative(path.resolve(dir).toLowerCase(), path.resolve(candidate).toLowerCase());
+    let resolvedDir = path.resolve(dir);
+    let resolvedCandidate = path.resolve(candidate);
+    if (process.platform === 'win32') {
+        resolvedDir = resolvedDir.toLowerCase();
+        resolvedCandidate = resolvedCandidate.toLowerCase();
+    }
+    const rel = path.relative(resolvedDir, resolvedCandidate);
     return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 

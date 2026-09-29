@@ -34,7 +34,8 @@ test('remote overlay plan expands staged renames into old delete and new upload'
     }
 });
 
-test('remote branch sync uses resolved repository root from baseline', async () => {    const commands: string[] = [];
+test('remote branch sync uses resolved repository root from baseline', async () => {
+    const commands: string[] = [];
     const runner: RemoteRunner = {
         async run(command: string) {
             commands.push(command);

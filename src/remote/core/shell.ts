@@ -1,6 +1,7 @@
 import * as cp from 'child_process';
 import { ServerConfig } from '../../core/serverStore';
 import { buildScpArgs, buildSshArgs, createAskpassEnv, sshTarget } from '../../core/ssh';
+import { posixQuote } from '../../core/shellQuote';
 import type { RemoteUploader } from './bootstrap';
 import { RemoteCommandResult, RemoteRunner } from './types';
 
@@ -14,7 +15,7 @@ export function quoteRemoteArg(value: string): string {
     if (value.includes('\0')) {
         throw new Error('remote argv contains NUL');
     }
-    return `'${value.replace(/'/g, `'\\''`)}'`;
+    return posixQuote(value);
 }
 
 export function remoteCommand(argv: string[]): string {
