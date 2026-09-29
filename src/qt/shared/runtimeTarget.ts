@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { posixQuote } from '../../core/shellQuote';
 
 /**
  * 根据平台计算重命名后的可执行文件完整路径。
@@ -11,10 +12,38 @@ export function resolveDesiredExePath(exeDir: string, executableName: string): s
     return path.join(exeDir, desiredName);
 }
 
+/**
+ * 生成构建后重命名命令。actualTarget 为 qmake TARGET 名，与 executableName 不同时重命名。
+ * Windows 用 move /Y：ren 在目标已存在（上一轮构建产物）时静默失败且无法覆盖，
+ * move /Y 与 POSIX mv -f 语义一致 —— 覆盖旧产物，真实错误（文件被占用等）以非零退出码上报。
+ */
+export function buildRenameCommand(exePath: string, actualTarget: string, executableName: string | undefined): string[] {
+    if (!executableName) { return []; }
+    const isWin = process.platform === 'win32';
+    const desiredBase = isWin ? executableName.replace(/\.exe$/i, '') : executableName;
+    if (actualTarget === desiredBase) { return []; }
+    const desiredPath = resolveDesiredExePath(path.dirname(exePath), executableName);
+    if (isWin) {
+        return [`(if exist "${exePath}" move /Y "${exePath}" "${desiredPath}")`];
+    }
+    return [`mv -f ${posixQuote(exePath)} ${posixQuote(desiredPath)}`];
+}
+
 export interface RuntimeTargetInfo {
     target: string;
     destDir: string;
     exePath: string;
+}
+
+/**
+ * 校验 qtPath 下 qmake 可执行文件是否存在。
+ * 有效返回 null；无效返回预期的 qmake 完整路径（用于诊断消息）。
+ * CLI（createActionPlan）与 VSCode（buildManager）共用同一校验口径。
+ */
+export function missingQmakeBin(qtPath: string): string | null {
+    if (!qtPath) { return null; }
+    const qmakeBin = path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake');
+    return fs.existsSync(qmakeBin) ? null : qmakeBin;
 }
 
 function readFile(filePath: string): string | null {

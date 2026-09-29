@@ -97,7 +97,9 @@ function parsePid(value: string): number | null {
 }
 
 function normalizeExecutablePath(executablePath: string): string {
-    return path.resolve(executablePath).toLowerCase();
+    // 不做 path.resolve：ps/tasklist 输出中的路径来自其它进程的工作目录，
+    // 用本进程的 cwd 补全会得到错误路径（且 Windows 上会破坏 POSIX 路径）
+    return executablePath.toLowerCase().replace(/\\/g, '/');
 }
 
 function executableName(executablePath: string): string {
@@ -130,6 +132,14 @@ export function parseTasklistPids(output: string, executablePath: string): numbe
     return pids;
 }
 
+function procExeMatches(pid: number, normalizedPath: string): boolean {
+    try {
+        return normalizeExecutablePath(fs.readlinkSync(`/proc/${pid}/exe`)) === normalizedPath;
+    } catch {
+        return false;
+    }
+}
+
 export function parsePsPids(output: string, executablePath: string): number[] {
     const normalizedPath = normalizeExecutablePath(executablePath);
     const exeName = executableName(executablePath).toLowerCase();
@@ -155,7 +165,10 @@ export function parsePsPids(output: string, executablePath: string): number[] {
         const args = match[3] || '';
         const commandName = executableName(command).toLowerCase();
         const haystack = `${command} ${args}`.toLowerCase();
-        if (haystack.includes(normalizedPath) || commandName === exeName) {
+        if (haystack.includes(normalizedPath)) {
+            pids.push(pid);
+        } else if (commandName === exeName && procExeMatches(pid, normalizedPath)) {
+            // 仅同名的候选必须经 /proc/<pid>/exe 全路径核验，防止误杀其它目录的同名进程
             pids.push(pid);
         }
     }
@@ -178,10 +191,9 @@ function findWindowsExecutablePids(executablePath: string): number[] {
             ['-NoProfile', '-NonInteractive', '-Command', command],
             { encoding: 'utf8', windowsHide: true }
         );
-        const pids = parsePowerShellPids(output);
-        if (pids.length > 0) {
-            return pids;
-        }
+        // CIM 可用时其全路径核验结果即权威答案；空结果不得回退到按名匹配的 tasklist，
+        // 否则同名异路径进程会被误杀
+        return parsePowerShellPids(output);
     } catch {
         // Fallback to tasklist below when PowerShell/CIM is unavailable.
     }

@@ -4,6 +4,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { warn } from '../../core/loggerBase';
+import { posixQuote } from '../../core/shellQuote';
 
 export interface RccTarget {
     name: string;
@@ -150,18 +151,22 @@ export function buildRccCommands(
 
     const qtBin = qtPath ? path.join(qtPath, 'bin') : '';
     if (qtBin) {
-        commands.push(isWin ? `set "PATH=${qtBin};%PATH%"` : `export PATH="${qtBin}:$PATH"`);
+        commands.push(isWin ? `set "PATH=${qtBin};%PATH%"` : `export PATH=${posixQuote(qtBin)}:"$PATH"`);
     }
 
     for (const target of targets) {
         const rccOutput = path.join(target.dir, `${target.name}.rcc`);
-        commands.push(isWin ? `cd /d "${target.dir}"` : `cd "${target.dir}"`);
-        commands.push(`rcc -binary "${target.name}.qrc" -o "${target.name}.rcc"`);
-        if (outputDir) {
-            if (isWin) {
+        if (isWin) {
+            commands.push(`cd /d "${target.dir}"`);
+            commands.push(`rcc -binary "${target.name}.qrc" -o "${target.name}.rcc"`);
+            if (outputDir) {
                 commands.push(`copy /Y "${rccOutput}" "${outputDir}\\"`);
-            } else {
-                commands.push(`cp "${rccOutput}" "${outputDir}/"`);
+            }
+        } else {
+            commands.push(`cd ${posixQuote(target.dir)}`);
+            commands.push(`rcc -binary ${posixQuote(`${target.name}.qrc`)} -o ${posixQuote(`${target.name}.rcc`)}`);
+            if (outputDir) {
+                commands.push(`cp ${posixQuote(rccOutput)} ${posixQuote(`${outputDir}/`)}`);
             }
         }
     }

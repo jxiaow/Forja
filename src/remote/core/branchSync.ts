@@ -1,6 +1,6 @@
 import { RepoBaselineState } from './baseline';
 import { buildOverlayRestoreCommand } from './overlayRestore';
-import { resolvedRemoteRepoPath } from './repoPath';
+import { resolvedRemoteRepoPathRaw } from './repoPath';
 import { quoteRemoteArg, remoteCommand } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
@@ -50,8 +50,9 @@ export async function executeRemoteBranchSync(options: ExecuteRemoteBranchSyncOp
 
         const repoDiagnostics: RemoteDiagnostic[] = [];
         const effectiveRemoteName = repo.remoteName || repo.name;
-        const repoDir = resolvedRemoteRepoPath(options.remotePath, effectiveRemoteName, repo.remotePath);
-        const overlay = await options.runner.run(buildOverlayRestoreCommand(options.targetId, effectiveRemoteName, repoDir), 30000);
+        const repoDirRaw = resolvedRemoteRepoPathRaw(options.remotePath, effectiveRemoteName, repo.remotePath);
+        const repoDir = remoteCommand([repoDirRaw]);
+        const overlay = await options.runner.run(buildOverlayRestoreCommand(options.targetId, effectiveRemoteName, repoDirRaw), 30000);
         if (overlay.exitCode !== 0) {
             const error = { level: 'error' as const, message: trim(overlay.stderr) || repo.name + ' overlay restore 失败' };
             diagnostics.push(error);

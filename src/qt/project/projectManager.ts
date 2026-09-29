@@ -8,7 +8,7 @@ import { getExecutableName } from '../services/configService';
 import { getState, setState } from '../../vscode/qtState';
 import { getQtSetting, setQtSetting } from '../../vscode/settingsStore';
 import { setProjectRoot } from '../../vscode/workspaceResolver';
-import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../shared/projectScanner';
+import { scanProFiles as sharedScanProFiles, parseProFile as sharedParseProFile } from '../../core/proProjectScanner';
 import { resolveRuntimeTarget, parseRuntimeLibPaths } from '../shared/runtimeTarget';
 import { ensureLocalStateDir } from '../shared/localState';
 

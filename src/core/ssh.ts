@@ -4,6 +4,7 @@
  * 被 sync/transport、sync/cli 共用。
  */
 import { ServerConfig } from './serverStore';
+import { posixQuote } from './shellQuote';
 
 export interface SshArgsOptions {
     /** 额外的 -o 选项 */
@@ -66,7 +67,7 @@ export function sshTarget(server: ServerConfig): string {
 
 /** Quote a value for insertion into a remote shell command. */
 export function quoteForRemoteShell(value: string): string {
-    return `'${value.replace(/'/g, "'\\''")}'`;
+    return posixQuote(value);
 }
 
 // ── ASKPASS 统一方案 ──

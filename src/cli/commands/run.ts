@@ -149,7 +149,7 @@ export async function runRun(workspace: string, options: {
         const planned = await createActionPlan(cliOptions);
         if (!planned.ok) {
             let nextAction = stripJsonFlag(planned.nextAction);
-            if (planned.diagnostics.some(d => d.message.includes('XYRcc'))) {
+            if (planned.diagnostics.some(d => d.code === 'rccMissing' || d.code === 'rccNoQrc')) {
                 nextAction = workroot ? 'forja use --rcc' : 'forja init';
             }
             if (planned.diagnostics.some(d => d.code === 'qtPathInvalid') && !workroot) {

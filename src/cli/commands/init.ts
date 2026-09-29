@@ -11,7 +11,7 @@ import {
     generateTargetId, removeTarget,
     type WorkspaceConfig, type TargetProfile,
 } from '../../core/workspaceStore';
-import { scanProFiles } from '../../qt/shared/projectScanner';
+import { scanProFiles } from '../../core/proProjectScanner';
 import { scanCppProjects } from '../../core/cppProjectScanner';
 import { detectProjectType } from '../../core/projectTypeDetector';
 import { detectEnv } from '../../qt/env/envDetector';

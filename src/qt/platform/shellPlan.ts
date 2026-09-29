@@ -1,4 +1,5 @@
 import type { PlatformConfig } from './platformConfig';
+import { posixQuote } from '../../core/shellQuote';
 
 export interface BuildConfig {
     vsDevShell: string;
@@ -62,8 +63,13 @@ export function createShellPlanBuilder(config: PlatformConfig): ShellPlanBuilder
             const extra = config.qmakeExtraArgs(cfg);
             const customArgs = cfg.qmakeArgs?.trim();
             const configArgs = [...modeConfigs, ...extraConfigs].join(' ');
-            const qmakeBin = cfg.qtPath ? `"${cfg.qtPath.replace(/\\/g, '/')}/bin/${config.qmakeBin}"` : 'qmake';
-            const qmakeCmd = `${qmakeBin} ${cfg.proFile} -spec ${config.qmakeSpec} ${configArgs}${extra ? ' ' + extra : ''}${customArgs ? ' ' + customArgs : ''}`;
+            // shellExecutable 为 null 即 POSIX shell，字量必须单引号防展开/注入
+            const quote = config.shellExecutable
+                ? (value: string) => `"${value}"`
+                : posixQuote;
+            const qmakeBin = cfg.qtPath ? quote(`${cfg.qtPath.replace(/\\/g, '/')}/bin/${config.qmakeBin}`) : 'qmake';
+            const proArg = cfg.proFile ? quote(cfg.proFile) : '';
+            const qmakeCmd = `${qmakeBin} ${proArg} -spec ${config.qmakeSpec} ${configArgs}${extra ? ' ' + extra : ''}${customArgs ? ' ' + customArgs : ''}`;
             return {
                 commands: assembleCommands(cfg, [qmakeCmd]),
                 matcher: config.qmakeMatcher

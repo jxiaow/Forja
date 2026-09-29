@@ -12,6 +12,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import * as os from 'os';
 import { warn } from './loggerBase';
+import { atomicWriteFileSync } from './atomicWrite';
 
 // ── 类型定义 ──
 
@@ -188,8 +189,9 @@ export function loadGlobalConfig(): GlobalConfig {
             const jobs = typeof raw.jobs === 'number' && raw.jobs > 0 && Number.isInteger(raw.jobs) ? raw.jobs : undefined;
             return { lang: typeof raw.lang === 'string' ? raw.lang : '', jobs };
         }
-    } catch {
-        // ignore
+    } catch (e) {
+        if (e instanceof SyntaxError) { _corruptedConfigs.push({ path: filePath, detail: e.message }); }
+        warnSettingsLoadFailure('global', filePath, e);
     }
     return { ...DEFAULT_GLOBAL_CONFIG };
 }
@@ -197,9 +199,7 @@ export function loadGlobalConfig(): GlobalConfig {
 export function saveGlobalConfig(config: Partial<GlobalConfig>): void {
     const current = loadGlobalConfig();
     const merged = { ...current, ...config };
-    const dir = forjaConfigDir();
-    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
-    fs.writeFileSync(globalConfigPath(), JSON.stringify(merged, null, 2), 'utf8');
+    atomicWriteFileSync(globalConfigPath(), JSON.stringify(merged, null, 2));
 }
 
 /** 根据 workspace 路径和配置类型生成配置文件路径 */
@@ -281,13 +281,12 @@ export function loadCppSettings(workspace: string): CppSettings {
 
 export function saveCppSettings(workspace: string, settings: CppSettings): void {
     const filePath = projectConfigPath(workspace, 'cpp');
-    _ensureDir(filePath);
     const data: Record<string, unknown> = {
         workspace,
         type: 'cpp',
         ...settings
     };
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+    atomicWriteFileSync(filePath, JSON.stringify(data, null, 4) + '\n');
 }
 
 // ── Sync 配置读写 ──
@@ -311,13 +310,12 @@ export function loadSyncSettings(workspace: string): SyncSettings {
 
 export function saveSyncSettings(workspace: string, settings: SyncSettings): void {
     const filePath = projectConfigPath(workspace, 'sync');
-    _ensureDir(filePath);
     const data: Record<string, unknown> = {
         workspace,
         type: 'sync',
         ...settings
     };
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+    atomicWriteFileSync(filePath, JSON.stringify(data, null, 4) + '\n');
 }
 
 // ── Remote 配置读写 ──
@@ -338,13 +336,12 @@ export function loadRemoteSettings(workspace: string): RemoteSettings {
 
 export function saveRemoteSettings(workspace: string, settings: RemoteSettings): void {
     const filePath = projectConfigPath(workspace, 'remote');
-    _ensureDir(filePath);
     const data: Record<string, unknown> = {
         workspace,
         type: 'remote',
         ...settings
     };
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+    atomicWriteFileSync(filePath, JSON.stringify(data, null, 4) + '\n');
 }
 
 // ── VS 路径推导 ──
@@ -393,14 +390,7 @@ export function listProjectConfigs(): Array<{ filePath: string; workspace: strin
 
 // ── 内部工具 ──
 
-function _ensureDir(filePath: string): void {
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-}
-
-function warnSettingsLoadFailure(type: ConfigType, filePath: string, e: unknown): void {
+function warnSettingsLoadFailure(type: string, filePath: string, e: unknown): void {
     warn(`${type} 配置读取失败 (invalid JSON or read error): ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
 }
 

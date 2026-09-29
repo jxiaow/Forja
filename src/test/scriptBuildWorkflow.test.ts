@@ -203,6 +203,35 @@ test('planner matches script extensions case-insensitively', () => {
     assert.doesNotMatch(commands[0], /make -C/);
 });
 
+test('sln planner drops platform values with unsafe characters', (t) => {
+    if (process.platform !== 'win32') {
+        t.skip('msbuild solution plan is Windows-only');
+        return;
+    }
+    const sln = path.join(TEST_DIR, 'evil.sln');
+    fs.writeFileSync(sln, [
+        'Microsoft Visual Studio Solution File, Format Version 12.00',
+        'Global',
+        '\tGlobalSection(SolutionConfigurationPlatforms) = preSolution',
+        '\t\tDebug|x64 = Debug|x64',
+        '\t\tDebug|x64" /p:Injected=1 & calc & = Debug|x64',
+        '\tEndGlobalSection',
+        'EndGlobal'
+    ].join('\r\n'));
+
+    const commands = buildCommand({
+        action: 'build',
+        workspace: TEST_DIR,
+        project: sln,
+        mode: 'debug',
+        arch: 'x64',
+    });
+
+    const msbuild = commands.at(-1) || '';
+    assert.match(msbuild, /\/p:Platform=x64( |$)/);
+    assert.doesNotMatch(msbuild, /calc|Injected/);
+});
+
 test('planner respects bash shebang instead of hardcoded sh', () => {
     const bashScript = path.join(TEST_DIR, 'build_incremental.sh');
     fs.writeFileSync(bashScript, '#!/bin/bash\n[[ -f config ]] && source config\n');

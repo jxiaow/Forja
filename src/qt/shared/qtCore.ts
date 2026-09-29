@@ -6,7 +6,7 @@ import { winConfig } from '../platform/win/builder';
 import { linuxConfig } from '../platform/linux/builder';
 import { resolveBuildConfig } from './configResolver';
 import { buildRunCommand } from './commandRunner';
-import { resolveRuntimeTarget, validateMakefile, resolveDesiredExePath } from './runtimeTarget';
+import { resolveRuntimeTarget, validateMakefile, resolveDesiredExePath, buildRenameCommand, missingQmakeBin } from './runtimeTarget';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from './rccResolver';
 import { getDefaultArch } from '../platform/requirements';
 
@@ -15,19 +15,8 @@ import { getDefaultArch } from '../platform/requirements';
  * 如果 executableName 已设置且与实际产物名不同，返回重命名命令；否则返回空数组。
  */
 function buildRenameCommands(runtimeTarget: { target: string; exePath: string } | null, executableName: string | undefined): string[] {
-    if (!executableName || !runtimeTarget) { return []; }
-    const isWin = process.platform === 'win32';
-    const actualBase = runtimeTarget.target;
-    const desiredBase = isWin ? executableName.replace(/\.exe$/i, '') : executableName;
-    if (actualBase === desiredBase) { return []; }
-    const exePath = runtimeTarget.exePath;
-    const dir = path.dirname(exePath);
-    if (isWin) {
-        return [`(if exist "${exePath}" ren "${exePath}" "${desiredBase}.exe")`];
-    } else {
-        const newPath = path.join(dir, desiredBase);
-        return [`mv -f "${exePath}" "${newPath}"`];
-    }
+    if (!runtimeTarget) { return []; }
+    return buildRenameCommand(runtimeTarget.exePath, runtimeTarget.target, executableName);
 }
 
 function emptyResult(options: CliOptions, workspace: string): CliResult {
@@ -90,13 +79,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     const qmakeArgs = options.qmakeArgs || '';
     const jomPath = options.jomPath || '';
     if (qtPath && options.executionMode === 'execute') {
-        const qmakeBin = path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake');
-        if (!fs.existsSync(qmakeBin)) {
+        const missing = missingQmakeBin(qtPath);
+        if (missing) {
             result.diagnostics.push({
                 level: 'error',
                 code: 'qtPathInvalid',
-                params: [qtPath, qmakeBin],
-                message: `Qt 路径无效，未找到 ${qmakeBin}。Qt 目录可能已被移动或改名，运行 forja use --qt <新路径> 重新选择 Qt`,
+                params: [qtPath, missing],
+                message: `Qt 路径无效，未找到 ${missing}。Qt 目录可能已被移动或改名，运行 forja use --qt <新路径> 重新选择 Qt`,
             });
             result.nextAction = 'forja use --qt <path>';
             return result;
@@ -257,13 +246,13 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     } else if (options.action === 'rcc') {
         const rccPath = resolveRccProjectPath(options.rccProjectPath || '', workspace);
         if (!rccPath) {
-            result.diagnostics.push({ level: 'error', message: '未找到 XYRcc 目录。使用 forja use --rcc <路径> 设置，或运行 forja init 重新配置' });
+            result.diagnostics.push({ level: 'error', code: 'rccMissing', message: '未找到 XYRcc 目录。使用 forja use --rcc <路径> 设置，或运行 forja init 重新配置' });
             result.nextAction = 'forja init';
             return result;
         }
         const targets = scanRccTargets(rccPath);
         if (targets.length === 0) {
-            result.diagnostics.push({ level: 'warning', message: 'XYRcc 目录下未找到 .qrc 文件' });
+            result.diagnostics.push({ level: 'warning', code: 'rccNoQrc', message: 'XYRcc 目录下未找到 .qrc 文件' });
             result.nextAction = 'forja status --json';
             return result;
         }

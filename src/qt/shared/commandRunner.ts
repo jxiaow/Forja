@@ -5,6 +5,7 @@ import { CliResult } from '../cli/types';
 import type { PlatformRunExecutor } from '../platform/runExecutor';
 import { ensureLocalStateDir, findExecutablePids, logsDir, runLogPath, writeRunState } from './localState';
 import { parseRuntimeLibPaths, resolveRuntimeTarget } from './runtimeTarget';
+import { posixQuote } from '../../core/shellQuote';
 
 function logFileFor(workspace: string, action: string): string {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -77,6 +78,14 @@ function extractPathEnv(commands: string[]): { filtered: string[]; env?: NodeJS.
     };
 }
 
+/** 128+signum 约定：SIGINT→130、SIGTERM→143、SIGKILL→137，其余信号→128。 */
+export function signalExitCode(signal: string | null | undefined): number {
+    if (signal === 'SIGINT') return 130;
+    if (signal === 'SIGTERM') return 143;
+    if (signal === 'SIGKILL') return 137;
+    return 128;
+}
+
 function execute(commandLine: string, cwd: string, suppressedWarnings?: string[], env?: NodeJS.ProcessEnv): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise(resolve => {
         cp.exec(commandLine, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: 'buffer', env }, (error, stdout, stderr) => {
@@ -86,7 +95,7 @@ function execute(commandLine: string, cwd: string, suppressedWarnings?: string[]
                 if (typeof execError.code === 'number') {
                     exitCode = execError.code;
                 } else if (execError.signal) {
-                    exitCode = 128;
+                    exitCode = signalExitCode(execError.signal);
                 } else {
                     exitCode = 1;
                 }
@@ -107,22 +116,24 @@ function executeStreaming(commandLine: string, cwd: string, executablePath?: str
 
         let stdout = '';
         let stderr = '';
-        let interrupted = false;
+        let interrupted: string | undefined;
         const isWin = process.platform === 'win32';
 
-        const onInterrupt = (): void => {
-            interrupted = true;
+        const makeHandler = (signal: string): (() => void) => () => {
+            interrupted ??= signal;
             terminateExecutable(executablePath);
             try { child.kill(); } catch { /* child may already be closed */ }
         };
+        const onSigint = makeHandler('SIGINT');
+        const onSigterm = makeHandler('SIGTERM');
         const cleanupSignalHandlers = (): void => {
-            process.off('SIGINT', onInterrupt);
-            process.off('SIGTERM', onInterrupt);
+            process.off('SIGINT', onSigint);
+            process.off('SIGTERM', onSigterm);
         };
 
         if (executablePath) {
-            process.on('SIGINT', onInterrupt);
-            process.on('SIGTERM', onInterrupt);
+            process.on('SIGINT', onSigint);
+            process.on('SIGTERM', onSigterm);
         }
 
         child.stdout?.on('data', (chunk: Buffer) => {
@@ -137,14 +148,14 @@ function executeStreaming(commandLine: string, cwd: string, executablePath?: str
             process.stderr.write(text);
         });
 
-        child.on('close', (code) => {
+        child.on('close', (code, signal) => {
             cleanupSignalHandlers();
-            resolve({ exitCode: interrupted ? 0 : (code ?? 0), stdout, stderr });
+            resolve({ exitCode: interrupted ? signalExitCode(interrupted) : (code !== null ? code : signalExitCode(signal)), stdout, stderr });
         });
 
         child.on('error', (err) => {
             cleanupSignalHandlers();
-            resolve({ exitCode: interrupted ? 0 : 1, stdout, stderr: stderr + err.message });
+            resolve({ exitCode: interrupted ? signalExitCode(interrupted) : 1, stdout, stderr: stderr + err.message });
         });
     });
 }
@@ -159,14 +170,16 @@ async function executeWithPlatformRunner(
 ): Promise<{ exitCode: number; stdout: string; stderr: string; pid: number }> {
     let stdout = '';
     let stderr = '';
-    let interrupted = false;
+    let interrupted: string | undefined;
 
-    const onInterrupt = (): void => {
-        interrupted = true;
+    const makeHandler = (signal: string): (() => void) => () => {
+        interrupted ??= signal;
         terminateExecutable(executablePath);
     };
-    process.on('SIGINT', onInterrupt);
-    process.on('SIGTERM', onInterrupt);
+    const onSigint = makeHandler('SIGINT');
+    const onSigterm = makeHandler('SIGTERM');
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
 
     try {
         const launched = await executor.execute({
@@ -186,14 +199,14 @@ async function executeWithPlatformRunner(
             }
         });
         return {
-            exitCode: interrupted ? 0 : (launched.exitCode ?? 0),
+            exitCode: interrupted ? signalExitCode(interrupted) : (launched.exitCode ?? 1),
             stdout,
             stderr,
             pid: launched.pid
         };
     } finally {
-        process.off('SIGINT', onInterrupt);
-        process.off('SIGTERM', onInterrupt);
+        process.off('SIGINT', onSigint);
+        process.off('SIGTERM', onSigterm);
     }
 }
 
@@ -262,10 +275,11 @@ export function buildRunCommand(project: string, mode: string, arch: string, qtP
 
     const libraryPaths = parseRuntimeLibPaths(path.dirname(project));
     if (libraryPaths.length === 0) {
-        return shellQuote(runtimeTarget.exePath);
+        return posixQuote(runtimeTarget.exePath);
     }
 
-    return `export LD_LIBRARY_PATH=${shellQuote(`${libraryPaths.join(':')}:$LD_LIBRARY_PATH`)} && ${shellQuote(runtimeTarget.exePath)}`;
+    const libValue = [...libraryPaths.map(posixQuote), '"$LD_LIBRARY_PATH"'].join(':');
+    return `export LD_LIBRARY_PATH=${libValue} && ${posixQuote(runtimeTarget.exePath)}`;
 }
 
 /**
@@ -379,7 +393,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 logFile: buildLogFilePath,
                 buildLogFile: buildLogFilePath,
                 commands: commandParts,
-                diagnostics: [...result.diagnostics, { level: 'error', message: '编译失败' }]
+                diagnostics: [...result.diagnostics, { level: 'error', code: 'buildFailed', message: '编译失败' }]
             };
         }
 
@@ -422,7 +436,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
             child.unref();
             pid = await resolveDetachedRunPid(result.executablePath, previousExecutablePids);
         } else {
-            const child = cp.spawn('/bin/sh', ['-c', `cd "${cwd}" && ${runCommand} >"${logFile}" 2>&1 &`], {
+            const child = cp.spawn('/bin/sh', ['-c', `cd ${posixQuote(cwd)} && ${runCommand} >${posixQuote(logFile)} 2>&1 &`], {
                 cwd,
                 detached: true,
                 stdio: 'ignore'
@@ -511,7 +525,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 warningSummary: ws.total > 0 ? ws : undefined,
                 logFile: filePath,
                 commands: commandParts,
-                diagnostics: [...result.diagnostics, { level: 'error', message: '编译失败' }]
+                diagnostics: [...result.diagnostics, { level: 'error', code: 'buildFailed', message: '编译失败' }]
             };
         }
 
@@ -580,7 +594,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
                 stdio: 'ignore'
             });
         } else {
-            child = cp.spawn('/bin/sh', ['-c', `cd "${cwd}" && ${commandLine} >"${logFile}" 2>&1 &`], {
+            child = cp.spawn('/bin/sh', ['-c', `cd ${posixQuote(cwd)} && ${commandLine} >${posixQuote(logFile)} 2>&1 &`], {
                 cwd,
                 detached: true,
                 stdio: 'ignore'

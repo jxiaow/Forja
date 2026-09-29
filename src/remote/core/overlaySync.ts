@@ -6,7 +6,7 @@ import { resolveGitRoots } from '../../core/gitRepoResolver';
 import { isIgnored } from '../../core/gitChangedFiles';
 import { GitRunner } from './baseline';
 import { RemoteUploader } from './bootstrap';
-import { quoteRemoteArg, remoteCommand } from './shell';
+import { quoteRemoteArg, remoteCommand, remoteStateDirArg } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
 export interface OverlayFile {
@@ -322,7 +322,7 @@ function listFilesRecursive(dir: string): string[] {
 }
 
 function buildCaptureUnderlayCommand(targetId: string, repoName: string, repoRemotePath: string, rel: string): string {
-    const stateDir = '"$HOME/.forja/remote-state/' + targetId + '"';
+    const stateDir = remoteStateDirArg(targetId);
     const backupRef = repoName + '/' + hashPath(rel) + '.bak';
     const script = [
         "const fs=require('fs');const path=require('path');const cp=require('child_process');",
@@ -347,7 +347,7 @@ function buildEnsureParentDirectoryCommand(repoRemotePath: string, rel: string):
 }
 
 function buildManifestUpdateCommand(targetId: string, repoName: string, tracked: string[], untracked: string[], deletedTracked: string[]): string {
-    const stateDir = '"$HOME/.forja/remote-state/' + targetId + '"';
+    const stateDir = remoteStateDirArg(targetId);
     const payload = JSON.stringify({ tracked, untracked, deletedTracked });
     const script = [
         "const fs=require('fs');const path=require('path');",

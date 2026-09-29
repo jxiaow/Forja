@@ -26,6 +26,16 @@ test('core source files do not import vscode', () => {
     assert.deepEqual(offenders.map(file => path.relative(process.cwd(), file)), []);
 });
 
+test('core source files do not import qt, cpp, or ui layers', () => {
+    const files = readFiles(path.join(process.cwd(), 'src', 'core'));
+    const offenders = files.filter(file => {
+        const source = fs.readFileSync(file, 'utf8');
+        return /from ['"]\.\.\/(qt|cpp|ui|vscode|sync|remote)\//.test(source);
+    });
+
+    assert.deepEqual(offenders.map(file => path.relative(process.cwd(), file)), []);
+});
+
 test('CLI and shared source files do not import vscode adapters', () => {
     const roots = [
         path.join(process.cwd(), 'src', 'cli'),

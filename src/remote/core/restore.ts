@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import { buildRemoteRepoDirSetup } from './repoPath';
-import { quoteRemoteArg, remoteCommand } from './shell';
+import { quoteRemoteArg, remoteCommand, remoteStateDirArg } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
 export interface ExecuteRemoteRestoreOptions {
@@ -84,7 +84,7 @@ function validateRelativePath(value: string, label: string): string | null {
 }
 
 function buildOverlayCleanupCommand(targetId: string, repo: string, paths: string[]): string {
-    const stateDir = '"$HOME/.forja/remote-state/' + targetId + '"';
+    const stateDir = remoteStateDirArg(targetId);
     const script = [
         "const fs=require('fs');const path=require('path');",
         "const stateDir=process.argv[1];const repo=process.argv[2];const paths=process.argv.slice(3);",

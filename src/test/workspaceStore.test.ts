@@ -14,6 +14,7 @@ import {
     getActiveTarget,
     relativeProjectPath,
     createEmptyWorkspaceConfig,
+    removeTarget,
     normalizePath,
     workspaceConfigPath,
     workspacesRegistryPath,
@@ -310,4 +311,57 @@ test('getActiveTarget returns the active target profile', () => {
     const target = getActiveTarget(config);
     assert.ok(target);
     assert.equal(target!.id, 'qt-app-debug-x64');
+});
+
+// ── reload-merge 并发写 ──
+
+test('saveWorkspaceConfig keeps target additions from a concurrent writer', () => {
+    freshConfigDir();
+    const workroot = 'C:/Code/merge';
+    const config = createEmptyWorkspaceConfig(workroot);
+    config.targets['qt-a'] = { id: 'qt-a', name: 'A', kind: 'qt', project: 'a.pro', mode: 'debug', arch: 'x64', toolchain: {} };
+    saveWorkspaceConfig(config);
+
+    // 另一进程持有较早快照（不含 qt-a），只新增了 qt-b
+    const stale = createEmptyWorkspaceConfig(workroot);
+    stale.activeTarget = 'qt-b';
+    stale.targets['qt-b'] = { id: 'qt-b', name: 'B', kind: 'qt', project: 'b.pro', mode: 'release', arch: 'x64', toolchain: {} };
+    saveWorkspaceConfig(stale);
+
+    const loaded = loadWorkspaceConfig(workroot);
+    assert.ok(loaded.targets['qt-a'], 'concurrent addition must survive merge');
+    assert.ok(loaded.targets['qt-b']);
+    assert.equal(loaded.activeTarget, 'qt-b', 'activeTarget is last-writer-wins');
+});
+
+test('same-id target from the incoming snapshot wins over disk', () => {
+    freshConfigDir();
+    const workroot = 'C:/Code/merge-conflict';
+    const config = createEmptyWorkspaceConfig(workroot);
+    config.targets['qt-a'] = { id: 'qt-a', name: 'Old', kind: 'qt', project: 'a.pro', mode: 'debug', arch: 'x64', toolchain: {} };
+    saveWorkspaceConfig(config);
+
+    const updated = createEmptyWorkspaceConfig(workroot);
+    updated.targets['qt-a'] = { id: 'qt-a', name: 'New', kind: 'qt', project: 'a.pro', mode: 'debug', arch: 'x64', toolchain: {} };
+    saveWorkspaceConfig(updated);
+
+    assert.equal(loadWorkspaceConfig(workroot).targets['qt-a'].name, 'New');
+});
+
+test('removeTarget deletion is not resurrected by later merge saves', () => {
+    freshConfigDir();
+    const workroot = 'C:/Code/merge-remove';
+    const config = createEmptyWorkspaceConfig(workroot);
+    config.targets['qt-a'] = { id: 'qt-a', name: 'A', kind: 'qt', project: 'a.pro', mode: 'debug', arch: 'x64', toolchain: {} };
+    config.targets['qt-b'] = { id: 'qt-b', name: 'B', kind: 'qt', project: 'b.pro', mode: 'debug', arch: 'x64', toolchain: {} };
+    saveWorkspaceConfig(config);
+
+    removeTarget(workroot, 'qt-a');
+    assert.equal(loadWorkspaceConfig(workroot).targets['qt-a'], undefined);
+
+    // 后续合并保存（快照仍含 qt-b）不得复活 qt-a
+    const later = createEmptyWorkspaceConfig(workroot);
+    later.targets['qt-b'] = config.targets['qt-b'];
+    saveWorkspaceConfig(later);
+    assert.equal(loadWorkspaceConfig(workroot).targets['qt-a'], undefined);
 });

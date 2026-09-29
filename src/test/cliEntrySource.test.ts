@@ -97,8 +97,8 @@ test('package channels are explicit and documented', () => {
 test('public documentation describes only the supported remote workflow', () => {
     for (const file of ['README.md', 'docs/README-cli.md', 'docs/README-vscode.md']) {
         const content = fs.readFileSync(path.join(process.cwd(), file), 'utf8');
-        assert.match(content, /远端当前仅支持工作区同步和 CLI 部署/);
-        assert.doesNotMatch(content, /支持本地和远程执行/);
+        assert.match(content, /自动 bridge 到远端执行|自动 bridge 到远程执行/);
+        assert.doesNotMatch(content, /远端当前仅支持工作区同步和 CLI 部署/);
     }
 });
 

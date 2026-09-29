@@ -192,7 +192,7 @@ function createAheadRepo(): { root: string; workspace: string } {
     fs.writeFileSync(path.join(workspace, 'README.md'), 'initial\n');
     cp.execFileSync('git', ['add', 'README.md'], { cwd: workspace });
     cp.execFileSync('git', ['commit', '-m', 'initial'], { cwd: workspace });
-    cp.execFileSync('git', ['push', '-u', 'origin', 'master'], { cwd: workspace });
+    cp.execFileSync('git', ['push', '-u', 'origin', 'HEAD'], { cwd: workspace });
     fs.writeFileSync(path.join(workspace, 'README.md'), 'local ahead\n');
     cp.execFileSync('git', ['commit', '-am', 'local ahead'], { cwd: workspace });
     return { root, workspace };

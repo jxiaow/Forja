@@ -73,11 +73,16 @@ test('createAskpassEnv askpass command prints password and exits successfully', 
     const result = createAskpassEnv('mypass', 'exit-test');
     assert.ok(result);
     try {
-        const output = cp.spawnSync(result.env.SSH_ASKPASS || '', [], {
-            env: result.env,
-            encoding: 'utf8',
-            windowsHide: true
-        });
+        // Node 24 refuses to spawn bare .cmd files (EINVAL); the askpass script is
+        // consumed by ssh/git via the shell, so launch it the same way here.
+        const scriptPath = result.env.SSH_ASKPASS || '';
+        const output = process.platform === 'win32'
+            ? cp.spawnSync('cmd.exe', ['/d', '/s', '/c', scriptPath], {
+                env: result.env,
+                encoding: 'utf8',
+                windowsVerbatimArguments: true,
+            })
+            : cp.spawnSync(scriptPath, [], { env: result.env, encoding: 'utf8' });
         assert.equal(output.status, 0);
         assert.equal(output.stdout, 'mypass');
     } finally {

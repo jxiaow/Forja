@@ -17,6 +17,11 @@ import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore'
 
 export type BuildAction = 'default' | 'fresh' | 'qmake' | 'rcc';
 
+function isPathUnder(candidate: string, dir: string): boolean {
+    const rel = path.relative(path.resolve(dir).toLowerCase(), path.resolve(candidate).toLowerCase());
+    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
 export interface BuildResult extends ForjaJsonResult {
     action: 'build';
     buildAction: BuildAction;
@@ -200,7 +205,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 if (state?.executablePath) {
                     const projectBasename = path.basename(target.project, path.extname(target.project));
                     const exeBasename = path.basename(state.executablePath, path.extname(state.executablePath));
-                    if (exeBasename === projectBasename) {
+                    if (exeBasename === projectBasename && isPathUnder(state.executablePath, workroot || workspace)) {
                         terminateExecutable(state.executablePath);
                     }
                 }
@@ -272,7 +277,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         const planned = await createActionPlan(cliOptions);
         if (!planned.ok) {
             let nextAction = stripJsonFlag(planned.nextAction);
-            const isRccMissing = planned.diagnostics.some(d => d.message.includes('XYRcc'));
+            const isRccMissing = planned.diagnostics.some(d => d.code === 'rccMissing' || d.code === 'rccNoQrc');
             if (isRccMissing) {
                 nextAction = workroot ? 'forja use --rcc' : 'forja init';
             }
@@ -328,7 +333,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 if (state?.executablePath) {
                     const projectBasename = path.basename(target.project, path.extname(target.project));
                     const exeBasename = path.basename(state.executablePath, path.extname(state.executablePath));
-                    if (exeBasename === projectBasename) {
+                    if (exeBasename === projectBasename && isPathUnder(state.executablePath, projectDir)) {
                         terminateExecutable(state.executablePath);
                     }
                 }

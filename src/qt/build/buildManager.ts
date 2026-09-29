@@ -10,7 +10,9 @@ import { getMakefileInfo, parseLibPaths } from '../project/projectManager';
 import { createLogger } from '../../vscode/logger';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
 import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from '../shared/rccResolver';
-import { validateMakefile, resolveRuntimeTarget, resolveDesiredExePath } from '../shared/runtimeTarget';
+import { validateMakefile, resolveRuntimeTarget, resolveDesiredExePath, buildRenameCommand, missingQmakeBin } from '../shared/runtimeTarget';
+import { loadGlobalConfig } from '../../core/settingsIO';
+import { T, resolveLocale, setGlobalLocale } from '../../cli/commands/types';
 import { clearRunState, findExecutablePids, runLogPath, waitForNewExecutablePid, writeRunState } from '../shared/localState';
 import { TASK_SOURCE_QT } from '../constants';
 
@@ -89,6 +91,15 @@ function _getTaskFolder(): vscode.WorkspaceFolder | vscode.TaskScope {
     return vscode.TaskScope.Workspace;
 }
 
+// 校验 qtPath 下 qmake 是否存在（与 CLI createActionPlan 同一口径）。
+// Qt 目录被移动/改名时抛出可操作错误，由命令注册的 catch 统一展示。
+function _ensureQtPathReady(cfg: ReturnType<typeof getBuildConfig>): void {
+    const missing = missingQmakeBin(cfg.qtPath);
+    if (!missing) { return; }
+    setGlobalLocale(resolveLocale(undefined, loadGlobalConfig().lang));
+    throw new Error(`${T('cmd.qtPathInvalid', [cfg.qtPath, missing])} ${T('cmd.qtPathInvalidHint')}`);
+}
+
 // QMake/Build/Clean 共用一个 Shared terminal（保留 problem matcher）
 function runTask(name: string, commands: string[], matcher: string | string[]): Thenable<vscode.TaskExecution> {
     logger.info(`Task ${name}: ${commands.join(' && ')}`);
@@ -126,6 +137,7 @@ function _resolveMakefileInfo(): ReturnType<typeof getMakefileInfo> {
 export function qmake(): Thenable<vscode.TaskExecution> {
     if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
+    _ensureQtPathReady(cfg);
     const { commands, matcher } = builder.qmakeCommands(cfg);
     return runTask(`QMake ${cfg.mode}`, commands, matcher);
 }
@@ -133,6 +145,7 @@ export function qmake(): Thenable<vscode.TaskExecution> {
 export function qmakeForDebug(): Thenable<vscode.TaskExecution> {
     if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
+    _ensureQtPathReady(cfg);
     const extraConfigs = cfg.mode === 'release'
         ? ['CONFIG+=force_debug_info']
         : [];
@@ -146,6 +159,7 @@ export function qmakeForDebug(): Thenable<vscode.TaskExecution> {
 export async function build(): Promise<vscode.TaskExecution> {
     if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
+    _ensureQtPathReady(cfg);
     if (!await _ensureMakefileFresh(cfg)) { return Promise.reject(new Error('需要先运行 QMake')); }
 
     // rcc 在 build 之后编译 — pro 构建步骤会拷贝 rcc，必须在拷贝后再编译
@@ -179,6 +193,7 @@ export async function build(): Promise<vscode.TaskExecution> {
 export function clean(): Thenable<vscode.TaskExecution> {
     if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
+    _ensureQtPathReady(cfg);
     const { commands, matcher } = builder.cleanCommands(cfg);
     return runTask(`Clean ${cfg.mode}`, commands, matcher);
 }
@@ -219,17 +234,8 @@ function _renameExecutableIfNeeded(cfg: ReturnType<typeof getBuildConfig>): stri
     if (!cfg.executableName || !cfg.projectDir) { return null; }
     const rt = resolveRuntimeTarget(cfg.projectDir, cfg.mode, cfg.arch);
     if (!rt) { return null; }
-    const isWin = process.platform === 'win32';
-    const actualBase = rt.target;
-    const desiredBase = isWin ? cfg.executableName.replace(/\.exe$/i, '') : cfg.executableName;
-    if (actualBase === desiredBase) { return null; }
-    const exePath = rt.exePath;
-    const desiredPath = resolveDesiredExePath(path.dirname(exePath), cfg.executableName);
-    if (isWin) {
-        return `(if exist "${exePath}" ren "${exePath}" "${desiredBase}.exe")`;
-    } else {
-        return `mv -f "${exePath}" "${desiredPath}"`;
-    }
+    const cmds = buildRenameCommand(rt.exePath, rt.target, cfg.executableName);
+    return cmds.length > 0 ? cmds[0] : null;
 }
 
 /** 执行重命名命令 */
@@ -252,6 +258,7 @@ function _handleRccError(err: unknown): void {
 export async function run(): Promise<void> {
     if (!_ensureEnvReady()) { return; }
     const cfg = getBuildConfig();
+    _ensureQtPathReady(cfg);
     if (!await _ensureMakefileFresh(cfg)) { return; }
     setState('isBuilding', true);
     setState('buildAction', 'run');
@@ -427,6 +434,7 @@ export async function run(): Promise<void> {
 export function rcc(): Thenable<vscode.TaskExecution> {
     if (!_ensureEnvReady()) { return Promise.reject(new Error('环境检测未完成')); }
     const cfg = getBuildConfig();
+    _ensureQtPathReady(cfg);
     const wsRoot = resolveProjectRoot();
 
     const rccPath = resolveRccProjectPath(getRccProjectPath(), wsRoot);

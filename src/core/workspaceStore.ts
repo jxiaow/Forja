@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { atomicWriteFileSync } from './atomicWrite';
 import { forjaConfigDir } from './settingsIO';
 
 // ── Types ──
@@ -105,22 +106,6 @@ export function workspaceConfigPath(workroot: string): string {
     const normalized = normalizePath(workroot);
     const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
     return path.join(workspacesDir(), `${hash}.json`);
-}
-
-// ── Atomic write helper ──
-
-function atomicWriteFileSync(filePath: string, data: string): void {
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
-    const tmpPath = filePath + '.tmp.' + process.pid;
-    try {
-        fs.writeFileSync(tmpPath, data, 'utf8');
-        fs.renameSync(tmpPath, filePath);
-    } catch (e) {
-        // Clean up temp file on failure
-        try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
-        throw e;
-    }
 }
 
 // ── Registry ──
@@ -269,7 +254,31 @@ export function loadWorkspaceConfig(workroot: string): WorkspaceConfig {
 export function saveWorkspaceConfig(config: WorkspaceConfig): void {
     const normalized = { ...config, workroot: normalizePath(config.workroot) };
     const filePath = workspaceConfigPath(normalized.workroot);
-    atomicWriteFileSync(filePath, JSON.stringify(normalized, null, 2));
+    atomicWriteFileSync(filePath, JSON.stringify(mergeWithDiskTargets(normalized, filePath), null, 2));
+}
+
+/** 直接覆盖写入，绕过 reload-merge —— 仅供删除类流程（removeTarget）使用。 */
+function writeWorkspaceConfigRaw(config: WorkspaceConfig): void {
+    const filePath = workspaceConfigPath(normalizePath(config.workroot));
+    atomicWriteFileSync(filePath, JSON.stringify(config, null, 2));
+}
+
+function mergeWithDiskTargets(config: WorkspaceConfig, filePath: string): WorkspaceConfig {
+    const disk = tryLoadWorkspaceConfigFromPath(filePath);
+    if (!disk) { return config; }
+    // CLI 与扩展双进程各自持有较早快照：targets 取并集，同 id 以本次写入为准，
+    // 避免一方在交互等待期间丢失另一方新增的 target。删除必须走 removeTarget。
+    return { ...config, targets: { ...disk.targets, ...config.targets } };
+}
+
+function tryLoadWorkspaceConfigFromPath(filePath: string): WorkspaceConfig | null {
+    try {
+        if (!fs.existsSync(filePath)) { return null; }
+        return sanitizeWorkspaceConfig(JSON.parse(fs.readFileSync(filePath, 'utf8')));
+    } catch {
+        // 损坏或不可读文件不参与合并，按快照写入
+        return null;
+    }
 }
 
 // ── Workroot resolution ──
@@ -372,7 +381,7 @@ export function removeTarget(workroot: string, targetId: string): { removed: str
     if (config.activeTarget === targetId) {
         config.activeTarget = null;
     }
-    saveWorkspaceConfig(config);
+    writeWorkspaceConfigRaw(config);
     return { removed: targetId };
 }
 

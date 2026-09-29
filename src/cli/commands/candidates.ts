@@ -3,7 +3,7 @@
  * Reads from workspaceStore. No vscode dependency.
  */
 import * as path from 'path';
-import { scanProFiles } from '../../qt/shared/projectScanner';
+import { scanProFiles } from '../../core/proProjectScanner';
 import { scanCppProjects } from '../../core/cppProjectScanner';
 import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget, normalizePath } from '../../core/workspaceStore';
 import type { TargetProfile } from '../../core/workspaceStore';

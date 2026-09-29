@@ -25,8 +25,14 @@ test('shell plan builder creates qmake command without vscode dependency', () =>
         'set "PATH=D:\\Qt\\5.15.2\\msvc2019\\bin;%PATH%"',
         'call "C:/VS/Common7/Tools/VsDevCmd.bat" -arch=x86 -no_logo',
         'cd /d "D:/demo"',
-        '"D:/Qt/5.15.2/msvc2019/bin/qmake.exe" demo.pro -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86'
+        '"D:/Qt/5.15.2/msvc2019/bin/qmake.exe" "demo.pro" -spec win32-msvc CONFIG+=debug CONFIG+=console CONFIG+=x86'
     ]);
+});
+
+test('qmake command quotes proFile names containing spaces', () => {
+    const builder = createShellPlanBuilder(winConfig);
+    const plan = builder.qmakeCommands({ ...cfg, proFile: 'my project.pro' });
+    assert.match(plan.commands.at(-1) || '', /"my project\.pro"/);
 });
 
 test('shell plan builder appends custom qmake arguments', () => {
@@ -52,10 +58,12 @@ test('linux shell plan exposes Qt lib path for Qt helper binaries', () => {
         proFile: 'qt_linux_pc_client.pro'
     });
 
-    assert.deepEqual(plan.commands.slice(0, 2), [
-        'export PATH="/usr/local/qt5.13.2/bin:$PATH"',
-        'export LD_LIBRARY_PATH="/usr/local/qt5.13.2/lib:$HOME/.forja/compat/icu55/lib:$LD_LIBRARY_PATH"'
+    assert.deepEqual(plan.commands.slice(0, 3), [
+        'export PATH=\'/usr/local/qt5.13.2/bin\':"$PATH"',
+        'export LD_LIBRARY_PATH=\'/usr/local/qt5.13.2/lib\':"$HOME/.forja/compat/icu55/lib":"$LD_LIBRARY_PATH"',
+        `cd '/workspace/qt'`
     ]);
+    assert.match(plan.commands.at(-1) || '', /^'\/usr\/local\/qt5\.13\.2\/bin\/qmake' 'qt_linux_pc_client\.pro' -spec linux-g\+\+/);
 });
 
 test('shell plan builder exposes shell execution metadata', () => {

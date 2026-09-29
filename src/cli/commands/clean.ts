@@ -219,7 +219,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
     try {
         const planned = await createActionPlan(cliOptions);
         if (!planned.ok) {
-            const isRccMissing = planned.diagnostics.some(d => d.message.includes('XYRcc'));
+            const isRccMissing = planned.diagnostics.some(d => d.code === 'rccMissing' || d.code === 'rccNoQrc');
             const isTargetMissing = planned.diagnostics.some(d => /not found|does not exist|missing/i.test(d.message));
             let nextAction: string | undefined;
             if (planned.diagnostics.some(d => d.code === 'qtPathInvalid')) {

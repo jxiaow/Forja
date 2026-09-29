@@ -11,12 +11,14 @@ export function validateRepoName(name: string): { ok: true } | { ok: false; reas
     return { ok: true };
 }
 
-export function fallbackRemoteRepoPath(remotePath: string, repoName: string): string {
-    return remoteCommand([remotePath]) + '/' + remoteCommand([repoName]);
+/** Raw (unquoted) repository root path, for passing into builders that quote internally. */
+export function resolvedRemoteRepoPathRaw(remotePath: string, repoName: string, resolved?: string): string {
+    const base = resolved || (trimTrailingSlash(remotePath) + '/' + repoName);
+    return trimTrailingSlash(base);
 }
 
-export function resolvedRemoteRepoPath(remotePath: string, repoName: string, resolved?: string): string {
-    return resolved ? remoteCommand([resolved]) : fallbackRemoteRepoPath(remotePath, repoName);
+function trimTrailingSlash(value: string): string {
+    return value.replace(/\/+$/, '');
 }
 
 export function buildRemoteRepoDirSetup(remotePath: string, repoName: string, singleRepoRoot: boolean): string {

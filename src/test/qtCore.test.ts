@@ -461,3 +461,26 @@ test('jomPath is passed through to resolved config', async () => {
     assert.equal(result.ok, true);
     assert.equal(result.resolved?.jomPath, 'C:/Qt/Tools/jom/jom.exe');
 });
+
+// ── rcc diagnostics codes ──
+
+test('rcc action without an XYRcc directory returns rccMissing code', async () => {
+    const workspace = makeWorkspace();
+
+    const result = await createActionPlan({
+        action: 'rcc',
+        executionMode: 'dryRun',
+        workspace,
+        project: null,
+        mode: 'debug',
+        arch: 'x86',
+        qtPath: '',
+        vsDevShell: '',
+        target: null,
+        saveLocal: false,
+        json: true
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.diagnostics.some(d => d.code === 'rccMissing'), true);
+});

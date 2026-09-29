@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { executeRemoteBranchSync } from '../remote/core/branchSync';
+import { buildOverlayRestoreCommand } from '../remote/core/overlayRestore';
 import { buildLocalOverlayPlan, executeRemoteOverlaySync } from '../remote/core/overlaySync';
 import { RemoteUploader } from '../remote/core/bootstrap';
 import { RemoteRunner } from '../remote/core/types';
@@ -33,8 +34,7 @@ test('remote overlay plan expands staged renames into old delete and new upload'
     }
 });
 
-test('remote branch sync uses resolved repository root from baseline', async () => {
-    const commands: string[] = [];
+test('remote branch sync uses resolved repository root from baseline', async () => {    const commands: string[] = [];
     const runner: RemoteRunner = {
         async run(command: string) {
             commands.push(command);
@@ -60,6 +60,11 @@ test('remote branch sync uses resolved repository root from baseline', async () 
     assert.equal(result.ok, true);
     assert.ok(commands.some(command => command.includes("cd '/remote/root' && git fetch --prune")));
     assert.ok(commands.every(command => !command.includes("'/remote/base'/'forja'")));
+});
+
+test('overlay restore command quotes raw repo dir and state dir segments', () => {
+    const command = buildOverlayRestoreCommand('tgt-1', 'my repo', '/remote/my repo');
+    assert.ok(command.includes(`-- "$HOME/.forja/remote-state/"'tgt-1' 'my repo' '/remote/my repo'`), command);
 });
 
 test('remote branch sync preserves both sides of a remote tracked rename', async () => {

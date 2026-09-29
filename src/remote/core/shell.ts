@@ -21,6 +21,11 @@ export function remoteCommand(argv: string[]): string {
     return argv.map(quoteRemoteArg).join(' ');
 }
 
+/** 远端状态目录参数：$HOME 段保持双引号展开，targetId 段单引号转义。 */
+export function remoteStateDirArg(targetId: string): string {
+    return '"$HOME/.forja/remote-state/"' + quoteRemoteArg(targetId);
+}
+
 export function createScpUploader(server: ServerConfig, password: string | null = null): RemoteUploader {
     return {
         upload(localPath: string, remotePath: string): Promise<void> {

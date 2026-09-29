@@ -5,7 +5,7 @@
 import * as path from 'path';
 import * as os from 'os';
 import { UnifiedProject, ProjectGroup } from './types';
-import { scanProFiles, parseProFile } from '../qt/shared/projectScanner';
+import { scanProFiles, parseProFile } from './proProjectScanner';
 import { scanCppProjects } from './cppProjectScanner';
 
 export interface UnifiedScanOptions {

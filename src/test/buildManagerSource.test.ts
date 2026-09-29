@@ -55,3 +55,16 @@ test('vscode debug updates runtime state and clears it when the session ends', (
     assert.match(source, /clearRunState\(resolveProjectRoot\(\)\)/);
     assert.match(source, /DEBUG_RUN_ID_KEY/);
 });
+
+test('vscode qt task entries validate qtPath before building commands', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'qt', 'build', 'buildManager.ts'), 'utf8');
+
+    assert.match(source, /function _ensureQtPathReady\(cfg/);
+    assert.match(source, /missingQmakeBin\(cfg\.qtPath\)/);
+    for (const fn of ['qmake', 'qmakeForDebug', 'build', 'clean', 'run', 'rcc']) {
+        const start = source.indexOf(`export ${fn === 'build' || fn === 'run' ? 'async function' : 'function'} ${fn}(`);
+        assert.notEqual(start, -1, `${fn} entry exists`);
+        const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+        assert.match(body, /_ensureQtPathReady\(cfg\)/, `${fn} must validate qtPath`);
+    }
+});

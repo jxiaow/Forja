@@ -1,5 +1,6 @@
 import { PlatformConfig } from '../platformConfig';
 import { BuildConfig } from '../shellPlan';
+import { posixQuote } from '../../../core/shellQuote';
 
 export const linuxConfig: PlatformConfig = {
     shellExecutable: null,
@@ -10,13 +11,13 @@ export const linuxConfig: PlatformConfig = {
     initCommands(cfg: BuildConfig): string[] {
         if (!cfg.qtPath) { return []; }
         return [
-            `export PATH="${cfg.qtPath}/bin:$PATH"`,
-            `export LD_LIBRARY_PATH="${cfg.qtPath}/lib:$HOME/.forja/compat/icu55/lib:$LD_LIBRARY_PATH"`
+            `export PATH=${posixQuote(`${cfg.qtPath}/bin`)}:"$PATH"`,
+            `export LD_LIBRARY_PATH=${posixQuote(`${cfg.qtPath}/lib`)}:"$HOME/.forja/compat/icu55/lib":"$LD_LIBRARY_PATH"`
         ];
     },
 
     cdCommand(dir: string): string {
-        return `cd "${dir}"`;
+        return `cd ${posixQuote(dir)}`;
     },
 
     qmakeSpec: 'linux-g++',

@@ -43,7 +43,10 @@ function readSolutionPlatforms(projectPath: string, configuration: string): stri
         const match = line.match(/^\s*([^|=]+)\|([^=]+?)\s*=/);
         if (!match) { continue; }
         if (match[1].trim().toLowerCase() !== configuration.toLowerCase()) { continue; }
-        platforms.push(match[2].trim());
+        const platform = match[2].trim();
+        // .sln 为外部内容：仅接受安全字符的平台名，防止注入 msbuild 命令行
+        if (!/^[\w.\-+]+$/.test(platform)) { continue; }
+        platforms.push(platform);
     }
     return platforms;
 }

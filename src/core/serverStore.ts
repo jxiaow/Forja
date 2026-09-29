@@ -13,17 +13,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { forjaConfigDir, loadSyncSettings, saveSyncSettings, SyncSettings, DEFAULT_SYNC, loadRemoteSettings, saveRemoteSettings } from './settingsIO';
 import { warn } from './loggerBase';
+import { atomicWriteFileSync } from './atomicWrite';
 
 function atomicWriteJson(filePath: string, data: unknown): void {
-    const tmp = filePath + `.tmp.${process.pid}`;
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
-    try {
-        fs.renameSync(tmp, filePath);
-    } catch {
-        // rename 失败时回退为直接写入，并清理临时文件
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-        try { fs.unlinkSync(tmp); } catch { /* ignore */ }
-    }
+    atomicWriteFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
 export type AuthMode = 'key' | 'password';

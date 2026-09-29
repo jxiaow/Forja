@@ -81,8 +81,11 @@ const syncFiles = [
 
 // Individual files needed from core/
 const coreFiles = [
+    'core/atomicWrite.js',
     'core/loggerBase.js',
+    'core/proProjectScanner.js',
     'core/settingsIO.js',
+    'core/shellQuote.js',
     'core/types.js',
     'core/syncState.js',
     'core/serverStore.js',

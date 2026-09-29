@@ -15,6 +15,11 @@ import {
     saveRemoteSettings,
     projectConfigPath,
     listProjectConfigs,
+    globalConfigPath,
+    loadGlobalConfig,
+    saveGlobalConfig,
+    getCorruptedConfigs,
+    clearCorruptedConfigs,
 } from '../core/settingsIO';
 import { setOutputWriter } from '../core/loggerBase';
 
@@ -345,4 +350,41 @@ test('listProjectConfigs warns when a project config file is malformed', () => {
     assert.equal(matchingLines.length, 1);
     assert.match(matchingLines[0], /\[WARN\]/);
     assert.match(matchingLines[0], /项目配置扫描跳过损坏文件/);
+});
+
+// ── 原子写与损坏可见 ──
+
+test('save functions leave no temp files behind', () => {
+    const workspace = makeWorkspace();
+    trackFile(projectConfigPath(workspace, 'cpp'));
+    trackFile(globalConfigPath());
+
+    saveCppSettings(workspace, { ...DEFAULT_CPP, vsInstall: 'C:/VS' });
+    saveGlobalConfig({ lang: 'zh' });
+
+    const projectsDir = path.dirname(projectConfigPath(workspace, 'cpp'));
+    const leftovers = [
+        ...fs.readdirSync(projectsDir).filter(f => f.includes('.tmp.')),
+        ...fs.readdirSync(path.dirname(globalConfigPath())).filter(f => f.includes('.tmp.'))
+    ];
+    assert.deepEqual(leftovers, []);
+    assert.equal(loadGlobalConfig().lang, 'zh');
+});
+
+test('loadGlobalConfig records corruption instead of failing silently', () => {
+    const filePath = globalConfigPath();
+    trackFile(filePath);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, '{ broken global json', 'utf8');
+    clearCorruptedConfigs();
+
+    const { result: config, lines } = captureOutputLines(() => loadGlobalConfig());
+
+    assert.equal(config.lang, '');
+    assert.equal(lines.some(line => /\[WARN\]/.test(line) && line.includes('global 配置读取失败')), true);
+    const corrupted = getCorruptedConfigs();
+    assert.equal(corrupted.length, 1);
+    assert.equal(corrupted[0].path, filePath);
+    fs.rmSync(filePath, { force: true });
+    clearCorruptedConfigs();
 });

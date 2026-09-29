@@ -148,7 +148,7 @@ test('runCliResult still fails foreground run when build fails', async () => {
     assert.equal(result.exitCode, 3);
     assert.match(result.stderr, /build failed/);
     assert.doesNotMatch(result.stdout, /should not run/);
-    assert.equal(result.diagnostics.some(d => d.message === '编译失败'), true);
+    assert.equal(result.diagnostics.some(d => d.code === 'buildFailed'), true);
 });
 
 test('runCliResult streams platform runner output and preserves runtime exit code', async () => {
@@ -190,7 +190,7 @@ test('runCliResult streams platform runner output and preserves runtime exit cod
     assert.equal(result.runtimeExitCode, 7);
 });
 
-test('runCliResult treats Ctrl+C as an intentional runtime stop', async () => {
+test('runCliResult reports Ctrl+C as interrupted runtime stop (exit 130)', async () => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forja-runner-'));
     _tmpDirs.push(workspace);
     const runExecutor: PlatformRunExecutor = {
@@ -219,8 +219,8 @@ test('runCliResult treats Ctrl+C as an intentional runtime stop', async () => {
         resolved: null
     }, { runExecutor });
 
-    assert.equal(result.runtimeExitCode, 0);
-    assert.equal(result.diagnostics.some(d => d.level === 'warning'), false);
+    assert.equal(result.runtimeExitCode, 130);
+    assert.equal(result.diagnostics.some(d => d.level === 'warning' && d.message.includes('130')), true);
 });
 
 test('runCliResult detach run returns target process pid', async (t) => {

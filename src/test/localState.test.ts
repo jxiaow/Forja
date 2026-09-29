@@ -57,6 +57,13 @@ test('parsePsPids returns matching executable pids', () => {
     assert.deepEqual(parsePsPids(output, '/opt/app/DemoApp'), [13228]);
 });
 
+test('parsePsPids rejects basename-only matches without full-path evidence', () => {
+    // 同名但命令行中无目标全路径；超大 PID 保证 /proc 核验在任何机器上必然失败
+    const output = '4294967000 DemoApp ./DemoApp --flag';
+
+    assert.deepEqual(parsePsPids(output, '/opt/app/DemoApp'), []);
+});
+
 test('waitForNewExecutablePid detects a newly observed process and ignores known PIDs', async () => {
     const found = await waitForNewExecutablePid(process.execPath, [], 50);
     assert.equal(found, process.pid);

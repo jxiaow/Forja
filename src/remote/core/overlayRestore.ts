@@ -1,4 +1,4 @@
-import { quoteRemoteArg, remoteCommand } from './shell';
+import { quoteRemoteArg, remoteCommand, remoteStateDirArg } from './shell';
 import { RemoteDiagnostic, RemoteRunner } from './types';
 
 export interface RemoteOverlayRestoreRepo {
@@ -29,7 +29,7 @@ export async function executeRemoteOverlayRestore(options: ExecuteRemoteOverlayR
 }
 
 export function buildOverlayRestoreCommand(targetId: string, repoName: string, repoDir: string): string {
-    const stateDir = '"$HOME/.forja/remote-state/' + targetId + '"';
+    const stateDir = remoteStateDirArg(targetId);
     const script = [
         "const fs=require('fs');const path=require('path');const cp=require('child_process');",
         "const stateDir=process.argv[1];const repo=process.argv[2];const repoDir=process.argv[3];",
@@ -46,7 +46,7 @@ export function buildOverlayRestoreCommand(targetId: string, repoName: string, r
         "repoState.tracked=[];repoState.untracked=[];repoState.deletedTracked=[];",
         "fs.writeFileSync(manifestPath,JSON.stringify(manifest,null,2));"
     ].join('');
-    return 'node -e ' + quoteRemoteArg(script) + ' -- ' + stateDir + ' ' + remoteCommand([repoName]) + ' ' + repoDir;
+    return 'node -e ' + quoteRemoteArg(script) + ' -- ' + stateDir + ' ' + remoteCommand([repoName, repoDir]);
 }
 
 function trim(value: string): string {
