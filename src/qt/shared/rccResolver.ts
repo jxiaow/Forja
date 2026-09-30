@@ -5,10 +5,27 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { warn } from '../../core/loggerBase';
 import { posixQuote } from '../../core/shellQuote';
+import {
+    RCC_MANIFEST_VERSION,
+    buildRccTargetRecord,
+    checkTargetAgainstManifest,
+    loadRccManifest,
+    parseQrcFileRefs,
+    rccTargetKey,
+    saveRccManifest,
+    writeRccManifest,
+} from './rccManifest';
 
 export interface RccTarget {
     name: string;
     dir: string;
+}
+
+/** rcc 重编判定的可选上下文：提供 workroot 后启用 mtime/size 快路径 + 内容哈希兜底 */
+export interface RccRebuildContext {
+    workroot: string;
+    /** 覆盖配置根目录（测试注入用），默认 forjaConfigDir() */
+    configDir?: string;
 }
 
 /**
@@ -100,11 +117,58 @@ export function scanRccTargets(rccProjectPath: string): RccTarget[] {
 }
 
 /**
- * 检查是否有 rcc target 需要重新编译
- * 比较 .rcc 输出文件和 .qrc 及其引用资源的 mtime
- * 如果提供了 outputDir，还会检查输出目录中的 .rcc 拷贝是否过期
+ * 检查是否有 rcc target 需要重新编译。
+ * 不提供 ctx 时保持现行裸 mtime 判定；提供 ctx.workroot 时升级为：
+ * .rcc 缺失 → 直接重编；manifest 无记录 → mtime 判定 + 免编时补建哈希记录；
+ * 有记录 → mtime/size 快路径 + 内容哈希兜底（时间戳动但内容不动只刷新记录，不重编）。
+ * 判定过程只读和 stat/哈希，仅在免编分支补建/刷新 manifest 时写入。
+ * 如果提供了 outputDir，还会检查输出目录中的 .rcc 拷贝是否过期（保持 mtime 口径）。
  */
-export function rccNeedsRebuild(targets: RccTarget[], outputDir?: string | null): boolean {
+export function rccNeedsRebuild(targets: RccTarget[], outputDir?: string | null, ctx?: RccRebuildContext | null): boolean {
+    if (!ctx) { return rccNeedsRebuildByMtime(targets, outputDir); }
+
+    const manifest = loadRccManifest(ctx.workroot, ctx.configDir)
+        ?? { version: RCC_MANIFEST_VERSION, targets: {} };
+    let dirty = false;
+
+    for (const target of targets) {
+        const rccFile = path.join(target.dir, `${target.name}.rcc`);
+        if (!fs.existsSync(rccFile)) { return true; }
+        const rccMtime = fs.statSync(rccFile).mtimeMs;
+
+        const key = rccTargetKey(ctx.workroot, target);
+        const entry = manifest.targets[key];
+        if (!entry) {
+            // 无记录 → 走现行 mtime 判定；判为免编时为全部文件算哈希补建条目（一次成本）
+            if (rccNeedsRebuildByMtime([target], null)) { return true; }
+            const rec = buildRccTargetRecord(ctx.workroot, target);
+            if (rec) {
+                manifest.targets[key] = rec;
+                dirty = true;
+            }
+        } else {
+            const check = checkTargetAgainstManifest(ctx.workroot, target, entry);
+            if (check.needsRebuild) { return true; }
+            if (check.refreshed) { dirty = true; }
+        }
+
+        // 输出目录的 .rcc 拷贝是否过期（保持现 mtime 逻辑）
+        if (outputDir) {
+            const outputRcc = path.join(outputDir, `${target.name}.rcc`);
+            if (!fs.existsSync(outputRcc) || fs.statSync(outputRcc).mtimeMs < rccMtime) {
+                return true;
+            }
+        }
+    }
+
+    if (dirty) { saveRccManifest(ctx.workroot, manifest, ctx.configDir); }
+    return false;
+}
+
+/**
+ * 现行裸 mtime 判定：.qrc 或引用资源比 .rcc 新 → 需重编；引用文件缺失容忍不重编
+ */
+function rccNeedsRebuildByMtime(targets: RccTarget[], outputDir?: string | null): boolean {
     for (const target of targets) {
         const rccFile = path.join(target.dir, `${target.name}.rcc`);
         const qrcFile = path.join(target.dir, `${target.name}.qrc`);
@@ -125,9 +189,8 @@ export function rccNeedsRebuild(targets: RccTarget[], outputDir?: string | null)
 
         try {
             const qrcContent = fs.readFileSync(qrcFile, 'utf-8');
-            const fileMatches = qrcContent.matchAll(/<file[^>]*>([^<]+)<\/file>/g);
-            for (const match of fileMatches) {
-                const resPath = path.join(target.dir, match[1]);
+            for (const ref of parseQrcFileRefs(qrcContent)) {
+                const resPath = path.join(target.dir, ref);
                 if (fs.existsSync(resPath) && fs.statSync(resPath).mtimeMs > rccMtime) {
                     return true;
                 }
@@ -135,6 +198,18 @@ export function rccNeedsRebuild(targets: RccTarget[], outputDir?: string | null)
         } catch { /* qrc read failure tolerated */ }
     }
     return false;
+}
+
+/**
+ * rcc 编译成功后重写该 workroot 的重编 manifest（CLI 与扩展共用入口）
+ */
+export function refreshRccManifest(workspace: string, configuredRccPath: string | null | undefined): void {
+    const wsRoot = path.resolve(workspace);
+    const rccPath = resolveRccProjectPath(configuredRccPath || '', wsRoot);
+    if (!rccPath) { return; }
+    const targets = scanRccTargets(rccPath);
+    if (targets.length === 0) { return; }
+    writeRccManifest(wsRoot, targets);
 }
 
 /**

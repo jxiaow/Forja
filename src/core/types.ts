@@ -111,4 +111,6 @@ export interface CliResult {
     resolved: CliResolvedConfig | null;
     rccProjectPath?: string;
     data?: Record<string, unknown>;
+    /** 内部计划标记：commands 中包含 rcc 编译命令。非 CLI JSON 输出字段，不会被序列化到结果协议。 */
+    rccCompiled?: boolean;
 }
