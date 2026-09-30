@@ -53,9 +53,11 @@ export async function runRemoteCli(argv: string[]): Promise<void> {
         ignoreEngines: options.force,
     });
     if (!result.ok) { process.exitCode = 1; }
-    // Add server info to result for display
-    (result as any).serverName = options.serverName || server.name;
-    (result as any).host = server.host;
+    // Add server info to result for display (structural extension, no `any` cast)
+    Object.assign(result, {
+        serverName: options.serverName || server.name,
+        host: server.host
+    });
     writeOutput(result, options.json);
 }
 

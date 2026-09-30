@@ -11,7 +11,7 @@ export function isPathInside(parentDir: string, childPath: string): boolean {
 }
 
 export function isGlobPattern(s: string): boolean {
-    return /[*?\[]/.test(s);
+    return /[*?[[]/.test(s);
 }
 
 export function globToRegex(glob: string): RegExp {
@@ -95,7 +95,7 @@ export function resolveRequestedFilesForGitRootDetailed(gitRoot: string, workspa
         if (!trimmed) { continue; }
 
         if (isGlobPattern(trimmed) && !path.isAbsolute(trimmed)) {
-            const globBase = trimmed.split(/[*?\[]/)[0].replace(/\/+$/, '');
+            const globBase = trimmed.split(/[*?[[]/)[0].replace(/\/+$/, '');
             const globPattern = trimmed.slice(globBase.length).replace(/^\//, '');
             const searchDir = path.resolve(workspaceAbs, globBase || '.');
 
