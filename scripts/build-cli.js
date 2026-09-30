@@ -41,6 +41,7 @@ const tmpBuild = path.join(root, 'dist', '_cli-build');
 const dirs = [
     'cli',
     'cli/commands',
+    'cli/commands/dict',
     'cli/commands/useTarget',
     'qt/cli',
     'qt/shared',
@@ -104,7 +105,10 @@ const platformFiles = [
     'qt/platform/platformConfig.js',
     'qt/platform/requirements.js',
     'qt/platform/runExecutor.js',
-    'qt/platform/shellPlan.js'
+    'qt/platform/shellPlan.js',
+    'qt/platform/executable.js',
+    'qt/platform/outputCodec.js',
+    'qt/platform/processControl.js'
 ];
 
 // Version file at root of out/

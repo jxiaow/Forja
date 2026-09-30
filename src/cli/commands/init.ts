@@ -3,7 +3,7 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { T, Diagnostic, Question } from './types';
+import { T, Diagnostic, Question, Locale } from './types';
 import type { ForjaJsonResult } from './types';
 import {
     resolveWorkroot, isWorkrootRegistered, registerWorkroot, unregisterWorkroot,
@@ -19,6 +19,10 @@ import { scanRccCandidates } from '../../qt/shared/rccResolver';
 import { setSilent } from '../../core/loggerBase';
 import { confirm, prompt, choose, chooseRequired } from './prompt';
 import { getProjectGroup } from './projectGrouping';
+import { saveGlobalConfig } from '../../core/settingsIO';
+import { outputResult } from './output';
+import { extractFlag, findUnknownFlags, unknownFlagsMessage } from './args';
+import { isRemoteMode, executeRemoteBridgeAction } from './remoteMode';
 export { getProjectGroup } from './projectGrouping';
 
 // ── Result type ──
@@ -891,4 +895,80 @@ async function configureTargetFields(target: TargetProfile, options: InitOptions
     }
 
     return { ok: true, target: updated, rccProjectPath };
+}
+
+// ── Init ──
+
+export async function handleInit(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
+    const initKnown = new Set(['--workroot', '--answers', '--lang']);
+    const initWithValue = new Set(['--workroot', '--answers', '--lang']);
+    const initUnknown = findUnknownFlags(argv, initKnown, initWithValue);
+    if (initUnknown.length > 0) {
+        outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: unknownFlagsMessage(initUnknown, initKnown) }], nextAction: 'forja init' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    const workrootFlag = extractFlag(argv, '--workroot');
+    const answersFile = extractFlag(argv, '--answers');
+    const langFlag = extractFlag(argv, '--lang');
+
+    // Validate --lang early
+    if (langFlag && langFlag !== 'zh' && langFlag !== 'en') {
+        outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('use.invalidLanguage')}: ${langFlag}. ${T('use.useZhOrEn')}` }] }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // Remote mode — bridge init to remote
+    if (isRemoteMode(workroot)) {
+        const extraArgs: string[] = [];
+        if (langFlag) { extraArgs.push('--lang', langFlag); }
+        await executeRemoteBridgeAction(workroot, 'init', extraArgs, wantsJson);
+        return;
+    }
+
+    let answers: Record<string, string> | undefined;
+    if (answersFile) {
+        try {
+            const parsed = JSON.parse(fs.readFileSync(answersFile, 'utf8'));
+            if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: `Answers file must contain a JSON object: ${answersFile}` }] }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            answers = parsed;
+        } catch {
+            outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('initAnswersFileFailed', [answersFile])}` }] }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+    }
+
+    // In JSON mode, workroot is collected as the first init answer. Resolve it
+    // before scanning, but keep it out of target configuration answers.
+    const answerWorkroot = answers?.workroot;
+    if (answers && answerWorkroot) {
+        const { workroot: _ignoredWorkroot, ...targetAnswers } = answers;
+        answers = Object.keys(targetAnswers).length > 0 ? targetAnswers : undefined;
+    }
+    const result = await runInit(workroot, {
+        workroot: workrootFlag || answerWorkroot,
+        interactive: !wantsJson && !answers,
+        json: wantsJson,
+        answers,
+    });
+
+    // Persist --lang if provided and init succeeded
+    if (langFlag && result.ok) {
+        try {
+            saveGlobalConfig({ lang: langFlag });
+        } catch (e) {
+            outputResult({ ok: false, action: 'init', diagnostics: [{ level: 'error', message: `${T('use.failedToSaveLanguage')}: ${e instanceof Error ? e.message : String(e)}` }] }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+    }
+
+    outputResult(result, wantsJson, (r) => formatInitText(r));
 }

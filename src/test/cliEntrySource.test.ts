@@ -34,21 +34,23 @@ test('remote CLI bootstrap resolves artifacts from package root instead of calle
 });
 
 test('unified CLI exposes the existing remote bootstrap workflow', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'index.ts'), 'utf8');
+    // Remote dispatcher handler lives in the remote command module since the index.ts split.
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'remote.ts'), 'utf8');
 
     assert.match(source, /import \{ runRemoteCli \} from '\.\.\/\.\.\/remote\/cli'/);
     assert.match(source, /case 'bootstrap':[\s\S]*runRemoteCli\(\['bootstrap', '--workspace', workroot/);
 });
 
 test('remote CLI surface keeps only on, off, check, and bootstrap', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'index.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'remote.ts'), 'utf8');
 
     assert.match(source, /REMOTE_SUBCOMMANDS = \['on', 'off', 'check', 'bootstrap'\]/);
     assert.doesNotMatch(source, /subCmd === 'restore'|subCmd === 'reset'/);
 });
 
 test('use help does not expose an execution-location option', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'types.ts'), 'utf8');
+    // Help texts moved to the dictionary shard since the types.ts split.
+    const source = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'dict', 'help.ts'), 'utf8');
 
     assert.doesNotMatch(source, /Set execution location/);
 });
@@ -123,14 +125,16 @@ test('forja skill documents current status init use flow', () => {
 
 test('sync command surface is minimal (plan subcommand + reset flag)', () => {
     const syncSrc = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'sync.ts'), 'utf8');
-    const indexSrc = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'index.ts'), 'utf8');
+    // Sync/use dispatcher handlers moved into their command modules since the index.ts split.
+    const dispatcherSrc = fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'sync.ts'), 'utf8')
+        + fs.readFileSync(path.join(process.cwd(), 'src', 'cli', 'commands', 'use.ts'), 'utf8');
 
     // SyncAction only has run/plan/reset/status/ignore
     assert.match(syncSrc, /SyncAction\s*=\s*'run'\s*\|\s*'plan'\s*\|\s*'reset'/);
     // No transfer subcommand in dispatcher
-    assert.doesNotMatch(indexSrc, /subArg === 'transfer'/);
+    assert.doesNotMatch(dispatcherSrc, /subArg === 'transfer'/);
     // --reset flag is supported
-    assert.match(indexSrc, /--reset/);
+    assert.match(dispatcherSrc, /--reset/);
 });
 
 test('sync help and docs describe sync command', () => {

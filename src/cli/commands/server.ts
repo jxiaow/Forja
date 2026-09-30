@@ -7,6 +7,10 @@ import {
 } from '../../core/serverStore';
 import { ForjaJsonResult, Diagnostic, ServerDetail, ServerSummary, Locale, T } from './types';
 import { loadRemoteSettings, saveRemoteSettings, loadSyncSettings, saveSyncSettings } from '../../core/settingsIO';
+import { outputResult } from './output';
+import { extractFlag, findUnknownFlags, unknownFlagsMessage, suggestCorrection, hasFlag } from './args';
+import { runList, formatListText } from './list';
+import { confirm } from './prompt';
 import * as path from 'path';
 
 export function formatServerText(result: ServerResult, _locale: Locale): string {
@@ -382,4 +386,211 @@ export function listServers(selectedId?: string): ServerSummary[] {
 export function getServerDetail(id: string): ServerDetail | null {
     const s = getServerById(id);
     return s ? toServerDetail(s) : null;
+}
+
+// ── Server ──
+
+export async function handleServer(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+
+    // Per-subcommand flag validation — each subcommand only accepts its own flags
+    const srvWithVal = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password']);
+    const addUpdateKnown = new Set(['--name','--host','--username','--port','--auth-mode','--private-key-path','--password','--strict-host-key-checking','--no-strict-host-key-checking']);
+    const removeKnown = new Set(['--force']);
+    const listKnown = new Set(['--detail']);
+    const strictHostKeyChecking = hasFlag(argv, '--strict-host-key-checking');
+    const noStrictHostKeyChecking = hasFlag(argv, '--no-strict-host-key-checking');
+
+    if ((subCmd === 'add' || subCmd === 'update') && strictHostKeyChecking && noStrictHostKeyChecking) {
+        outputResult({
+            ok: false,
+            action: 'server',
+            serverAction: subCmd,
+            changed: [],
+            diagnostics: [{ level: 'error', message: T('srv.strictHostFlagsConflict') }],
+            nextAction: `forja server ${subCmd}`,
+        }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    switch (subCmd) {
+        case 'add': {
+            const addUnknown = findUnknownFlags(argv, addUpdateKnown, srvWithVal);
+            if (addUnknown.length > 0) {
+                outputResult({ ok: false, action: 'server', serverAction: 'add', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(addUnknown, addUpdateKnown) }], nextAction: 'forja server add' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const portStr = extractFlag(argv, '--port');
+            let port: number | undefined;
+            if (portStr) {
+                // Reject non-integer values (e.g., "3.14", "abc")
+                if (!/^\d+$/.test(portStr)) {
+                    outputResult({
+                        ok: false,
+                        action: 'server',
+                        serverAction: 'add',
+                        changed: [],
+                        diagnostics: [{
+                            level: 'error',
+                            message: `${T('idx.invalidPort')}: ${portStr}. ${T('idx.invalidPortHint')}`,
+                        }],
+                        nextAction: 'forja server add --port 22',
+                    }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                port = parseInt(portStr, 10);
+                if (isNaN(port) || port < 1 || port > 65535) {
+                    outputResult({
+                        ok: false,
+                        action: 'server',
+                        serverAction: 'add',
+                        changed: [],
+                        diagnostics: [{
+                            level: 'error',
+                            message: `${T('idx.invalidPort')}: ${portStr}. ${T('idx.invalidPortHint')}`,
+                        }],
+                        nextAction: 'forja server add --port 22',
+                    }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+            }
+            const result = runServerAdd({
+                name: extractFlag(argv, '--name') || '',
+                host: extractFlag(argv, '--host') || '',
+                username: extractFlag(argv, '--username') || '',
+                port,
+                authMode: extractFlag(argv, '--auth-mode') as 'key' | 'password' | undefined,
+                privateKeyPath: extractFlag(argv, '--private-key-path'),
+                password: extractFlag(argv, '--password'),
+                strictHostKeyChecking: strictHostKeyChecking ? true : noStrictHostKeyChecking ? false : undefined,
+            });
+            outputResult(result, wantsJson, (r) => formatServerText(r, locale));
+            return;
+        }
+        case 'update': {
+            const updateUnknown = findUnknownFlags(argv, addUpdateKnown, srvWithVal);
+            if (updateUnknown.length > 0) {
+                outputResult({ ok: false, action: 'server', serverAction: 'update', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(updateUnknown, addUpdateKnown) }], nextAction: 'forja server update' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const id = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
+            if (!id) {
+                outputResult({
+                    ok: false, action: 'server', serverAction: 'update', changed: [],
+                    diagnostics: [{ level: 'error', message:`${T('idx.serverIdRequired')}: forja server update <id>` }],
+                    nextAction: 'forja server',
+                }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const portStr = extractFlag(argv, '--port');
+            let port: number | undefined;
+            if (portStr) {
+                // Reject non-integer values (e.g., "3.14", "abc")
+                if (!/^\d+$/.test(portStr)) {
+                    outputResult({
+                        ok: false,
+                        action: 'server',
+                        serverAction: 'update',
+                        changed: [],
+                        diagnostics: [{
+                            level: 'error',
+                            message: `${T('idx.invalidPort')}: ${portStr}. ${T('idx.invalidPortHint')}`,
+                        }],
+                        nextAction: `forja server update ${id} --port 22`,
+                    }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                port = parseInt(portStr, 10);
+                if (isNaN(port) || port < 1 || port > 65535) {
+                    outputResult({
+                        ok: false,
+                        action: 'server',
+                        serverAction: 'update',
+                        changed: [],
+                        diagnostics: [{
+                            level: 'error',
+                            message: `${T('idx.invalidPort')}: ${portStr}. ${T('idx.invalidPortHint')}`,
+                        }],
+                        nextAction: `forja server update ${id} --port 22`,
+                    }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+            }
+            const result = runServerUpdate(id, {
+                name: extractFlag(argv, '--name'),
+                host: extractFlag(argv, '--host'),
+                username: extractFlag(argv, '--username'),
+                port,
+                authMode: extractFlag(argv, '--auth-mode') as 'key' | 'password' | undefined,
+                privateKeyPath: extractFlag(argv, '--private-key-path'),
+                password: extractFlag(argv, '--password'),
+                strictHostKeyChecking: strictHostKeyChecking ? true : noStrictHostKeyChecking ? false : undefined,
+            });
+            outputResult(result, wantsJson, (r) => formatServerText(r, locale));
+            return;
+        }
+        case 'remove': {
+            const removeUnknown = findUnknownFlags(argv, removeKnown, new Set());
+            if (removeUnknown.length > 0) {
+                outputResult({ ok: false, action: 'server', serverAction: 'remove', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(removeUnknown, removeKnown) }], nextAction: 'forja server remove' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const id = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
+            if (!id) {
+                outputResult({
+                    ok: false, action: 'server', serverAction: 'remove', changed: [],
+                    diagnostics: [{ level: 'error', message:`${T('idx.serverIdRequired')}: forja server remove <id>` }],
+                    nextAction: 'forja server',
+                }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            // Destructive action: require confirmation
+            const forceFlag = hasFlag(argv, '--force');
+            if (!wantsJson && !forceFlag) {
+                const yes = await confirm(T('confirmRemoveServer', [id]), false);
+                if (!yes) {
+                    outputResult({ ok: false, action: 'server', serverAction: 'remove', changed: [], diagnostics: [{ level: 'info', message: T('cancelled') }] }, wantsJson);
+                    return;
+                }
+            } else if (wantsJson && !forceFlag) {
+                outputResult({ ok: false, action: 'server', serverAction: 'remove', changed: [], diagnostics: [{ level: 'error', message: T('destructiveRequiresForce') }], nextAction: `forja server remove ${id} --force` }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const result = runServerRemove(id, workroot);
+            outputResult(result, wantsJson, (r) => formatServerText(r, locale));
+            return;
+        }
+        default: {
+            if (subCmd !== '') {
+                const SERVER_SUBCOMMANDS = ['add', 'update', 'remove'];
+                const hint = suggestCorrection(subCmd, SERVER_SUBCOMMANDS);
+                const msg = hint
+                    ? `${T('idx.unknownServerSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: ${hint}?`
+                    : `${T('idx.unknownServerSubcommand')}: ${subCmd}`;
+                outputResult({ ok: false, action: 'server', serverAction: 'list', changed: [], diagnostics: [{ level: 'error', message: msg }], nextAction: hint ? `forja server ${hint}` : 'forja server add' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const listUnknown = findUnknownFlags(argv, listKnown, new Set(['--detail']));
+            if (listUnknown.length > 0) {
+                outputResult({ ok: false, action: 'server', serverAction: 'list', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(listUnknown, listKnown) }], nextAction: 'forja server' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const detailId = extractFlag(argv, '--detail');
+            const result = await runList(workroot, 'servers', { detailId });
+            outputResult(result, wantsJson, (r) => formatListText(r, locale));
+        }
+    }
 }

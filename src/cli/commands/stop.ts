@@ -5,8 +5,11 @@
 import { requireActiveTarget } from './activeTarget';
 import { readRunState, clearRunState, findExecutablePids, resolveRunProcessStatus, isProcessRunning } from '../../qt/shared/localState';
 import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
-import { ForjaJsonResult, Diagnostic, RuntimeState, diag, T } from './types';
+import { ForjaJsonResult, Diagnostic, RuntimeState, Locale, diag, T } from './types';
 import type { TargetProfile } from '../../core/workspaceStore';
+import { outputResult } from './output';
+import { findUnknownFlags, unknownFlagsMessage } from './args';
+import { isRemoteMode, executeRemoteBridgeAction } from './remoteMode';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { getServerById } from '../../core/serverStore';
 import * as cp from 'child_process';
@@ -213,4 +216,28 @@ export function outputStopResult(result: StopResult, wantsJson: boolean): void {
         }
     }
     if (!result.ok) { process.exitCode = 1; }
+}
+
+// ── Stop ──
+
+export async function handleStop(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
+    const stopUnknown = findUnknownFlags(argv, new Set(), new Set());
+    if (stopUnknown.length > 0) {
+        outputResult({ ok: false, action: 'stop', diagnostics: [{ level: 'error', message: unknownFlagsMessage(stopUnknown, new Set()) }], nextAction: 'forja stop' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+    const stopPosArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+    if (stopPosArg) {
+        outputResult({ ok: false, action: 'stop', diagnostics: [{ level: 'error', message: `${T('idx.unexpectedArgument')}: ${stopPosArg}` }], nextAction: 'forja stop' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+    // Remote mode routing — directly bridge (no prepare pipeline)
+    if (isRemoteMode(workroot)) {
+        await executeRemoteBridgeAction(workroot, 'stop', [], wantsJson);
+        return;
+    }
+    const result = await runStop(workroot, { json: wantsJson });
+    outputStopResult(result, wantsJson);
 }

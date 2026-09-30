@@ -10,6 +10,9 @@ import { resolveWorkroot, loadWorkspaceConfig, getActiveTarget as getActiveTarge
 import { detectMake } from '../../cpp/cli/envDetector';
 import { detectEnv } from '../../qt/env/envDetector';
 import { setSilent } from '../../core/loggerBase';
+import { outputResult } from './output';
+import { findUnknownFlags, unknownFlagsMessage, suggestCorrection, hasFlag } from './args';
+import { isRemoteMode, executeRemoteBridgeAction } from './remoteMode';
 
 function quotePath(p: string): string {
     return p.includes(' ') ? `"${p}"` : p;
@@ -505,4 +508,113 @@ async function listEnvMake(): Promise<ListResult> {
         envSubCategory: 'make',
         env: summary,
     };
+}
+
+// ── List ──
+
+export async function handleList(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    // Determine category from first positional arg after 'list'
+    const categoryArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+    const validCategories = ['targets', 'env'];
+
+    // Require a category
+    if (!categoryArg) {
+        outputResult({
+            ok: false,
+            action: 'list',
+            diagnostics: [{
+                level: 'error',
+                message: T('idx.listCategoryRequired'),
+            }],
+            nextAction: 'forja list targets',
+        }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // Error on unknown category instead of silently falling back
+    if (!validCategories.includes(categoryArg)) {
+        outputResult({
+            ok: false,
+            action: 'list',
+            category: categoryArg,
+            workroot,
+            diagnostics: [{
+                level: 'error',
+                message: (() => {
+                    const base = `${T('idx.unknownListCategory')}: ${categoryArg}. ${T('idx.validCategories')}: ${validCategories.join(', ')}`;
+                    const hint = suggestCorrection(categoryArg, validCategories);
+                    return hint ? `${base}. ${T('idx.didYouMean')}: ${hint}?` : base;
+                })(),
+            }],
+            nextAction: 'forja list targets',
+        }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // Remote mode — bridge list to remote
+    if (isRemoteMode(workroot)) {
+        const extraArgs = [categoryArg, ...argv.filter(a => a.startsWith('--'))];
+        await executeRemoteBridgeAction(workroot, 'list', extraArgs, wantsJson);
+        return;
+    }
+
+    const category = categoryArg as ListCategory;
+
+    // Build known flags set based on category
+    const listKnown = new Set<string>(['--all']);
+    if (category === 'env') {
+        listKnown.add('--qt');
+        listKnown.add('--vs');
+        listKnown.add('--jom');
+        listKnown.add('--make');
+    }
+    const listUnknown = findUnknownFlags(argv, listKnown, new Set<string>());
+    if (listUnknown.length > 0) {
+        outputResult({ ok: false, action: 'list', diagnostics: [{ level: 'error', message: unknownFlagsMessage(listUnknown, listKnown) }], nextAction: 'forja list targets' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // Reject env filter flags when category is not 'env'
+    if (category !== 'env') {
+        const envFlags = ['--qt', '--vs', '--jom', '--make'];
+        const leaked = envFlags.filter(f => hasFlag(argv, f));
+        if (leaked.length > 0) {
+            outputResult({ ok: false, action: 'list', diagnostics: [{ level: 'error', message: `${T('idx.envFlagsOnlyWithEnv')}: ${leaked.join(', ')}` }], nextAction: 'forja list env --qt' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+    }
+
+    // Reject --all when category is not 'targets'
+    if (category !== 'targets' && hasFlag(argv, '--all')) {
+        outputResult({ ok: false, action: 'list', diagnostics: [{ level: 'error', message: T('idx.allOnlyWithTargets') }], nextAction: 'forja list targets --all' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // Parse env filter flags (e.g., `forja list env --qt`)
+    let envSubCategory: EnvSubCategory | undefined;
+    if (category === 'env') {
+        const envFlags: Array<{ flag: string; sub: EnvSubCategory }> = [
+            { flag: '--qt', sub: 'qt' }, { flag: '--vs', sub: 'vs' },
+            { flag: '--jom', sub: 'jom' }, { flag: '--make', sub: 'make' },
+        ];
+        const active = envFlags.filter(e => hasFlag(argv, e.flag));
+        if (active.length > 1) {
+            outputResult({
+                ok: false, action: 'list',
+                diagnostics: [{ level: 'error', message: T('idx.envSingleFilterOnly') }],
+                nextAction: 'forja list env --qt',
+            }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+        if (active.length === 1) { envSubCategory = active[0].sub; }
+    }
+
+    const result = await runList(workroot, category, { envSubCategory, savedOnly: !hasFlag(argv, '--all') });
+    outputResult(result, wantsJson, (r) => formatListText(r, locale));
 }

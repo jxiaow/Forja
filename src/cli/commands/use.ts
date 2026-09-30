@@ -5,8 +5,15 @@
 import { ForjaJsonResult, ActiveTarget, Locale, T, Question } from './types';
 import { getActiveTarget } from './activeTarget';
 import { resolveWorkroot, loadWorkspaceConfig, saveWorkspaceConfig } from '../../core/workspaceStore';
-import { loadGlobalConfig } from '../../core/settingsIO';
+import { loadGlobalConfig, saveGlobalConfig } from '../../core/settingsIO';
 import { promptRccProjectPath } from './init';
+import { outputResult } from './output';
+import {
+    extractFlag, findUnknownFlags, unknownFlagsMessage, hasEmptyFlagValue,
+    hasFlag, suggestCorrection, KEYWORD_SUGGESTIONS,
+} from './args';
+import { isRemoteMode, executeRemoteBridgeAction } from './remoteMode';
+import { confirm } from './prompt';
 import {
     runUseTarget as runUseTargetNew,
     runUpdateModeArch,
@@ -59,6 +66,9 @@ export function formatUseText(result: UseResult, _locale: Locale): string {
         }
         if (result.rccProjectPath) { lines.push(`  RCC: ${result.rccProjectPath}`); }
         if (result.qmakeArgs) { lines.push(`  ${T('use.qmakeArgsLabel')}: ${result.qmakeArgs}`); }
+        if (result.cmakeConfigureArgs && result.cmakeConfigureArgs.length > 0) {
+            lines.push(`  ${T('use.cmakeArgsLabel')}: ${result.cmakeConfigureArgs.join(' ')}`);
+        }
         if (result.jobs !== undefined) { lines.push(`  ${T('use.globalJobs')}: ${result.jobs}`); }
         if (result.nextAction) { lines.push(T('next')); lines.push(`  ${result.nextAction}`); }
         return lines.join('\n');
@@ -80,6 +90,7 @@ export interface UseResult extends ForjaJsonResult {
     changed?: string[];
     rccProjectPath?: string;
     qmakeArgs?: string;
+    cmakeConfigureArgs?: string[];
     jobs?: number;
 }
 
@@ -217,6 +228,71 @@ export function runQmakeArgs(workspace: string, args: string[], add: boolean, rm
     }
     return {
         ok: true, action: 'use', useScope: 'target', workspace, changed: ['qt.qmakeArgs'],
+        nextAction: 'forja build',
+    };
+}
+
+export function runCMakeArgs(workspace: string, args: string[], add: boolean, rm: boolean): UseResult {
+    const workroot = resolveWorkroot(workspace);
+    if (!workroot) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: T('notInitialized') }],
+            nextAction: 'forja init',
+        };
+    }
+
+    if (add && rm) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: T('use.cmakeArgsConflictFlags') }],
+            nextAction: 'forja use target cmake-args',
+        };
+    }
+
+    if ((add || rm) && args.length === 0) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: T('use.cmakeArgsMissingValues') }],
+            nextAction: 'forja use target cmake-args --add <args>',
+        };
+    }
+
+    const config = loadWorkspaceConfig(workroot);
+    const current = [...(config.cppModulePrefs.cmakeConfigureArgs ?? [])];
+
+    if (!add && !rm) {
+        return {
+            ok: true, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: current.length > 0
+                ? [{ level: 'info', message: T('use.cmakeArgsList', [current.join(' ')]) }]
+                : [{ level: 'info', message: T('use.noCMakeArgs') }],
+            nextAction: 'forja use target cmake-args --add <args>',
+        };
+    }
+
+    let updated: string[];
+    if (add) {
+        const set = new Set(current);
+        for (const a of args) set.add(a);
+        updated = [...set];
+    } else {
+        const toRemove = new Set(args);
+        updated = current.filter(t => !toRemove.has(t));
+    }
+
+    config.cppModulePrefs.cmakeConfigureArgs = updated;
+    try {
+        saveWorkspaceConfig(config);
+    } catch (e) {
+        return {
+            ok: false, action: 'use', useScope: 'target', workspace, changed: [],
+            diagnostics: [{ level: 'error', message: `${T('use.failedToSaveTarget')}: ${e instanceof Error ? e.message : String(e)}` }],
+            nextAction: 'forja status',
+        };
+    }
+    return {
+        ok: true, action: 'use', useScope: 'target', workspace, changed: ['cpp.cmakeConfigureArgs'],
         nextAction: 'forja build',
     };
 }
@@ -404,5 +480,230 @@ export function runUseShow(workspace: string): UseResult {
         }
     }
 
+    if (target.kind === 'cpp') {
+        const workroot = resolveWorkroot(workspace);
+        if (workroot) {
+            const wsConfig = loadWorkspaceConfig(workroot);
+            if (wsConfig.cppModulePrefs.cmakeConfigureArgs.length > 0) {
+                result.cmakeConfigureArgs = [...wsConfig.cppModulePrefs.cmakeConfigureArgs];
+            }
+        }
+    }
+
     return result;
+}
+
+// ── Use ──
+
+export async function handleUse(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+
+    // Remote mode — bridge use to remote
+    if (isRemoteMode(workroot) && subCmd) {
+        const extraArgs = argv.slice(1);
+        await executeRemoteBridgeAction(workroot, 'use', extraArgs, wantsJson);
+        return;
+    }
+
+    // Per-subcommand flag validation
+    switch (subCmd) {
+        case 'target': {
+            if (argv[2] === 'suppress-warnings') {
+                const swKnown = new Set(['--add', '--rm']);
+                const swUnknown = findUnknownFlags(argv.slice(2), swKnown, new Set<string>());
+                if (swUnknown.length > 0) {
+                    outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(swUnknown, swKnown) }], nextAction: 'forja use target suppress-warnings' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                const add = hasFlag(argv, '--add');
+                const rm = hasFlag(argv, '--rm');
+                const codes = argv.slice(3).filter(a => !a.startsWith('--'));
+                const result = runSuppressWarnings(workroot, codes, add, rm);
+                outputResult(result, wantsJson, (r) => formatUseText(r, locale));
+                return;
+            }
+            if (argv[2] === 'qmake-args') {
+                const qaKnown = new Set(['--add', '--rm']);
+                const qaUnknown = findUnknownFlags(argv.slice(2), qaKnown, new Set<string>());
+                if (qaUnknown.length > 0) {
+                    outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(qaUnknown, qaKnown) }], nextAction: 'forja use target qmake-args' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                const add = hasFlag(argv, '--add');
+                const rm = hasFlag(argv, '--rm');
+                const qaArgs = argv.slice(3).filter(a => !a.startsWith('--'));
+                const result = runQmakeArgs(workroot, qaArgs, add, rm);
+                outputResult(result, wantsJson, (r) => formatUseText(r, locale));
+                return;
+            }
+            if (argv[2] === 'cmake-args') {
+                const caKnown = new Set(['--add', '--rm']);
+                const caUnknown = findUnknownFlags(argv.slice(2), caKnown, new Set<string>());
+                if (caUnknown.length > 0) {
+                    outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(caUnknown, caKnown) }], nextAction: 'forja use target cmake-args' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                const add = hasFlag(argv, '--add');
+                const rm = hasFlag(argv, '--rm');
+                const caArgs = argv.slice(3).filter(a => !a.startsWith('--'));
+                const result = runCMakeArgs(workroot, caArgs, add, rm);
+                outputResult(result, wantsJson, (r) => formatUseText(r, locale));
+                return;
+            }
+            if (argv[2] === 'remove') {
+                const rmKnown = new Set(['--force']);
+                const rmUnknown = findUnknownFlags(argv.slice(2), rmKnown, new Set<string>());
+                if (rmUnknown.length > 0) {
+                    outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'error', message: unknownFlagsMessage(rmUnknown, rmKnown) }], nextAction: 'forja use target remove' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                const wsConfig = loadWorkspaceConfig(workroot);
+                const savedTargets = Object.values(wsConfig.targets);
+                if (savedTargets.length === 0) {
+                    outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'error', message: T('use.noTargetsToRemove') }], nextAction: 'forja init' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                let targetId = argv[3] && !argv[3].startsWith('--') ? argv[3] : '';
+                if (!targetId) {
+                    if (!wantsJson) {
+                        const { chooseRequired } = await import('./prompt');
+                        const chosen = await chooseRequired(
+                            T('use.selectTarget'),
+                            savedTargets,
+                            t => `${t.id}  ${t.name}  [${t.kind}] ${t.mode}|${t.arch}`,
+                        );
+                        if (!chosen) {
+                            outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'info', message: T('cancelled') }] }, wantsJson);
+                            return;
+                        }
+                        targetId = chosen.id;
+                    } else {
+                        outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'error', message: `${T('use.targetNotFound')}: forja use target remove <id>` }], nextAction: 'forja list targets --json' }, wantsJson);
+                        process.exitCode = 1;
+                        return;
+                    }
+                }
+                if (!wsConfig.targets[targetId]) {
+                    outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'error', message: T('use.targetNotFound', [targetId]) }], nextAction: 'forja list targets' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                const forceFlag = hasFlag(argv, '--force');
+                if (!wantsJson && !forceFlag) {
+                    const yes = await confirm(T('confirmRemoveTarget', [targetId]), false);
+                    if (!yes) {
+                        outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'info', message: T('cancelled') }] }, wantsJson);
+                        return;
+                    }
+                } else if (wantsJson && !forceFlag) {
+                    outputResult({ ok: false, action: 'use', useScope: 'target', changed: [], diagnostics: [{ level: 'error', message: T('destructiveRequiresForce') }], nextAction: `forja use target remove ${targetId} --force` }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                const removeResult = runRemoveTarget(workroot, targetId);
+                outputResult(removeResult, wantsJson, (r) => formatUseText(r, locale));
+                return;
+            }
+            const targetKnown = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--executable-name', '--reset', '--build-script', '--rcc']);
+            const targetWithVal = new Set(['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom', '--executable-name', '--build-script', '--rcc']);
+            const targetUnknown = findUnknownFlags(argv, targetKnown, targetWithVal, {
+                allowEmptyValues: new Set(['--build-script', '--executable-name']),
+            });
+            if (targetUnknown.length > 0) {
+                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(targetUnknown, targetKnown) }], nextAction: 'forja use target' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            // Check for empty flag values (--build-script allows empty to clear)
+            const emptyFlags = ['--project', '--answers', '--mode', '--arch', '--qt', '--vs', '--jom'];
+            for (const f of emptyFlags) {
+                if (hasEmptyFlagValue(argv, f)) {
+                    outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: `${f} requires a non-empty value` }], nextAction: 'forja use target' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+            }
+            const result = await runUseTarget(workroot, {
+                project: extractFlag(argv, '--project') || (argv[2] && !argv[2].startsWith('--') ? argv[2] : undefined),
+                answers: extractFlag(argv, '--answers'),
+                mode: extractFlag(argv, '--mode') as 'debug' | 'release' | undefined,
+                arch: extractFlag(argv, '--arch') as 'x86' | 'x64' | undefined,
+                qtPath: extractFlag(argv, '--qt'),
+                vsInstall: extractFlag(argv, '--vs'),
+                jomPath: extractFlag(argv, '--jom'),
+                executableName: extractFlag(argv, '--executable-name', { allowEmpty: true }),
+                buildScript: extractFlag(argv, '--build-script', { allowEmpty: true }),
+                rccProjectPath: extractFlag(argv, '--rcc'),
+                reset: hasFlag(argv, '--reset'),
+                interactive: !wantsJson,
+                json: wantsJson,
+            });
+            outputResult(result, wantsJson, (r) => formatUseText(r, locale));
+            return;
+        }
+        default: {
+            if (subCmd !== '') {
+                const USE_SUBCOMMANDS = ['target'];
+                const keywordEntry = KEYWORD_SUGGESTIONS['use']?.[subCmd];
+                const keywordHint = keywordEntry ? `${keywordEntry.hint} ${keywordEntry.params.map(p => `[${p}]`).join(' ')}` : undefined;
+                const substringHint = suggestCorrection(subCmd, USE_SUBCOMMANDS);
+                const fallbackHint = substringHint ? `forja use ${substringHint}` : undefined;
+                const hint = keywordHint || fallbackHint;
+                const msg = hint
+                    ? `${T('idx.unknownUseSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: ${hint}?`
+                    : `${T('idx.unknownUseSubcommand')}: ${subCmd}`;
+                const nextAction = keywordEntry ? keywordEntry.next : (hint || 'forja use target');
+                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: msg }], nextAction }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            // No subcommand — handle global flags or show current config
+            const globalKnown = new Set(['--jobs', '--rcc']);
+            const globalWithVal = new Set(['--jobs', '--rcc']);
+            const showUnknown = findUnknownFlags(argv, globalKnown, globalWithVal, {
+                allowEmptyValues: new Set(['--jobs']),
+            });
+            if (showUnknown.length > 0) {
+                outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: unknownFlagsMessage(showUnknown, globalKnown) }], nextAction: 'forja use' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            // --jobs: persist global parallel build setting
+            const jobsRaw = extractFlag(argv, '--jobs', { allowEmpty: true });
+            if (jobsRaw !== undefined) {
+                if (jobsRaw === '') {
+                    saveGlobalConfig({ jobs: undefined });
+                    outputResult({ ok: true, action: 'use', useScope: 'global', changed: ['jobs'], nextAction: 'forja build' }, wantsJson, (r) => T('use.jobsCleared'));
+                    return;
+                }
+                const jobsNum = parseInt(jobsRaw, 10);
+                if (isNaN(jobsNum) || jobsNum < 1) {
+                    outputResult({ ok: false, action: 'use', diagnostics: [{ level: 'error', message: T('use.jobsRequiresPositive') }], nextAction: 'forja use --jobs <N>' }, wantsJson);
+                    process.exitCode = 1;
+                    return;
+                }
+                saveGlobalConfig({ jobs: jobsNum });
+                outputResult({ ok: true, action: 'use', useScope: 'global', changed: ['jobs'], jobs: jobsNum, nextAction: 'forja build' }, wantsJson, (r) => T('use.jobsSet', [String(jobsNum)]));
+                return;
+            }
+            // --rcc: update RCC project path
+            const rccRaw = extractFlag(argv, '--rcc');
+            if (rccRaw !== undefined) {
+                const useResult = await runUseTarget(workroot, {
+                    rccProjectPath: rccRaw,
+                    interactive: !wantsJson,
+                    json: wantsJson,
+                });
+                outputResult(useResult, wantsJson, (r) => formatUseText(r, locale));
+                return;
+            }
+            const result = runUseShow(workroot);
+            outputResult(result, wantsJson, (r) => formatUseText(r, locale));
+        }
+    }
 }

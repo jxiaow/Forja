@@ -8,12 +8,16 @@ import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner';
 import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
+import { refreshRccManifest } from '../../qt/shared/rccResolver';
 import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
 import { createCppPlan } from '../../cpp/shared/plan';
-import { ForjaJsonResult, ActiveTarget, diag, mapQtDiagnostic, T } from './types';
-import { resolveVsDevCmdPath } from '../../core/settingsIO';
+import { ForjaJsonResult, ActiveTarget, Locale, diag, mapQtDiagnostic, mapCppPlanDiagnostic, T } from './types';
+import { resolveVsDevCmdPath, loadGlobalConfig } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
+import { outputResult } from './output';
+import { extractFlag, findUnknownFlags, hasEmptyFlagValue, hasFlag, unknownFlagsMessage, suggestCorrection } from './args';
+import { isRemoteMode, executeRemoteBridgeAction, downloadArtifacts } from './remoteMode';
 
 export type BuildAction = 'default' | 'fresh' | 'qmake' | 'rcc';
 
@@ -191,7 +195,11 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 arch: target.arch,
                 vsDevCmdPath: vsDevCmdPath || undefined,
                 jobs: options.jobs,
+                cmakeConfigureArgs: earlyWsConfig?.cppModulePrefs.cmakeConfigureArgs,
             });
+            const presetWarnings = plan.diagnostics
+                .map(mapCppPlanDiagnostic)
+                .filter((d): d is NonNullable<ReturnType<typeof mapCppPlanDiagnostic>> => d !== null);
 
             if (options.plan) {
                 return {
@@ -201,6 +209,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                     workspace,
                     activeTarget: target,
                     plan: { mode: 'dryRun', commands: plan.commands, shellCommand: plan.shellCommand },
+                    diagnostics: presetWarnings.length > 0 ? presetWarnings : undefined,
                 };
             }
 
@@ -222,6 +231,8 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
             const durationMs = Date.now() - started;
 
             const ok = executed.ok;
+            const failureDiags = ok ? [] : [diag('error', executed.errors?.length > 0 ? `${T('cmd.cppBuildFailed')} (${T('cmd.buildErrorCount', [String(executed.errors.length)])})` : T('cmd.cppBuildFailed'))];
+            const mergedDiags = [...presetWarnings, ...failureDiags];
             return {
                 ok,
                 action: 'build',
@@ -233,7 +244,7 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
                 errors: executed.errors?.length > 0 ? executed.errors : undefined,
                 warningSummary: executed.warningSummary,
                 logFile: executed.logFile ?? undefined,
-                diagnostics: ok ? undefined : [diag('error', executed.errors?.length > 0 ? `${T('cmd.cppBuildFailed')} (${T('cmd.buildErrorCount', [String(executed.errors.length)])})` : T('cmd.cppBuildFailed'))],
+                diagnostics: mergedDiags.length > 0 ? mergedDiags : undefined,
                 nextAction: ok ? undefined : (executed.errors?.length ? undefined : 'forja status'),
             };
         } catch (e) {
@@ -347,6 +358,8 @@ export async function runBuild(workspace: string, buildAction: BuildAction, opti
         }
 
         const executed = await runCliResult(planned, { streaming: !wantsJson, detach: false, suppressedWarnings });
+        // rcc 编译成功后重写该 workroot 的重编 manifest（内容哈希记录，供下次判定快路径）
+        if (executed.ok && planned.rccCompiled) { refreshRccManifest(workspace, rccProjectPath); }
         return {
             ok: executed.ok,
             action: 'build',
@@ -414,4 +427,86 @@ export function outputBuildResult(result: BuildResult, wantsJson: boolean): void
         }
     }
     if (!result.ok) { process.exitCode = 1; }
+}
+
+// ── Build ──
+
+export async function handleBuild(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
+    const buildUnknown = findUnknownFlags(
+        argv,
+        new Set(['--plan', '--project', '--jobs', '--download', '--artifact']),
+        new Set(['--project', '--jobs', '--artifact']),
+    );
+    if (buildUnknown.length > 0) {
+        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: unknownFlagsMessage(buildUnknown, new Set(['--plan','--project','--jobs','--download','--artifact'])) }], nextAction: 'forja build' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+    if (hasEmptyFlagValue(argv, '--project')) {
+        outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: '--project requires a non-empty value' }], nextAction: 'forja build' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+    const subArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+    let buildAction: BuildAction = 'default';
+    if (subArg === 'fresh') { buildAction = 'fresh'; }
+    else if (subArg === 'qmake') { buildAction = 'qmake'; }
+    else if (subArg === 'rcc') { buildAction = 'rcc'; }
+    else if (subArg !== '') {
+        // Unknown subaction - error with suggestion
+        const BUILD_ACTIONS = ['fresh', 'qmake', 'rcc'];
+        const buildHint = suggestCorrection(subArg, BUILD_ACTIONS);
+        const buildMsg = buildHint
+            ? `${T('idx.unknownBuildAction')}: ${subArg}. ${T('idx.didYouMean')}: ${buildHint}?`
+            : `${T('idx.unknownBuildAction')}: ${subArg}. ${T('idx.validActions')}`;
+        outputResult({
+            ok: false,
+            action: 'build',
+            buildAction: 'default',
+            workroot,
+            diagnostics: [{ level: 'error', message: buildMsg }],
+            nextAction: buildHint ? `forja build ${buildHint}` : 'forja build',
+        }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    const jobsRaw = extractFlag(argv, '--jobs');
+    let jobs: number | undefined;
+    if (jobsRaw) {
+        jobs = parseInt(jobsRaw, 10);
+        if (isNaN(jobs) || jobs < 1) {
+            outputResult({ ok: false, action: 'build', buildAction: 'default', workroot, diagnostics: [{ level: 'error', message: '--jobs requires a positive integer' }], nextAction: 'forja build' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+    } else {
+        jobs = loadGlobalConfig().jobs;
+    }
+
+    // Remote mode routing — directly bridge to remote (no prepare pipeline)
+    if (isRemoteMode(workroot)) {
+        const remoteActionMap: Record<string, 'build' | 'rebuild' | 'qmake'> = { default: 'build', fresh: 'rebuild', qmake: 'qmake' };
+        const remoteAction = remoteActionMap[buildAction];
+        if (remoteAction) {
+            const extraArgs: string[] = [];
+            const activeProject = extractFlag(argv, '--project');
+            if (activeProject) { extraArgs.push('--project', activeProject); }
+            if (jobs !== undefined) { extraArgs.push('--jobs', String(jobs)); }
+
+            const result = await executeRemoteBridgeAction(workroot, remoteAction, extraArgs, wantsJson);
+            if (result?.ok && hasFlag(argv, '--download')) {
+                await downloadArtifacts(workroot, argv, wantsJson);
+            }
+            return;
+        }
+    }
+
+    const result = await runBuild(workroot, buildAction, {
+        plan: hasFlag(argv, '--plan'),
+        json: wantsJson,
+        project: extractFlag(argv, '--project'),
+        jobs,
+    });
+    outputBuildResult(result, wantsJson);
 }

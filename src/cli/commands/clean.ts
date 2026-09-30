@@ -10,10 +10,14 @@ import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner
 import { readRunState } from '../../qt/shared/localState';
 import { CliOptions } from '../../qt/cli/types';
 import { createCppPlan } from '../../cpp/shared/plan';
-import { ForjaJsonResult, ActiveTarget, diag, mapQtDiagnostic, T } from './types';
+import { resolveConfigurePreset } from '../../cpp/shared/cmakePresets';
+import { ForjaJsonResult, ActiveTarget, Locale, diag, mapQtDiagnostic, mapCppPlanDiagnostic, T } from './types';
 import { loadRemoteSettings, resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 import { getServerById } from '../../core/serverStore';
+import { outputResult } from './output';
+import { findUnknownFlags, unknownFlagsMessage, hasFlag } from './args';
+import { isRemoteMode, executeRemoteBridgeAction } from './remoteMode';
 
 export interface CleanResult extends ForjaJsonResult {
     action: 'clean';
@@ -145,7 +149,11 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             mode: target.mode,
             arch: target.arch,
             vsDevCmdPath: vsDevCmdPath || undefined,
+            cmakeConfigureArgs: wsConfig?.cppModulePrefs.cmakeConfigureArgs,
         });
+        const presetWarnings = plan.diagnostics
+            .map(mapCppPlanDiagnostic)
+            .filter((d): d is NonNullable<ReturnType<typeof mapCppPlanDiagnostic>> => d !== null);
 
         if (options.plan) {
             return {
@@ -154,10 +162,15 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
                 workspace,
                 activeTarget: target,
                 plan: { mode: 'dryRun', commands: plan.commands, shellCommand: plan.shellCommand },
+                diagnostics: presetWarnings.length > 0 ? presetWarnings : undefined,
             };
         }
 
-        const buildDir = getBuildOutputDir(projectPath, 'cpp');
+        // Artifact check must use the preset-resolved binary dir when one matches
+        const presetBuildDir = path.basename(projectPath).toLowerCase() === 'cmakelists.txt'
+            ? (resolveConfigurePreset(path.dirname(projectPath), target.mode).preset?.binaryDir ?? null)
+            : null;
+        const buildDir = presetBuildDir ?? getBuildOutputDir(projectPath, 'cpp');
         if (!hasBuildArtifacts(buildDir)) {
             return {
                 ok: true,
@@ -165,6 +178,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
                 workspace,
                 activeTarget: target,
                 state: 'already-clean',
+                diagnostics: presetWarnings.length > 0 ? presetWarnings : undefined,
             };
         }
 
@@ -184,6 +198,8 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
 
         const ok = executed.ok;
         const changed = ok ? [path.relative(workspace, buildDir) || '.'] : undefined;
+        const failureDiags = ok ? [] : [diag('error', `${T('cmd.cppCleanFailed')}: ${extractCleanError(executed) || T('unknownError')}`)];
+        const mergedDiags = [...presetWarnings, ...failureDiags];
         return {
             ok,
             action: 'clean',
@@ -193,7 +209,7 @@ export async function runClean(workspace: string, options: { plan?: boolean; jso
             exitCode: executed.exitCode ?? undefined,
             durationMs: executed.durationMs > 0 ? executed.durationMs : durationMs,
             changed,
-            diagnostics: ok ? undefined : [diag('error', `${T('cmd.cppCleanFailed')}: ${extractCleanError(executed) || T('unknownError')}`)],
+            diagnostics: mergedDiags.length > 0 ? mergedDiags : undefined,
             nextAction: ok ? 'forja build' : 'forja status',
         };
     }
@@ -313,4 +329,30 @@ export function outputCleanResult(result: CleanResult, wantsJson: boolean): void
         }
     }
     if (!result.ok) { process.exitCode = 1; }
+}
+
+// ── Clean ──
+
+export async function handleClean(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
+    const cleanUnknown = findUnknownFlags(argv, new Set(['--plan']), new Set());
+    if (cleanUnknown.length > 0) {
+        outputResult({ ok: false, action: 'clean', diagnostics: [{ level: 'error', message: unknownFlagsMessage(cleanUnknown, new Set(['--plan'])) }], nextAction: 'forja clean' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+    const cleanPosArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+    if (cleanPosArg) {
+        outputResult({ ok: false, action: 'clean', diagnostics: [{ level: 'error', message: `${T('idx.unexpectedArgument')}: ${cleanPosArg}` }], nextAction: 'forja clean' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+    // Remote mode routing — directly bridge (no prepare pipeline)
+    if (isRemoteMode(workroot)) {
+        const extraArgs: string[] = [];
+        if (hasFlag(argv, '--plan')) { extraArgs.push('--plan'); }
+        await executeRemoteBridgeAction(workroot, 'clean', extraArgs, wantsJson);
+        return;
+    }
+    const result = await runClean(workroot, { plan: hasFlag(argv, '--plan'), json: wantsJson });
+    outputCleanResult(result, wantsJson);
 }

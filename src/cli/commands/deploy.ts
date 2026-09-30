@@ -11,6 +11,9 @@ import { loadWorkspaceConfig, getActiveTarget } from '../../core/workspaceStore'
 import { executeRemotePlan } from '../../remote/core/plan';
 import { scpDownload, scpUpload } from '../../core/sshTransport';
 import { createSshRunner, remoteCommand } from '../../remote/core/shell';
+import { outputResult } from './output';
+import { extractFlag, findUnknownFlags, unknownFlagsMessage, suggestCorrection } from './args';
+import { isRemoteMode, executeRemoteBridgeAction } from './remoteMode';
 
 export type DeployAction = 'deploy' | 'config';
 
@@ -264,4 +267,64 @@ export function formatDeployText(result: DeployResult, _locale: Locale): string 
         if (d.level === 'warning') { lines.push(`  ⚠ ${d.message}`); }
     }
     return lines.join('\n');
+}
+
+// ── Deploy ──
+
+export async function handleDeploy(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+
+    if (subCmd === 'config') {
+        const server = extractFlag(argv, '--server');
+        const deployPath = extractFlag(argv, '--deploy-path');
+        const artifacts: string[] = [];
+        for (let i = 0; i < argv.length; i++) {
+            if (argv[i] === '--artifact' && argv[i + 1] && !argv[i + 1].startsWith('--')) {
+                artifacts.push(argv[++i]);
+            }
+        }
+        const result = runDeployConfig(workroot, { server, deployPath, artifacts });
+        const fmt = (r: DeployResult) => formatDeployConfigText(r, locale);
+        outputResult(result, wantsJson, fmt);
+        if (!result.ok) { process.exitCode = 1; }
+        return;
+    }
+
+    if (subCmd !== '') {
+        const DEPLOY_SUBCOMMANDS = ['config'];
+        const hint = suggestCorrection(subCmd, DEPLOY_SUBCOMMANDS);
+        const msg = hint
+            ? `${T('idx.unknownRemoteSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: forja deploy ${hint}?`
+            : `${T('idx.unknownRemoteSubcommand')}: ${subCmd}`;
+        outputResult({ ok: false, action: 'deploy', deployAction: 'deploy', diagnostics: [{ level: 'error', message: msg }] }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    const deployUnknown = findUnknownFlags(argv, new Set(['--artifact']), new Set(['--artifact']));
+    if (deployUnknown.length > 0) {
+        outputResult({ ok: false, action: 'deploy', deployAction: 'deploy', diagnostics: [{ level: 'error', message: unknownFlagsMessage(deployUnknown, new Set(['--artifact'])) }], nextAction: 'forja deploy' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    const artifactFlags: string[] = [];
+    for (let i = 0; i < argv.length; i++) {
+        if (argv[i] === '--artifact' && argv[i + 1] && !argv[i + 1].startsWith('--')) {
+            artifactFlags.push(argv[++i]);
+        }
+    }
+
+    // Remote mode — bridge deploy to remote
+    if (isRemoteMode(workroot)) {
+        const extraArgs: string[] = [];
+        for (const a of artifactFlags) { extraArgs.push('--artifact', a); }
+        await executeRemoteBridgeAction(workroot, 'deploy', extraArgs, wantsJson);
+        return;
+    }
+
+    const result = await runDeploy(workroot, { artifactFlags, json: wantsJson });
+    const fmt = (r: DeployResult) => formatDeployText(r, locale);
+    outputResult(result, wantsJson, fmt);
+    if (!result.ok) { process.exitCode = 1; }
 }

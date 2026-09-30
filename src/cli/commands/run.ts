@@ -8,14 +8,18 @@ import * as cp from 'child_process';
 import { requireActiveTarget, stripJsonFlag } from './activeTarget';
 import { createActionPlan } from '../../qt/shared/qtCore';
 import { runCliResult, terminateExecutable } from '../../qt/shared/commandRunner';
+import { refreshRccManifest } from '../../qt/shared/rccResolver';
 import { createPlatformRunExecutor } from '../../qt/platform/runExecutor';
 import { resolveRuntimeTarget } from '../../qt/shared/runtimeTarget';
 import { CliOptions } from '../../qt/cli/types';
-import { ForjaJsonResult, ActiveTarget, RuntimeState, diag, mapQtDiagnostic, T } from './types';
+import { ForjaJsonResult, ActiveTarget, RuntimeState, Locale, diag, mapQtDiagnostic, T } from './types';
 import { getActiveTarget } from './activeTarget';
 import { resolveVsDevCmdPath } from '../../core/settingsIO';
 import { resolveWorkroot, loadWorkspaceConfig } from '../../core/workspaceStore';
 import { launchDesigner } from '../../qt/build/designer';
+import { outputResult } from './output';
+import { findUnknownFlags, unknownFlagsMessage, hasFlag, suggestCorrection } from './args';
+import { isRemoteMode, executeRemoteBridgeAction } from './remoteMode';
 
 export type RunAction = 'default' | 'detach' | 'debug' | 'custom' | 'designer';
 
@@ -191,6 +195,8 @@ export async function runRun(workspace: string, options: {
             detach: options.detach ?? false,
             runExecutor: createPlatformRunExecutor()
         });
+        // rcc 编译成功后重写该 workroot 的重编 manifest（内容哈希记录，供下次判定快路径）
+        if (executed.ok && planned.rccCompiled) { refreshRccManifest(workspace, rccProjectPath); }
         const runtime: RuntimeState | undefined = executed.pid ? {
             running: true,
             pid: executed.pid,
@@ -412,4 +418,82 @@ export function outputRunResult(result: RunResult, wantsJson: boolean): void {
         }
     }
     if (!result.ok) { process.exitCode = 1; }
+}
+
+// ── Run ──
+
+export async function handleRun(argv: string[], workroot: string, wantsJson: boolean, _locale: Locale): Promise<void> {
+    const runUnknown = findUnknownFlags(argv, new Set(['--detach', '--plan', '--debug']), new Set());
+    if (runUnknown.length > 0) {
+        outputResult({ ok: false, action: 'run', diagnostics: [{ level: 'error', message: unknownFlagsMessage(runUnknown, new Set(['--detach','--plan','--debug'])) }], nextAction: 'forja run' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+    const subArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+
+    // Subcommands: designer, custom
+    if (subArg === 'designer') {
+        const uiFile = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
+        if (!uiFile) {
+            outputResult({
+                ok: false,
+                action: 'run',
+                runAction: 'designer',
+                diagnostics: [{ level: 'error', message: T('idx.runDesignerUsage') }],
+            }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+        const result = await runRun(workroot, { designer: uiFile, json: wantsJson });
+        outputRunResult(result, wantsJson);
+        return;
+    }
+
+    if (subArg === 'custom') {
+        const customName = argv[2] && !argv[2].startsWith('--') ? argv[2] : '';
+        if (!customName) {
+            outputResult({
+                ok: false,
+                action: 'run',
+                runAction: 'custom',
+                diagnostics: [{ level: 'error', message: T('runCustomRequiresName') }],
+                nextAction: 'forja run custom <name>',
+            }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+        const result = await runRun(workroot, { custom: customName, json: wantsJson });
+        outputRunResult(result, wantsJson);
+        return;
+    }
+
+    // Unknown positional arg
+    if (subArg !== '') {
+        const RUN_SUBCOMMANDS = ['designer', 'custom'];
+        const hint = suggestCorrection(subArg, RUN_SUBCOMMANDS);
+        const msg = hint
+            ? `${T('idx.unknownArgument')}: ${subArg}. ${T('idx.didYouMean')}: forja run ${hint}?`
+            : `${T('idx.unknownArgument')}: ${subArg}`;
+        outputResult({
+            ok: false, action: 'run', runAction: 'default', workroot,
+            diagnostics: [{ level: 'error', message: msg }],
+            nextAction: hint ? `forja run ${hint}` : 'forja run',
+        }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // Remote mode routing — directly bridge (no prepare pipeline)
+    if (isRemoteMode(workroot)) {
+        await executeRemoteBridgeAction(workroot, 'run', [], wantsJson);
+        return;
+    }
+
+    const result = await runRun(workroot, {
+        detach: hasFlag(argv, '--detach'),
+        debug: hasFlag(argv, '--debug'),
+        plan: hasFlag(argv, '--plan'),
+        json: wantsJson,
+    });
+    outputRunResult(result, wantsJson);
 }

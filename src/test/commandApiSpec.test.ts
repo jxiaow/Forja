@@ -181,9 +181,14 @@ test('sync command supports plan and reset actions', () => {
 // ── Unknown flag detection ──
 
 test('CLI dispatcher validates unknown flags for all commands', () => {
-    const indexSrc = source('src/cli/commands/index.ts');
-    assert.ok(indexSrc.includes('findUnknownFlags'), 'CLI dispatcher must use findUnknownFlags');
-    const handleUse = indexSrc.match(/function handleUse\(([\s\S]*?)\n\}/);
+    // Handler dispatch moved out of index.ts into per-command modules + args.ts helpers.
+    const dispatcherSrc = [
+        source('src/cli/commands/index.ts'),
+        source('src/cli/commands/args.ts'),
+        source('src/cli/commands/use.ts'),
+    ].join('\n');
+    assert.ok(dispatcherSrc.includes('findUnknownFlags'), 'CLI dispatcher must use findUnknownFlags');
+    const handleUse = source('src/cli/commands/use.ts').match(/function handleUse\(([\s\S]*?)\n\}/);
     assert.ok(handleUse, 'handleUse function must exist');
     assert.ok(handleUse[1].includes('findUnknownFlags') || handleUse[1].includes('useUnknown'), 'handleUse must validate unknown flags');
 });

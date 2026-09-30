@@ -23,6 +23,11 @@ import { resolveRemoteConfigFrom } from '../../remote/core/config';
 import { detectMake } from '../../cpp/cli/envDetector';
 import { detectJomSync } from '../../qt/env/envDetector';
 import { validateMakefile } from '../../qt/shared/runtimeTarget';
+import { outputResult } from './output';
+import { findUnknownFlags, unknownFlagsMessage } from './args';
+import { isRemoteMode, resolveRemoteTargetKind } from './remoteMode';
+import { executeRemoteBridge } from '../../remote/core/bridge';
+import { createSshRunner } from '../../remote/core/shell';
 
 export interface StatusResult extends ForjaJsonResult {
     action: 'status';
@@ -615,4 +620,65 @@ function shortPath(p: string): string {
 function buildToolLabel(executablePath: string): 'jom' | 'make' {
     const executable = executablePath.split(/[\\/]/).pop() || '';
     return /^jom(?:\.exe)?$/i.test(executable) ? 'jom' : 'make';
+}
+
+// ── Status ──
+
+export async function handleStatus(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    const statusUnknown = findUnknownFlags(argv, new Set(), new Set());
+    if (statusUnknown.length > 0) {
+        outputResult({ ok: false, action: 'status', diagnostics: [{ level: 'error', message: unknownFlagsMessage(statusUnknown, new Set()) }], nextAction: 'forja status' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // Remote mode: directly fetch remote status via bridge (no prepare pipeline)
+    if (isRemoteMode(workroot)) {
+        const remoteSettings = loadRemoteSettings(workroot);
+        const serverId = remoteSettings.selectedServer;
+        const server = serverId ? getServerById(serverId) : null;
+        const remotePath = serverId ? remoteSettings.remotePaths[serverId] : undefined;
+
+        if (!server || !remotePath) {
+            outputResult({
+                ok: false, action: 'status',
+                diagnostics: [{ level: 'error', message: serverId ? T('remotePathNotConfigured') : T('remoteNoServerConfigured') }],
+                nextAction: 'forja sync',
+            }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+
+        const password = server.password || process.env.FORJA_SSH_PASSWORD || null;
+        const runner = createSshRunner(server, password);
+        const bridge = await executeRemoteBridge({
+            target: resolveRemoteTargetKind(workroot) || 'qt',
+            action: 'status',
+            args: [],
+            json: true,
+            remotePath,
+            runner,
+            remoteForjaBin: remoteSettings.remoteForjaBin || undefined,
+        });
+
+        if (wantsJson) {
+            const jsonOut = bridge.result ? { ...(bridge.result as object), remoteMode: server.name } : { ok: bridge.ok, diagnostics: bridge.diagnostics };
+            console.log(JSON.stringify(jsonOut, null, 2));
+        } else if (bridge.result) {
+            // Bridge result is a JSON union; status rendering tolerates the wider shape.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const statusResult = { ...(bridge.result as any), remoteMode: server.name };
+            if (statusResult.nextAction) {
+                statusResult.nextAction = statusResult.nextAction.replace(/\s+--json/g, '');
+            }
+            console.log(formatStatusText(statusResult, locale));
+        } else {
+            for (const d of bridge.diagnostics) { console.error(`  ${d.level}: ${d.message}`); }
+        }
+        if (!bridge.ok) { process.exitCode = 1; }
+        return;
+    }
+
+    const result = runStatus(workroot);
+    outputResult(result, wantsJson, (r) => formatStatusText(r, locale));
 }

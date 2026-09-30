@@ -10,7 +10,9 @@ import { configureSyncSettings } from '../../sync/cli';
 import { resolveGitRoots } from '../../core/gitRepoResolver';
 import { createSshRunner, remoteCommand } from '../../remote/core/shell';
 import { choose } from './prompt';
-import { extractFlag, outputResult } from './index';
+import { extractFlag, findUnknownFlags, unknownFlagsMessage, suggestCorrection, hasFlag } from './args';
+import { outputResult } from './output';
+import { runRemoteCli } from '../../remote/cli';
 
 export type RemoteAction = 'show' | 'setup' | 'on' | 'off' | 'check';
 
@@ -455,5 +457,80 @@ function runGitSync(cwd: string, ...args: string[]): string {
         return cp.execFileSync('git', args, { cwd, encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
     } catch {
         return '';
+    }
+}
+
+// ── Remote ──
+
+export async function handleRemote(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    const subCmd = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+    const remoteKnown = new Set(['--server', '--remote-path', ...(subCmd === 'bootstrap' ? ['--force'] : [])]);
+    const remoteWithVal = new Set(['--server', '--remote-path']);
+    const remoteUnknown = findUnknownFlags(argv, remoteKnown, remoteWithVal);
+    if (remoteUnknown.length > 0) {
+        outputResult({ ok: false, action: 'remote', diagnostics: [{ level: 'error', message: unknownFlagsMessage(remoteUnknown, remoteKnown) }], nextAction: 'forja remote' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    const fmt = (r: RemoteResult) => formatRemoteText(r, locale);
+    switch (subCmd) {
+        case 'on': {
+            const result = runRemoteOn(workroot);
+            outputResult(result, wantsJson, fmt);
+            return;
+        }
+        case 'off': {
+            const result = runRemoteOff(workroot);
+            outputResult(result, wantsJson, fmt);
+            return;
+        }
+        case 'check': {
+            const result = await runRemoteCheck(workroot);
+            if (wantsJson) {
+                console.log(JSON.stringify(result, null, 2));
+            } else {
+                console.log(formatRemoteCheckText(result, locale));
+            }
+            if (!result.ok) { process.exitCode = 1; }
+            return;
+        }
+        case 'bootstrap': {
+            const server = await resolveServer(argv, workroot, wantsJson);
+            if (!server) { process.exitCode = 1; return; }
+            await runRemoteCli(['bootstrap', '--workspace', workroot, '--server', server.name, ...(hasFlag(argv, '--force') ? ['--force'] : []), ...(wantsJson ? ['--json'] : [])]);
+            return;
+        }
+        default: {
+            if (subCmd !== '') {
+                const REMOTE_SUBCOMMANDS = ['on', 'off', 'check', 'bootstrap'];
+                const hint = suggestCorrection(subCmd, REMOTE_SUBCOMMANDS);
+                const msg = hint
+                    ? `${T('idx.unknownRemoteSubcommand')}: ${subCmd}. ${T('idx.didYouMean')}: forja remote ${hint}?`
+                    : `${T('idx.unknownRemoteSubcommand')}: ${subCmd}`;
+                outputResult({ ok: false, action: 'remote', remoteAction: 'show', changed: [], diagnostics: [{ level: 'error', message: msg }], nextAction: hint ? `forja remote ${hint}` : 'forja remote' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            // No subcommand: show remote mode status
+            const serverFlag = extractFlag(argv, '--server');
+            const remotePathFlag = extractFlag(argv, '--remote-path');
+            if (serverFlag || remotePathFlag) {
+                outputResult({ ok: false, action: 'remote', remoteAction: 'show', changed: [], diagnostics: [{ level: 'error', message: T('remote.showNoFlags') }], nextAction: 'forja sync' }, wantsJson);
+                process.exitCode = 1;
+                return;
+            }
+            const remote = loadRemoteSettings(workroot);
+            const modeText = remote.remoteMode ? T('remoteModeRemote') : T('remoteModeLocal');
+            const serverId = remote.selectedServer;
+            const server = serverId ? getServerById(serverId) : null;
+            const serverLabel = server ? `${server.name} (${server.host})` : (serverId || T('remoteNoServerConfigured'));
+            if (wantsJson) {
+                console.log(JSON.stringify({ ok: true, action: 'remote', remoteAction: 'show', remote: { remoteMode: remote.remoteMode, server: remote.selectedServer, remotePath: remote.remotePaths[remote.selectedServer] } }, null, 2));
+            } else {
+                console.log(`${T('remoteModeLabel')}: ${modeText} (${serverLabel})`);
+            }
+            return;
+        }
     }
 }

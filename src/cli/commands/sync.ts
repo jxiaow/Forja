@@ -6,7 +6,10 @@ import { planSyncCli, executeSyncCli, resetSyncCli, ClassifiedChanges, configure
 import { readProjectSyncConfig, writeProjectSyncConfig, getServerById, readServers, addServer, ServerConfig } from '../../core/serverStore';
 import { loadRemoteSettings } from '../../core/settingsIO';
 import { Diagnostic, SyncPlan, ForjaJsonResult, diag, Locale, T } from './types';
-import { prompt, choose } from './prompt';
+import { prompt, choose, confirm } from './prompt';
+import { outputResult } from './output';
+import { extractAllFlags, extractFlag, findUnknownFlags, hasEmptyFlagValue, hasFlag, unknownFlagsMessage } from './args';
+import { resolveGitRoots } from '../../core/gitRepoResolver';
 
 // ── Types ──
 
@@ -424,4 +427,200 @@ export async function interactiveRemoteSetup(workroot: string): Promise<{ ok: tr
 
     console.log();
     return { ok: true };
+}
+
+// ── Sync ──
+
+export async function handleSync(argv: string[], workroot: string, wantsJson: boolean, locale: Locale): Promise<void> {
+    const syncUnknown = findUnknownFlags(argv, new Set(['--yes', '--file', '--force', '--dry-run', '--add', '--rm']), new Set(['--file', '--add', '--rm']));
+    if (syncUnknown.length > 0) {
+        outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: `${T('sync.unknownFlag')}: ${syncUnknown.join(', ')}` }], nextAction: 'forja sync' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+    if (hasEmptyFlagValue(argv, '--file')) {
+        outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: '--file requires a non-empty value' }], nextAction: 'forja sync' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    const fmt = (r: SyncResult) => formatSyncText(r, locale);
+    const subArg = argv[1] && !argv[1].startsWith('--') ? argv[1] : '';
+    const files = extractAllFlags(argv, '--file');
+
+    // ── 子命令校验 ──
+    if (subArg !== '' && subArg !== 'status' && subArg !== 'reset' && subArg !== 'ignore') {
+        outputResult({
+            ok: false,
+            action: 'sync',
+            syncAction: 'run',
+            workroot,
+            diagnostics: [{
+                level: 'error',
+                message: `${T('sync.unknownAction')}: ${subArg}`,
+            }],
+            nextAction: 'forja sync',
+        }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // X2: --file is only valid for default sync (execute/plan), not for subcommands
+    if (files.length > 0 && subArg !== '') {
+        outputResult({ ok: false, action: 'sync', syncAction: 'run', diagnostics: [{ level: 'error', message: T('sync.fileOnlyForExecute') }], nextAction: 'forja sync --file <path>' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // X3: --add/--rm are only valid for the ignore subcommand
+    if (subArg !== 'ignore' && (hasFlag(argv, '--add') || hasFlag(argv, '--rm'))) {
+        outputResult({ ok: false, action: 'sync', syncAction: 'ignore', diagnostics: [{ level: 'error', message: T('sync.ignoreFlagsOnlyWithIgnore') }], nextAction: 'forja sync ignore --add <pattern>' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // X1: --dry-run and --yes are mutually exclusive
+    if (hasFlag(argv, '--dry-run') && hasFlag(argv, '--yes')) {
+        outputResult({ ok: false, action: 'sync', syncAction: 'run', diagnostics: [{ level: 'error', message: T('sync.dryRunYesConflict') }], nextAction: 'forja sync' }, wantsJson);
+        process.exitCode = 1;
+        return;
+    }
+
+    // reset subcommand: clear sync state (destructive — requires confirmation)
+    if (subArg === 'reset') {
+        if (hasFlag(argv, '--dry-run')) {
+            outputResult({ ok: false, action: 'sync', syncAction: 'reset', workroot, diagnostics: [{ level: 'error', message: T('sync.dryRunIncompatible') }], nextAction: 'forja sync reset' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+        const forceFlag = hasFlag(argv, '--force');
+        if (!wantsJson && !forceFlag) {
+            const yes = await confirm(T('syncResetConfirm'), false);
+            if (!yes) {
+                outputResult({ ok: false, action: 'sync', syncAction: 'reset', diagnostics: [{ level: 'info', message: T('cancelled') }] }, wantsJson);
+                return;
+            }
+        } else if (wantsJson && !forceFlag) {
+            outputResult({ ok: false, action: 'sync', syncAction: 'reset', diagnostics: [{ level: 'error', message: T('destructiveRequiresForce') }], nextAction: 'forja sync reset --force' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+        const result = runSyncReset(workroot);
+        outputResult(result, wantsJson, fmt);
+        return;
+    }
+
+    // status: 显示配置，不需要 sync 前置配置
+    if (subArg === 'status') {
+        if (hasFlag(argv, '--dry-run')) {
+            outputResult({ ok: false, action: 'sync', syncAction: 'status', diagnostics: [{ level: 'error', message: T('sync.dryRunIncompatible') }], nextAction: 'forja sync status' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+        const result = runSyncStatus(workroot);
+        outputResult(result, wantsJson, fmt);
+        return;
+    }
+
+    // ignore: 管理忽略规则，不需要 sync 前置配置
+    if (subArg === 'ignore') {
+        if (hasFlag(argv, '--dry-run')) {
+            outputResult({ ok: false, action: 'sync', syncAction: 'ignore', diagnostics: [{ level: 'error', message: T('sync.dryRunIncompatible') }], nextAction: 'forja sync ignore' }, wantsJson);
+            process.exitCode = 1;
+            return;
+        }
+        if (hasFlag(argv, '--add') && hasFlag(argv, '--rm')) {
+            outputResult({ ok: false, action: 'sync', syncAction: 'ignore', workroot, diagnostics: [diag('error', T('syncIgnoreAddRmConflict'))] }, wantsJson, fmt);
+            process.exitCode = 1;
+            return;
+        }
+        if (hasFlag(argv, '--add') || hasFlag(argv, '--rm')) {
+            const hasAdd = hasFlag(argv, '--add');
+            const hasRm = hasFlag(argv, '--rm');
+            const addPattern = hasAdd ? extractFlag(argv, '--add') : undefined;
+            const rmPattern = hasRm ? extractFlag(argv, '--rm') : undefined;
+            if (hasAdd && !addPattern) {
+                outputResult({ ok: false, action: 'sync', syncAction: 'ignore', ignoreAction: 'add', workroot, diagnostics: [diag('error', T('syncIgnorePatternRequired'))] }, wantsJson, fmt);
+                process.exitCode = 1;
+                return;
+            }
+            if (hasRm && !rmPattern) {
+                outputResult({ ok: false, action: 'sync', syncAction: 'ignore', ignoreAction: 'rm', workroot, diagnostics: [diag('error', T('syncIgnorePatternRequired').replace('--add', '--rm'))] }, wantsJson, fmt);
+                process.exitCode = 1;
+                return;
+            }
+            if (addPattern) {
+                const result = runSyncIgnoreAdd(workroot, addPattern);
+                outputResult(result, wantsJson, fmt);
+                if (!result.ok) process.exitCode = 1;
+            } else if (rmPattern) {
+                const result = runSyncIgnoreRm(workroot, rmPattern);
+                outputResult(result, wantsJson, fmt);
+                if (!result.ok) process.exitCode = 1;
+            }
+        } else {
+            outputResult(runSyncIgnoreList(workroot), wantsJson, fmt);
+        }
+        return;
+    }
+
+    // ── 检查配置是否完整 ──
+    const syncCfg = readProjectSyncConfig(workroot);
+    const remoteCfg = loadRemoteSettings(workroot);
+    const serverExists = remoteCfg.selectedServer ? readServers().some(s => s.id === remoteCfg.selectedServer) : false;
+    const needsSetup = !syncCfg.enabled || !remoteCfg.selectedServer || !serverExists || !remoteCfg.remotePaths[remoteCfg.selectedServer];
+    if (needsSetup) {
+        if (wantsJson) {
+            // JSON mode: return choices for AI to guide user
+            outputResult({
+                ok: false, action: 'sync',
+                diagnostics: [{ level: 'error', message: T('sync.notConfigured') }],
+                choices: [
+                    { label: 'forja sync', command: 'forja sync', description: T('syncInteractiveSetup') },
+                ],
+            }, wantsJson);
+            process.exitCode = 1;
+            return;
+        } else {
+            outputResult({ ok: false, action: 'sync', diagnostics: [{ level: 'error', message: T('sync.notConfigured') }], nextAction: 'forja sync' }, false);
+            process.exitCode = 1;
+            return;
+        }
+    }
+
+    if (hasFlag(argv, '--dry-run')) {
+        const result = await runSyncPlan(workroot, files);
+        outputResult(result, wantsJson, fmt);
+        return;
+    }
+
+    // Default: interactive plan → confirm → execute
+    if (!wantsJson && !hasFlag(argv, '--yes')) {
+        const plan = await runSyncPlan(workroot, files);
+        if (!plan.ok) { outputResult(plan, false, fmt); process.exitCode = 1; return; }
+        const pendingCount = (plan.plan?.pending?.length ?? 0) + (plan.plan?.deleted?.length ?? 0);
+        if (pendingCount === 0) { console.log(T('syncNothing')); return; }
+        // 交互确认中的 plan 只是中间步骤，不显示 nextAction（用户已在 forja sync 流程中）
+        plan.nextAction = undefined;
+        console.log(formatSyncText(plan, locale));
+        console.log();
+        const yes = await confirm(T('syncConfirm'), false);
+        if (!yes) { console.log(T('syncCancelled')); process.exitCode = 1; return; }
+
+        // Reuse plan data to avoid re-running git status
+        const gitRoots = resolveGitRoots(workroot);
+        const classified: ClassifiedChanges = {
+            pending: plan.plan?.pending ?? [],
+            deleted: plan.plan?.deleted ?? [],
+            skipped: plan.plan?.skipped ?? [],
+            skippedDetails: plan.plan?.skippedDetails ?? [],
+            gitRoots: (plan.plan?.repos ?? []).map(name => gitRoots.find(g => g.name === name)).filter(Boolean) as ReturnType<typeof resolveGitRoots>,
+            requestedFilesNotFound: false,
+        };
+        const result = await runSyncExecute(workroot, files, classified);
+        outputResult(result, wantsJson, fmt);
+        return;
+    }
+    const result = await runSyncExecute(workroot, files);
+    outputResult(result, wantsJson, fmt);
 }
