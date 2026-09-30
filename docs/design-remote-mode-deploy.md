@@ -1,7 +1,7 @@
 # Remote Mode & Deploy 设计文档
 
 > 日期：2026-09-08
-> 状态：设计中
+> 状态：已实现（remote on/off/check/bootstrap、deploy、全命令远程 bridge 均已合入 master）
 
 ## 一、背景
 
