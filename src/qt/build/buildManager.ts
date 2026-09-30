@@ -4,20 +4,21 @@ import * as fs from 'fs';
 import { setState, getState } from '../../vscode/qtState';
 import { getBuildConfig, getRccProjectPath } from '../services/configService';
 import { PlatformBuilder, createBuilder } from '../platform/builder';
-import { winConfig, getVsDevCmd } from '../platform/win/builder';
-import { linuxConfig } from '../platform/linux/builder';
+import { getVsDevCmd } from '../platform/win/builder';
+import { currentPlatformConfig, isWindows } from '../platform/executable';
 import { getMakefileInfo, parseLibPaths } from '../project/projectManager';
 import { createLogger } from '../../vscode/logger';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
-import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands } from '../shared/rccResolver';
+import { resolveRccProjectPath, scanRccTargets, rccNeedsRebuild, buildRccCommands, refreshRccManifest } from '../shared/rccResolver';
 import { validateMakefile, resolveRuntimeTarget, resolveDesiredExePath, buildRenameCommand, missingQmakeBin } from '../shared/runtimeTarget';
 import { loadGlobalConfig } from '../../core/settingsIO';
 import { T, resolveLocale, setGlobalLocale } from '../../cli/commands/types';
 import { clearRunState, findExecutablePids, runLogPath, waitForNewExecutablePid, writeRunState } from '../shared/localState';
+import { attachDiagnosticsMatcher, endBuildTee } from '../../vscode/diagnostics';
 import { TASK_SOURCE_QT } from '../constants';
 
-const builder: PlatformBuilder = createBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
-const isWin = process.platform === 'win32';
+const builder: PlatformBuilder = createBuilder(currentPlatformConfig());
+const isWin = isWindows();
 const logger = createLogger('Build');
 
 /** Guard: 环境检测未完成时阻止构建操作 */
@@ -101,12 +102,15 @@ function _ensureQtPathReady(cfg: ReturnType<typeof getBuildConfig>): void {
 }
 
 // QMake/Build/Clean 共用一个 Shared terminal（保留 problem matcher）
-function runTask(name: string, commands: string[], matcher: string | string[]): Thenable<vscode.TaskExecution> {
+// matcher 允许携带函数式 tee ProblemMatcher（诊断输出用），运行时按 matcher 数组处理
+type MatcherInput = string | (string | vscode.ProblemMatcher)[];
+
+function runTask(name: string, commands: string[], matcher: MatcherInput): Thenable<vscode.TaskExecution> {
     logger.info(`Task ${name}: ${commands.join(' && ')}`);
     const task = new vscode.Task(
         { type: 'shell' },
         _getTaskFolder(), name, TASK_SOURCE_QT,
-        builder.makeExec(commands), matcher
+        builder.makeExec(commands), matcher as string | string[]
     );
     task.presentationOptions = {
         reveal: vscode.TaskRevealKind.Always,
@@ -117,6 +121,13 @@ function runTask(name: string, commands: string[], matcher: string | string[]): 
         clear: false
     };
     return vscode.tasks.executeTask(task);
+}
+
+// 在任务原有 matcher 之外追加本轮构建输出的 tee matcher（终端输出保持实时流式）
+function _withTee(matcher: string | string[], tee: vscode.ProblemMatcher): (string | vscode.ProblemMatcher)[] {
+    const list: (string | vscode.ProblemMatcher)[] = Array.isArray(matcher) ? [...matcher] : [matcher];
+    list.push(tee);
+    return list;
 }
 
 
@@ -164,10 +175,15 @@ export async function build(): Promise<vscode.TaskExecution> {
 
     // rcc 在 build 之后编译 — pro 构建步骤会拷贝 rcc，必须在拷贝后再编译
     const { commands, matcher } = builder.buildCommands(cfg);
-    const execution = await runTask(`Build ${cfg.mode}`, commands, matcher);
+    // 逐行 tee 构建输出（终端照常实时输出），任务结束后解析进 Problems 面板
+    const tee = attachDiagnosticsMatcher(cfg.projectDir ? [cfg.projectDir] : []);
+    const execution = await runTask(`Build ${cfg.mode}`, commands, _withTee(matcher, tee));
 
     // 监听 build 任务完成，成功后执行重命名（如需要）再编译 rcc
     const disposable = vscode.tasks.onDidEndTaskProcess(e => {
+        if (e.execution === execution) {
+            endBuildTee(tee);
+        }
         if (e.execution === execution && e.exitCode === 0) {
             disposable.dispose();
             // 构建后重命名
@@ -207,7 +223,7 @@ function _rccNeedsRebuild(): boolean {
     if (targets.length === 0) { return false; }
     const mfInfo = _resolveMakefileInfo();
     const outputDir = mfInfo ? path.dirname(mfInfo.exePath) : null;
-    const needs = rccNeedsRebuild(targets, outputDir);
+    const needs = rccNeedsRebuild(targets, outputDir, { workroot: wsRoot });
     if (needs) { logger.info('RCC 资源有变更，需要重编'); }
     return needs;
 }
@@ -279,11 +295,12 @@ export async function run(): Promise<void> {
     terminateExecutable(mfInfo.exePath);
 
     const { commands, matcher } = builder.buildCommands(cfg);
-    // Build task: 不清屏，失败时保留编译错误
+    // Build task: 不清屏，失败时保留编译错误；逐行 tee 输出用于 Problems 面板诊断
+    const tee = attachDiagnosticsMatcher(cfg.projectDir ? [cfg.projectDir] : []);
     const buildTask = new vscode.Task(
         { type: 'shell' },
         _getTaskFolder(), `Build ${cfg.mode}`, TASK_SOURCE_QT,
-        builder.makeExec(commands), matcher
+        builder.makeExec(commands), _withTee(matcher, tee) as string | string[]
     );
     buildTask.presentationOptions = {
         reveal: vscode.TaskRevealKind.Always,
@@ -305,6 +322,7 @@ export async function run(): Promise<void> {
             d1.dispose();
             d2.dispose();
             setState('isBuilding', false);
+            endBuildTee(tee);
 
             if (exitCode === undefined) {
                 reject(new Error('任务已终止'));
@@ -470,7 +488,17 @@ export function rcc(): Thenable<vscode.TaskExecution> {
     const rccCmds = buildRccCommands(targets, cfg.qtPath, outputDir, isWin ? 'win32' : 'linux');
     commands.push(...rccCmds);
 
-    return runTask('RCC Compile', commands, isWin ? '$msCompile' : []);
+    const execution = runTask('RCC Compile', commands, isWin ? '$msCompile' : []);
+    // rcc 任务成功结束后重写该 workroot 的重编 manifest（内容哈希记录，供下次判定快路径）
+    void execution.then(ex => {
+        const d = vscode.tasks.onDidEndTaskProcess(e => {
+            if (e.execution === ex) {
+                d.dispose();
+                if (e.exitCode === 0) { refreshRccManifest(wsRoot, getRccProjectPath()); }
+            }
+        });
+    }, () => { /* 任务启动失败，无需登记 manifest */ });
+    return execution;
 }
 
 export function runCustomCommand(name: string, command: string): Thenable<vscode.TaskExecution> {

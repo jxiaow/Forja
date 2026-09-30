@@ -6,6 +6,7 @@
  */
 import * as vscode from 'vscode';
 import { getOutputChannel } from './logger';
+import { initBuildDiagnostics } from './diagnostics';
 import { getWorkspaceRoot } from '../qt/services/configService';
 import { setState } from './qtState';
 import { getActiveTarget } from '../cli/commands/activeTarget';
@@ -23,6 +24,8 @@ import type { RemoteResult } from '../cli/commands/remote';
  * These commands delegate to the CLI handlers in cli/commands/.
  */
 export function registerCommands(context: vscode.ExtensionContext): void {
+    // forja 构建诊断（Problems 面板）collection 随命令层一起注册与销毁
+    initBuildDiagnostics(context);
     const workspace = () => getWorkspaceRoot() || process.cwd();
 
     // Resolve active target from workspaceStore
