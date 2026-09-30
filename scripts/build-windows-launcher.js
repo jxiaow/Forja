@@ -12,6 +12,12 @@ function sha256(filePath) {
     return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 }
 
+// 源文件哈希按 LF 归一化，避免 checkout 换行符差异（Windows CRLF / Linux LF）导致校验失败
+function sha256Text(filePath) {
+    const text = fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+    return crypto.createHash('sha256').update(text).digest('hex');
+}
+
 function commandAvailable(command) {
     const probe = spawnSync(command, ['--version'], { stdio: 'ignore', windowsHide: true });
     return !probe.error;
@@ -43,7 +49,7 @@ if (built.status !== 0) { process.exit(built.status || 1); }
 fs.renameSync(tempOutput, output);
 const manifest = {
     source: path.relative(root, source).replace(/\\/g, '/'),
-    sourceSha256: sha256(source),
+    sourceSha256: sha256Text(source),
     binarySha256: sha256(output),
     compiler
 };
