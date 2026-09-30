@@ -61,8 +61,7 @@ test('buildRenameCommand uses move /Y on windows so an existing target is overwr
 test('buildRenameCommand uses mv -f with posix quoting on linux', () => {
     withPlatform('linux', () => {
         const cmds = buildRenameCommand('/work/debug/demo', 'demo', "My App");
-        const expectedPath = path.join('/work/debug', 'My App');
-        assert.deepEqual(cmds, [`mv -f '/work/debug/demo' '${expectedPath}'`]);
+        assert.deepEqual(cmds, [`mv -f '/work/debug/demo' '/work/debug/My App'`]);
     });
 });
 

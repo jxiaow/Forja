@@ -4,11 +4,11 @@ import { isWindows, qmakeBinName, normalizeExeName, exeBaseName, renameOutputCom
 
 /**
  * 根据平台计算重命名后的可执行文件完整路径。
- * Windows 上自动处理 .exe 后缀。
+ * Windows 上自动处理 .exe 后缀。路径语义跟随 isWindows()，与宿主 OS 无关。
  */
 export function resolveDesiredExePath(exeDir: string, executableName: string): string {
     const desiredName = normalizeExeName(executableName);
-    return path.join(exeDir, desiredName);
+    return (isWindows() ? path.win32 : path.posix).join(exeDir, desiredName);
 }
 
 /**
@@ -19,7 +19,8 @@ export function buildRenameCommand(exePath: string, actualTarget: string, execut
     if (!executableName) { return []; }
     const desiredBase = exeBaseName(executableName);
     if (actualTarget === desiredBase) { return []; }
-    const desiredPath = resolveDesiredExePath(path.dirname(exePath), executableName);
+    const p = isWindows() ? path.win32 : path.posix;
+    const desiredPath = resolveDesiredExePath(p.dirname(exePath), executableName);
     return renameOutputCommand(exePath, desiredPath);
 }
 
