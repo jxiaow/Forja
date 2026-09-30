@@ -6,6 +6,9 @@ import type { PlatformRunExecutor } from '../platform/runExecutor';
 import { ensureLocalStateDir, findExecutablePids, logsDir, runLogPath, writeRunState } from './localState';
 import { parseRuntimeLibPaths, resolveRuntimeTarget } from './runtimeTarget';
 import { posixQuote } from '../../core/shellQuote';
+import { isWindows } from '../platform/executable';
+import { decodeWinOutput, decodeProcessOutput } from '../platform/outputCodec';
+import { killProcess } from '../platform/processControl';
 
 function logFileFor(workspace: string, action: string): string {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -33,30 +36,13 @@ function cleanDetachScripts(dir: string): void {
 }
 
 /**
- * 将子进程输出的 Buffer 解码为字符串。
- * 优先尝试 UTF-8（MSBuild 等现代工具），失败则退回 GBK（传统 cmd/jom 等）。
- */
-function decodeWinOutput(buffer: Buffer): string {
-    try {
-        return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
-    } catch {
-        // Not valid UTF-8 — fall back to GBK for legacy Windows tools
-        try {
-            return new TextDecoder('gbk', { fatal: false }).decode(buffer);
-        } catch {
-            return buffer.toString('utf-8');
-        }
-    }
-}
-
-/**
  * Extract `set "PATH=...;%PATH%"` commands and return a modified env object.
  * On Windows, %PATH% expansion inside cmd.exe inflates the effective command
  * line length far beyond the JS string length, hitting the ~8191 char limit.
  * Moving PATH into the child process env eliminates this inflation entirely.
  */
 function extractPathEnv(commands: string[]): { filtered: string[]; env?: NodeJS.ProcessEnv } {
-    if (process.platform !== 'win32') {
+    if (!isWindows()) {
         return { filtered: commands };
     }
     const pathValues: string[] = [];
@@ -100,8 +86,8 @@ function execute(commandLine: string, cwd: string, suppressedWarnings?: string[]
                     exitCode = 1;
                 }
             }
-            const decodedStdout = filterBuildOutput(process.platform === 'win32' ? decodeWinOutput(stdout) : stdout.toString('utf-8'), suppressedWarnings);
-            const decodedStderr = filterBuildOutput(process.platform === 'win32' ? decodeWinOutput(stderr) : stderr.toString('utf-8'), suppressedWarnings);
+            const decodedStdout = filterBuildOutput(decodeProcessOutput(stdout), suppressedWarnings);
+            const decodedStderr = filterBuildOutput(decodeProcessOutput(stderr), suppressedWarnings);
             resolve({ exitCode, stdout: decodedStdout, stderr: decodedStderr });
         });
     });
@@ -117,7 +103,6 @@ function executeStreaming(commandLine: string, cwd: string, executablePath?: str
         let stdout = '';
         let stderr = '';
         let interrupted: string | undefined;
-        const isWin = process.platform === 'win32';
 
         const makeHandler = (signal: string): (() => void) => () => {
             interrupted ??= signal;
@@ -137,13 +122,13 @@ function executeStreaming(commandLine: string, cwd: string, executablePath?: str
         }
 
         child.stdout?.on('data', (chunk: Buffer) => {
-            const text = filterBuildOutput(isWin ? decodeWinOutput(chunk) : chunk.toString('utf-8'), suppressedWarnings);
+            const text = filterBuildOutput(decodeProcessOutput(chunk), suppressedWarnings);
             stdout += text;
             process.stdout.write(text);
         });
 
         child.stderr?.on('data', (chunk: Buffer) => {
-            const text = filterBuildOutput(isWin ? decodeWinOutput(chunk) : chunk.toString('utf-8'), suppressedWarnings);
+            const text = filterBuildOutput(decodeProcessOutput(chunk), suppressedWarnings);
             stderr += text;
             process.stderr.write(text);
         });
@@ -249,11 +234,7 @@ export function terminateExecutable(executablePath: string | undefined): void {
     const pids = findExecutablePids(executablePath);
     for (const pid of pids) {
         try {
-            if (process.platform === 'win32') {
-                cp.execFileSync('taskkill', ['/F', '/T', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true });
-            } else {
-                process.kill(pid, 'SIGTERM');
-            }
+            killProcess(pid);
         } catch {
             // Process may have already exited.
         }
@@ -266,7 +247,7 @@ export function buildRunCommand(project: string, mode: string, arch: string, qtP
         return null;
     }
 
-    if (process.platform === 'win32') {
+    if (isWindows()) {
         if (qtPath) {
             return `set "PATH=${qtPath}\\bin;%PATH%" && ${shellQuote(runtimeTarget.exePath)}`;
         }
@@ -404,7 +385,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
         cleanDetachScripts(path.dirname(logFile));
 
         const cwd = resolveProjectCwd(result);
-        const isWin = process.platform === 'win32';
+        const isWin = isWindows();
         const previousExecutablePids = result.executablePath ? findExecutablePids(result.executablePath) : [];
 
         let pid: number | null;
@@ -579,7 +560,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
 
         const commandLine = commandParts.join(' && ');
         const cwd = resolveProjectCwd(result);
-        const isWin = process.platform === 'win32';
+        const isWin = isWindows();
 
         let child: cp.ChildProcess;
         if (isWin) {
@@ -665,7 +646,7 @@ export async function runCliResult(result: CliResult, options?: RunOptions): Pro
     // Fall back to writing a .bat file and executing it directly.
     let batFile: string | undefined;
     let effectiveCmd = execCommandLine;
-    if (process.platform === 'win32' && execCommandLine.length > 7000) {
+    if (isWindows() && execCommandLine.length > 7000) {
         ensureLocalStateDir(result.workspace);
         batFile = path.join(logsDir(result.workspace), `${result.action}-${Date.now()}.bat`);
         const cwd = resolveProjectCwd(result);

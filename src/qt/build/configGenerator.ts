@@ -5,6 +5,7 @@ import { ProjectInfo } from '../project/projectManager';
 import { getState } from '../../vscode/qtState';
 import { getWorkspaceRoot, getCStandard, getCppStandard, getEffectiveQtPath, getScanExcludeDirs } from '../services/configService';
 import { log } from '../../vscode/logger';
+import { isWindows } from '../platform/executable';
 
 // 判断目录是否应跳过（精确匹配 + build* 前缀 + 用户自定义）
 function shouldSkip(name: string, extraSkip: string[]): boolean {
@@ -160,7 +161,7 @@ export function generateCppProperties(project: ProjectInfo): void {
         return;
     }
 
-    const isWin = process.platform === 'win32';
+    const isWin = isWindows();
     const state = getState();
     const qtPath = getEffectiveQtPath().replace(/\\/g, '/');
     const arch = state.arch;
@@ -270,7 +271,7 @@ export function generateCppProperties(project: ProjectInfo): void {
  */
 export function generateCppPropertiesFromSln(slnPath: string, wsRoot: string): void {
     const slnDir = path.dirname(slnPath);
-    const isWin = process.platform === 'win32';
+    const isWin = isWindows();
     const state = getState();
     const arch = state.arch || (isWin ? 'x86' : 'x64');
 
@@ -437,7 +438,7 @@ export function updateCppPropertiesStandard(cStandard: string, cppStandard: stri
         const props = JSON.parse(content);
 
         if (props.configurations && props.configurations.length > 0) {
-            const configName = process.platform === 'win32' ? `Qt ${getState().arch === 'x64' ? 'x64' : 'Win32'}` : `Qt ${getState().arch}`;
+            const configName = isWindows() ? `Qt ${getState().arch === 'x64' ? 'x64' : 'Win32'}` : `Qt ${getState().arch}`;
             const config = props.configurations.find((c: Record<string, unknown>) => c.name === configName) || props.configurations[0];
             if (config) {
                 config.cStandard = cStandard;

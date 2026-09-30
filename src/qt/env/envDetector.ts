@@ -4,6 +4,7 @@ import { execAsync, readDir, isDir } from './utils';
 import { detectEnvWin, detectJomSync } from '../platform/win/envDetector';
 import { detectEnvLinux } from '../platform/linux/envDetector';
 import { log } from '../../core/loggerBase';
+import { isWindows, qmakeBinName } from '../platform/executable';
 
 // 重新导出，供 platform 子模块使用
 export { execAsync, readDir, isDir, detectJomSync };
@@ -13,8 +14,8 @@ import type { EnvInfo, QtInfo } from '../../core/types';
 
 // ── Qt 扫描公共逻辑 ──
 
-const isWin = process.platform === 'win32';
-const qmakeName = isWin ? 'qmake.exe' : 'qmake';
+const isWin = isWindows();
+const qmakeName = qmakeBinName();
 
 // 判断目录是否包含 bin/qmake
 export function hasQmake(dir: string): boolean {
@@ -113,7 +114,7 @@ export async function scanQt(parentDirs: string[], tag: string): Promise<string[
 // ── 入口 ──
 
 export async function detectEnv(manualQtPath?: string, manualVsPath?: string): Promise<EnvInfo> {
-    if (process.platform === 'win32') {
+    if (isWindows()) {
         return detectEnvWin(manualQtPath, manualVsPath);
     } else {
         return detectEnvLinux(manualQtPath);

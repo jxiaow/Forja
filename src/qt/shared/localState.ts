@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as cp from 'child_process';
+import { isWindows } from '../platform/executable';
 
 export function logsDir(workspace: string): string {
     const tmpBase = process.env.TEMP || process.env.TMP || require('os').tmpdir();
@@ -216,7 +217,7 @@ export function findExecutablePids(executablePath: string): number[] {
     }
 
     try {
-        if (process.platform === 'win32') {
+        if (isWindows()) {
             return findWindowsExecutablePids(executablePath);
         }
 

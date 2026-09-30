@@ -2,8 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { CliOptions, CliResolvedConfig, CliResult } from '../cli/types';
 import { createShellPlanBuilder } from '../platform/shellPlan';
-import { winConfig } from '../platform/win/builder';
-import { linuxConfig } from '../platform/linux/builder';
+import { currentPlatformConfig, platformName } from '../platform/executable';
 import { resolveBuildConfig } from './configResolver';
 import { buildRunCommand } from './commandRunner';
 import { resolveRuntimeTarget, validateMakefile, resolveDesiredExePath, buildRenameCommand, missingQmakeBin } from './runtimeTarget';
@@ -93,7 +92,7 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
     }
     const resolved = buildResolvedConfig(mode, arch, qtPath, vsDevShell, target, undefined, undefined, jomPath || undefined);
 
-    const shellBuilder = createShellPlanBuilder(process.platform === 'win32' ? winConfig : linuxConfig);
+    const shellBuilder = createShellPlanBuilder(currentPlatformConfig());
     const buildConfig = resolveBuildConfig({
         workspace,
         projectPath: project,
@@ -147,8 +146,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 const targets = scanRccTargets(rccPath);
                 let outputDir: string | null = null;
                 if (runtimeTarget) { outputDir = path.dirname(runtimeTarget.exePath); }
-                if (targets.length > 0 && rccNeedsRebuild(targets, outputDir)) {
-                    rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
+                if (targets.length > 0 && rccNeedsRebuild(targets, outputDir, { workroot: workspace })) {
+                    rccCmds = buildRccCommands(targets, qtPath, outputDir, platformName());
+                    result.rccCompiled = true;
                     result.diagnostics.push({ level: 'info', message: 'RCC 资源有变更，已插入 rcc 编译命令' });
                 }
             }
@@ -211,14 +211,15 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
                 const targets = scanRccTargets(rccPath);
                 let outputDir: string | null = null;
                 if (runtimeTarget) { outputDir = path.dirname(runtimeTarget.exePath); }
-                if (targets.length > 0 && rccNeedsRebuild(targets, outputDir)) {
-                    rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
+                if (targets.length > 0 && rccNeedsRebuild(targets, outputDir, { workroot: workspace })) {
+                    rccCmds = buildRccCommands(targets, qtPath, outputDir, platformName());
                     result.diagnostics.push({ level: 'info', message: 'RCC 资源有变更，已插入 rcc 编译命令' });
                 }
             }
 
             if (runCmd) {
                 commands = [...qmakeCmds, ...dedupedBuildCmds, ...renameCmds, ...rccCmds, runCmd];
+                if (rccCmds.length > 0) { result.rccCompiled = true; }
                 if (runtimeTarget && renameCmds.length > 0 && buildConfig.executableName) {
                     result.executablePath = resolveDesiredExePath(path.dirname(runtimeTarget.exePath), buildConfig.executableName);
                 } else {
@@ -263,8 +264,9 @@ export async function createActionPlan(options: CliOptions): Promise<CliResult> 
             if (runtimeTarget) { outputDir = path.dirname(runtimeTarget.exePath); }
         }
         // rcc 只需要 Qt bin 在 PATH，不需要 VS 环境
-        const rccCmds = buildRccCommands(targets, qtPath, outputDir, process.platform === 'win32' ? 'win32' : 'linux');
+        const rccCmds = buildRccCommands(targets, qtPath, outputDir, platformName());
         commands = rccCmds;
+        result.rccCompiled = true;
         if (!outputDir) {
             result.diagnostics.push({ level: 'warning', message: '无法确定输出目录，.rcc 仅生成不复制' });
         }

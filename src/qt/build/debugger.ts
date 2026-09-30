@@ -8,8 +8,9 @@ import { build, qmakeForDebug } from './buildManager';
 import { createLogger } from '../../vscode/logger';
 import { clearRunState, findExecutablePids, runLogPath, waitForNewExecutablePid, writeRunState } from '../shared/localState';
 import { resolveProjectRoot } from '../../vscode/workspaceResolver';
+import { isWindows } from '../platform/executable';
 
-const isWin = process.platform === 'win32';
+const isWin = isWindows();
 const logger = createLogger('Debug');
 const DEBUG_RUN_ID_KEY = '__forjaDebugRunId';
 let _activeDebugProgram: string | null = null;

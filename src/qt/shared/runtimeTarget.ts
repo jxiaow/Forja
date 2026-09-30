@@ -1,32 +1,26 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { posixQuote } from '../../core/shellQuote';
+import { isWindows, qmakeBinName, normalizeExeName, exeBaseName, renameOutputCommand } from '../platform/executable';
 
 /**
  * 根据平台计算重命名后的可执行文件完整路径。
  * Windows 上自动处理 .exe 后缀。
  */
 export function resolveDesiredExePath(exeDir: string, executableName: string): string {
-    const isWin = process.platform === 'win32';
-    const desiredName = isWin ? executableName.replace(/\.exe$/i, '') + '.exe' : executableName;
+    const desiredName = normalizeExeName(executableName);
     return path.join(exeDir, desiredName);
 }
 
 /**
  * 生成构建后重命名命令。actualTarget 为 qmake TARGET 名，与 executableName 不同时重命名。
- * Windows 用 move /Y：ren 在目标已存在（上一轮构建产物）时静默失败且无法覆盖，
- * move /Y 与 POSIX mv -f 语义一致 —— 覆盖旧产物，真实错误（文件被占用等）以非零退出码上报。
+ * 平台命令差异（move /Y 与 mv -f）见 platform/executable.renameOutputCommand。
  */
 export function buildRenameCommand(exePath: string, actualTarget: string, executableName: string | undefined): string[] {
     if (!executableName) { return []; }
-    const isWin = process.platform === 'win32';
-    const desiredBase = isWin ? executableName.replace(/\.exe$/i, '') : executableName;
+    const desiredBase = exeBaseName(executableName);
     if (actualTarget === desiredBase) { return []; }
     const desiredPath = resolveDesiredExePath(path.dirname(exePath), executableName);
-    if (isWin) {
-        return [`(if exist "${exePath}" move /Y "${exePath}" "${desiredPath}")`];
-    }
-    return [`mv -f ${posixQuote(exePath)} ${posixQuote(desiredPath)}`];
+    return renameOutputCommand(exePath, desiredPath);
 }
 
 export interface RuntimeTargetInfo {
@@ -42,7 +36,7 @@ export interface RuntimeTargetInfo {
  */
 export function missingQmakeBin(qtPath: string): string | null {
     if (!qtPath) { return null; }
-    const qmakeBin = path.join(qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake');
+    const qmakeBin = path.join(qtPath, 'bin', qmakeBinName());
     return fs.existsSync(qmakeBin) ? null : qmakeBin;
 }
 
@@ -117,10 +111,10 @@ export function validateMakefile(projectDir: string, config: { mode: string; arc
     // mode
     if (!cmd.includes(`CONFIG+=${config.mode}`)) { mismatch.push('mode'); }
     // arch (Windows only)
-    if (process.platform === 'win32' && !cmd.includes(`CONFIG+=${config.arch}`)) { mismatch.push('arch'); }
+    if (isWindows() && !cmd.includes(`CONFIG+=${config.arch}`)) { mismatch.push('arch'); }
     // Qt 路径：命令行中包含完整 qmake 可执行文件路径
     if (config.qtPath) {
-        const expectedQmake = path.join(config.qtPath, 'bin', process.platform === 'win32' ? 'qmake.exe' : 'qmake').replace(/\\/g, '/').toLowerCase();
+        const expectedQmake = path.join(config.qtPath, 'bin', qmakeBinName()).replace(/\\/g, '/').toLowerCase();
         const cmdNormalized = cmd.replace(/\\/g, '/').toLowerCase();
         if (!cmdNormalized.includes(expectedQmake)) { mismatch.push('qtPath'); }
     }
@@ -144,7 +138,7 @@ export function resolveRuntimeTarget(projectDir: string, mode: string, arch: str
         return null;
     }
 
-    if (process.platform === 'win32') {
+    if (isWindows()) {
         if (!validateWindowsMakefile(mainContent, mode, arch)) {
             return null;
         }
