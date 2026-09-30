@@ -45,6 +45,7 @@ export interface CppSettings {
     vsInstall: string;
     pinnedProject: string | null;
     scanDepth?: number;
+    cmakeConfigureArgs?: string[];
 }
 
 export interface SyncSettings {
@@ -414,7 +415,8 @@ function sanitizeCpp(raw: Record<string, unknown>): CppSettings {
         arch: (raw.arch === 'x86' || raw.arch === 'x64') ? raw.arch : d.arch,
         vsInstall: isString(raw.vsInstall) ? raw.vsInstall : d.vsInstall,
         pinnedProject: isString(raw.pinnedProject) ? raw.pinnedProject : null,
-        ...(isNumber(raw.scanDepth) && raw.scanDepth >= 1 ? { scanDepth: raw.scanDepth } : {})
+        ...(isNumber(raw.scanDepth) && raw.scanDepth >= 1 ? { scanDepth: raw.scanDepth } : {}),
+        ...(isStringArray(raw.cmakeConfigureArgs) ? { cmakeConfigureArgs: [...(raw.cmakeConfigureArgs as string[])] } : {})
     };
 }
 function sanitizeSync(raw: Record<string, unknown>): SyncSettings {

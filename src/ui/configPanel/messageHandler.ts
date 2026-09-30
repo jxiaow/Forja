@@ -492,7 +492,7 @@ export async function handleMessage(
                 try {
                     const { testConnection } = await import('../../sync/transport');
                     const tempServerConfig = {
-                        id: '', name: 'test', ...testServer, strictHostKeyChecking: false
+                        id: '', name: 'test', ...testServer
                     };
                     const pwd = testServer.authMode === 'password' ? testServer.password : null;
                     const result = await testConnection(tempServerConfig as import('../../core/serverStore').ServerConfig, pwd);
@@ -566,6 +566,12 @@ export async function handleMessage(
             logger.info(`保存 C++ VS 路径: "${msg.value}"`);
             const cppVsInstall = inferVsInstall(String(msg.value || '')) || String(msg.value || '');
             setCppSetting('vsInstall', cppVsInstall);
+            break;
+        }
+        case 'saveCMakeConfigureArgs': {
+            const args = String(msg.value || '').trim().split(/\s+/).filter(a => a.length > 0);
+            logger.info(`保存 CMake configure 参数: "${args.join(' ')}"`);
+            setCppSetting('cmakeConfigureArgs', args);
             break;
         }
         case 'selectCppProject': {

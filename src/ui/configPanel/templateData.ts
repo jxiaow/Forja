@@ -90,6 +90,7 @@ export function buildTemplateData(context: vscode.ExtensionContext): TemplateDat
         cppMode: getCppSetting('mode'),
         cppArch: getCppSetting('arch'),
         cppVsInstall: getCppSetting('vsInstall') || '',
+        cmakeConfigureArgs: (getCppSetting('cmakeConfigureArgs') || []).join(' '),
         qtActive: !!resolveProjectRoot('qt'),
         cppActive: !!resolveProjectRoot('cpp'),
     };

@@ -128,6 +128,8 @@ forja build
 # C++ 目标当前只支持构建；普通 run 仅用于 Qt/qmake 目标
 ```
 
+CMakeLists.txt 工程：若工程目录（或其上一级目录）存在 `CMakePresets.json`，`build` 会按当前 mode 选择名字/`binaryDir` 含 `debug`/`release` 的 configure preset，改用 `cmake --preset <name>` 配置并用 preset 解析出的 `binaryDir` 执行 `cmake --build`；解析失败或无匹配 preset 时自动回退 `-DCMAKE_BUILD_TYPE` 并给出 warning。`forja use target cmake-args --add <arg>` 配置的参数会追加到 configure 命令尾部。
+
 ### 场景 3：远程同步与部署
 
 ```bash
@@ -262,6 +264,11 @@ forja use target --qt /path/to/Qt --vs "C:/Program Files/Microsoft Visual Studio
 
 # 构建后重命名可执行文件
 forja use target --executable-name MyApp
+
+# 管理持久化 CMake configure 参数（追加到 cmake configure 命令尾部）
+forja use target cmake-args              # 查看
+forja use target cmake-args --add -DUSE_CCACHE=ON
+forja use target cmake-args --rm -DUSE_CCACHE=ON
 
 # 设置全局并行编译数
 forja use --jobs 8

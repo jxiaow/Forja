@@ -175,11 +175,20 @@ function buildCppEnvSection(data: TemplateData): string {
     h += '</div></div>';
     h += '</div></div></div>';
 
+    // CMake configure 参数（workspace cppModulePrefs.cmakeConfigureArgs，空格分隔）
+    h += '<div class="cs"><div class="cst">CMake</div>';
+    h += '<div class="env-card" id="cmakeArgsCard"><div class="ech">';
+    h += '<span class="ect">Configure 追加参数</span></div>';
+    h += '<div class="ef-row"><span class="ef-label">cmakeConfigureArgs</span>';
+    h += '<div class="input-row">';
+    h += `<input id="cmakeConfigureArgs" class="ef-input" value="${esc(data.cmakeConfigureArgs || '')}"`;
+    h += ' placeholder="例如 -DUSE_CCACHE=ON -DBUILD_TESTS=OFF（空格分隔，追加到 cmake configure 末尾）"';
+    h += " onblur=\"vscode.postMessage({command:'saveCMakeConfigureArgs',value:this.value})\"/>";
+    h += '</div></div></div></div>';
+
     h += '</details>';
     return h;
 }
-
-// ── 辅助函数 ──
 
 function buildVsCandidateSelect(env: EnvInfo | null, currentPath: string): string {
     const candidates = env?.vsCandidates ?? [];

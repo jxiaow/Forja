@@ -6,6 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import { CliResult } from '../../core/types';
+import { CMakePresetWarning, resolveConfigurePreset } from './cmakePresets';
 
 export interface CppPlanOptions {
     action: 'build' | 'rebuild' | 'clean';
@@ -15,6 +16,13 @@ export interface CppPlanOptions {
     arch: 'x86' | 'x64';
     vsDevCmdPath?: string;
     jobs?: number;
+    /** Extra configure args appended to the CMake configure command (cmakeConfigureArgs setting). */
+    cmakeConfigureArgs?: string[];
+}
+
+export interface CppPlanDetails {
+    commands: string[];
+    warnings: CMakePresetWarning[];
 }
 
 /**
@@ -96,11 +104,13 @@ function resolveShellInterpreter(scriptPath: string): string {
 /**
  * Build shell commands for C++ project (MSBuild on Windows, make on POSIX).
  * Single source of truth for C++ build command assembly.
+ * Returns commands plus structured CMake preset warnings (see buildCommandDetailed).
  */
-export function buildCommand(options: CppPlanOptions): string[] {
+export function buildCommandDetailed(options: CppPlanOptions): CppPlanDetails {
     const isWindows = os.platform() === 'win32';
     const projectExtension = path.extname(options.project).toLowerCase();
     const commands: string[] = [];
+    const warnings: CMakePresetWarning[] = [];
 
     if (isWindows && projectExtension === '.sln') {
         // Initialize VS environment
@@ -120,14 +130,26 @@ export function buildCommand(options: CppPlanOptions): string[] {
         if (isWindows && options.vsDevCmdPath) {
             commands.push(`call "${options.vsDevCmdPath}" -arch=${options.arch} -no_logo`);
         }
+        const presetResolution = resolveConfigurePreset(projectDir, options.mode);
+        warnings.push(...presetResolution.warnings);
+        const preset = presetResolution.preset;
+        const extraArgs = (options.cmakeConfigureArgs ?? []).join(' ').trim();
         if (options.action === 'clean') {
-            commands.push(`cmake --build "${buildDir}" --target clean`);
+            const cleanDir = preset ? preset.binaryDir : buildDir;
+            commands.push(`cmake --build "${cleanDir}" --target clean`);
         } else {
-            const configFlag = options.mode === 'release' ? '-DCMAKE_BUILD_TYPE=Release' : '-DCMAKE_BUILD_TYPE=Debug';
-            commands.push(`cmake -B "${buildDir}" -S "${projectDir}" ${configFlag}`);
             const parallelFlag = options.jobs ? `--parallel ${options.jobs}` : '--parallel';
             const buildAction = options.action === 'rebuild' ? '--clean-first' : '';
-            commands.push(`cmake --build "${buildDir}" ${buildAction} ${parallelFlag}`.trim());
+            if (preset) {
+                // CMake reads generator/toolchainFile/environment/cacheVariables from the preset file itself
+                const configure = `cmake --preset "${preset.name}" -S "${preset.sourceDir}" -B "${preset.binaryDir}"`;
+                commands.push(configure + (extraArgs ? ` ${extraArgs}` : ''));
+                commands.push(`cmake --build "${preset.binaryDir}" ${buildAction} ${parallelFlag}`.trim());
+            } else {
+                const configFlag = options.mode === 'release' ? '-DCMAKE_BUILD_TYPE=Release' : '-DCMAKE_BUILD_TYPE=Debug';
+                commands.push(`cmake -B "${buildDir}" -S "${projectDir}" ${configFlag}${extraArgs ? ` ${extraArgs}` : ''}`);
+                commands.push(`cmake --build "${buildDir}" ${buildAction} ${parallelFlag}`.trim());
+            }
         }
     } else if (projectExtension === '.sh' || projectExtension === '.bat') {
         // Custom build script — execute in its own directory
@@ -150,7 +172,15 @@ export function buildCommand(options: CppPlanOptions): string[] {
         const jobsFlag = options.jobs ? `-j${options.jobs}` : '-j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)';
         commands.push(`make -C "${makefileDir}" ${target} ${jobsFlag}`.trim());
     }
-    return commands;
+    return { commands, warnings };
+}
+
+/**
+ * Build shell commands for a C++ project. Thin wrapper over
+ * buildCommandDetailed for consumers that do not surface preset warnings.
+ */
+export function buildCommand(options: CppPlanOptions): string[] {
+    return buildCommandDetailed(options).commands;
 }
 
 /**
@@ -158,7 +188,7 @@ export function buildCommand(options: CppPlanOptions): string[] {
  * This allows reusing Qt's runCliResult execution engine.
  */
 export function createCppPlan(options: CppPlanOptions): CliResult {
-    const commands = buildCommand(options);
+    const { commands, warnings } = buildCommandDetailed(options);
     const shellCommand = commands.join(' && ');
 
     return {
@@ -175,7 +205,12 @@ export function createCppPlan(options: CppPlanOptions): CliResult {
         stderr: '',
         errors: [],
         logFile: null,
-        diagnostics: [],
+        diagnostics: warnings.map(w => ({
+            level: 'warning' as const,
+            code: w.code,
+            params: w.params,
+            message: w.message,
+        })),
         resolved: null,
     };
 }

@@ -63,9 +63,13 @@ forja <subcommand> [action] [options]
 | 子命令 | 参数 | 说明 |
 |--------|------|------|
 | `target` | `--project`, `--answers`, `--mode`, `--arch`, `--qt`, `--vs`, `--jom`, `--executable-name`, `--build-script`, `--rcc`, `--reset` | 选择项目和本地构建配置 |
+| `target qmake-args` | `--add`, `--rm`（位置参数为参数值） | 管理持久化 qmake 参数（无参数=查看） |
+| `target cmake-args` | `--add`, `--rm`（位置参数为参数值） | 管理持久化 CMake configure 参数，追加到 configure 命令尾部；存储于 workspace 配置 `cppModulePrefs.cmakeConfigureArgs`（无参数=查看），`changed` 返回 `cpp.cmakeConfigureArgs` |
 | （全局） | `--jobs <N>` | 设置全局并行编译数 |
 
 选择新项目但缺少 mode 或 Windows arch 时，返回 `status: "needs-input"` 与对应 `questions`，不写入默认值。Linux arch 唯一为 `x64`，因此不返回 arch 问题。
+
+CMake 工程（CMakeLists.txt）的 `build`/`clean` 计划支持 `CMakePresets.json`：命中 preset 时 configure 使用 `cmake --preset <name> -S <sourceDir> -B <binaryDir>`，build 使用 preset 解析出的 `binaryDir`（含 `${sourceDir}` 占位符展开）；非法 JSON 或无匹配 preset 时回退 `-DCMAKE_BUILD_TYPE` 并在 `diagnostics` 中新增 `warning` 级条目（code `cpp.cmakePresetInvalidJson` / `cpp.cmakePresetNoMatch`），既有 JSON 字段不变。
 
 ### `forja remote`
 

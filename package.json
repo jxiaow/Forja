@@ -159,6 +159,17 @@
           "when": "workspaceFolderCount > 0"
         }
       ]
+    },
+    "configuration": {
+      "title": "Forja C++",
+      "properties": {
+        "forja.cpp.cmakeConfigureArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "追加到 CMake configure 命令行尾部的参数（workspace 级 cmakeConfigureArgs 未配置时生效）/ Extra arguments appended to the CMake configure command line (used when the workspace-level cmakeConfigureArgs is empty)."
+        }
+      }
     }
   },
   "scripts": {

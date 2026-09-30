@@ -17,9 +17,8 @@ import {
     saveWorkspaceConfig,
     getActiveTarget,
     workspacesDir,
-    type WorkspaceConfig,
-    type TargetProfile,
 } from '../core/workspaceStore';
+import { buildQtSettings, buildCppSettings } from '../core/settingsProjection';
 
 export type { ForjaSettings, QtSettings, CppSettings, SyncSettings } from '../core/settingsIO';
 export { DEFAULT_SETTINGS, DEFAULT_QT, DEFAULT_CPP, DEFAULT_SYNC, resolveVsDevShellPath, resolveVsDevCmdPath } from '../core/settingsIO';
@@ -48,61 +47,8 @@ function _resolveWorkrootForModule(module: 'qt' | 'cpp'): string | null {
     return resolveWorkroot(ws);
 }
 
-// ── Build QtSettings from workspaceStore ──
-
-function _buildQtSettings(config: WorkspaceConfig, target: TargetProfile | null): QtSettings {
-    const prefs = config.qtModulePrefs;
-    const d = DEFAULT_SETTINGS.qt;
-
-    // Only use target if it's a Qt project — prevent cross-type contamination
-    const qtTarget = target?.kind === 'qt' ? target : null;
-
-    let pinnedProject: QtSettings['pinnedProject'] = null;
-    if (qtTarget && qtTarget.project) {
-        pinnedProject = { root: config.workroot, relative: qtTarget.project };
-    }
-
-    return {
-        mode: qtTarget ? qtTarget.mode : d.mode,
-        arch: qtTarget ? qtTarget.arch : d.arch,
-        vsInstall: qtTarget?.toolchain.vsInstall ?? d.vsInstall,
-        qtPath: qtTarget?.toolchain.qtPath ?? d.qtPath,
-        qtVersion: qtTarget?.toolchain.qtVersion ?? d.qtVersion,
-        jomPath: qtTarget?.toolchain.jomPath ?? d.jomPath,
-        pinnedProject,
-        executableName: qtTarget?.toolchain.executableName ?? d.executableName,
-        qmakeArgs: prefs.qmakeArgs,
-        cStandard: prefs.cStandard,
-        cppStandard: prefs.cppStandard,
-        designerPath: prefs.designerPath,
-        qtSourcePath: prefs.qtSourcePath,
-        manualProPath: prefs.manualProPath,
-        rccProjectPath: prefs.rccProjectPath,
-        scanExcludeDirs: [...prefs.scanExcludeDirs],
-        customCommands: prefs.customCommands.map(c => ({ ...c })),
-        fileSyncPromptEnabled: prefs.fileSyncPromptEnabled,
-        qmakeReminderEnabled: prefs.qmakeReminderEnabled,
-        suppressedWarnings: prefs.suppressedWarnings.length > 0 ? [...prefs.suppressedWarnings] : undefined,
-    };
-}
-
-// ── Build CppSettings from workspaceStore ──
-
-function _buildCppSettings(config: WorkspaceConfig, target: TargetProfile | null): CppSettings {
-    const prefs = config.cppModulePrefs;
-    const d = DEFAULT_SETTINGS.cpp;
-
-    // Only use target if it's a C++ project — prevent cross-type contamination
-    const cppTarget = target?.kind === 'cpp' ? target : null;
-
-    return {
-        mode: cppTarget ? cppTarget.mode : d.mode,
-        arch: cppTarget ? cppTarget.arch : d.arch,
-        vsInstall: cppTarget?.toolchain.vsInstall ?? d.vsInstall,
-        pinnedProject: (cppTarget && cppTarget.project) ? cppTarget.project : null,
-        scanDepth: prefs.scanDepth,
-    };
-}
+// ── Build QtSettings / CppSettings from workspaceStore ──
+// 投影逻辑为纯函数，位于 core/settingsProjection.ts（可脱离 vscode 单测）
 
 // ── Write Qt setting back to workspaceStore ──
 
@@ -201,6 +147,14 @@ function _saveCppToStore(key: CppKey, value: CppSettings[CppKey]): void {
     if (!workroot) { return; }
 
     const config = loadWorkspaceConfig(workroot);
+
+    // CppModulePrefs fields — workspace-level, saved even without active target
+    switch (key) {
+        case 'cmakeConfigureArgs':
+            config.cppModulePrefs.cmakeConfigureArgs = (value as string[] | undefined) ?? [];
+            saveWorkspaceConfig(config); return;
+    }
+
     const targetId = config.activeTarget;
     if (!targetId) {
         logger.warn(`C++ setting '${key}' not persisted: no active target`);
@@ -245,7 +199,7 @@ function _load(): ForjaSettings {
     if (qtWorkroot) {
         const config = loadWorkspaceConfig(qtWorkroot);
         const target = getActiveTarget(config);
-        qt = _buildQtSettings(config, target);
+        qt = buildQtSettings(config, target);
     } else {
         qt = { ...DEFAULT_SETTINGS.qt };
     }
@@ -254,7 +208,7 @@ function _load(): ForjaSettings {
     if (cppWorkroot) {
         const config = loadWorkspaceConfig(cppWorkroot);
         const target = getActiveTarget(config);
-        cpp = _buildCppSettings(config, target);
+        cpp = buildCppSettings(config, target);
     } else {
         cpp = { ...DEFAULT_SETTINGS.cpp };
     }

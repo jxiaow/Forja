@@ -41,6 +41,7 @@ export interface TemplateData {
     cppMode: string;
     cppArch: string;
     cppVsInstall: string;
+    cmakeConfigureArgs?: string;
     // 模块激活状态
     qtActive: boolean;
     cppActive: boolean;

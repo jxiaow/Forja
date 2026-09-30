@@ -107,7 +107,7 @@ test('saveWorkspaceConfig round-trips with all fields', () => {
             fileSyncPromptEnabled: false,
             qmakeReminderEnabled: true,
         },
-        cppModulePrefs: { scanDepth: 12 },
+        cppModulePrefs: { scanDepth: 12, cmakeConfigureArgs: [] },
     };
     saveWorkspaceConfig(config);
     const loaded = loadWorkspaceConfig(workroot);

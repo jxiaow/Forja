@@ -52,6 +52,8 @@ export interface QtModulePrefs {
 
 export interface CppModulePrefs {
     scanDepth: number;
+    /** Extra arguments appended to the CMake configure command line. */
+    cmakeConfigureArgs: string[];
 }
 
 export interface WorkspaceConfig {
@@ -85,6 +87,7 @@ export const DEFAULT_QT_MODULE_PREFS: Readonly<QtModulePrefs> = {
 
 export const DEFAULT_CPP_MODULE_PREFS: Readonly<CppModulePrefs> = {
     scanDepth: 8,
+    cmakeConfigureArgs: [],
 };
 
 // ── Paths ──
@@ -102,10 +105,14 @@ export function normalizePath(p: string): string {
     return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
-export function workspaceConfigPath(workroot: string): string {
+/** workroot 存储键哈希 — 与 workspaces/<hash>.json 同一算法，rcc-manifests 等复用 */
+export function workrootKeyHash(workroot: string): string {
     const normalized = normalizePath(workroot);
-    const hash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
-    return path.join(workspacesDir(), `${hash}.json`);
+    return crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12);
+}
+
+export function workspaceConfigPath(workroot: string): string {
+    return path.join(workspacesDir(), `${workrootKeyHash(workroot)}.json`);
 }
 
 // ── Registry ──
@@ -217,6 +224,9 @@ function sanitizeWorkspaceConfig(raw: Record<string, unknown>): WorkspaceConfig 
         const obj = (raw && typeof raw === 'object') ? raw as Record<string, unknown> : {};
         return {
             scanDepth: typeof obj.scanDepth === 'number' ? obj.scanDepth : 8,
+            cmakeConfigureArgs: Array.isArray(obj.cmakeConfigureArgs)
+                ? obj.cmakeConfigureArgs.filter((a): a is string => typeof a === 'string' && a.length > 0)
+                : [],
         };
     };
 
